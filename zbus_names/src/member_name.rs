@@ -1,4 +1,7 @@
-use crate::{utils::impl_try_from, Error, Result};
+use crate::{
+    utils::{impl_str_basic, impl_try_from},
+    Error, Result,
+};
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
@@ -39,6 +42,8 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 pub struct MemberName<'name>(Str<'name>);
 
 assert_impl_all!(MemberName<'_>: Send, Sync, Unpin);
+
+impl_str_basic!(MemberName<'_>);
 
 impl<'name> MemberName<'name> {
     /// A borrowed clone (never allocates, unlike clone).
@@ -219,6 +224,8 @@ impl<'name> NoneValue for MemberName<'name> {
 pub struct OwnedMemberName(#[serde(borrow)] MemberName<'static>);
 
 assert_impl_all!(OwnedMemberName: Send, Sync, Unpin);
+
+impl_str_basic!(OwnedMemberName);
 
 impl OwnedMemberName {
     /// Convert to the inner `MemberName`, consuming `self`.

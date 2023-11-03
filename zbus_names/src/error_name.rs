@@ -1,4 +1,7 @@
-use crate::{utils::impl_try_from, Error, Result};
+use crate::{
+    utils::{impl_str_basic, impl_try_from},
+    Error, Result,
+};
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
@@ -43,6 +46,8 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 pub struct ErrorName<'name>(Str<'name>);
 
 assert_impl_all!(ErrorName<'_>: Send, Sync, Unpin);
+
+impl_str_basic!(ErrorName<'_>);
 
 impl<'name> ErrorName<'name> {
     /// A borrowed clone (never allocates, unlike clone).
@@ -243,6 +248,8 @@ impl<'name> NoneValue for ErrorName<'name> {
 pub struct OwnedErrorName(#[serde(borrow)] ErrorName<'static>);
 
 assert_impl_all!(OwnedErrorName: Send, Sync, Unpin);
+
+impl_str_basic!(OwnedErrorName);
 
 impl OwnedErrorName {
     /// Convert to the inner `ErrorName`, consuming `self`.

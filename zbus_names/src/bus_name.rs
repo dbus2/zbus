@@ -5,7 +5,10 @@ use core::{
 };
 use std::{borrow::Cow, sync::Arc};
 
-use crate::{Error, OwnedUniqueName, OwnedWellKnownName, Result, UniqueName, WellKnownName};
+use crate::{
+    utils::impl_str_basic, Error, OwnedUniqueName, OwnedWellKnownName, Result, UniqueName,
+    WellKnownName,
+};
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
@@ -53,6 +56,8 @@ pub enum BusName<'name> {
 }
 
 assert_impl_all!(BusName<'_>: Send, Sync, Unpin);
+
+impl_str_basic!(BusName<'_>);
 
 impl<'name> BusName<'name> {
     /// A borrowed clone (never allocates, unlike clone).
@@ -347,6 +352,8 @@ impl<'a> From<&'a OwnedWellKnownName> for BusName<'a> {
 /// Owned sibling of [`BusName`].
 #[derive(Clone, Hash, PartialEq, Eq, Serialize, PartialOrd, Ord, Type)]
 pub struct OwnedBusName(#[serde(borrow)] BusName<'static>);
+
+impl_str_basic!(OwnedBusName);
 
 impl OwnedBusName {
     /// Convert to the inner `BusName`, consuming `self`.
