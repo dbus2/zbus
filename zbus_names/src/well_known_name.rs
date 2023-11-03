@@ -1,4 +1,7 @@
-use crate::{utils::impl_try_from, Error, Result};
+use crate::{
+    utils::{impl_str_basic, impl_try_from},
+    Error, Result,
+};
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
@@ -37,6 +40,8 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
     Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
 )]
 pub struct WellKnownName<'name>(Str<'name>);
+
+impl_str_basic!(WellKnownName<'_>);
 
 assert_impl_all!(WellKnownName<'_>: Send, Sync, Unpin);
 
@@ -248,6 +253,8 @@ impl OwnedWellKnownName {
         &self.0
     }
 }
+
+impl_str_basic!(OwnedWellKnownName);
 
 impl Deref for OwnedWellKnownName {
     type Target = WellKnownName<'static>;

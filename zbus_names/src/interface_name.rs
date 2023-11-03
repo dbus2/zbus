@@ -1,4 +1,7 @@
-use crate::{utils::impl_try_from, Error, Result};
+use crate::{
+    utils::{impl_str_basic, impl_try_from},
+    Error, Result,
+};
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
@@ -39,6 +42,8 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
     Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
 )]
 pub struct InterfaceName<'name>(Str<'name>);
+
+impl_str_basic!(InterfaceName<'_>);
 
 assert_impl_all!(InterfaceName<'_>: Send, Sync, Unpin);
 
@@ -241,6 +246,8 @@ impl<'name> NoneValue for InterfaceName<'name> {
 pub struct OwnedInterfaceName(#[serde(borrow)] InterfaceName<'static>);
 
 assert_impl_all!(OwnedInterfaceName: Send, Sync, Unpin);
+
+impl_str_basic!(OwnedInterfaceName);
 
 impl OwnedInterfaceName {
     /// Convert to the inner `InterfaceName`, consuming `self`.

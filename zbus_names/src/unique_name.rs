@@ -1,4 +1,7 @@
-use crate::{utils::impl_try_from, Error, Result};
+use crate::{
+    utils::{impl_str_basic, impl_try_from},
+    Error, Result,
+};
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
@@ -38,6 +41,8 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 pub struct UniqueName<'name>(Str<'name>);
 
 assert_impl_all!(UniqueName<'_>: Send, Sync, Unpin);
+
+impl_str_basic!(UniqueName<'_>);
 
 impl<'name> UniqueName<'name> {
     /// A borrowed clone (never allocates, unlike clone).
@@ -235,6 +240,8 @@ impl<'name> NoneValue for UniqueName<'name> {
 pub struct OwnedUniqueName(#[serde(borrow)] UniqueName<'static>);
 
 assert_impl_all!(OwnedUniqueName: Send, Sync, Unpin);
+
+impl_str_basic!(OwnedUniqueName);
 
 impl OwnedUniqueName {
     /// Convert to the inner `UniqueName`, consuming `self`.
