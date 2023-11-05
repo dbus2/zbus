@@ -473,6 +473,29 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
     }
     drop(stream);
 
+    let root_introspect_proxy = zbus::fdo::IntrospectableProxy::builder(&conn)
+        .destination("org.freedesktop.MyService")?
+        .path("/")?
+        .build()
+        .await?;
+    debug!("Created: {:?}", root_introspect_proxy);
+
+    let root_xml = root_introspect_proxy.introspect().await?;
+    let root_node = zbus_xml::Node::from_reader(root_xml.as_bytes())
+        .map_err(|e| Error::Failure(e.to_string()))?;
+    let mut node = &root_node;
+    for name in ["org", "freedesktop", "MyService"] {
+        node = node
+            .nodes()
+            .iter()
+            .find(|&n| n.name().is_some_and(|n| n == name))
+            .expect("Child node not exist");
+    }
+    assert!(node
+        .interfaces()
+        .iter()
+        .any(|i| i.name() == "org.freedesktop.MyIface"));
+
     let proxy = MyIfaceProxy::builder(&conn)
         .destination("org.freedesktop.MyService")?
         .path("/org/freedesktop/MyService")?

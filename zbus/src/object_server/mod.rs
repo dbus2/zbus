@@ -3,7 +3,7 @@
 use event_listener::{Event, EventListener};
 use serde::Serialize;
 use std::{
-    collections::{hash_map::Entry, HashMap, VecDeque},
+    collections::{hash_map::Entry, HashMap},
     fmt::Write,
     marker::PhantomData,
     ops::{Deref, DerefMut},
@@ -298,38 +298,68 @@ impl Node {
     }
 
     async fn introspect_to_writer<W: Write + Send>(&self, writer: &mut W) {
-        let mut node_list = VecDeque::new();
-        node_list.push_back((self, "", 0));
-        while let Some((node, path, level)) = node_list.pop_front() {
-            if level == 0 {
-                writeln!(
-                    writer,
-                    r#"
+        enum Fragment<'a> {
+            /// Represent an unclosed node tree, could be further splitted into sub-`Fragment`s
+            Node {
+                name: &'a str,
+                node: &'a Node,
+                level: usize,
+            },
+            /// Represent a closing `</node>`
+            End { level: usize },
+        }
+
+        let mut stack = Vec::new();
+        stack.push(Fragment::Node {
+            name: "",
+            node: self,
+            level: 0,
+        });
+
+        // This can be seen as traversing the fragment tree in pre-order DFS with formatted XML
+        // fragment, splitted `Fragment::Node`s and `Fragment::End` being current node, left
+        // subtree and right leaf respectively.
+        while let Some(fragment) = stack.pop() {
+            match fragment {
+                Fragment::Node { name, node, level } => {
+                    stack.push(Fragment::End { level });
+
+                    for (name, node) in &node.children {
+                        stack.push(Fragment::Node {
+                            name,
+                            node,
+                            level: level + 2,
+                        })
+                    }
+
+                    if level == 0 {
+                        writeln!(
+                            writer,
+                            r#"
 <!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
  "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
 <node>"#
-                )
-                .unwrap();
-            } else {
-                writeln!(
-                    writer,
-                    "{:indent$}<node name=\"{}\">",
-                    "",
-                    path,
-                    indent = level
-                )
-                .unwrap();
-            }
+                        )
+                        .unwrap();
+                    } else {
+                        writeln!(
+                            writer,
+                            "{:indent$}<node name=\"{}\">",
+                            "",
+                            name,
+                            indent = level
+                        )
+                        .unwrap();
+                    }
 
-            for iface in node.interfaces.values() {
-                iface.read().await.introspect_to_writer(writer, level + 2);
+                    for iface in node.interfaces.values() {
+                        iface.read().await.introspect_to_writer(writer, level + 2);
+                    }
+                }
+                Fragment::End { level } => {
+                    writeln!(writer, "{:indent$}</node>", "", indent = level).unwrap();
+                }
             }
-
-            for (path, node) in &node.children {
-                node_list.push_front((node, path, level + 2));
-            }
-
-            writeln!(writer, "{:indent$}</node>", "", indent = level).unwrap();
         }
     }
 
