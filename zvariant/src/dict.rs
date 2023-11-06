@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     fmt::{Display, Write},
     hash::BuildHasher,
 };
@@ -15,9 +15,9 @@ use crate::{value_display_fmt, Basic, DynamicType, Error, Signature, Type, Value
 ///
 /// [`Value`]: enum.Value.html#variant.Dict
 /// [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Hash, PartialEq, PartialOrd, Eq, Ord)]
 pub struct Dict<'k, 'v> {
-    entries: Vec<DictEntry<'k, 'v>>,
+    entries: BTreeSet<DictEntry<'k, 'v>>,
     key_signature: Signature<'k>,
     value_signature: Signature<'v>,
     // should use a separate lifetime or everything should use the same but API break.
@@ -32,7 +32,7 @@ impl<'k, 'v> Dict<'k, 'v> {
         let signature = create_signature(&key_signature, &value_signature);
 
         Self {
-            entries: vec![],
+            entries: BTreeSet::new(),
             key_signature,
             value_signature,
             signature,
@@ -56,7 +56,7 @@ impl<'k, 'v> Dict<'k, 'v> {
         check_child_value_signature!(self.key_signature, key.value_signature(), "key");
         check_child_value_signature!(self.value_signature, value.value_signature(), "value");
 
-        self.entries.push(DictEntry { key, value });
+        self.entries.insert(DictEntry { key, value });
 
         Ok(())
     }
@@ -70,7 +70,7 @@ impl<'k, 'v> Dict<'k, 'v> {
         check_child_value_signature!(self.key_signature, K::signature(), "key");
         check_child_value_signature!(self.value_signature, value.dynamic_signature(), "value");
 
-        self.entries.push(DictEntry {
+        self.entries.insert(DictEntry {
             key: Value::new(key),
             value: Value::new(value),
         });
@@ -131,7 +131,7 @@ impl<'k, 'v> Dict<'k, 'v> {
         let value_signature = signature.slice(3..signature.len() - 1);
 
         Self {
-            entries: vec![],
+            entries: BTreeSet::new(),
             key_signature,
             value_signature,
             signature,
@@ -261,7 +261,7 @@ where
 
 // TODO: Conversion of Dict from/to BTreeMap
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
 struct DictEntry<'k, 'v> {
     key: Value<'k>,
     value: Value<'v>,

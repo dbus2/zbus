@@ -32,7 +32,7 @@ use crate::{Basic, EncodingFormat, Error, Result, Signature, Str, Type};
 /// ObjectPath::try_from("/end/with/slash/").unwrap_err();
 /// ObjectPath::try_from("/ha.d").unwrap_err();
 /// ```
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
 pub struct ObjectPath<'a>(Str<'a>);
 
 assert_impl_all!(ObjectPath<'_>: Send, Sync, Unpin);

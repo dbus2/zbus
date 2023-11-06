@@ -1,5 +1,7 @@
 use core::{
+    cmp::Ordering,
     fmt::{self, Debug, Display, Formatter},
+    hash::{Hash, Hasher},
     str,
 };
 use serde::{
@@ -20,7 +22,7 @@ use crate::{signature_parser::SignatureParser, Basic, EncodingFormat, Error, Res
 // breakage.
 //
 // [`bytes::Bytes`]: https://docs.rs/bytes/0.5.6/bytes/struct.Bytes.html
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, Clone)]
 enum Bytes<'b> {
     Borrowed(&'b [u8]),
     Static(&'static [u8]),
@@ -46,7 +48,7 @@ impl<'b> Bytes<'b> {
     }
 }
 
-impl<'b> std::ops::Deref for Bytes<'b> {
+impl std::ops::Deref for Bytes<'_> {
     type Target = [u8];
 
     fn deref(&self) -> &[u8] {
@@ -55,6 +57,32 @@ impl<'b> std::ops::Deref for Bytes<'b> {
             Bytes::Static(borrowed) => borrowed,
             Bytes::Owned(owned) => owned,
         }
+    }
+}
+
+impl Eq for Bytes<'_> {}
+
+impl PartialEq for Bytes<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        **self == **other
+    }
+}
+
+impl Ord for Bytes<'_> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        (**self).cmp(&**other)
+    }
+}
+
+impl PartialOrd for Bytes<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Hash for Bytes<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        (**self).hash(state)
     }
 }
 
@@ -96,7 +124,7 @@ impl<'b> std::ops::Deref for Bytes<'b> {
 ///
 /// [identifies]: https://dbus.freedesktop.org/doc/dbus-specification.html#type-system
 /// [`slice`]: #method.slice
-#[derive(Hash, Clone)]
+#[derive(Hash, Clone, PartialOrd, Ord)]
 pub struct Signature<'a> {
     bytes: Bytes<'a>,
     pos: usize,
@@ -551,7 +579,31 @@ impl std::fmt::Display for OwnedSignature {
 
 #[cfg(test)]
 mod tests {
-    use super::Signature;
+    use super::{Bytes, Signature};
+    use std::sync::Arc;
+
+    #[test]
+    fn bytes_equality() {
+        let borrowed1 = Bytes::Borrowed(b"foo");
+        let borrowed2 = Bytes::Borrowed(b"foo");
+        let static1 = Bytes::Static(b"foo");
+        let static2 = Bytes::Static(b"foo");
+        let owned1 = Bytes::Owned(Arc::new(*b"foo"));
+        let owned2 = Bytes::Owned(Arc::new(*b"foo"));
+
+        assert_eq!(borrowed1, borrowed2);
+        assert_eq!(static1, static2);
+        assert_eq!(owned1, owned2);
+
+        assert_eq!(borrowed1, static1);
+        assert_eq!(static1, borrowed1);
+
+        assert_eq!(static1, owned1);
+        assert_eq!(owned1, static1);
+
+        assert_eq!(borrowed1, owned1);
+        assert_eq!(owned1, borrowed1);
+    }
 
     #[test]
     fn signature_slicing() {
