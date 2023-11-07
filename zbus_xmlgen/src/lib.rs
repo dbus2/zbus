@@ -228,7 +228,11 @@ fn to_rust_type(ty: &CompleteType, input: bool, as_ref: bool) -> String {
                 loop {
                     let c = it.peek().unwrap();
                     match **c as char {
-                        STRUCT_SIG_END_CHAR | DICT_ENTRY_SIG_END_CHAR => break,
+                        STRUCT_SIG_END_CHAR | DICT_ENTRY_SIG_END_CHAR => {
+                            // consume the closing character
+                            it.next().unwrap();
+                            break;
+                        }
                         _ => vec.push(iter_to_rust_type(it, input, false)),
                     }
                 }
