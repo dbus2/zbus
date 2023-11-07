@@ -13,7 +13,7 @@ use crate::gvariant::Serializer as GVSerializer;
 use crate::{
     container_depths::ContainerDepths,
     dbus::Serializer as DBusSerializer,
-    serialized::{Data, Size},
+    serialized::{Data, Written},
     signature_parser::SignatureParser,
     utils::*,
     Basic, DynamicType, EncodingContext, EncodingFormat, Error, Result, Signature,
@@ -51,7 +51,7 @@ impl Seek for NullWriteSeek {
 /// let len = serialized_size(ctxt, &("hello world!", 42_u64)).unwrap();
 /// assert_eq!(*len, 32);
 /// ```
-pub fn serialized_size<B, T: ?Sized>(ctxt: EncodingContext<B>, value: &T) -> Result<Size<B>>
+pub fn serialized_size<B, T: ?Sized>(ctxt: EncodingContext<B>, value: &T) -> Result<Written<B>>
 where
     B: byteorder::ByteOrder,
     T: Serialize + DynamicType,
@@ -81,7 +81,7 @@ pub fn to_writer<B, W, T: ?Sized>(
     writer: &mut W,
     ctxt: EncodingContext<B>,
     value: &T,
-) -> Result<Size<B>>
+) -> Result<Written<B>>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -118,7 +118,7 @@ pub fn to_writer_for_signature<'s, B, W, S, T: ?Sized>(
     ctxt: EncodingContext<B>,
     signature: S,
     value: &T,
-) -> Result<Size<B>>
+) -> Result<Written<B>>
 where
     B: byteorder::ByteOrder,
     W: Write + Seek,
@@ -154,7 +154,7 @@ where
         }
     };
 
-    let size = Size::new(len, ctxt);
+    let size = Written::new(len, ctxt);
     #[cfg(unix)]
     let size = size.set_fds(fds);
 

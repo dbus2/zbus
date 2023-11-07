@@ -6,19 +6,21 @@ use byteorder::ByteOrder;
 
 use crate::EncodingContext;
 
-/// Represents size of serialized bytes in a specific format.
+/// Represents the return value of [`crate::to_writer`] function.
+///
+/// It mainly contains the size of serialized bytes in a specific format.
 ///
 /// On Unix platforms, it also contains a list of file descriptors, whose indexes are included in
 /// the serialized bytes.
 #[derive(Debug)]
-pub struct Size<B: ByteOrder> {
+pub struct Written<B: ByteOrder> {
     size: usize,
     context: EncodingContext<B>,
     #[cfg(unix)]
     fds: Vec<OwnedFd>,
 }
 
-impl<B: ByteOrder> Size<B> {
+impl<B: ByteOrder> Written<B> {
     /// Create a new `EncodedSize` instance.
     pub fn new(size: usize, context: EncodingContext<B>) -> Self {
         Self {
@@ -63,7 +65,7 @@ impl<B: ByteOrder> Size<B> {
     }
 }
 
-impl<B: ByteOrder> Deref for Size<B> {
+impl<B: ByteOrder> Deref for Written<B> {
     type Target = usize;
 
     fn deref(&self) -> &Self::Target {
