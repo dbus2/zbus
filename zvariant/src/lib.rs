@@ -1554,7 +1554,7 @@ mod tests {
             let stdout = std::io::stdout();
             let l = crate::serialized_size(ctxt, &Fd::from(&stdout)).unwrap();
             assert_eq!(*l, 4);
-            assert_eq!(l.fds().len(), 1);
+            assert_eq!(l.num_fds(), 1);
         }
 
         let l = crate::serialized_size(ctxt, &('a', "abc", &(1_u32, 2))).unwrap();

@@ -206,33 +206,24 @@ impl<'a> Builder<'a> {
         // Note: this iterates the body twice, but we prefer efficient handling of large messages
         // to efficient handling of ones that are complex to serialize.
         let body_size = zvariant::serialized_size(ctxt, body)?;
-        let body_len = body_size.size();
-        #[cfg(unix)]
-        let fds_len = body_size.fds().len();
 
         let signature = body.dynamic_signature();
 
-        self.build_generic(
-            signature,
-            body_len,
-            move |cursor| {
-                zvariant::to_writer(cursor, ctxt, body)
-                    .map(|s| {
-                        #[cfg(unix)]
-                        {
-                            s.into_fds()
-                        }
-                        #[cfg(not(unix))]
-                        {
-                            let _ = s;
-                            ()
-                        }
-                    })
-                    .map_err(Into::into)
-            },
-            #[cfg(unix)]
-            fds_len,
-        )
+        self.build_generic(signature, body_size, move |cursor| {
+            zvariant::to_writer(cursor, ctxt, body)
+                .map(|s| {
+                    #[cfg(unix)]
+                    {
+                        s.into_fds()
+                    }
+                    #[cfg(not(unix))]
+                    {
+                        let _ = s;
+                        ()
+                    }
+                })
+                .map_err(Into::into)
+        })
     }
 
     /// Create a new message from a raw slice of bytes to populate the body with, rather than by
@@ -252,12 +243,16 @@ impl<'a> Builder<'a> {
         S::Error: Into<Error>,
     {
         let signature: Signature<'b> = signature.try_into().map_err(Into::into)?;
+        let body_size = serialized::Size::new(body_bytes.len(), dbus_context!(0));
         #[cfg(unix)]
-        let fds_len = fds.len();
+        let body_size = {
+            let num_fds = fds.len().try_into().map_err(|_| Error::ExcessData)?;
+            body_size.set_num_fds(num_fds)
+        };
 
         self.build_generic(
             signature,
-            body_bytes.len(),
+            body_size,
             move |cursor: &mut Cursor<&mut Vec<u8>>| {
                 cursor.write_all(body_bytes)?;
 
@@ -267,17 +262,14 @@ impl<'a> Builder<'a> {
                 #[cfg(not(unix))]
                 return Ok::<(), Error>(());
             },
-            #[cfg(unix)]
-            fds_len,
         )
     }
 
     fn build_generic<WriteFunc>(
         self,
         mut signature: Signature<'_>,
-        body_len: usize,
+        body_size: serialized::Size<byteorder::NativeEndian>,
         write_body: WriteFunc,
-        #[cfg(unix)] fds_len: usize,
     ) -> Result<Message>
     where
         WriteFunc: FnOnce(&mut Cursor<&mut Vec<u8>>) -> Result<BuildGenericResult>,
@@ -293,14 +285,14 @@ impl<'a> Builder<'a> {
             header.fields_mut().add(Field::Signature(signature));
         }
 
-        let body_len_u32 = body_len.try_into().map_err(|_| Error::ExcessData)?;
+        let body_len_u32 = body_size.size().try_into().map_err(|_| Error::ExcessData)?;
         header.primary_mut().set_body_len(body_len_u32);
 
         #[cfg(unix)]
         {
-            let fds_len_u32 = fds_len.try_into().map_err(|_| Error::ExcessData)?;
+            let fds_len = body_size.num_fds();
             if fds_len != 0 {
-                header.fields_mut().add(Field::UnixFDs(fds_len_u32));
+                header.fields_mut().add(Field::UnixFDs(fds_len));
             }
         }
 
@@ -308,7 +300,7 @@ impl<'a> Builder<'a> {
         // We need to align the body to 8-byte boundary.
         let body_padding = padding_for_8_bytes(hdr_len);
         let body_offset = hdr_len + body_padding;
-        let total_len = body_offset + body_len;
+        let total_len = body_offset + body_size.size();
         if total_len > MAX_MESSAGE_SIZE {
             return Err(Error::ExcessData);
         }

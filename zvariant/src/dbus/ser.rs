@@ -7,9 +7,6 @@ use std::{
     str,
 };
 
-#[cfg(unix)]
-use std::os::fd::OwnedFd;
-
 use crate::{
     container_depths::ContainerDepths, signature_parser::SignatureParser, utils::*, Basic,
     EncodingContext, EncodingFormat, Error, ObjectPath, Result, Signature,
@@ -36,7 +33,7 @@ where
     pub fn new<'w: 'ser, 'f: 'ser, S>(
         signature: S,
         writer: &'w mut W,
-        #[cfg(unix)] fds: &'f mut Vec<OwnedFd>,
+        #[cfg(unix)] fds: &'f mut crate::ser::FdList,
         ctxt: EncodingContext<B>,
     ) -> Result<Self>
     where

@@ -13,7 +13,7 @@ use crate::gvariant::Serializer as GVSerializer;
 use crate::{
     container_depths::ContainerDepths,
     dbus::Serializer as DBusSerializer,
-    serialized::{Data, Written},
+    serialized::{Data, Size, Written},
     signature_parser::SignatureParser,
     utils::*,
     Basic, DynamicType, EncodingContext, EncodingFormat, Error, Result, Signature,
@@ -51,14 +51,50 @@ impl Seek for NullWriteSeek {
 /// let len = serialized_size(ctxt, &("hello world!", 42_u64)).unwrap();
 /// assert_eq!(*len, 32);
 /// ```
-pub fn serialized_size<B, T: ?Sized>(ctxt: EncodingContext<B>, value: &T) -> Result<Written<B>>
+pub fn serialized_size<B, T: ?Sized>(ctxt: EncodingContext<B>, value: &T) -> Result<Size<B>>
 where
     B: byteorder::ByteOrder,
     T: Serialize + DynamicType,
 {
     let mut null = NullWriteSeek;
+    let signature = value.dynamic_signature();
+    #[cfg(unix)]
+    let mut fds = FdList::Number(0);
 
-    to_writer(&mut null, ctxt, value)
+    let len = match ctxt.format() {
+        EncodingFormat::DBus => {
+            let mut ser = DBusSerializer::<B, NullWriteSeek>::new(
+                signature,
+                &mut null,
+                #[cfg(unix)]
+                &mut fds,
+                ctxt,
+            )?;
+            value.serialize(&mut ser)?;
+            ser.0.bytes_written
+        }
+        #[cfg(feature = "gvariant")]
+        EncodingFormat::GVariant => {
+            let mut ser = GVSerializer::<B, NullWriteSeek>::new(
+                signature,
+                &mut null,
+                #[cfg(unix)]
+                &mut fds,
+                ctxt,
+            )?;
+            value.serialize(&mut ser)?;
+            ser.0.bytes_written
+        }
+    };
+
+    let size = Size::new(len, ctxt);
+    #[cfg(unix)]
+    let size = match fds {
+        FdList::Number(n) => size.set_num_fds(n),
+        FdList::Fds(_) => unreachable!("`Fds::Fds` is not possible here"),
+    };
+
+    Ok(size)
 }
 
 /// Serialize `T` to the given `writer`.
@@ -127,7 +163,8 @@ where
     T: Serialize,
 {
     #[cfg(unix)]
-    let mut fds = vec![];
+    let mut fds = FdList::Fds(vec![]);
+
     let len = match ctxt.format() {
         EncodingFormat::DBus => {
             let mut ser = DBusSerializer::<B, W>::new(
@@ -154,11 +191,14 @@ where
         }
     };
 
-    let size = Written::new(len, ctxt);
+    let written = Written::new(len, ctxt);
     #[cfg(unix)]
-    let size = size.set_fds(fds);
+    let written = match fds {
+        FdList::Fds(fds) => written.set_fds(fds),
+        FdList::Number(_) => unreachable!("`Fds::Number` is not possible here"),
+    };
 
-    Ok(size)
+    Ok(written)
 }
 
 /// Serialize `T` that has the given signature, to a new byte vector.
@@ -200,7 +240,7 @@ pub(crate) struct SerializerCommon<'ser, 'sig, B, W> {
     pub(crate) writer: &'ser mut W,
     pub(crate) bytes_written: usize,
     #[cfg(unix)]
-    pub(crate) fds: &'ser mut Vec<OwnedFd>,
+    pub(crate) fds: &'ser mut FdList,
 
     pub(crate) sig_parser: SignatureParser<'sig>,
 
@@ -209,6 +249,12 @@ pub(crate) struct SerializerCommon<'ser, 'sig, B, W> {
     pub(crate) container_depths: ContainerDepths,
 
     pub(crate) b: PhantomData<B>,
+}
+
+#[cfg(unix)]
+pub(crate) enum FdList {
+    Fds(Vec<OwnedFd>),
+    Number(u32),
 }
 
 impl<'ser, 'sig, B, W> SerializerCommon<'ser, 'sig, B, W>
@@ -220,16 +266,26 @@ where
     pub(crate) fn add_fd(&mut self, fd: std::os::fd::RawFd) -> Result<u32> {
         use std::os::fd::{AsRawFd, BorrowedFd};
 
-        if let Some(idx) = self.fds.iter().position(|x| x.as_raw_fd() == fd) {
-            return Ok(idx as u32);
-        }
-        let idx = self.fds.len();
-        // Cloning implies dup and is unfortunate but we need to return owned fds
-        // and dup is not expensive (at least on Linux).
-        let fd = unsafe { BorrowedFd::borrow_raw(fd) }.try_clone_to_owned()?;
-        self.fds.push(fd);
+        match self.fds {
+            FdList::Fds(fds) => {
+                if let Some(idx) = fds.iter().position(|x| x.as_raw_fd() == fd) {
+                    return Ok(idx as u32);
+                }
+                let idx = fds.len();
+                // Cloning implies dup and is unfortunate but we need to return owned fds
+                // and dup is not expensive (at least on Linux).
+                let fd = unsafe { BorrowedFd::borrow_raw(fd) }.try_clone_to_owned()?;
+                fds.push(fd);
 
-        Ok(idx as u32)
+                Ok(idx as u32)
+            }
+            FdList::Number(n) => {
+                let idx = *n;
+                *n += 1;
+
+                Ok(idx)
+            }
+        }
     }
 
     pub(crate) fn add_padding(&mut self, alignment: usize) -> Result<usize> {
