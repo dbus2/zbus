@@ -145,10 +145,9 @@ where
 /// Serialize `T` that has the given signature, to the given `writer`.
 ///
 /// Use this function instead of [`to_writer`] if the value being serialized does not implement
-/// [`Type`].
+/// [`DynamicType`].
 ///
 /// [`to_writer`]: fn.to_writer.html
-/// [`Type`]: trait.Type.html
 pub fn to_writer_for_signature<'s, B, W, S, T: ?Sized>(
     writer: &mut W,
     ctxt: EncodingContext<B>,
@@ -204,11 +203,10 @@ where
 /// Serialize `T` that has the given signature, to a new byte vector.
 ///
 /// Use this function instead of [`to_bytes`] if the value being serialized does not implement
-/// [`Type`]. See [`from_slice_for_signature`] documentation for an example of how to use this
-/// function.
+/// [`DynamicType`]. See [`from_slice_for_signature`] documentation for an example of how to use
+/// this function.
 ///
 /// [`to_bytes`]: fn.to_bytes.html
-/// [`Type`]: trait.Type.html
 /// [`from_slice_for_signature`]: fn.from_slice_for_signature.html#examples
 pub fn to_bytes_for_signature<'s, B, S, T: ?Sized>(
     ctxt: EncodingContext<B>,
