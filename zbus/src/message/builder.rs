@@ -210,7 +210,8 @@ impl<'a> Builder<'a> {
         let signature = body.dynamic_signature();
 
         self.build_generic(signature, body_size, move |cursor| {
-            zvariant::to_writer(cursor, ctxt, body)
+            // SAFETY: build_generic puts FDs and the body in the same Message.
+            unsafe { zvariant::to_writer(cursor, ctxt, body) }
                 .map(|s| {
                     #[cfg(unix)]
                     {
@@ -307,7 +308,8 @@ impl<'a> Builder<'a> {
         let mut bytes: Vec<u8> = Vec::with_capacity(total_len);
         let mut cursor = Cursor::new(&mut bytes);
 
-        zvariant::to_writer(&mut cursor, ctxt, &header)?;
+        // SAFETY: There are no FDs involved.
+        unsafe { zvariant::to_writer(&mut cursor, ctxt, &header) }?;
         for _ in 0..body_padding {
             cursor.write_all(&[0u8])?;
         }

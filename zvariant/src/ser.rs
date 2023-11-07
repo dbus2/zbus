@@ -106,14 +106,25 @@ where
 ///
 /// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
 /// let mut cursor = std::io::Cursor::new(vec![]);
-/// to_writer(&mut cursor, ctxt, &42u32).unwrap();
+/// // SAFETY: No FDs are being serialized here so its completely safe.
+/// unsafe { to_writer(&mut cursor, ctxt, &42u32) }.unwrap();
 /// let encoded = Data::new(cursor.get_ref(), ctxt);
 /// let value: u32 = encoded.deserialize().unwrap().0;
 /// assert_eq!(value, 42);
 /// ```
 ///
+/// # Safety
+///
+/// On Unix systems, the returned [`Written`] instance can contain file descriptors and therefore
+/// the caller is responsible for not dropping the returned [`Written`] instance before the
+/// `writer`. Otherwise, the file descriptors in the `Written` instance will be closed while
+/// serialized data will still refer to them. Hence why this function is marked unsafe.
+///
+/// On non-Unix systems, the returned [`Written`] instance will not contain any file descriptors and
+/// hence is safe to drop.
+///
 /// [`to_writer_fds`]: fn.to_writer_fds.html
-pub fn to_writer<B, W, T: ?Sized>(
+pub unsafe fn to_writer<B, W, T: ?Sized>(
     writer: &mut W,
     ctxt: EncodingContext<B>,
     value: &T,
@@ -147,8 +158,18 @@ where
 /// Use this function instead of [`to_writer`] if the value being serialized does not implement
 /// [`DynamicType`].
 ///
+/// # Safety
+///
+/// On Unix systems, the returned [`Written`] instance can contain file descriptors and therefore
+/// the caller is responsible for not dropping the returned [`Written`] instance before the
+/// `writer`. Otherwise, the file descriptors in the `Written` instance will be closed while
+/// serialized data will still refer to them. Hence why this function is marked unsafe.
+///
+/// On non-Unix systems, the returned [`Written`] instance will not contain any file descriptors and
+/// hence is safe to drop.
+///
 /// [`to_writer`]: fn.to_writer.html
-pub fn to_writer_for_signature<'s, B, W, S, T: ?Sized>(
+pub unsafe fn to_writer_for_signature<'s, B, W, S, T: ?Sized>(
     writer: &mut W,
     ctxt: EncodingContext<B>,
     signature: S,
@@ -220,7 +241,9 @@ where
     T: Serialize,
 {
     let mut cursor = std::io::Cursor::new(vec![]);
-    let ret = to_writer_for_signature(&mut cursor, ctxt, signature, value)?;
+    // SAFETY: We put the bytes and FDs in the `Data` to ensure that the data and FDs are only
+    // dropped together.
+    let ret = unsafe { to_writer_for_signature(&mut cursor, ctxt, signature, value) }?;
     #[cfg(unix)]
     let encoded = Data::new_fds(cursor.into_inner(), ctxt, ret.into_fds());
     #[cfg(not(unix))]
