@@ -24,7 +24,7 @@ impl super::WriteHalf for std::sync::Arc<async_io::Async<vsock::VsockStream>> {
     async fn sendmsg(
         &mut self,
         buf: &[u8],
-        #[cfg(unix)] fds: &[std::os::unix::io::RawFd],
+        #[cfg(unix)] fds: &[std::os::fd::BorrowedFd<'_>],
     ) -> std::io::Result<usize> {
         use std::io;
 
@@ -39,7 +39,7 @@ impl super::WriteHalf for std::sync::Arc<async_io::Async<vsock::VsockStream>> {
         futures_util::AsyncWriteExt::write(&mut self.as_ref(), buf).await
     }
 
-    async fn close(&self) -> io::Result<()> {
+    async fn close(&mut self) -> std::io::Result<()> {
         let stream = self.clone();
         crate::Task::spawn_blocking(
             move || stream.get_ref().shutdown(std::net::Shutdown::Both),
@@ -84,7 +84,7 @@ impl super::WriteHalf for tokio_vsock::WriteHalf {
     async fn sendmsg(
         &mut self,
         buf: &[u8],
-        #[cfg(unix)] fds: &[std::os::unix::io::RawFd],
+        #[cfg(unix)] fds: &[std::os::fd::BorrowedFd<'_>],
     ) -> std::io::Result<usize> {
         use std::io;
         use tokio::io::AsyncWriteExt;

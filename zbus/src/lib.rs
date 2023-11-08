@@ -191,9 +191,6 @@ pub mod export {
 pub use zbus_names as names;
 pub use zvariant;
 
-#[cfg(unix)]
-use zvariant::OwnedFd;
-
 #[cfg(test)]
 mod tests {
     use std::{

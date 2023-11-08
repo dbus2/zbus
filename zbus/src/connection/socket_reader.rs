@@ -117,7 +117,7 @@ impl SocketReader {
                 let len = {
                     #[cfg(unix)]
                     {
-                        fds.extend(res.1.into_iter().map(Into::into));
+                        fds.extend(res.1);
                         res.0
                     }
                     #[cfg(not(unix))]
@@ -157,7 +157,7 @@ impl SocketReader {
             let read = {
                 #[cfg(unix)]
                 {
-                    fds.extend(res.1.into_iter().map(Into::into));
+                    fds.extend(res.1);
                     res.0
                 }
                 #[cfg(not(unix))]
