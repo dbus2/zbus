@@ -14,7 +14,7 @@ use crate::{
 /// Use this to efficiently build a [`Structure`].
 ///
 /// [`Structure`]: struct.Structure.html
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Default, PartialEq)]
 pub struct StructureBuilder<'a>(Vec<Value<'a>>);
 
 assert_impl_all!(StructureBuilder<'_>: Send, Sync, Unpin);
@@ -155,7 +155,7 @@ impl<'de> Visitor<'de> for StructureVisitor<'de> {
 /// API is provided to convert from, and to tuples.
 ///
 /// [`Value`]: enum.Value.html
-#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Structure<'a> {
     fields: Vec<Value<'a>>,
     signature: Signature<'a>,
@@ -197,6 +197,20 @@ impl<'a> Structure<'a> {
                 .map(|v| v.try_to_owned().map(Into::into))
                 .collect::<crate::Result<_>>()?,
             signature: self.signature.to_owned(),
+        })
+    }
+
+    /// Attempt to clone `self`.
+    pub fn try_clone(&self) -> Result<Self, crate::Error> {
+        let fields = self
+            .fields
+            .iter()
+            .map(|v| v.try_clone())
+            .collect::<crate::Result<Vec<_>>>()?;
+
+        Ok(Self {
+            fields,
+            signature: self.signature.clone(),
         })
     }
 }

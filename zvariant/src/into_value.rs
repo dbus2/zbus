@@ -17,37 +17,65 @@ macro_rules! into_value {
                 Value::$kind(v.into())
             }
         }
+    };
+}
 
+macro_rules! into_value_from_ref {
+    ($from:ty, $kind:ident) => {
         impl<'a> From<&'a $from> for Value<'a> {
             fn from(v: &'a $from) -> Self {
-                Value::from(v.clone())
+                Value::$kind(v.clone().into())
             }
         }
     };
 }
 
-into_value!(u8, U8);
-into_value!(i8, I16);
-into_value!(bool, Bool);
-into_value!(u16, U16);
-into_value!(i16, I16);
-into_value!(u32, U32);
-into_value!(i32, I32);
-into_value!(u64, U64);
-into_value!(i64, I64);
-into_value!(f32, F64);
-into_value!(f64, F64);
-#[cfg(unix)]
-into_value!(Fd, Fd);
+macro_rules! into_value_from_both {
+    ($from:ty, $kind:ident) => {
+        into_value!($from, $kind);
+        into_value_from_ref!($from, $kind);
+    };
+}
 
-into_value!(&'a str, Str);
-into_value!(Str<'a>, Str);
-into_value!(Signature<'a>, Signature);
-into_value!(ObjectPath<'a>, ObjectPath);
+into_value_from_both!(u8, U8);
+into_value_from_both!(i8, I16);
+into_value_from_both!(bool, Bool);
+into_value_from_both!(u16, U16);
+into_value_from_both!(i16, I16);
+into_value_from_both!(u32, U32);
+into_value_from_both!(i32, I32);
+into_value_from_both!(u64, U64);
+into_value_from_both!(i64, I64);
+into_value_from_both!(f32, F64);
+into_value_from_both!(f64, F64);
+#[cfg(unix)]
+into_value_from_both!(Fd, Fd);
+
+into_value_from_both!(&'a str, Str);
+into_value_from_both!(Str<'a>, Str);
+into_value_from_both!(Signature<'a>, Signature);
+into_value_from_both!(ObjectPath<'a>, ObjectPath);
+
+macro_rules! try_into_value_from_ref {
+    ($from:ty, $kind:ident) => {
+        impl<'a> TryFrom<&'a $from> for Value<'a> {
+            type Error = crate::Error;
+
+            fn try_from(v: &'a $from) -> crate::Result<Self> {
+                v.try_clone().map(Value::$kind)
+            }
+        }
+    };
+}
+
 into_value!(Array<'a>, Array);
+try_into_value_from_ref!(Array<'a>, Array);
 into_value!(Dict<'a, 'a>, Dict);
+try_into_value_from_ref!(Dict<'a, 'a>, Dict);
 #[cfg(feature = "gvariant")]
 into_value!(Maybe<'a>, Maybe);
+#[cfg(feature = "gvariant")]
+try_into_value_from_ref!(Maybe<'a>, Maybe);
 
 impl From<String> for Value<'static> {
     fn from(v: String) -> Self {

@@ -537,11 +537,11 @@ impl ObjectServer {
                         .map(|(i, props)| {
                             let props = props
                                 .iter()
-                                .map(|(k, v)| (k.as_str(), Value::from(v)))
-                                .collect();
-                            (i.into(), props)
+                                .map(|(k, v)| Ok((k.as_str(), Value::try_from(v)?)))
+                                .collect::<Result<_>>();
+                            Ok((i.into(), props?))
                         })
-                        .collect();
+                        .collect::<Result<_>>()?;
                     ObjectManager::interfaces_added(&ctxt, &path, &interfaces).await?;
                 }
             } else if let Some(manager_path) = manager_path {
@@ -550,8 +550,8 @@ impl ObjectServer {
                 let owned_props = node.get_properties(name.clone()).await?;
                 let props = owned_props
                     .iter()
-                    .map(|(k, v)| (k.as_str(), Value::from(v)))
-                    .collect();
+                    .map(|(k, v)| Ok((k.as_str(), Value::try_from(v)?)))
+                    .collect::<Result<_>>()?;
                 interfaces.insert(name, props);
 
                 ObjectManager::interfaces_added(&ctxt, &path, &interfaces).await?;

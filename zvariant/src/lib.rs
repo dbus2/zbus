@@ -242,7 +242,7 @@ mod tests {
         let v: Value<'_> = value.into();
         assert_eq!(v.value_signature(), f64::SIGNATURE_STR);
         assert_eq!(v, Value::F64(value));
-        f64_value_test(format, v.clone(), expected_value_len);
+        f64_value_test(format, v.try_clone().unwrap(), expected_value_len);
         let v: f64 = v.try_into().unwrap();
         assert!((v - value).abs() < f64::EPSILON);
     }
@@ -880,7 +880,7 @@ mod tests {
         let encoded = to_bytes::<LE, _>(ctxt, &v).unwrap();
         assert_eq!(encoded.len(), 94);
         let v = encoded.deserialize::<Value<'_>>().unwrap().0;
-        if let Value::Array(array) = v.clone() {
+        if let Value::Array(array) = v.try_clone().unwrap() {
             assert_eq!(*array.element_signature(), "(yu(xbxas)s)");
             assert_eq!(array.len(), 1);
             let r = &array.get()[0];
@@ -1683,7 +1683,10 @@ mod tests {
             Value::Maybe(maybe) => assert_eq!(maybe.get().unwrap(), mn),
             #[cfg(feature = "option-as-array")]
             Value::Array(array) => {
-                assert_eq!(i16::try_from(array.get()[0].clone()).unwrap(), 16i16)
+                assert_eq!(
+                    i16::try_from(array.get()[0].try_clone().unwrap()).unwrap(),
+                    16i16
+                )
             }
             _ => panic!("unexpected value {decoded:?}"),
         }
@@ -1742,7 +1745,7 @@ mod tests {
         match &v {
             Value::Array(array) => {
                 assert_eq!(
-                    String::try_from(array.get()[0].clone()).unwrap(),
+                    String::try_from(array.get()[0].try_clone().unwrap()).unwrap(),
                     ms.unwrap()
                 )
             }
@@ -1763,7 +1766,7 @@ mod tests {
             #[cfg(feature = "option-as-array")]
             Value::Array(array) => {
                 assert_eq!(
-                    String::try_from(array.get()[0].clone()).unwrap(),
+                    String::try_from(array.get()[0].try_clone().unwrap()).unwrap(),
                     ms.unwrap()
                 )
             }

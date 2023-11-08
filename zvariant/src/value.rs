@@ -75,7 +75,7 @@ use crate::Fd;
 /// ```
 ///
 /// [D-Bus specification]: https://dbus.freedesktop.org/doc/dbus-specification.html#container-types
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, PartialEq, PartialOrd)]
 pub enum Value<'a> {
     // Simple types
     U8(u8),
@@ -267,6 +267,32 @@ impl<'a> Value<'a> {
             #[cfg(unix)]
             Value::Fd(_) => Fd::signature(),
         }
+    }
+
+    /// Try to clone the value.
+    pub fn try_clone(&self) -> crate::Result<Self> {
+        Ok(match self {
+            Value::U8(v) => Value::U8(*v),
+            Value::Bool(v) => Value::Bool(*v),
+            Value::I16(v) => Value::I16(*v),
+            Value::U16(v) => Value::U16(*v),
+            Value::I32(v) => Value::I32(*v),
+            Value::U32(v) => Value::U32(*v),
+            Value::I64(v) => Value::I64(*v),
+            Value::U64(v) => Value::U64(*v),
+            Value::F64(v) => Value::F64(*v),
+            Value::Str(v) => Value::Str(v.clone()),
+            Value::Signature(v) => Value::Signature(v.clone()),
+            Value::ObjectPath(v) => Value::ObjectPath(v.clone()),
+            Value::Value(v) => Value::Value(Box::new(v.try_clone()?)),
+            Value::Array(v) => Value::Array(v.try_clone()?),
+            Value::Dict(v) => Value::Dict(v.try_clone()?),
+            Value::Structure(v) => Value::Structure(v.try_clone()?),
+            #[cfg(feature = "gvariant")]
+            Value::Maybe(v) => Value::Maybe(v.try_clone()?),
+            #[cfg(unix)]
+            Value::Fd(v) => Value::Fd(*v),
+        })
     }
 
     pub(crate) fn serialize_value_as_struct_field<S>(

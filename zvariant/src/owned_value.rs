@@ -17,12 +17,17 @@ use crate::Maybe;
 // https://github.com/dbus2/zbus/issues/138
 
 /// Owned [`Value`](enum.Value.html)
-#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+#[derive(Debug, PartialEq, Serialize, Type)]
 pub struct OwnedValue(pub(crate) Value<'static>);
 
 assert_impl_all!(OwnedValue: Send, Sync, Unpin);
 
 impl OwnedValue {
+    /// Attempt to clone the value.
+    pub fn try_clone(&self) -> Result<Self, crate::Error> {
+        self.0.try_clone().map(Self)
+    }
+
     pub(crate) fn into_inner(self) -> Value<'static> {
         self.0
     }
@@ -248,9 +253,11 @@ impl From<OwnedValue> for Value<'static> {
     }
 }
 
-impl<'o> From<&'o OwnedValue> for Value<'o> {
-    fn from(v: &'o OwnedValue) -> Value<'o> {
-        v.inner().clone()
+impl<'o> TryFrom<&'o OwnedValue> for Value<'o> {
+    type Error = crate::Error;
+
+    fn try_from(v: &'o OwnedValue) -> crate::Result<Value<'o>> {
+        v.inner().try_clone()
     }
 }
 

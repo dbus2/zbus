@@ -9,7 +9,7 @@ use crate::{value_display_fmt, Error, Signature, Type, Value};
 /// API is provided to convert from, and to `Option<T>`.
 ///
 /// [`Value`]: enum.Value.html
-#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Maybe<'a> {
     value: Box<Option<Value<'a>>>,
     value_signature: Signature<'a>,
@@ -105,6 +105,21 @@ impl<'a> Maybe<'a> {
                     .transpose()?,
             ),
             signature: self.signature.to_owned(),
+        })
+    }
+
+    /// Attempt to clone `self`.
+    pub fn try_clone(&self) -> Result<Self, crate::Error> {
+        Ok(Maybe {
+            value_signature: self.value_signature.clone(),
+            value: Box::new(
+                self.value
+                    .as_ref()
+                    .as_ref()
+                    .map(|v| v.try_clone().map(Into::into))
+                    .transpose()?,
+            ),
+            signature: self.signature.clone(),
         })
     }
 }

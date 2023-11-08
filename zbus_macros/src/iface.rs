@@ -292,7 +292,14 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                                 .args
                                 .first()
                                 .filter(|arg| matches!(arg, GenericArgument::Lifetime(_)))
-                                .map(|_| quote!(value.clone()))
+                                .map(|_| quote!(match ::zbus::zvariant::Value::try_clone(value) {
+                                    ::std::result::Result::Ok(val) => val,
+                                    ::std::result::Result::Err(e) => {
+                                        return ::std::result::Result::Err(
+                                            ::std::convert::Into::into(#zbus::Error::Variant(::std::convert::Into::into(e)))
+                                        );
+                                    }
+                                }))
                                 .unwrap_or_else(|| value_to_owned.clone()),
                             _ => value_to_owned.clone(),
                         })

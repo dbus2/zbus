@@ -17,7 +17,7 @@ use crate::{
 ///
 /// [`Value`]: enum.Value.html#variant.Array
 /// [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
-#[derive(Debug, Clone, Hash, PartialEq, PartialOrd, Eq, Ord)]
+#[derive(Debug, Hash, PartialEq, PartialOrd, Eq, Ord)]
 pub struct Array<'a> {
     element_signature: Signature<'a>,
     elements: Vec<Value<'a>>,
@@ -102,6 +102,21 @@ impl<'a> Array<'a> {
                 .map(|v| v.try_to_owned().map(Into::into))
                 .collect::<Result<_>>()?,
             signature: self.signature.to_owned(),
+        })
+    }
+
+    /// Tries to clone the `Array`.
+    pub fn try_clone(&self) -> crate::Result<Self> {
+        let elements = self
+            .elements
+            .iter()
+            .map(|v| v.try_clone())
+            .collect::<crate::Result<Vec<_>>>()?;
+
+        Ok(Self {
+            element_signature: self.element_signature.clone(),
+            elements,
+            signature: self.signature.clone(),
         })
     }
 }
