@@ -72,7 +72,7 @@ pub trait Interface: Any + Send + Sync {
     async fn get(&self, property_name: &str) -> Option<fdo::Result<OwnedValue>>;
 
     /// Return all the properties.
-    async fn get_all(&self) -> HashMap<String, OwnedValue>;
+    async fn get_all(&self) -> fdo::Result<HashMap<String, OwnedValue>>;
 
     /// Set a property value.
     ///

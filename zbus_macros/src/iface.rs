@@ -494,16 +494,16 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
             async fn get_all(
                 &self,
-            ) -> ::std::collections::HashMap<
+            ) -> #zbus::fdo::Result<::std::collections::HashMap<
                 ::std::string::String,
                 #zbus::zvariant::OwnedValue,
-            > {
+            >> {
                 let mut props: ::std::collections::HashMap<
                     ::std::string::String,
                     #zbus::zvariant::OwnedValue,
                 > = ::std::collections::HashMap::new();
                 #get_all
-                props
+                Ok(props)
             }
 
             fn set<'call>(

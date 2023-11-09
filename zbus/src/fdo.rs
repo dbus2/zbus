@@ -199,7 +199,7 @@ impl Properties {
                 Error::UnknownInterface(format!("Unknown interface '{interface_name}'"))
             })?;
 
-        let res = iface.read().await.get_all().await;
+        let res = iface.read().await.get_all().await?;
         Ok(res)
     }
 
@@ -298,7 +298,7 @@ impl ObjectManager {
             .get_child(path)
             .ok_or_else(|| Error::UnknownObject(format!("Unknown object '{path}'")))?;
 
-        Ok(node.get_managed_objects().await)
+        node.get_managed_objects().await
     }
 
     /// This signal is emitted when either a new object is added or when an existing object gains
