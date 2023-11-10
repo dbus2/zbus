@@ -333,6 +333,7 @@ impl Address {
             Address::Tcp(addr) => connect_tcp(addr).await.map(Stream::Tcp),
 
             Address::NonceTcp { addr, nonce_file } => {
+                #[allow(unused_mut)]
                 let mut stream = connect_tcp(addr).await?;
 
                 #[cfg(unix)]
@@ -352,7 +353,7 @@ impl Address {
 
                     while !nonce.is_empty() {
                         let len = stream
-                            .write_with_mut(|s| std::io::Write::write(s, nonce))
+                            .write_with(|mut s| std::io::Write::write(&mut s, nonce))
                             .await?;
                         nonce = &nonce[len..];
                     }
