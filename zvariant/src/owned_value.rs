@@ -182,48 +182,65 @@ where
 
 // tuple conversions in `structure` module for avoiding code-duplication.
 
-impl<'a> From<Value<'a>> for OwnedValue {
-    fn from(v: Value<'a>) -> Self {
+impl<'a> TryFrom<Value<'a>> for OwnedValue {
+    type Error = crate::Error;
+
+    fn try_from(v: Value<'a>) -> crate::Result<Self> {
         // TODO: add into_owned, avoiding copy if already owned..
-        v.to_owned()
+        v.try_to_owned()
     }
 }
 
-impl<'a> From<&Value<'a>> for OwnedValue {
-    fn from(v: &Value<'a>) -> Self {
-        v.to_owned()
+impl<'a> TryFrom<&Value<'a>> for OwnedValue {
+    type Error = crate::Error;
+
+    fn try_from(v: &Value<'a>) -> crate::Result<Self> {
+        v.try_to_owned()
     }
 }
 
 macro_rules! to_value {
-    ($from:ty) => {
+    ($from:ty, $variant:ident) => {
         impl<'a> From<$from> for OwnedValue {
             fn from(v: $from) -> Self {
-                OwnedValue::from(<Value<'a>>::from(v))
+                OwnedValue(<Value<'static>>::$variant(v.to_owned()))
             }
         }
     };
 }
 
-to_value!(u8);
-to_value!(bool);
-to_value!(i16);
-to_value!(u16);
-to_value!(i32);
-to_value!(u32);
-to_value!(i64);
-to_value!(u64);
-to_value!(f64);
-to_value!(Array<'a>);
-to_value!(Dict<'a, 'a>);
-#[cfg(feature = "gvariant")]
-to_value!(Maybe<'a>);
-to_value!(Str<'a>);
-to_value!(Signature<'a>);
-to_value!(Structure<'a>);
-to_value!(ObjectPath<'a>);
+to_value!(u8, U8);
+to_value!(bool, Bool);
+to_value!(i16, I16);
+to_value!(u16, U16);
+to_value!(i32, I32);
+to_value!(u32, U32);
+to_value!(i64, I64);
+to_value!(u64, U64);
+to_value!(f64, F64);
+to_value!(Str<'a>, Str);
+to_value!(Signature<'a>, Signature);
+to_value!(ObjectPath<'a>, ObjectPath);
 #[cfg(unix)]
-to_value!(Fd);
+to_value!(Fd, Fd);
+
+macro_rules! try_to_value {
+    ($from:ty) => {
+        impl<'a> TryFrom<$from> for OwnedValue {
+            type Error = crate::Error;
+
+            fn try_from(v: $from) -> crate::Result<Self> {
+                OwnedValue::try_from(<Value<'a>>::from(v))
+            }
+        }
+    };
+}
+
+try_to_value!(Array<'a>);
+try_to_value!(Dict<'a, 'a>);
+#[cfg(feature = "gvariant")]
+try_to_value!(Maybe<'a>);
+try_to_value!(Structure<'a>);
 
 impl From<OwnedValue> for Value<'static> {
     fn from(v: OwnedValue) -> Value<'static> {
@@ -250,7 +267,8 @@ impl<'de> Deserialize<'de> for OwnedValue {
     where
         D: Deserializer<'de>,
     {
-        Ok(Value::deserialize(deserializer)?.into())
+        Value::deserialize(deserializer)
+            .and_then(|v| v.try_to_owned().map_err(serde::de::Error::custom))
     }
 }
 
@@ -273,7 +291,7 @@ mod tests {
         }
 
         let v = Value::from(0x2u32);
-        let ov: OwnedValue = v.into();
+        let ov: OwnedValue = v.try_into()?;
         assert_eq!(<enumflags2::BitFlags<Flaggy>>::try_from(ov)?, Flaggy::Two);
         Ok(())
     }
@@ -281,7 +299,7 @@ mod tests {
     #[test]
     fn from_value() -> Result<(), Box<dyn Error>> {
         let v = Value::from("hi!");
-        let ov: OwnedValue = v.into();
+        let ov: OwnedValue = v.try_into()?;
         assert_eq!(<&str>::try_from(&ov)?, "hi!");
         Ok(())
     }
@@ -289,7 +307,7 @@ mod tests {
     #[test]
     fn serde() -> Result<(), Box<dyn Error>> {
         let ec = EncodingContext::<LE>::new_dbus(0);
-        let ov: OwnedValue = Value::from("hi!").into();
+        let ov: OwnedValue = Value::from("hi!").try_into()?;
         let ser = to_bytes(ec, &ov)?;
         let (de, parsed): (Value<'_>, _) = ser.deserialize()?;
         assert_eq!(<&str>::try_from(&de)?, "hi!");

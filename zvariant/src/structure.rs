@@ -189,11 +189,15 @@ impl<'a> Structure<'a> {
         &self.signature
     }
 
-    pub(crate) fn to_owned(&self) -> Structure<'static> {
-        Structure {
-            fields: self.fields.iter().map(|v| v.to_owned().into()).collect(),
+    pub(crate) fn try_to_owned(&self) -> crate::Result<Structure<'static>> {
+        Ok(Structure {
+            fields: self
+                .fields
+                .iter()
+                .map(|v| v.try_to_owned().map(Into::into))
+                .collect::<crate::Result<_>>()?,
             signature: self.signature.to_owned(),
-        }
+        })
     }
 }
 

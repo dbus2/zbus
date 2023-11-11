@@ -210,13 +210,9 @@ impl<'a> Value<'a> {
         }
     }
 
-    /// Create an owned version of `self`.
-    ///
-    /// Ideally, we should implement [`std::borrow::ToOwned`] trait for `Value`, but that's
-    /// implemented generically for us through `impl<T: Clone> ToOwned for T` and it's not what we
-    /// need/want.
-    pub fn to_owned(&self) -> OwnedValue {
-        OwnedValue(match self {
+    /// Try to create an owned version of `self`.
+    pub fn try_to_owned(&self) -> crate::Result<OwnedValue> {
+        Ok(OwnedValue(match self {
             Value::U8(v) => Value::U8(*v),
             Value::Bool(v) => Value::Bool(*v),
             Value::I16(v) => Value::I16(*v),
@@ -230,18 +226,18 @@ impl<'a> Value<'a> {
             Value::Signature(v) => Value::Signature(v.to_owned()),
             Value::ObjectPath(v) => Value::ObjectPath(v.to_owned()),
             Value::Value(v) => {
-                let o = OwnedValue::from(&**v);
+                let o = OwnedValue::try_from(&**v)?;
                 Value::Value(Box::new(o.into_inner()))
             }
 
-            Value::Array(v) => Value::Array(v.to_owned()),
-            Value::Dict(v) => Value::Dict(v.to_owned()),
-            Value::Structure(v) => Value::Structure(v.to_owned()),
+            Value::Array(v) => Value::Array(v.try_to_owned()?),
+            Value::Dict(v) => Value::Dict(v.try_to_owned()?),
+            Value::Structure(v) => Value::Structure(v.try_to_owned()?),
             #[cfg(feature = "gvariant")]
-            Value::Maybe(v) => Value::Maybe(v.to_owned()),
+            Value::Maybe(v) => Value::Maybe(v.try_to_owned()?),
             #[cfg(unix)]
             Value::Fd(v) => Value::Fd(*v),
-        })
+        }))
     }
 
     /// Get the signature of the enclosed value.

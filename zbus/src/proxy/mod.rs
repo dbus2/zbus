@@ -197,7 +197,7 @@ where
     pub async fn get(&self) -> Result<T> {
         self.get_raw()
             .await
-            .and_then(|v| T::try_from(OwnedValue::from(&*v)).map_err(Into::into))
+            .and_then(|v| T::try_from(OwnedValue::try_from(&*v)?).map_err(Into::into))
     }
 }
 
@@ -446,7 +446,16 @@ impl PropertiesCache {
 
             let entry = values.entry(property_name.to_string()).or_default();
 
-            entry.value = Some(OwnedValue::from(value));
+            let value = match OwnedValue::try_from(value) {
+                Ok(value) => value,
+                Err(e) => {
+                    debug!(
+                        "Failed to convert property `{interface}.{property_name}` to OwnedValue: {e}"
+                    );
+                    continue;
+                }
+            };
+            entry.value = Some(value);
             entry.event.notify(usize::MAX);
         }
     }
@@ -704,9 +713,8 @@ impl<'a> Proxy<'a> {
     {
         self.cached_property_raw(property_name)
             .as_deref()
-            .map(|v| T::try_from(OwnedValue::from(v)))
+            .map(|v| T::try_from(OwnedValue::try_from(v)?).map_err(Into::into))
             .transpose()
-            .map_err(Into::into)
     }
 
     /// Get the cached value of the property `property_name`.

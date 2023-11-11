@@ -93,12 +93,16 @@ impl<'a> Array<'a> {
         &self.element_signature
     }
 
-    pub(crate) fn to_owned(&self) -> Array<'static> {
-        Array {
+    pub(crate) fn try_to_owned(&self) -> Result<Array<'static>> {
+        Ok(Array {
             element_signature: self.element_signature.to_owned(),
-            elements: self.elements.iter().map(|v| v.to_owned().into()).collect(),
+            elements: self
+                .elements
+                .iter()
+                .map(|v| v.try_to_owned().map(Into::into))
+                .collect::<Result<_>>()?,
             signature: self.signature.to_owned(),
-        }
+        })
     }
 }
 

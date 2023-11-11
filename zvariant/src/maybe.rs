@@ -94,12 +94,18 @@ impl<'a> Maybe<'a> {
         &self.value_signature
     }
 
-    pub(crate) fn to_owned(&self) -> Maybe<'static> {
-        Maybe {
+    pub(crate) fn try_to_owned(&self) -> crate::Result<Maybe<'static>> {
+        Ok(Maybe {
             value_signature: self.value_signature.to_owned(),
-            value: Box::new(self.value.clone().map(|v| v.to_owned().into())),
+            value: Box::new(
+                self.value
+                    .as_ref()
+                    .as_ref()
+                    .map(|v| v.try_to_owned().map(Into::into))
+                    .transpose()?,
+            ),
             signature: self.signature.to_owned(),
-        }
+        })
     }
 }
 

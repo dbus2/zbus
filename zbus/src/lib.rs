@@ -599,7 +599,7 @@ mod tests {
                 input: Value<'_>,
             ) -> zbus::fdo::Result<(OwnedValue, OwnedObjectPath)> {
                 Ok((
-                    OwnedValue::from(input),
+                    OwnedValue::try_from(input).unwrap(),
                     ObjectPath::try_from("/org/freedesktop/secrets/Blah")
                         .unwrap()
                         .into(),

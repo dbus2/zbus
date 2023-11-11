@@ -328,7 +328,7 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// };
 /// let value = Value::from(s.clone());
 /// let _ = OwnedStruct::try_from(value).unwrap();
-/// let value = OwnedValue::from(s);
+/// let value = OwnedValue::try_from(s).unwrap();
 /// let s = OwnedStruct::try_from(value).unwrap();
 /// assert_eq!(s.owned_str, "hi");
 /// assert_eq!(s.owned_path.as_str(), "/blah");
@@ -354,7 +354,7 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// let value = Value::from(s.clone());
 /// let s = UnownedStruct::try_from(value).unwrap();
 ///
-/// let value = OwnedValue::from(s);
+/// let value = OwnedValue::try_from(s).unwrap();
 /// let s = UnownedStruct::try_from(value).unwrap();
 /// assert_eq!(s.s, "hi");
 /// assert_eq!(s.path, "/blah");
@@ -377,7 +377,7 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// };
 /// let value = Value::from(s.clone());
 /// let _ = GenericStruct::<String, OwnedObjectPath>::try_from(value).unwrap();
-/// let value = OwnedValue::from(s);
+/// let value = OwnedValue::try_from(s).unwrap();
 /// let s = GenericStruct::<String, OwnedObjectPath>::try_from(value).unwrap();
 /// assert_eq!(s.field1, "hi");
 /// assert_eq!(s.field2.as_str(), "/blah");
@@ -398,7 +398,7 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// let value = Value::from(Enum::Variant1);
 /// let e = Enum::try_from(value).unwrap();
 /// assert_eq!(e, Enum::Variant1);
-/// let value = OwnedValue::from(Enum::Variant2);
+/// let value = OwnedValue::try_from(Enum::Variant2).unwrap();
 /// let e = Enum::try_from(value).unwrap();
 /// assert_eq!(e, Enum::Variant2);
 /// ```
@@ -421,7 +421,7 @@ pub fn value_macro_derive(input: TokenStream) -> TokenStream {
 
 /// Implements conversions for your type to/from [`OwnedValue`].
 ///
-/// Implements `TryFrom<OwnedValue>` and `Into<OwnedValue>` for your type.
+/// Implements `TryFrom<OwnedValue>` and `TryInto<OwnedValue>` for your type.
 ///
 /// See [`Value`] documentation for examples.
 ///

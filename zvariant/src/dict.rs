@@ -116,13 +116,17 @@ impl<'k, 'v> Dict<'k, 'v> {
         &self.signature
     }
 
-    pub(crate) fn to_owned(&self) -> Dict<'static, 'static> {
-        Dict {
+    pub(crate) fn try_to_owned(&self) -> crate::Result<Dict<'static, 'static>> {
+        Ok(Dict {
             key_signature: self.key_signature.to_owned(),
             value_signature: self.value_signature.to_owned(),
             signature: self.signature.to_owned(),
-            entries: self.entries.iter().map(|v| v.to_owned()).collect(),
-        }
+            entries: self
+                .entries
+                .iter()
+                .map(|v| v.try_to_owned().map(Into::into))
+                .collect::<crate::Result<_>>()?,
+        })
     }
 
     /// Create a new empty `Dict`, given the complete signature.
@@ -268,11 +272,11 @@ struct DictEntry<'k, 'v> {
 }
 
 impl<'k, 'v> DictEntry<'k, 'v> {
-    fn to_owned(&self) -> DictEntry<'static, 'static> {
-        DictEntry {
-            key: self.key.to_owned().into(),
-            value: self.value.to_owned().into(),
-        }
+    fn try_to_owned(&self) -> crate::Result<DictEntry<'static, 'static>> {
+        Ok(DictEntry {
+            key: self.key.try_to_owned().map(Into::into)?,
+            value: self.value.try_to_owned().map(Into::into)?,
+        })
     }
 }
 
