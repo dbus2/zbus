@@ -314,10 +314,7 @@ impl<'a> Builder<'a> {
             cursor.write_all(&[0u8])?;
         }
         #[cfg(unix)]
-        let fds = write_body(&mut cursor)?
-            .into_iter()
-            .map(Into::into)
-            .collect();
+        let fds: Vec<_> = write_body(&mut cursor)?.into_iter().collect();
         #[cfg(not(unix))]
         write_body(&mut cursor)?;
 

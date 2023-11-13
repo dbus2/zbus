@@ -1,5 +1,5 @@
 #[cfg(unix)]
-use super::fd::Fd;
+use crate::{Fd, OwnedFd};
 use std::{
     borrow::Cow,
     ops::{Bound, Deref, Range, RangeBounds},
@@ -43,7 +43,7 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
     pub fn new_borrowed_fds<T>(
         bytes: T,
         context: EncodingContext<B>,
-        fds: Vec<std::os::fd::BorrowedFd<'fds>>,
+        fds: impl IntoIterator<Item = impl Into<Fd<'fds>>>,
     ) -> Self
     where
         T: Into<Cow<'bytes, [u8]>>,
@@ -77,7 +77,7 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
     ///
     /// This method is only available on Unix platforms.
     #[cfg(unix)]
-    pub fn fds(&self) -> &[impl std::os::fd::AsFd + std::fmt::Debug + 'fds] {
+    pub fn fds(&self) -> &[Fd<'fds>] {
         &self.inner.fds
     }
 
@@ -362,7 +362,11 @@ impl<'bytes, B: ByteOrder> Data<'bytes, 'static, B> {
     ///
     /// This method is only available on Unix platforms.
     #[cfg(unix)]
-    pub fn new_fds<T>(bytes: T, context: EncodingContext<B>, fds: Vec<std::os::fd::OwnedFd>) -> Self
+    pub fn new_fds<T>(
+        bytes: T,
+        context: EncodingContext<B>,
+        fds: impl IntoIterator<Item = impl Into<OwnedFd>>,
+    ) -> Self
     where
         T: Into<Cow<'bytes, [u8]>>,
     {
@@ -374,7 +378,7 @@ impl<'bytes, B: ByteOrder> Data<'bytes, 'static, B> {
         Data {
             inner: Arc::new(Inner {
                 bytes,
-                fds: fds.into_iter().map(Into::into).collect(),
+                fds: fds.into_iter().map(Into::into).map(Fd::from).collect(),
             }),
             context,
             range,

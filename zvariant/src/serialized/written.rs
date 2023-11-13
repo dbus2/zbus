@@ -33,8 +33,8 @@ impl<B: ByteOrder> Written<B> {
 
     /// Set the file descriptors.
     #[cfg(unix)]
-    pub fn set_fds(mut self, fds: Vec<OwnedFd>) -> Self {
-        self.fds = fds;
+    pub fn set_fds(mut self, fds: impl IntoIterator<Item = impl Into<OwnedFd>>) -> Self {
+        self.fds = fds.into_iter().map(Into::into).collect();
         self
     }
 
@@ -60,7 +60,7 @@ impl<B: ByteOrder> Written<B> {
     ///
     /// This method is only available on Unix platforms.
     #[cfg(unix)]
-    pub fn fds(&self) -> &[impl std::os::fd::AsFd] {
+    pub fn fds(&self) -> &[OwnedFd] {
         &self.fds
     }
 }
