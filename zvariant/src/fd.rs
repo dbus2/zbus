@@ -9,13 +9,9 @@ use crate::{Basic, EncodingFormat, Signature, Type};
 /// See also `OwnedFd` if you need a wrapper that takes ownership of the file.
 ///
 /// We wrap the `RawFd` type so that we can implement [`Serialize`] and [`Deserialize`] for it.
-/// File descriptors are serialized in a special way and you need to use specific [serializer] and
-/// [deserializer] API when file descriptors are or could be involved.
 ///
 /// [`Serialize`]: https://docs.serde.rs/serde/trait.Serialize.html
 /// [`Deserialize`]: https://docs.serde.rs/serde/de/trait.Deserialize.html
-/// [deserializer]: fn.from_slice_fds.html
-/// [serializer]: fn.to_bytes_fds.html
 #[derive(Debug, PartialEq, PartialOrd, Ord, Eq, Hash, Clone, Copy)]
 pub struct Fd(io::RawFd);
 
