@@ -9,9 +9,8 @@ use std::os::fd::{AsFd, AsRawFd};
 #[cfg(feature = "gvariant")]
 use crate::gvariant::Deserializer as GVDeserializer;
 use crate::{
-    container_depths::ContainerDepths, dbus::Deserializer as DBusDeserializer,
-    signature_parser::SignatureParser, utils::*, Basic, EncodingContext, Error, ObjectPath, Result,
-    Signature,
+    container_depths::ContainerDepths, dbus::Deserializer as DBusDeserializer, serialized::Context,
+    signature_parser::SignatureParser, utils::*, Basic, Error, ObjectPath, Result, Signature,
 };
 
 #[cfg(unix)]
@@ -20,7 +19,7 @@ use crate::Fd;
 /// Our deserialization implementation.
 #[derive(Debug)]
 pub(crate) struct DeserializerCommon<'de, 'sig, 'f, B, F> {
-    pub(crate) ctxt: EncodingContext<B>,
+    pub(crate) ctxt: Context<B>,
     pub(crate) bytes: &'de [u8],
 
     #[cfg(unix)]

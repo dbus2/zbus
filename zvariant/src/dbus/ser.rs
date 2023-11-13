@@ -8,8 +8,11 @@ use std::{
 };
 
 use crate::{
-    container_depths::ContainerDepths, signature_parser::SignatureParser, utils::*, Basic,
-    EncodingContext, EncodingFormat, Error, ObjectPath, Result, Signature,
+    container_depths::ContainerDepths,
+    serialized::{Context, Format},
+    signature_parser::SignatureParser,
+    utils::*,
+    Basic, Error, ObjectPath, Result, Signature,
 };
 
 #[cfg(unix)]
@@ -34,13 +37,13 @@ where
         signature: S,
         writer: &'w mut W,
         #[cfg(unix)] fds: &'f mut crate::ser::FdList,
-        ctxt: EncodingContext<B>,
+        ctxt: Context<B>,
     ) -> Result<Self>
     where
         S: TryInto<Signature<'sig>>,
         S::Error: Into<Error>,
     {
-        assert_eq!(ctxt.format(), EncodingFormat::DBus);
+        assert_eq!(ctxt.format(), Format::DBus);
 
         let signature = signature.try_into().map_err(Into::into)?;
         let sig_parser = SignatureParser::new(signature);
@@ -97,7 +100,7 @@ where
             #[cfg(unix)]
             Fd::SIGNATURE_CHAR => {
                 self.0.sig_parser.skip_char()?;
-                self.0.add_padding(u32::alignment(EncodingFormat::DBus))?;
+                self.0.add_padding(u32::alignment(Format::DBus))?;
                 let idx = self.0.add_fd(v)?;
                 self.0
                     .write_u32::<B>(idx)
@@ -144,8 +147,7 @@ where
 
         match c {
             ObjectPath::SIGNATURE_CHAR | <&str>::SIGNATURE_CHAR => {
-                self.0
-                    .add_padding(<&str>::alignment(EncodingFormat::DBus))?;
+                self.0.add_padding(<&str>::alignment(Format::DBus))?;
                 self.0
                     .write_u32::<B>(usize_to_u32(v.len()))
                     .map_err(|e| Error::InputOutput(e.into()))?;
@@ -470,7 +472,7 @@ where
         }
 
         let signature = ser.0.sig_parser.next_signature()?;
-        let alignment = alignment_for_signature(&signature, EncodingFormat::DBus)?;
+        let alignment = alignment_for_signature(&signature, Format::DBus)?;
         ser.0.add_padding(alignment)?;
 
         ser.0.sig_parser.skip_char()?;

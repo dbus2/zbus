@@ -10,9 +10,10 @@ use crate::{
     de::{DeserializerCommon, ValueParseStage},
     framing_offset_size::FramingOffsetSize,
     framing_offsets::FramingOffsets,
+    serialized::{Context, Format},
     signature_parser::SignatureParser,
     utils::*,
-    Basic, EncodingContext, EncodingFormat, Error, Result, Signature,
+    Basic, Error, Result, Signature,
 };
 
 /// Our GVariant deserialization implementation.
@@ -32,13 +33,13 @@ where
         bytes: &'r [u8],
         #[cfg(unix)] fds: Option<&'f [F]>,
         signature: S,
-        ctxt: EncodingContext<B>,
+        ctxt: Context<B>,
     ) -> Result<Self>
     where
         S: TryInto<Signature<'sig>>,
         S::Error: Into<Error>,
     {
-        assert_eq!(ctxt.format(), EncodingFormat::GVariant);
+        assert_eq!(ctxt.format(), Format::GVariant);
 
         let signature = signature.try_into().map_err(Into::into)?;
         let sig_parser = SignatureParser::new(signature);
@@ -63,7 +64,7 @@ macro_rules! deserialize_basic {
         where
             V: Visitor<'de>,
         {
-            let ctxt = EncodingContext::new_dbus(self.0.ctxt.position() + self.0.pos);
+            let ctxt = Context::new_dbus(self.0.ctxt.position() + self.0.pos);
 
             let mut dbus_de = crate::dbus::Deserializer::<B, F>(DeserializerCommon::<B, F> {
                 ctxt,
@@ -218,8 +219,7 @@ where
 
             visitor.visit_none()
         } else {
-            let ctxt =
-                EncodingContext::new(self.0.ctxt.format(), self.0.ctxt.position() + self.0.pos);
+            let ctxt = Context::new(self.0.ctxt.format(), self.0.ctxt.position() + self.0.pos);
             let end = if fixed_sized_child {
                 self.0.bytes.len()
             } else {
@@ -496,7 +496,7 @@ where
     fn element_end(&mut self, pop: bool) -> Result<usize> {
         match self.offsets.as_mut() {
             Some(offsets) => {
-                assert_eq!(self.de.0.ctxt.format(), EncodingFormat::GVariant);
+                assert_eq!(self.de.0.ctxt.format(), Format::GVariant);
 
                 let offset = if pop { offsets.pop() } else { offsets.peek() };
                 match offset {
@@ -539,7 +539,7 @@ where
             return Ok(None);
         }
 
-        let ctxt = EncodingContext::new(
+        let ctxt = Context::new(
             self.de.0.ctxt.format(),
             self.de.0.ctxt.position() + self.de.0.pos,
         );
@@ -594,7 +594,7 @@ where
 
         self.de.0.parse_padding(self.element_alignment)?;
 
-        let ctxt = EncodingContext::new(
+        let ctxt = Context::new(
             self.de.0.ctxt.format(),
             self.de.0.ctxt.position() + self.de.0.pos,
         );
@@ -640,7 +640,7 @@ where
     where
         V: DeserializeSeed<'de>,
     {
-        let ctxt = EncodingContext::new(
+        let ctxt = Context::new(
             self.de.0.ctxt.format(),
             self.de.0.ctxt.position() + self.de.0.pos,
         );
@@ -703,7 +703,7 @@ where
     where
         T: DeserializeSeed<'de>,
     {
-        let ctxt = EncodingContext::new(
+        let ctxt = Context::new(
             self.de.0.ctxt.format(),
             self.de.0.ctxt.position() + self.de.0.pos,
         );
@@ -861,7 +861,7 @@ where
                 let signature = Signature::try_from(slice)?;
                 let sig_parser = SignatureParser::new(signature);
 
-                let ctxt = EncodingContext::new(
+                let ctxt = Context::new(
                     self.de.0.ctxt.format(),
                     self.de.0.ctxt.position() + self.value_start,
                 );

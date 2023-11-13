@@ -36,13 +36,13 @@ use crate::Fd;
 /// # Examples
 ///
 /// ```
-/// use zvariant::{to_bytes, EncodingContext, Value};
+/// use zvariant::{to_bytes, serialized::Context, Value};
 ///
 /// // Create a Value from an i16
 /// let v = Value::new(i16::max_value());
 ///
 /// // Encode it
-/// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
+/// let ctxt = Context::<byteorder::LE>::new_dbus(0);
 /// let encoding = to_bytes(ctxt, &v).unwrap();
 ///
 /// // Decode it back
@@ -55,14 +55,14 @@ use crate::Fd;
 /// Now let's try a more complicated example:
 ///
 /// ```
-/// use zvariant::{to_bytes, EncodingContext};
+/// use zvariant::{to_bytes, serialized::Context};
 /// use zvariant::{Structure, Value, Str};
 ///
 /// // Create a Value from a tuple this time
 /// let v = Value::new((i16::max_value(), "hello", true));
 ///
 /// // Same drill as previous example
-/// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
+/// let ctxt = Context::<byteorder::LE>::new_dbus(0);
 /// let encoding = to_bytes(ctxt, &v).unwrap();
 /// let v: Value = encoding.deserialize().unwrap().0;
 ///

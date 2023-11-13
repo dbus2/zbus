@@ -15,7 +15,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::{signature_parser::SignatureParser, Basic, EncodingFormat, Error, Result, Type};
+use crate::{serialized::Format, signature_parser::SignatureParser, Basic, Error, Result, Type};
 
 // A data type similar to Cow and [`bytes::Bytes`] but unlike the former won't allow us to only keep
 // the owned bytes in Arc and latter doesn't have a notion of borrowed data and would require API
@@ -348,11 +348,11 @@ impl<'a> Basic for Signature<'a> {
     const SIGNATURE_CHAR: char = 'g';
     const SIGNATURE_STR: &'static str = "g";
 
-    fn alignment(format: EncodingFormat) -> usize {
+    fn alignment(format: Format) -> usize {
         match format {
-            EncodingFormat::DBus => 1,
+            Format::DBus => 1,
             #[cfg(feature = "gvariant")]
-            EncodingFormat::GVariant => 1,
+            Format::GVariant => 1,
         }
     }
 }
@@ -521,7 +521,7 @@ impl Basic for OwnedSignature {
     const SIGNATURE_CHAR: char = Signature::SIGNATURE_CHAR;
     const SIGNATURE_STR: &'static str = Signature::SIGNATURE_STR;
 
-    fn alignment(format: EncodingFormat) -> usize {
+    fn alignment(format: Format) -> usize {
         Signature::alignment(format)
     }
 }

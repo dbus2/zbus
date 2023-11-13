@@ -6,7 +6,7 @@ use serde::{
 use static_assertions::assert_impl_all;
 use std::borrow::Cow;
 
-use crate::{Basic, EncodingFormat, Error, Result, Signature, Str, Type};
+use crate::{serialized::Format, Basic, Error, Result, Signature, Str, Type};
 
 /// String that identifies objects at a given destination on the D-Bus bus.
 ///
@@ -124,11 +124,11 @@ impl<'a> Basic for ObjectPath<'a> {
     const SIGNATURE_CHAR: char = 'o';
     const SIGNATURE_STR: &'static str = "o";
 
-    fn alignment(format: EncodingFormat) -> usize {
+    fn alignment(format: Format) -> usize {
         match format {
-            EncodingFormat::DBus => <&str>::alignment(format),
+            Format::DBus => <&str>::alignment(format),
             #[cfg(feature = "gvariant")]
-            EncodingFormat::GVariant => 1,
+            Format::GVariant => 1,
         }
     }
 }
@@ -316,7 +316,7 @@ impl Basic for OwnedObjectPath {
     const SIGNATURE_CHAR: char = ObjectPath::SIGNATURE_CHAR;
     const SIGNATURE_STR: &'static str = ObjectPath::SIGNATURE_STR;
 
-    fn alignment(format: EncodingFormat) -> usize {
+    fn alignment(format: Format) -> usize {
         ObjectPath::alignment(format)
     }
 }

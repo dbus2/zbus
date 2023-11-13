@@ -2,7 +2,7 @@ use std::slice::SliceIndex;
 
 #[cfg(feature = "gvariant")]
 use crate::signature_parser::SignatureParser;
-use crate::{Basic, EncodingFormat, Error, ObjectPath, Result, Signature};
+use crate::{serialized::Format, Basic, Error, ObjectPath, Result, Signature};
 
 #[cfg(unix)]
 use crate::Fd;
@@ -87,10 +87,7 @@ pub(crate) fn f64_to_f32(value: f64) -> f32 {
 }
 
 // `signature` must be **one** complete and correct signature. Expect panics otherwise!
-pub(crate) fn alignment_for_signature(
-    signature: &Signature<'_>,
-    format: EncodingFormat,
-) -> Result<usize> {
+pub(crate) fn alignment_for_signature(signature: &Signature<'_>, format: Format) -> Result<usize> {
     let alignment = match signature
         .as_bytes()
         .first()
@@ -112,9 +109,9 @@ pub(crate) fn alignment_for_signature(
         ObjectPath::SIGNATURE_CHAR => ObjectPath::alignment(format),
         Signature::SIGNATURE_CHAR => Signature::alignment(format),
         VARIANT_SIGNATURE_CHAR => match format {
-            EncodingFormat::DBus => VARIANT_ALIGNMENT_DBUS,
+            Format::DBus => VARIANT_ALIGNMENT_DBUS,
             #[cfg(feature = "gvariant")]
-            EncodingFormat::GVariant => VARIANT_ALIGNMENT_GVARIANT,
+            Format::GVariant => VARIANT_ALIGNMENT_GVARIANT,
         },
         ARRAY_SIGNATURE_CHAR => alignment_for_array_signature(signature, format)?,
         STRUCT_SIG_START_CHAR => alignment_for_struct_signature(signature, format)?,
@@ -183,13 +180,13 @@ macro_rules! check_child_value_signature {
 
 fn alignment_for_single_child_type_signature(
     #[allow(unused)] signature: &Signature<'_>,
-    format: EncodingFormat,
+    format: Format,
     dbus_align: usize,
 ) -> Result<usize> {
     match format {
-        EncodingFormat::DBus => Ok(dbus_align),
+        Format::DBus => Ok(dbus_align),
         #[cfg(feature = "gvariant")]
-        EncodingFormat::GVariant => {
+        Format::GVariant => {
             let child_signature = signature.slice(1..);
 
             alignment_for_signature(&child_signature, format)
@@ -197,29 +194,23 @@ fn alignment_for_single_child_type_signature(
     }
 }
 
-fn alignment_for_array_signature(
-    signature: &Signature<'_>,
-    format: EncodingFormat,
-) -> Result<usize> {
+fn alignment_for_array_signature(signature: &Signature<'_>, format: Format) -> Result<usize> {
     alignment_for_single_child_type_signature(signature, format, ARRAY_ALIGNMENT_DBUS)
 }
 
 #[cfg(feature = "gvariant")]
-fn alignment_for_maybe_signature(
-    signature: &Signature<'_>,
-    format: EncodingFormat,
-) -> Result<usize> {
+fn alignment_for_maybe_signature(signature: &Signature<'_>, format: Format) -> Result<usize> {
     alignment_for_single_child_type_signature(signature, format, 1)
 }
 
 fn alignment_for_struct_signature(
     #[allow(unused)] signature: &Signature<'_>,
-    format: EncodingFormat,
+    format: Format,
 ) -> Result<usize> {
     match format {
-        EncodingFormat::DBus => Ok(STRUCT_ALIGNMENT_DBUS),
+        Format::DBus => Ok(STRUCT_ALIGNMENT_DBUS),
         #[cfg(feature = "gvariant")]
-        EncodingFormat::GVariant => {
+        Format::GVariant => {
             if signature.len() < 3 {
                 return Err(serde::de::Error::invalid_length(
                     signature.len(),
@@ -251,12 +242,12 @@ fn alignment_for_struct_signature(
 
 fn alignment_for_dict_entry_signature(
     #[allow(unused)] signature: &Signature<'_>,
-    format: EncodingFormat,
+    format: Format,
 ) -> Result<usize> {
     match format {
-        EncodingFormat::DBus => Ok(DICT_ENTRY_ALIGNMENT_DBUS),
+        Format::DBus => Ok(DICT_ENTRY_ALIGNMENT_DBUS),
         #[cfg(feature = "gvariant")]
-        EncodingFormat::GVariant => {
+        Format::GVariant => {
             if signature.len() < 4 {
                 return Err(serde::de::Error::invalid_length(
                     signature.len(),

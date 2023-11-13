@@ -10,8 +10,9 @@ use byteorder::ByteOrder;
 use serde::{de::DeserializeSeed, Deserialize};
 
 use crate::{
-    de::Deserializer, DynamicDeserialize, DynamicType, EncodingContext, EncodingFormat, Error,
-    Result, Signature, Type,
+    de::Deserializer,
+    serialized::{Context, Format},
+    DynamicDeserialize, DynamicType, Error, Result, Signature, Type,
 };
 
 /// Represents serialized bytes in a specific format.
@@ -22,7 +23,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct Data<'bytes, 'fds, B: ByteOrder> {
     inner: Arc<Inner<'bytes, 'fds>>,
-    context: EncodingContext<B>,
+    context: Context<B>,
     range: Range<usize>,
 }
 
@@ -42,7 +43,7 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
     #[cfg(unix)]
     pub fn new_borrowed_fds<T>(
         bytes: T,
-        context: EncodingContext<B>,
+        context: Context<B>,
         fds: impl IntoIterator<Item = impl Into<Fd<'fds>>>,
     ) -> Self
     where
@@ -69,7 +70,7 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
     }
 
     /// The encoding context.
-    pub fn context(&self) -> EncodingContext<B> {
+    pub fn context(&self) -> Context<B> {
         self.context
     }
 
@@ -104,7 +105,7 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
         );
         assert!(end <= len, "range end out of bounds: {end:?} > {len:?}");
 
-        let context = EncodingContext::new(self.context.format(), self.context.position() + start);
+        let context = Context::new(self.context.format(), self.context.position() + start);
         let range = Range {
             start: self.range.start + start,
             end: self.range.start + end,
@@ -123,9 +124,9 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
     ///
     /// ```
     /// use zvariant::to_bytes;
-    /// use zvariant::EncodingContext;
+    /// use zvariant::serialized::Context;
     ///
-    /// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
+    /// let ctxt = Context::<byteorder::LE>::new_dbus(0);
     /// let encoded = to_bytes(ctxt, "hello world").unwrap();
     /// let decoded: &str = encoded.deserialize().unwrap().0;
     /// assert_eq!(decoded, "hello world");
@@ -157,9 +158,9 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
     /// use serde::{Deserialize, Serialize};
     ///
     /// use zvariant::to_bytes_for_signature;
-    /// use zvariant::EncodingContext;
+    /// use zvariant::serialized::Context;
     ///
-    /// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
+    /// let ctxt = Context::<byteorder::LE>::new_dbus(0);
     /// #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
     /// enum Unit {
     ///     Variant1,
@@ -220,7 +221,7 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
         let fds = &self.inner.fds;
         let mut de = match self.context.format() {
             #[cfg(feature = "gvariant")]
-            EncodingFormat::GVariant => {
+            Format::GVariant => {
                 #[cfg(unix)]
                 {
                     crate::gvariant::Deserializer::new(
@@ -240,7 +241,7 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
                 }
             }
             .map(Deserializer::GVariant)?,
-            EncodingFormat::DBus => {
+            Format::DBus => {
                 #[cfg(unix)]
                 {
                     crate::dbus::Deserializer::new(self.bytes(), Some(fds), signature, self.context)
@@ -293,7 +294,7 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
         let fds = &self.inner.fds;
         let mut de = match self.context.format() {
             #[cfg(feature = "gvariant")]
-            EncodingFormat::GVariant => {
+            Format::GVariant => {
                 #[cfg(unix)]
                 {
                     crate::gvariant::Deserializer::new(
@@ -313,7 +314,7 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
                 }
             }
             .map(Deserializer::GVariant)?,
-            EncodingFormat::DBus => {
+            Format::DBus => {
                 #[cfg(unix)]
                 {
                     crate::dbus::Deserializer::new(self.bytes(), Some(fds), signature, self.context)
@@ -336,7 +337,7 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
 
 impl<'bytes, B: ByteOrder> Data<'bytes, 'static, B> {
     /// Create a new `EncodedBytes` instance.
-    pub fn new<T>(bytes: T, context: EncodingContext<B>) -> Self
+    pub fn new<T>(bytes: T, context: Context<B>) -> Self
     where
         T: Into<Cow<'bytes, [u8]>>,
     {
@@ -364,7 +365,7 @@ impl<'bytes, B: ByteOrder> Data<'bytes, 'static, B> {
     #[cfg(unix)]
     pub fn new_fds<T>(
         bytes: T,
-        context: EncodingContext<B>,
+        context: Context<B>,
         fds: impl IntoIterator<Item = impl Into<OwnedFd>>,
     ) -> Self
     where

@@ -3,7 +3,8 @@
 use byteorder::LE;
 use std::collections::HashMap;
 use zvariant::{
-    DeserializeDict, EncodingContext, EncodingFormat, OwnedValue, SerializeDict, Type, Value,
+    serialized::{Context, Format},
+    DeserializeDict, OwnedValue, SerializeDict, Type, Value,
 };
 
 #[test]
@@ -56,7 +57,7 @@ fn derive_dict() {
         field_c: vec![1, 2, 3],
     };
 
-    let ctxt = EncodingContext::<LE>::new(EncodingFormat::DBus, 0);
+    let ctxt = Context::<LE>::new(Format::DBus, 0);
     let serialized = zvariant::to_bytes(ctxt, &test).unwrap();
     let deserialized: HashMap<String, OwnedValue> = serialized.deserialize().unwrap().0;
 

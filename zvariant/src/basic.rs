@@ -1,4 +1,4 @@
-use crate::{EncodingFormat, Signature, Type};
+use crate::{serialized::Format, Signature, Type};
 
 /// Trait for basic types.
 ///
@@ -13,7 +13,7 @@ pub trait Basic: Type {
     const SIGNATURE_STR: &'static str;
 
     /// The required padding alignment for the given format.
-    fn alignment(format: EncodingFormat) -> usize;
+    fn alignment(format: Format) -> usize;
 }
 
 impl<B: ?Sized> Basic for &B
@@ -23,7 +23,7 @@ where
     const SIGNATURE_CHAR: char = B::SIGNATURE_CHAR;
     const SIGNATURE_STR: &'static str = B::SIGNATURE_STR;
 
-    fn alignment(format: EncodingFormat) -> usize {
+    fn alignment(format: Format) -> usize {
         B::alignment(format)
     }
 }
@@ -43,11 +43,11 @@ macro_rules! alignment_method {
         alignment_method!($alignment, $alignment);
     };
     ($dbus_alignment:expr, $gvariant_alignment:expr) => {
-        fn alignment(format: EncodingFormat) -> usize {
+        fn alignment(format: Format) -> usize {
             match format {
-                EncodingFormat::DBus => $dbus_alignment,
+                Format::DBus => $dbus_alignment,
                 #[cfg(feature = "gvariant")]
-                EncodingFormat::GVariant => $gvariant_alignment,
+                Format::GVariant => $gvariant_alignment,
             }
         }
     };
@@ -75,8 +75,8 @@ impl Basic for i8 {
     const SIGNATURE_STR: &'static str = i16::SIGNATURE_STR;
 
     alignment_method!(
-        i16::alignment(EncodingFormat::DBus),
-        i16::alignment(EncodingFormat::GVariant)
+        i16::alignment(Format::DBus),
+        i16::alignment(Format::GVariant)
     );
 }
 impl_type!(i8);
@@ -86,8 +86,8 @@ impl Basic for std::num::NonZeroI8 {
     const SIGNATURE_STR: &'static str = i8::SIGNATURE_STR;
 
     alignment_method!(
-        i16::alignment(EncodingFormat::DBus),
-        i16::alignment(EncodingFormat::GVariant)
+        i16::alignment(Format::DBus),
+        i16::alignment(Format::GVariant)
     );
 }
 impl_type!(std::num::NonZeroI8);
@@ -202,8 +202,8 @@ impl Basic for f32 {
     const SIGNATURE_STR: &'static str = f64::SIGNATURE_STR;
 
     alignment_method!(
-        f64::alignment(EncodingFormat::DBus),
-        f64::alignment(EncodingFormat::GVariant)
+        f64::alignment(Format::DBus),
+        f64::alignment(Format::GVariant)
     );
 }
 impl_type!(f32);

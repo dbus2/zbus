@@ -12,9 +12,9 @@ use crate::{Signature, Type, Value};
 /// generic [`Value`] and instead use this wrapper.
 ///
 /// ```
-/// # use zvariant::{to_bytes, EncodingContext, DeserializeValue, SerializeValue};
+/// # use zvariant::{to_bytes, serialized::Context, DeserializeValue, SerializeValue};
 /// #
-/// # let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
+/// # let ctxt = Context::<byteorder::LE>::new_dbus(0);
 /// # let array = [0, 1, 2];
 /// # let v = SerializeValue(&array);
 /// # let encoded = to_bytes(ctxt, &v).unwrap();

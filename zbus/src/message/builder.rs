@@ -12,7 +12,7 @@ use zvariant::serialized;
 use crate::{
     message::{Field, FieldCode, Fields, Flags, Header, Message, PrimaryHeader, Sequence, Type},
     utils::padding_for_8_bytes,
-    zvariant::{DynamicType, EncodingContext, ObjectPath, Signature},
+    zvariant::{serialized::Context, DynamicType, ObjectPath, Signature},
     Error, Result,
 };
 
@@ -26,7 +26,7 @@ type BuildGenericResult = ();
 
 macro_rules! dbus_context {
     ($n_bytes_before: expr) => {
-        EncodingContext::<byteorder::NativeEndian>::new_dbus($n_bytes_before)
+        Context::<byteorder::NativeEndian>::new_dbus($n_bytes_before)
     };
 }
 

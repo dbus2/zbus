@@ -4,7 +4,7 @@ macro_rules! impl_str_basic {
             const SIGNATURE_CHAR: char = <zvariant::Str<'_>>::SIGNATURE_CHAR;
             const SIGNATURE_STR: &'static str = <zvariant::Str<'_>>::SIGNATURE_STR;
 
-            fn alignment(format: zvariant::EncodingFormat) -> usize {
+            fn alignment(format: zvariant::serialized::Format) -> usize {
                 <zvariant::Str<'_>>::alignment(format)
             }
         }

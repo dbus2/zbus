@@ -13,10 +13,10 @@ use crate::gvariant::Serializer as GVSerializer;
 use crate::{
     container_depths::ContainerDepths,
     dbus::Serializer as DBusSerializer,
-    serialized::{Data, Size, Written},
+    serialized::{Context, Data, Format, Size, Written},
     signature_parser::SignatureParser,
     utils::*,
-    Basic, DynamicType, EncodingContext, EncodingFormat, Error, Result, Signature,
+    Basic, DynamicType, Error, Result, Signature,
 };
 
 struct NullWriteSeek;
@@ -42,16 +42,16 @@ impl Seek for NullWriteSeek {
 /// # Examples
 ///
 /// ```
-/// use zvariant::{EncodingContext, serialized_size};
+/// use zvariant::{serialized::Context, serialized_size};
 ///
-/// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
+/// let ctxt = Context::<byteorder::LE>::new_dbus(0);
 /// let len = serialized_size(ctxt, "hello world").unwrap();
 /// assert_eq!(*len, 16);
 ///
 /// let len = serialized_size(ctxt, &("hello world!", 42_u64)).unwrap();
 /// assert_eq!(*len, 32);
 /// ```
-pub fn serialized_size<B, T: ?Sized>(ctxt: EncodingContext<B>, value: &T) -> Result<Size<B>>
+pub fn serialized_size<B, T: ?Sized>(ctxt: Context<B>, value: &T) -> Result<Size<B>>
 where
     B: byteorder::ByteOrder,
     T: Serialize + DynamicType,
@@ -62,7 +62,7 @@ where
     let mut fds = FdList::Number(0);
 
     let len = match ctxt.format() {
-        EncodingFormat::DBus => {
+        Format::DBus => {
             let mut ser = DBusSerializer::<B, NullWriteSeek>::new(
                 signature,
                 &mut null,
@@ -74,7 +74,7 @@ where
             ser.0.bytes_written
         }
         #[cfg(feature = "gvariant")]
-        EncodingFormat::GVariant => {
+        Format::GVariant => {
             let mut ser = GVSerializer::<B, NullWriteSeek>::new(
                 signature,
                 &mut null,
@@ -102,9 +102,9 @@ where
 /// # Examples
 ///
 /// ```
-/// use zvariant::{EncodingContext, serialized::Data, to_writer};
+/// use zvariant::{serialized::{Context, Data}, to_writer};
 ///
-/// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
+/// let ctxt = Context::<byteorder::LE>::new_dbus(0);
 /// let mut cursor = std::io::Cursor::new(vec![]);
 /// // SAFETY: No FDs are being serialized here so its completely safe.
 /// unsafe { to_writer(&mut cursor, ctxt, &42u32) }.unwrap();
@@ -126,7 +126,7 @@ where
 /// [`to_writer_fds`]: fn.to_writer_fds.html
 pub unsafe fn to_writer<B, W, T: ?Sized>(
     writer: &mut W,
-    ctxt: EncodingContext<B>,
+    ctxt: Context<B>,
     value: &T,
 ) -> Result<Written<B>>
 where
@@ -142,10 +142,7 @@ where
 /// Serialize `T` as a byte vector.
 ///
 /// See [`Data::deserialize`] documentation for an example of how to use this function.
-pub fn to_bytes<B, T: ?Sized>(
-    ctxt: EncodingContext<B>,
-    value: &T,
-) -> Result<Data<'static, 'static, B>>
+pub fn to_bytes<B, T: ?Sized>(ctxt: Context<B>, value: &T) -> Result<Data<'static, 'static, B>>
 where
     B: byteorder::ByteOrder,
     T: Serialize + DynamicType,
@@ -171,7 +168,7 @@ where
 /// [`to_writer`]: fn.to_writer.html
 pub unsafe fn to_writer_for_signature<'s, B, W, S, T: ?Sized>(
     writer: &mut W,
-    ctxt: EncodingContext<B>,
+    ctxt: Context<B>,
     signature: S,
     value: &T,
 ) -> Result<Written<B>>
@@ -186,7 +183,7 @@ where
     let mut fds = FdList::Fds(vec![]);
 
     let len = match ctxt.format() {
-        EncodingFormat::DBus => {
+        Format::DBus => {
             let mut ser = DBusSerializer::<B, W>::new(
                 signature,
                 writer,
@@ -198,7 +195,7 @@ where
             ser.0.bytes_written
         }
         #[cfg(feature = "gvariant")]
-        EncodingFormat::GVariant => {
+        Format::GVariant => {
             let mut ser = GVSerializer::<B, W>::new(
                 signature,
                 writer,
@@ -230,7 +227,7 @@ where
 /// [`to_bytes`]: fn.to_bytes.html
 /// [`from_slice_for_signature`]: fn.from_slice_for_signature.html#examples
 pub fn to_bytes_for_signature<'s, B, S, T: ?Sized>(
-    ctxt: EncodingContext<B>,
+    ctxt: Context<B>,
     signature: S,
     value: &T,
 ) -> Result<Data<'static, 'static, B>>
@@ -257,7 +254,7 @@ where
 
 /// Context for all our serializers and provides shared functionality.
 pub(crate) struct SerializerCommon<'ser, 'sig, B, W> {
-    pub(crate) ctxt: EncodingContext<B>,
+    pub(crate) ctxt: Context<B>,
     pub(crate) writer: &'ser mut W,
     pub(crate) bytes_written: usize,
     #[cfg(unix)]

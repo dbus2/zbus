@@ -4,7 +4,7 @@ use std::os::fd::OwnedFd;
 
 use byteorder::ByteOrder;
 
-use crate::EncodingContext;
+use crate::serialized::Context;
 
 /// Represents the return value of [`crate::to_writer`] function.
 ///
@@ -15,14 +15,14 @@ use crate::EncodingContext;
 #[derive(Debug)]
 pub struct Written<B: ByteOrder> {
     size: usize,
-    context: EncodingContext<B>,
+    context: Context<B>,
     #[cfg(unix)]
     fds: Vec<OwnedFd>,
 }
 
 impl<B: ByteOrder> Written<B> {
     /// Create a new `EncodedSize` instance.
-    pub fn new(size: usize, context: EncodingContext<B>) -> Self {
+    pub fn new(size: usize, context: Context<B>) -> Self {
         Self {
             size,
             context,
@@ -44,7 +44,7 @@ impl<B: ByteOrder> Written<B> {
     }
 
     /// The encoding context.
-    pub fn context(&self) -> EncodingContext<B> {
+    pub fn context(&self) -> Context<B> {
         self.context
     }
 

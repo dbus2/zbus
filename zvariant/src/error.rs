@@ -52,7 +52,7 @@ pub enum Error {
     /// Missing framing offset at the end of a GVariant-encoded container,
     MissingFramingOffset,
     /// The type (signature as first argument) being (de)serialized is not supported by the format.
-    IncompatibleFormat(crate::Signature<'static>, crate::EncodingFormat),
+    IncompatibleFormat(crate::Signature<'static>, crate::serialized::Format),
     /// The provided signature (first argument) was not valid for reading as the requested type.
     /// Details on the expected signatures are in the second argument.
     SignatureMismatch(crate::Signature<'static>, String),

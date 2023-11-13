@@ -8,9 +8,10 @@ use std::os::fd::AsFd;
 
 use crate::{
     de::{DeserializerCommon, ValueParseStage},
+    serialized::{Context, Format},
     signature_parser::SignatureParser,
     utils::*,
-    Basic, EncodingContext, EncodingFormat, Error, ObjectPath, Result, Signature,
+    Basic, Error, ObjectPath, Result, Signature,
 };
 
 #[cfg(unix)]
@@ -35,13 +36,13 @@ where
         bytes: &'r [u8],
         #[cfg(unix)] fds: Option<&'f [F]>,
         signature: S,
-        ctxt: EncodingContext<B>,
+        ctxt: Context<B>,
     ) -> Result<Self>
     where
         S: TryInto<Signature<'sig>>,
         S::Error: Into<Error>,
     {
-        assert_eq!(ctxt.format(), EncodingFormat::DBus);
+        assert_eq!(ctxt.format(), Format::DBus);
 
         let signature = signature.try_into().map_err(Into::into)?;
         let sig_parser = SignatureParser::new(signature);
@@ -170,7 +171,7 @@ where
             #[cfg(unix)]
             Fd::SIGNATURE_CHAR => {
                 self.0.sig_parser.skip_char()?;
-                let alignment = u32::alignment(EncodingFormat::DBus);
+                let alignment = u32::alignment(Format::DBus);
                 self.0.parse_padding(alignment)?;
                 let idx = B::read_u32(self.0.next_slice(alignment)?);
                 self.0.get_fd(idx)?
@@ -209,7 +210,7 @@ where
                 len_slice[0] as usize
             }
             <&str>::SIGNATURE_CHAR | ObjectPath::SIGNATURE_CHAR => {
-                let alignment = u32::alignment(EncodingFormat::DBus);
+                let alignment = u32::alignment(Format::DBus);
                 self.0.parse_padding(alignment)?;
                 let len_slice = self.0.next_slice(alignment)?;
 
@@ -318,7 +319,7 @@ where
             }
             STRUCT_SIG_START_CHAR => {
                 let signature = self.0.sig_parser.next_signature()?;
-                let alignment = alignment_for_signature(&signature, EncodingFormat::DBus)?;
+                let alignment = alignment_for_signature(&signature, Format::DBus)?;
                 self.0.parse_padding(alignment)?;
 
                 self.0.sig_parser.skip_char()?;
@@ -418,7 +419,7 @@ where
 
         let len = B::read_u32(de.0.next_slice(4)?) as usize;
         let element_signature = de.0.sig_parser.next_signature()?;
-        let element_alignment = alignment_for_signature(&element_signature, EncodingFormat::DBus)?;
+        let element_alignment = alignment_for_signature(&element_signature, Format::DBus)?;
         let mut element_signature_len = element_signature.len();
 
         // D-Bus requires padding for the first element even when there is no first element
@@ -444,7 +445,7 @@ where
     where
         T: DeserializeSeed<'de>,
     {
-        let ctxt = EncodingContext::new_dbus(self.de.0.ctxt.position() + self.de.0.pos);
+        let ctxt = Context::new_dbus(self.de.0.ctxt.position() + self.de.0.pos);
 
         let mut de = Deserializer::<B, F>(DeserializerCommon {
             ctxt,
@@ -640,10 +641,7 @@ where
                 let signature = Signature::try_from(slice)?;
                 let sig_parser = SignatureParser::new(signature);
 
-                let ctxt = EncodingContext::new(
-                    EncodingFormat::DBus,
-                    self.de.0.ctxt.position() + value_start,
-                );
+                let ctxt = Context::new(Format::DBus, self.de.0.ctxt.position() + value_start);
                 let mut de = Deserializer::<B, F>(DeserializerCommon {
                     ctxt,
                     sig_parser,
