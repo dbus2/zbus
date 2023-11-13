@@ -82,7 +82,7 @@ ov_try_from!(Maybe<'static>);
 ov_try_from!(Str<'static>);
 ov_try_from!(Structure<'static>);
 #[cfg(unix)]
-ov_try_from!(Fd);
+ov_try_from!(Fd<'static>);
 
 ov_try_from_ref!(u8);
 ov_try_from_ref!(bool);
@@ -103,7 +103,7 @@ ov_try_from_ref!(&'a Structure<'a>);
 #[cfg(feature = "gvariant")]
 ov_try_from_ref!(&'a Maybe<'a>);
 #[cfg(unix)]
-ov_try_from_ref!(Fd);
+ov_try_from_ref!(&'a Fd<'a>);
 
 impl<'a, T> TryFrom<OwnedValue> for Vec<T>
 where
@@ -226,8 +226,6 @@ to_value!(f64, F64);
 to_value!(Str<'a>, Str);
 to_value!(Signature<'a>, Signature);
 to_value!(ObjectPath<'a>, ObjectPath);
-#[cfg(unix)]
-to_value!(Fd, Fd);
 
 macro_rules! try_to_value {
     ($from:ty) => {
@@ -246,6 +244,8 @@ try_to_value!(Dict<'a, 'a>);
 #[cfg(feature = "gvariant")]
 try_to_value!(Maybe<'a>);
 try_to_value!(Structure<'a>);
+#[cfg(unix)]
+try_to_value!(Fd<'a>);
 
 impl From<OwnedValue> for Value<'static> {
     fn from(v: OwnedValue) -> Value<'static> {

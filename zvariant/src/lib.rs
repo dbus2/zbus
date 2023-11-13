@@ -337,7 +337,7 @@ mod tests {
                 "invalid encoding using `to_bytes`"
             );
             #[cfg(unix)]
-            let (_, parsed): (Fd, _) = encoded.deserialize().unwrap();
+            let (_, parsed): (Fd<'_>, _) = encoded.deserialize().unwrap();
             assert!(
                 parsed == encoded.len(),
                 "invalid parsing using `from_slice`"
@@ -366,12 +366,12 @@ mod tests {
             let (decoded, parsed): (Value<'_>, _) = encoded.deserialize().unwrap();
             assert_eq!(
                 decoded,
-                Fd::from(encoded.fds()[0].as_fd().as_raw_fd()).into(),
+                Fd::from(encoded.fds()[0].as_fd()).into(),
                 "invalid decoding using `from_slice`"
             );
             assert_eq!(parsed, encoded.len(), "invalid parsing using `from_slice`");
 
-            let v: Fd = v.try_into().unwrap();
+            let v: Fd<'_> = v.try_into().unwrap();
             assert_eq!(v, $test_value);
         }};
     }
@@ -379,9 +379,10 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn fd_value() {
-        use std::os::fd::AsRawFd;
+        use std::os::fd::AsFd;
 
-        let fd = std::io::stdout().as_raw_fd();
+        let stdout = std::io::stdout();
+        let fd = stdout.as_fd();
         fd_value_test!(LE, DBus, Fd::from(fd), 4, 4, 8);
         #[cfg(feature = "gvariant")]
         fd_value_test!(LE, GVariant, Fd::from(fd), 4, 4, 6);

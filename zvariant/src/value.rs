@@ -100,7 +100,7 @@ pub enum Value<'a> {
     Maybe(Maybe<'a>),
 
     #[cfg(unix)]
-    Fd(Fd),
+    Fd(Fd<'a>),
 }
 
 impl Hash for Value<'_> {
@@ -236,7 +236,7 @@ impl<'a> Value<'a> {
             #[cfg(feature = "gvariant")]
             Value::Maybe(v) => Value::Maybe(v.try_to_owned()?),
             #[cfg(unix)]
-            Value::Fd(v) => Value::Fd(*v),
+            Value::Fd(v) => Value::Fd(v.try_to_owned()?),
         }))
     }
 
@@ -291,7 +291,7 @@ impl<'a> Value<'a> {
             #[cfg(feature = "gvariant")]
             Value::Maybe(v) => Value::Maybe(v.try_clone()?),
             #[cfg(unix)]
-            Value::Fd(v) => Value::Fd(*v),
+            Value::Fd(v) => Value::Fd(v.try_clone()?),
         })
     }
 
@@ -781,7 +781,11 @@ where
             )
         })? {
             #[cfg(unix)]
-            b'h' => Fd::from(value).into(),
+            b'h' => {
+                // SAFETY: The `'de` lifetimes will ensure the borrow won't outlive the raw FD.
+                let fd = unsafe { std::os::fd::BorrowedFd::borrow_raw(value) };
+                Fd::Borrowed(fd).into()
+            }
             _ => value.into(),
         };
 
@@ -1043,6 +1047,9 @@ mod tests {
 
         #[cfg(any(feature = "gvariant", feature = "option-as-array"))]
         {
+            #[cfg(unix)]
+            use std::os::fd::BorrowedFd;
+
             #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
             let s = "((@mn 0, @mmn 0, @mmmn 0), \
                 (@mn nothing, @mmn just nothing, @mmmn just just nothing), \
@@ -1063,7 +1070,11 @@ mod tests {
 
             #[cfg(unix)]
             assert_eq!(
-                Value::new(vec![Fd::from(0), Fd::from(-100)]).to_string(),
+                Value::new(vec![
+                    Fd::from(unsafe { BorrowedFd::borrow_raw(0) }),
+                    Fd::from(unsafe { BorrowedFd::borrow_raw(-100) })
+                ])
+                .to_string(),
                 "[handle 0, -100]"
             );
 

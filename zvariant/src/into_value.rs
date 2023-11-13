@@ -48,8 +48,6 @@ into_value_from_both!(u64, U64);
 into_value_from_both!(i64, I64);
 into_value_from_both!(f32, F64);
 into_value_from_both!(f64, F64);
-#[cfg(unix)]
-into_value_from_both!(Fd, Fd);
 
 into_value_from_both!(&'a str, Str);
 into_value_from_both!(Str<'a>, Str);
@@ -76,6 +74,10 @@ try_into_value_from_ref!(Dict<'a, 'a>, Dict);
 into_value!(Maybe<'a>, Maybe);
 #[cfg(feature = "gvariant")]
 try_into_value_from_ref!(Maybe<'a>, Maybe);
+#[cfg(unix)]
+into_value!(Fd<'a>, Fd);
+#[cfg(unix)]
+try_into_value_from_ref!(Fd<'a>, Fd);
 
 impl From<String> for Value<'static> {
     fn from(v: String) -> Self {

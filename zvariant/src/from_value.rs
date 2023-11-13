@@ -75,8 +75,6 @@ value_try_from_all!(U32, u32);
 value_try_from_all!(I64, i64);
 value_try_from_all!(U64, u64);
 value_try_from_all!(F64, f64);
-#[cfg(unix)]
-value_try_from_all!(Fd, Fd);
 
 value_try_from_all!(Str, Str<'a>);
 value_try_from_all!(Signature, Signature<'a>);
@@ -118,6 +116,13 @@ value_try_from!(Maybe, Maybe<'a>);
 value_try_from_ref!(Maybe, Maybe<'a>);
 #[cfg(feature = "gvariant")]
 value_try_from_ref_try_clone!(Maybe, Maybe<'a>);
+
+#[cfg(unix)]
+value_try_from!(Fd, Fd<'a>);
+#[cfg(unix)]
+value_try_from_ref!(Fd, Fd<'a>);
+#[cfg(unix)]
+value_try_from_ref_try_clone!(Fd, Fd<'a>);
 
 impl<'a> TryFrom<&'a Value<'a>> for String {
     type Error = Error;
