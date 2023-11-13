@@ -211,6 +211,11 @@ impl<'a> Value<'a> {
     }
 
     /// Try to create an owned version of `self`.
+    ///
+    /// # Errors
+    ///
+    /// This method can currently only fail on Unix platforms for [`Value::Fd`] variant. This
+    /// happens when the current process exceeds the maximum number of open file descriptors.
     pub fn try_to_owned(&self) -> crate::Result<OwnedValue> {
         Ok(OwnedValue(match self {
             Value::U8(v) => Value::U8(*v),
@@ -270,6 +275,12 @@ impl<'a> Value<'a> {
     }
 
     /// Try to clone the value.
+    ///
+    /// # Errors
+    ///
+    /// This method can currently only fail on Unix platforms for [`Value::Fd`] variant containing
+    /// an [`Fd::Owned`] variant. This happens when the current process exceeds the maximum number
+    /// of open file descriptors.
     pub fn try_clone(&self) -> crate::Result<Self> {
         Ok(match self {
             Value::U8(v) => Value::U8(*v),
