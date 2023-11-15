@@ -15,7 +15,7 @@ use crate::{value_display_fmt, Basic, DynamicType, Error, Signature, Type, Value
 ///
 /// [`Value`]: enum.Value.html#variant.Dict
 /// [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
-#[derive(Debug, Clone, Hash, PartialEq, PartialOrd, Eq, Ord)]
+#[derive(Debug, Hash, PartialEq, PartialOrd, Eq, Ord)]
 pub struct Dict<'k, 'v> {
     entries: BTreeSet<DictEntry<'k, 'v>>,
     key_signature: Signature<'k>,
@@ -116,13 +116,33 @@ impl<'k, 'v> Dict<'k, 'v> {
         &self.signature
     }
 
-    pub(crate) fn to_owned(&self) -> Dict<'static, 'static> {
-        Dict {
+    pub(crate) fn try_to_owned(&self) -> crate::Result<Dict<'static, 'static>> {
+        Ok(Dict {
             key_signature: self.key_signature.to_owned(),
             value_signature: self.value_signature.to_owned(),
             signature: self.signature.to_owned(),
-            entries: self.entries.iter().map(|v| v.to_owned()).collect(),
-        }
+            entries: self
+                .entries
+                .iter()
+                .map(|v| v.try_to_owned().map(Into::into))
+                .collect::<crate::Result<_>>()?,
+        })
+    }
+
+    /// Try to clone the `Dict`.
+    pub fn try_clone(&self) -> Result<Self, Error> {
+        let entries = self
+            .entries
+            .iter()
+            .map(|v| v.try_clone())
+            .collect::<Result<_, _>>()?;
+
+        Ok(Self {
+            entries,
+            key_signature: self.key_signature.clone(),
+            value_signature: self.value_signature.clone(),
+            signature: self.signature.clone(),
+        })
     }
 
     /// Create a new empty `Dict`, given the complete signature.
@@ -261,18 +281,25 @@ where
 
 // TODO: Conversion of Dict from/to BTreeMap
 
-#[derive(Debug, Clone, Hash, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Debug, Hash, PartialOrd, Ord, PartialEq, Eq)]
 struct DictEntry<'k, 'v> {
     key: Value<'k>,
     value: Value<'v>,
 }
 
 impl<'k, 'v> DictEntry<'k, 'v> {
-    fn to_owned(&self) -> DictEntry<'static, 'static> {
-        DictEntry {
-            key: self.key.to_owned().into(),
-            value: self.value.to_owned().into(),
-        }
+    fn try_to_owned(&self) -> crate::Result<DictEntry<'static, 'static>> {
+        Ok(DictEntry {
+            key: self.key.try_to_owned().map(Into::into)?,
+            value: self.value.try_to_owned().map(Into::into)?,
+        })
+    }
+
+    fn try_clone(&self) -> Result<Self, Error> {
+        Ok(Self {
+            key: self.key.try_clone()?,
+            value: self.value.try_clone()?,
+        })
     }
 }
 

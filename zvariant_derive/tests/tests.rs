@@ -3,7 +3,8 @@
 use byteorder::LE;
 use std::collections::HashMap;
 use zvariant::{
-    DeserializeDict, EncodingContext, EncodingFormat, OwnedValue, SerializeDict, Type, Value,
+    serialized::{Context, Format},
+    DeserializeDict, OwnedValue, SerializeDict, Type, Value,
 };
 
 #[test]
@@ -56,13 +57,22 @@ fn derive_dict() {
         field_c: vec![1, 2, 3],
     };
 
-    let ctxt = EncodingContext::<LE>::new(EncodingFormat::DBus, 0);
+    let ctxt = Context::<LE>::new(Format::DBus, 0);
     let serialized = zvariant::to_bytes(ctxt, &test).unwrap();
     let deserialized: HashMap<String, OwnedValue> = serialized.deserialize().unwrap().0;
 
-    assert_eq!(deserialized["fieldA"], Value::from(1u32).into());
-    assert_eq!(deserialized["field-b"], Value::from("foo").into());
-    assert_eq!(deserialized["fieldC"], Value::from(&[1u8, 2, 3][..]).into());
+    assert_eq!(
+        deserialized["fieldA"],
+        Value::from(1u32).try_into().unwrap()
+    );
+    assert_eq!(
+        deserialized["field-b"],
+        Value::from("foo").try_into().unwrap()
+    );
+    assert_eq!(
+        deserialized["fieldC"],
+        Value::from(&[1u8, 2, 3][..]).try_into().unwrap()
+    );
 
     let serialized = zvariant::to_bytes(ctxt, &deserialized).unwrap();
     let deserialized: Test = serialized.deserialize().unwrap().0;

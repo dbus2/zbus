@@ -371,7 +371,7 @@ impl Node {
         xml
     }
 
-    pub(crate) async fn get_managed_objects(&self) -> ManagedObjects {
+    pub(crate) async fn get_managed_objects(&self) -> fdo::Result<ManagedObjects> {
         let mut managed_objects = ManagedObjects::new();
 
         // Recursively get all properties of all interfaces of descendants.
@@ -385,20 +385,20 @@ impl Node {
                     && *n != &Properties::name()
                     && *n != &ObjectManager::name()
             }) {
-                let props = node.get_properties(iface_name.clone()).await;
+                let props = node.get_properties(iface_name.clone()).await?;
                 interfaces.insert(iface_name.clone().into(), props);
             }
             managed_objects.insert(node.path.clone(), interfaces);
             node_list.extend(node.children.values());
         }
 
-        managed_objects
+        Ok(managed_objects)
     }
 
     async fn get_properties(
         &self,
         interface_name: InterfaceName<'_>,
-    ) -> HashMap<String, OwnedValue> {
+    ) -> fdo::Result<HashMap<String, OwnedValue>> {
         self.interface_lock(interface_name)
             .expect("Interface was added but not found")
             .read()
@@ -530,28 +530,28 @@ impl ObjectServer {
             if name == ObjectManager::name() {
                 // Just added an object manager. Need to signal all managed objects under it.
                 let ctxt = SignalContext::new(&self.connection(), path)?;
-                let objects = node.get_managed_objects().await;
+                let objects = node.get_managed_objects().await?;
                 for (path, owned_interfaces) in objects {
                     let interfaces = owned_interfaces
                         .iter()
                         .map(|(i, props)| {
                             let props = props
                                 .iter()
-                                .map(|(k, v)| (k.as_str(), Value::from(v)))
-                                .collect();
-                            (i.into(), props)
+                                .map(|(k, v)| Ok((k.as_str(), Value::try_from(v)?)))
+                                .collect::<Result<_>>();
+                            Ok((i.into(), props?))
                         })
-                        .collect();
+                        .collect::<Result<_>>()?;
                     ObjectManager::interfaces_added(&ctxt, &path, &interfaces).await?;
                 }
             } else if let Some(manager_path) = manager_path {
                 let ctxt = SignalContext::new(&self.connection(), manager_path.clone())?;
                 let mut interfaces = HashMap::new();
-                let owned_props = node.get_properties(name.clone()).await;
+                let owned_props = node.get_properties(name.clone()).await?;
                 let props = owned_props
                     .iter()
-                    .map(|(k, v)| (k.as_str(), Value::from(v)))
-                    .collect();
+                    .map(|(k, v)| Ok((k.as_str(), Value::try_from(v)?)))
+                    .collect::<Result<_>>()?;
                 interfaces.insert(name, props);
 
                 ObjectManager::interfaces_added(&ctxt, &path, &interfaces).await?;

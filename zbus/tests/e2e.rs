@@ -361,7 +361,10 @@ impl MyIfaceImpl {
     fn address_data2(&self) -> HashMap<String, OwnedValue> {
         debug!("`AddressData2` getter called.");
         let mut map = HashMap::new();
-        map.insert("address".into(), Value::from("127.0.0.1").into());
+        map.insert(
+            "address".into(),
+            Value::from("127.0.0.1").try_into().unwrap(),
+        );
         map.insert("prefix".into(), 1234u32.into());
 
         map

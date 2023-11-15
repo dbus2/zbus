@@ -24,8 +24,12 @@ pub use basic::*;
 mod dict;
 pub use dict::*;
 
-mod encoding_context;
-pub use encoding_context::*;
+#[deprecated(since = "4.0.0", note = "Use `serialized::Context` instead")]
+#[doc(hidden)]
+pub type EncodingContext<B> = serialized::Context<B>;
+#[deprecated(since = "4.0.0", note = "Use `serialized::Format` instead")]
+#[doc(hidden)]
+pub type EncodingFormat = serialized::Format;
 
 pub mod serialized;
 
@@ -131,16 +135,16 @@ mod tests {
     #[cfg(unix)]
     use crate::Fd;
     use crate::{
-        Array, Basic, DeserializeDict, DeserializeValue, Dict, EncodingContext as Context,
-        EncodingFormat, Error, ObjectPath, Result, SerializeDict, SerializeValue, Signature, Str,
-        Structure, Type, Value,
+        serialized::{Context, Format},
+        Array, Basic, DeserializeDict, DeserializeValue, Dict, Error, ObjectPath, Result,
+        SerializeDict, SerializeValue, Signature, Str, Structure, Type, Value,
     };
 
     // Test through both generic and specific API (wrt byte order)
     macro_rules! basic_type_test {
         ($trait:ty, $format:ident, $test_value:expr, $expected_len:expr, $expected_ty:ty, $align:literal) => {{
             // Lie that we're starting at byte 1 in the overall message to test padding
-            let ctxt = Context::<$trait>::new(EncodingFormat::$format, 1);
+            let ctxt = Context::<$trait>::new(Format::$format, 1);
             let encoded = to_bytes(ctxt, &$test_value).unwrap();
             let padding = crate::padding_for_n_bytes(1, $align);
             assert_eq!(
@@ -153,7 +157,7 @@ mod tests {
             assert!(parsed == encoded.len(), "invalid parsing");
 
             // Now encode w/o padding
-            let ctxt = Context::<$trait>::new(EncodingFormat::$format, 0);
+            let ctxt = Context::<$trait>::new(Format::$format, 0);
             let encoded = to_bytes(ctxt, &$test_value).unwrap();
             assert_eq!(
                 encoded.len(),
@@ -188,7 +192,7 @@ mod tests {
 
     macro_rules! value_test {
         ($trait:ty, $format:ident, $test_value:expr, $expected_len:expr) => {{
-            let ctxt = Context::<$trait>::new(EncodingFormat::$format, 0);
+            let ctxt = Context::<$trait>::new(Format::$format, 0);
             let encoded = to_bytes(ctxt, &$test_value).unwrap();
             assert_eq!(
                 encoded.len(),
@@ -204,7 +208,7 @@ mod tests {
     }
 
     fn f64_type_test(
-        format: EncodingFormat,
+        format: Format,
         value: f64,
         expected_len: usize,
         expected_value_len: usize,
@@ -238,16 +242,16 @@ mod tests {
         encoded
     }
 
-    fn f64_type_test_as_value(format: EncodingFormat, value: f64, expected_value_len: usize) {
+    fn f64_type_test_as_value(format: Format, value: f64, expected_value_len: usize) {
         let v: Value<'_> = value.into();
         assert_eq!(v.value_signature(), f64::SIGNATURE_STR);
         assert_eq!(v, Value::F64(value));
-        f64_value_test(format, v.clone(), expected_value_len);
+        f64_value_test(format, v.try_clone().unwrap(), expected_value_len);
         let v: f64 = v.try_into().unwrap();
         assert!((v - value).abs() < f64::EPSILON);
     }
 
-    fn f64_value_test(format: EncodingFormat, v: Value<'_>, expected_value_len: usize) {
+    fn f64_value_test(format: Format, v: Value<'_>, expected_value_len: usize) {
         let ctxt = Context::<LE>::new(format, 0);
         let encoded = to_bytes(ctxt, &v).unwrap();
         assert_eq!(
@@ -328,7 +332,7 @@ mod tests {
             use std::os::fd::AsFd;
 
             // Lie that we're starting at byte 1 in the overall message to test padding
-            let ctxt = Context::<$trait>::new(EncodingFormat::$format, 1);
+            let ctxt = Context::<$trait>::new(Format::$format, 1);
             let encoded = to_bytes(ctxt, &$test_value).unwrap();
             let padding = crate::padding_for_n_bytes(1, $align);
             assert_eq!(
@@ -337,14 +341,14 @@ mod tests {
                 "invalid encoding using `to_bytes`"
             );
             #[cfg(unix)]
-            let (_, parsed): (Fd, _) = encoded.deserialize().unwrap();
+            let (_, parsed): (Fd<'_>, _) = encoded.deserialize().unwrap();
             assert!(
                 parsed == encoded.len(),
                 "invalid parsing using `from_slice`"
             );
 
             // Now encode w/o padding
-            let ctxt = Context::<$trait>::new(EncodingFormat::$format, 0);
+            let ctxt = Context::<$trait>::new(Format::$format, 0);
             let encoded = to_bytes(ctxt, &$test_value).unwrap();
             assert_eq!(
                 encoded.len(),
@@ -366,12 +370,12 @@ mod tests {
             let (decoded, parsed): (Value<'_>, _) = encoded.deserialize().unwrap();
             assert_eq!(
                 decoded,
-                Fd::from(encoded.fds()[0].as_fd().as_raw_fd()).into(),
+                Fd::from(encoded.fds()[0].as_fd()).into(),
                 "invalid decoding using `from_slice`"
             );
             assert_eq!(parsed, encoded.len(), "invalid parsing using `from_slice`");
 
-            let v: Fd = v.try_into().unwrap();
+            let v: Fd<'_> = v.try_into().unwrap();
             assert_eq!(v, $test_value);
         }};
     }
@@ -379,9 +383,10 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn fd_value() {
-        use std::os::fd::AsRawFd;
+        use std::os::fd::AsFd;
 
-        let fd = std::io::stdout().as_raw_fd();
+        let stdout = std::io::stdout();
+        let fd = stdout.as_fd();
         fd_value_test!(LE, DBus, Fd::from(fd), 4, 4, 8);
         #[cfg(feature = "gvariant")]
         fd_value_test!(LE, GVariant, Fd::from(fd), 4, 4, 6);
@@ -449,7 +454,7 @@ mod tests {
 
     #[test]
     fn f64_value() {
-        let encoded = f64_type_test(EncodingFormat::DBus, 99999.99999_f64, 8, 16);
+        let encoded = f64_type_test(Format::DBus, 99999.99999_f64, 8, 16);
         assert!((NativeEndian::read_f64(&encoded) - 99999.99999_f64).abs() < f64::EPSILON);
         #[cfg(feature = "gvariant")]
         {
@@ -457,7 +462,7 @@ mod tests {
                 (decode_with_gvariant::<_, f64>(encoded, None) - 99999.99999_f64).abs()
                     < f64::EPSILON
             );
-            f64_type_test(EncodingFormat::GVariant, 99999.99999_f64, 8, 10);
+            f64_type_test(Format::GVariant, 99999.99999_f64, 8, 10);
         }
     }
 
@@ -880,7 +885,7 @@ mod tests {
         let encoded = to_bytes::<LE, _>(ctxt, &v).unwrap();
         assert_eq!(encoded.len(), 94);
         let v = encoded.deserialize::<Value<'_>>().unwrap().0;
-        if let Value::Array(array) = v.clone() {
+        if let Value::Array(array) = v.try_clone().unwrap() {
             assert_eq!(*array.element_signature(), "(yu(xbxas)s)");
             assert_eq!(array.len(), 1);
             let r = &array.get()[0];
@@ -1683,7 +1688,10 @@ mod tests {
             Value::Maybe(maybe) => assert_eq!(maybe.get().unwrap(), mn),
             #[cfg(feature = "option-as-array")]
             Value::Array(array) => {
-                assert_eq!(i16::try_from(array.get()[0].clone()).unwrap(), 16i16)
+                assert_eq!(
+                    i16::try_from(array.get()[0].try_clone().unwrap()).unwrap(),
+                    16i16
+                )
             }
             _ => panic!("unexpected value {decoded:?}"),
         }
@@ -1742,7 +1750,7 @@ mod tests {
         match &v {
             Value::Array(array) => {
                 assert_eq!(
-                    String::try_from(array.get()[0].clone()).unwrap(),
+                    String::try_from(array.get()[0].try_clone().unwrap()).unwrap(),
                     ms.unwrap()
                 )
             }
@@ -1763,7 +1771,7 @@ mod tests {
             #[cfg(feature = "option-as-array")]
             Value::Array(array) => {
                 assert_eq!(
-                    String::try_from(array.get()[0].clone()).unwrap(),
+                    String::try_from(array.get()[0].try_clone().unwrap()).unwrap(),
                     ms.unwrap()
                 )
             }

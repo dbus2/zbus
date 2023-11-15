@@ -52,7 +52,15 @@ fn impl_struct(
     zv: &TokenStream,
 ) -> Result<TokenStream, Error> {
     let statc_lifetime = LifetimeDef::new(Lifetime::new("'static", Span::call_site()));
-    let (value_type, value_lifetime) = match value_type {
+    let (
+        value_type,
+        value_lifetime,
+        into_value_trait,
+        into_value_method,
+        into_value_error_decl,
+        into_value_ret,
+        into_value_error_transform,
+    ) = match value_type {
         ValueType::Value => {
             let mut lifetimes = generics.lifetimes();
             let value_lifetime = lifetimes
@@ -66,9 +74,25 @@ fn impl_struct(
                 ));
             }
 
-            (quote! { #zv::Value<#value_lifetime> }, value_lifetime)
+            (
+                quote! { #zv::Value<#value_lifetime> },
+                value_lifetime,
+                quote! { From },
+                quote! { from },
+                quote! {},
+                quote! { Self },
+                quote! {},
+            )
         }
-        ValueType::OwnedValue => (quote! { #zv::OwnedValue }, statc_lifetime),
+        ValueType::OwnedValue => (
+            quote! { #zv::OwnedValue },
+            statc_lifetime,
+            quote! { TryFrom },
+            quote! { try_from },
+            quote! { type Error = #zv::Error; },
+            quote! { #zv::Result<Self> },
+            quote! { .map_err(::std::convert::Into::into) },
+        ),
     };
 
     let type_params = generics.type_params().cloned().collect::<Vec<_>>();
@@ -121,7 +145,8 @@ fn impl_struct(
                             fields.insert(stringify!(#field_names), #zv::Value::from(s.#field_names));
                         )*
 
-                        #zv::Value::from(fields).into()
+                        <#value_type>::#into_value_method(#zv::Value::from(fields))
+                            #into_value_error_transform
                     },
                 ),
                 Some(_) | None => (
@@ -139,12 +164,12 @@ fn impl_struct(
                         })
                     },
                     quote! {
-                        #zv::StructureBuilder::new()
+                        <#value_type>::#into_value_method(#zv::StructureBuilder::new()
                         #(
                             .add_field(s.#field_names)
                         )*
-                        .build()
-                        .into()
+                        .build())
+                        #into_value_error_transform
                     },
                 ),
             };
@@ -160,11 +185,13 @@ fn impl_struct(
                     }
                 }
 
-                impl #impl_generics From<#name #ty_generics> for #value_type
+                impl #impl_generics #into_value_trait<#name #ty_generics> for #value_type
                     #into_value_where_clause
                 {
+                    #into_value_error_decl
+
                     #[inline]
-                    fn from(s: #name #ty_generics) -> Self {
+                    fn #into_value_method(s: #name #ty_generics) -> #into_value_ret {
                         #into_value_impl
                     }
                 }
@@ -184,12 +211,14 @@ fn impl_struct(
                     }
                 }
 
-                impl #impl_generics From<#name #ty_generics> for #value_type
+                impl #impl_generics #into_value_trait<#name #ty_generics> for #value_type
                     #into_value_where_clause
                 {
+                    #into_value_error_decl
+
                     #[inline]
-                    fn from(s: #name #ty_generics) -> Self {
-                        s.0.into()
+                    fn #into_value_method(s: #name #ty_generics) -> #into_value_ret {
+                        <#value_type>::#into_value_method(s.0) #into_value_error_transform
                     }
                 }
             })
@@ -239,9 +268,45 @@ fn impl_enum(
         }
     }
 
-    let value_type = match value_type {
-        ValueType::Value => quote! { #zv::Value<'_> },
-        ValueType::OwnedValue => quote! { #zv::OwnedValue },
+    let (value_type, into_value) = match value_type {
+        ValueType::Value => (
+            quote! { #zv::Value<'_> },
+            quote! {
+                impl ::std::convert::From<#name> for #zv::Value<'_> {
+                    #[inline]
+                    fn from(e: #name) -> Self {
+                        let u: #repr = match e {
+                            #(
+                                #name::#variant_names => #variant_values
+                            ),*
+                        };
+
+                        <#zv::Value as ::std::convert::From<_>>::from(u).into()
+                    }
+                }
+            },
+        ),
+        ValueType::OwnedValue => (
+            quote! { #zv::OwnedValue },
+            quote! {
+                impl ::std::convert::TryFrom<#name> for #zv::OwnedValue {
+                    type Error = #zv::Error;
+
+                    #[inline]
+                    fn try_from(e: #name) -> #zv::Result<Self> {
+                        let u: #repr = match e {
+                            #(
+                                #name::#variant_names => #variant_values
+                            ),*
+                        };
+
+                        <#zv::OwnedValue as ::std::convert::TryFrom<_>>::try_from(
+                            <#zv::Value as ::std::convert::From<_>>::from(u)
+                        )
+                    }
+                }
+            },
+        ),
     };
 
     Ok(quote! {
@@ -261,17 +326,6 @@ fn impl_enum(
             }
         }
 
-        impl ::std::convert::From<#name> for #value_type {
-            #[inline]
-            fn from(e: #name) -> Self {
-                let u: #repr = match e {
-                    #(
-                        #name::#variant_names => #variant_values
-                     ),*
-                };
-
-                <#zv::Value as ::std::convert::From<_>>::from(u).into()
-             }
-        }
+        #into_value
     })
 }

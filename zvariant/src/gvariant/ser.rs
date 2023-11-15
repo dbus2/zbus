@@ -7,9 +7,13 @@ use std::{
 };
 
 use crate::{
-    container_depths::ContainerDepths, framing_offset_size::FramingOffsetSize,
-    framing_offsets::FramingOffsets, signature_parser::SignatureParser, utils::*, Basic,
-    EncodingContext, EncodingFormat, Error, Result, Signature,
+    container_depths::ContainerDepths,
+    framing_offset_size::FramingOffsetSize,
+    framing_offsets::FramingOffsets,
+    serialized::{Context, Format},
+    signature_parser::SignatureParser,
+    utils::*,
+    Basic, Error, Result, Signature,
 };
 
 /// Our serialization implementation.
@@ -31,13 +35,13 @@ where
         signature: S,
         writer: &'w mut W,
         #[cfg(unix)] fds: &'f mut crate::ser::FdList,
-        ctxt: EncodingContext<B>,
+        ctxt: Context<B>,
     ) -> Result<Self>
     where
         S: TryInto<Signature<'sig>>,
         S::Error: Into<Error>,
     {
-        assert_eq!(ctxt.format(), EncodingFormat::GVariant);
+        assert_eq!(ctxt.format(), Format::GVariant);
 
         let signature = signature.try_into().map_err(Into::into)?;
         let sig_parser = SignatureParser::new(signature);
@@ -94,7 +98,7 @@ where
 macro_rules! serialize_basic {
     ($method:ident, $type:ty) => {
         fn $method(self, v: $type) -> Result<()> {
-            let ctxt = EncodingContext::new_dbus(self.0.ctxt.position());
+            let ctxt = Context::new_dbus(self.0.ctxt.position());
             let bytes_written = self.0.bytes_written;
             let mut dbus_ser = crate::dbus::Serializer(crate::SerializerCommon::<B, W> {
                 ctxt,
@@ -486,7 +490,7 @@ where
         }
 
         let signature = ser.0.sig_parser.next_signature()?;
-        let alignment = alignment_for_signature(&signature, EncodingFormat::GVariant)?;
+        let alignment = alignment_for_signature(&signature, Format::GVariant)?;
         ser.0.add_padding(alignment)?;
 
         ser.0.sig_parser.skip_char()?;

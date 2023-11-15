@@ -2,29 +2,7 @@ use std::marker::PhantomData;
 
 use static_assertions::assert_impl_all;
 
-/// The encoding format.
-#[derive(Debug, Default, PartialEq, Eq, Copy, Clone)]
-pub enum EncodingFormat {
-    /// [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-marshaling)
-    /// format.
-    #[default]
-    DBus,
-    /// [GVariant](https://developer.gnome.org/glib/stable/glib-GVariant.html) format.
-    #[cfg(feature = "gvariant")]
-    GVariant,
-}
-
-assert_impl_all!(EncodingFormat: Send, Sync, Unpin);
-
-impl std::fmt::Display for EncodingFormat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            EncodingFormat::DBus => write!(f, "D-Bus"),
-            #[cfg(feature = "gvariant")]
-            EncodingFormat::GVariant => write!(f, "GVariant"),
-        }
-    }
-}
+use crate::serialized::Format;
 
 /// The encoding context to use with the [serialization and deserialization] API.
 ///
@@ -39,7 +17,7 @@ impl std::fmt::Display for EncodingFormat {
 /// ```
 /// use byteorder::LE;
 ///
-/// use zvariant::EncodingContext as Context;
+/// use zvariant::serialized::Context;
 /// use zvariant::to_bytes;
 ///
 /// let str_vec = vec!["Hello", "World"];
@@ -56,21 +34,21 @@ impl std::fmt::Display for EncodingFormat {
 /// [ByteOrder]: https://docs.rs/byteorder/1.3.4/byteorder/trait.ByteOrder.html
 /// [specify]: #method.new
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub struct EncodingContext<B> {
-    format: EncodingFormat,
+pub struct Context<B> {
+    format: Format,
     position: usize,
 
     b: PhantomData<B>,
 }
 
-assert_impl_all!(EncodingContext<byteorder::NativeEndian>: Send, Sync, Unpin);
+assert_impl_all!(Context<byteorder::NativeEndian>: Send, Sync, Unpin);
 
-impl<B> EncodingContext<B>
+impl<B> Context<B>
 where
     B: byteorder::ByteOrder,
 {
     /// Create a new encoding context.
-    pub fn new(format: EncodingFormat, position: usize) -> Self {
+    pub fn new(format: Format, position: usize) -> Self {
         Self {
             format,
             position,
@@ -82,7 +60,7 @@ where
     ///
     /// [`new`]: #method.new
     pub fn new_dbus(position: usize) -> Self {
-        Self::new(EncodingFormat::DBus, position)
+        Self::new(Format::DBus, position)
     }
 
     /// Convenient wrapper for [`new`] to create a context for GVariant format.
@@ -90,13 +68,11 @@ where
     /// [`new`]: #method.new
     #[cfg(feature = "gvariant")]
     pub fn new_gvariant(position: usize) -> Self {
-        Self::new(EncodingFormat::GVariant, position)
+        Self::new(Format::GVariant, position)
     }
 
-    /// The [`EncodingFormat`] of this context.
-    ///
-    /// [`EncodingFormat`]: enum.EncodingFormat.html
-    pub fn format(self) -> EncodingFormat {
+    /// The [`Format`] of this context.
+    pub fn format(self) -> Format {
         self.format
     }
 

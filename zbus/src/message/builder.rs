@@ -12,7 +12,7 @@ use zvariant::serialized;
 use crate::{
     message::{Field, FieldCode, Fields, Flags, Header, Message, PrimaryHeader, Sequence, Type},
     utils::padding_for_8_bytes,
-    zvariant::{DynamicType, EncodingContext, ObjectPath, Signature},
+    zvariant::{serialized::Context, DynamicType, ObjectPath, Signature},
     Error, Result,
 };
 
@@ -26,7 +26,7 @@ type BuildGenericResult = ();
 
 macro_rules! dbus_context {
     ($n_bytes_before: expr) => {
-        EncodingContext::<byteorder::NativeEndian>::new_dbus($n_bytes_before)
+        Context::<byteorder::NativeEndian>::new_dbus($n_bytes_before)
     };
 }
 
@@ -314,10 +314,7 @@ impl<'a> Builder<'a> {
             cursor.write_all(&[0u8])?;
         }
         #[cfg(unix)]
-        let fds = write_body(&mut cursor)?
-            .into_iter()
-            .map(Into::into)
-            .collect();
+        let fds: Vec<_> = write_body(&mut cursor)?.into_iter().collect();
         #[cfg(not(unix))]
         write_body(&mut cursor)?;
 

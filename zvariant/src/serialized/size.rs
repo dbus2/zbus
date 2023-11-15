@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use byteorder::ByteOrder;
 
-use crate::EncodingContext;
+use crate::serialized::Context;
 
 /// Represents the return value of [`crate::serialized_size`] function.
 ///
@@ -13,14 +13,14 @@ use crate::EncodingContext;
 #[derive(Debug)]
 pub struct Size<B: ByteOrder> {
     size: usize,
-    context: EncodingContext<B>,
+    context: Context<B>,
     #[cfg(unix)]
     num_fds: u32,
 }
 
 impl<B: ByteOrder> Size<B> {
     /// Create a new `EncodedSize` instance.
-    pub fn new(size: usize, context: EncodingContext<B>) -> Self {
+    pub fn new(size: usize, context: Context<B>) -> Self {
         Self {
             size,
             context,
@@ -42,7 +42,7 @@ impl<B: ByteOrder> Size<B> {
     }
 
     /// The encoding context.
-    pub fn context(&self) -> EncodingContext<B> {
+    pub fn context(&self) -> Context<B> {
         self.context
     }
 

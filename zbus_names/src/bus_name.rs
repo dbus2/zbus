@@ -316,12 +316,15 @@ impl TryFrom<OwnedValue> for BusName<'static> {
     }
 }
 
-impl From<BusName<'static>> for OwnedValue {
-    fn from(name: BusName<'static>) -> Self {
+impl TryFrom<BusName<'static>> for OwnedValue {
+    type Error = Error;
+
+    fn try_from(name: BusName<'static>) -> Result<Self> {
         match name {
-            BusName::Unique(name) => name.into(),
-            BusName::WellKnown(name) => name.into(),
+            BusName::Unique(name) => name.try_into(),
+            BusName::WellKnown(name) => name.try_into(),
         }
+        .map_err(Into::into)
     }
 }
 
@@ -469,9 +472,11 @@ impl TryFrom<OwnedValue> for OwnedBusName {
     }
 }
 
-impl From<OwnedBusName> for OwnedValue {
-    fn from(name: OwnedBusName) -> Self {
-        name.0.into()
+impl TryFrom<OwnedBusName> for OwnedValue {
+    type Error = Error;
+
+    fn try_from(name: OwnedBusName) -> Result<Self> {
+        name.0.try_into()
     }
 }
 

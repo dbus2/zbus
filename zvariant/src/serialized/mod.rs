@@ -4,5 +4,7 @@ mod size;
 pub use size::Size;
 mod written;
 pub use written::Written;
-#[cfg(unix)]
-mod fd;
+mod format;
+pub use format::Format;
+mod context;
+pub use context::Context;

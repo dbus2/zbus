@@ -1,5 +1,8 @@
 use byteorder::ByteOrder;
-use zvariant::{serialized::Data, to_bytes, EncodingContext as Context, Value};
+use zvariant::{
+    serialized::{Context, Data},
+    to_bytes, Value,
+};
 
 pub fn fuzz_for_context<B: ByteOrder>(bytes: &[u8], ctx: Context<B>) {
     let data = Data::new(bytes, ctx);

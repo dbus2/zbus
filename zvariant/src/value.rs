@@ -36,13 +36,13 @@ use crate::Fd;
 /// # Examples
 ///
 /// ```
-/// use zvariant::{to_bytes, EncodingContext, Value};
+/// use zvariant::{to_bytes, serialized::Context, Value};
 ///
 /// // Create a Value from an i16
 /// let v = Value::new(i16::max_value());
 ///
 /// // Encode it
-/// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
+/// let ctxt = Context::<byteorder::LE>::new_dbus(0);
 /// let encoding = to_bytes(ctxt, &v).unwrap();
 ///
 /// // Decode it back
@@ -55,14 +55,14 @@ use crate::Fd;
 /// Now let's try a more complicated example:
 ///
 /// ```
-/// use zvariant::{to_bytes, EncodingContext};
+/// use zvariant::{to_bytes, serialized::Context};
 /// use zvariant::{Structure, Value, Str};
 ///
 /// // Create a Value from a tuple this time
 /// let v = Value::new((i16::max_value(), "hello", true));
 ///
 /// // Same drill as previous example
-/// let ctxt = EncodingContext::<byteorder::LE>::new_dbus(0);
+/// let ctxt = Context::<byteorder::LE>::new_dbus(0);
 /// let encoding = to_bytes(ctxt, &v).unwrap();
 /// let v: Value = encoding.deserialize().unwrap().0;
 ///
@@ -75,7 +75,7 @@ use crate::Fd;
 /// ```
 ///
 /// [D-Bus specification]: https://dbus.freedesktop.org/doc/dbus-specification.html#container-types
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, PartialEq, PartialOrd)]
 pub enum Value<'a> {
     // Simple types
     U8(u8),
@@ -100,7 +100,7 @@ pub enum Value<'a> {
     Maybe(Maybe<'a>),
 
     #[cfg(unix)]
-    Fd(Fd),
+    Fd(Fd<'a>),
 }
 
 impl Hash for Value<'_> {
@@ -210,13 +210,14 @@ impl<'a> Value<'a> {
         }
     }
 
-    /// Create an owned version of `self`.
+    /// Try to create an owned version of `self`.
     ///
-    /// Ideally, we should implement [`std::borrow::ToOwned`] trait for `Value`, but that's
-    /// implemented generically for us through `impl<T: Clone> ToOwned for T` and it's not what we
-    /// need/want.
-    pub fn to_owned(&self) -> OwnedValue {
-        OwnedValue(match self {
+    /// # Errors
+    ///
+    /// This method can currently only fail on Unix platforms for [`Value::Fd`] variant. This
+    /// happens when the current process exceeds the maximum number of open file descriptors.
+    pub fn try_to_owned(&self) -> crate::Result<OwnedValue> {
+        Ok(OwnedValue(match self {
             Value::U8(v) => Value::U8(*v),
             Value::Bool(v) => Value::Bool(*v),
             Value::I16(v) => Value::I16(*v),
@@ -230,18 +231,18 @@ impl<'a> Value<'a> {
             Value::Signature(v) => Value::Signature(v.to_owned()),
             Value::ObjectPath(v) => Value::ObjectPath(v.to_owned()),
             Value::Value(v) => {
-                let o = OwnedValue::from(&**v);
+                let o = OwnedValue::try_from(&**v)?;
                 Value::Value(Box::new(o.into_inner()))
             }
 
-            Value::Array(v) => Value::Array(v.to_owned()),
-            Value::Dict(v) => Value::Dict(v.to_owned()),
-            Value::Structure(v) => Value::Structure(v.to_owned()),
+            Value::Array(v) => Value::Array(v.try_to_owned()?),
+            Value::Dict(v) => Value::Dict(v.try_to_owned()?),
+            Value::Structure(v) => Value::Structure(v.try_to_owned()?),
             #[cfg(feature = "gvariant")]
-            Value::Maybe(v) => Value::Maybe(v.to_owned()),
+            Value::Maybe(v) => Value::Maybe(v.try_to_owned()?),
             #[cfg(unix)]
-            Value::Fd(v) => Value::Fd(*v),
-        })
+            Value::Fd(v) => Value::Fd(v.try_to_owned()?),
+        }))
     }
 
     /// Get the signature of the enclosed value.
@@ -271,6 +272,38 @@ impl<'a> Value<'a> {
             #[cfg(unix)]
             Value::Fd(_) => Fd::signature(),
         }
+    }
+
+    /// Try to clone the value.
+    ///
+    /// # Errors
+    ///
+    /// This method can currently only fail on Unix platforms for [`Value::Fd`] variant containing
+    /// an [`Fd::Owned`] variant. This happens when the current process exceeds the maximum number
+    /// of open file descriptors.
+    pub fn try_clone(&self) -> crate::Result<Self> {
+        Ok(match self {
+            Value::U8(v) => Value::U8(*v),
+            Value::Bool(v) => Value::Bool(*v),
+            Value::I16(v) => Value::I16(*v),
+            Value::U16(v) => Value::U16(*v),
+            Value::I32(v) => Value::I32(*v),
+            Value::U32(v) => Value::U32(*v),
+            Value::I64(v) => Value::I64(*v),
+            Value::U64(v) => Value::U64(*v),
+            Value::F64(v) => Value::F64(*v),
+            Value::Str(v) => Value::Str(v.clone()),
+            Value::Signature(v) => Value::Signature(v.clone()),
+            Value::ObjectPath(v) => Value::ObjectPath(v.clone()),
+            Value::Value(v) => Value::Value(Box::new(v.try_clone()?)),
+            Value::Array(v) => Value::Array(v.try_clone()?),
+            Value::Dict(v) => Value::Dict(v.try_clone()?),
+            Value::Structure(v) => Value::Structure(v.try_clone()?),
+            #[cfg(feature = "gvariant")]
+            Value::Maybe(v) => Value::Maybe(v.try_clone()?),
+            #[cfg(unix)]
+            Value::Fd(v) => Value::Fd(v.try_clone()?),
+        })
     }
 
     pub(crate) fn serialize_value_as_struct_field<S>(
@@ -759,7 +792,11 @@ where
             )
         })? {
             #[cfg(unix)]
-            b'h' => Fd::from(value).into(),
+            b'h' => {
+                // SAFETY: The `'de` lifetimes will ensure the borrow won't outlive the raw FD.
+                let fd = unsafe { std::os::fd::BorrowedFd::borrow_raw(value) };
+                Fd::Borrowed(fd).into()
+            }
             _ => value.into(),
         };
 
@@ -1021,6 +1058,9 @@ mod tests {
 
         #[cfg(any(feature = "gvariant", feature = "option-as-array"))]
         {
+            #[cfg(unix)]
+            use std::os::fd::BorrowedFd;
+
             #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
             let s = "((@mn 0, @mmn 0, @mmmn 0), \
                 (@mn nothing, @mmn just nothing, @mmmn just just nothing), \
@@ -1041,7 +1081,11 @@ mod tests {
 
             #[cfg(unix)]
             assert_eq!(
-                Value::new(vec![Fd::from(0), Fd::from(-100)]).to_string(),
+                Value::new(vec![
+                    Fd::from(unsafe { BorrowedFd::borrow_raw(0) }),
+                    Fd::from(unsafe { BorrowedFd::borrow_raw(-100) })
+                ])
+                .to_string(),
                 "[handle 0, -100]"
             );
 

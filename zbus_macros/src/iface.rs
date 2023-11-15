@@ -169,8 +169,6 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             quote! {}
         };
 
-        let handle_fallible_property = quote! { .map(|e| <#zbus::zvariant::Value as ::std::convert::From<_>>::from(e).to_owned()) };
-
         let mut typed_inputs = inputs
             .iter()
             .filter_map(typed_arg)
@@ -268,9 +266,16 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 //   `TryFrom<Value<'_>>` is required).
                 //
                 // * For all other arg types, we convert the passed value to `OwnedValue` first and
-                //   then pass it as `Value` (so `TryFrom<Value<'static>>` is required).
+                //   then pass it as `Value` (so `TryFrom<OwnedValue>` is required).
                 let value_to_owned = quote! {
-                    ::zbus::zvariant::Value::from(zbus::zvariant::Value::to_owned(value))
+                    match ::zbus::zvariant::Value::try_to_owned(value) {
+                        ::std::result::Result::Ok(val) => ::zbus::zvariant::Value::from(val),
+                        ::std::result::Result::Err(e) => {
+                            return ::std::result::Result::Err(
+                                ::std::convert::Into::into(#zbus::Error::Variant(::std::convert::Into::into(e)))
+                            );
+                        }
+                    }
                 };
                 let value_arg = match &*typed_inputs
                     .first()
@@ -287,7 +292,14 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                                 .args
                                 .first()
                                 .filter(|arg| matches!(arg, GenericArgument::Lifetime(_)))
-                                .map(|_| quote!(value.clone()))
+                                .map(|_| quote!(match ::zbus::zvariant::Value::try_clone(value) {
+                                    ::std::result::Result::Ok(val) => val,
+                                    ::std::result::Result::Err(e) => {
+                                        return ::std::result::Result::Err(
+                                            ::std::convert::Into::into(#zbus::Error::Variant(::std::convert::Into::into(e)))
+                                        );
+                                    }
+                                }))
                                 .unwrap_or_else(|| value_to_owned.clone()),
                             _ => value_to_owned.clone(),
                         })
@@ -321,7 +333,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                     let q = quote!(
                         #(#cfg_attrs)*
                         #member_name => {
-                            ::std::option::Option::Some(#do_set)
+                            ::std::option::Option::Some((move || async move { #do_set }) ().await)
                         }
                     );
                     set_mut_dispatch.extend(q);
@@ -347,16 +359,21 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
                 p.ty = Some(get_property_type(output)?);
                 p.read = true;
-                let inner = if is_fallible_property {
-                    quote!(self.#ident() #method_await #handle_fallible_property)
-                } else {
-                    quote!(::std::result::Result::Ok(
-                        ::std::convert::Into::into(
-                            <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
-                                self.#ident()#method_await,
-                            ),
+                let value_convert = quote!(
+                    <#zbus::zvariant::OwnedValue as ::std::convert::TryFrom<_>>::try_from(
+                        <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
+                            value,
                         ),
-                    ))
+                    )
+                    .map_err(|e| #zbus::fdo::Error::Failed(e.to_string()))
+                );
+                let inner = if is_fallible_property {
+                    quote!(self.#ident() #method_await .and_then(|value| #value_convert))
+                } else {
+                    quote!({
+                        let value = self.#ident()#method_await;
+                        #value_convert
+                    })
                 };
 
                 let q = quote!(
@@ -371,21 +388,23 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                     quote!(if let Ok(prop) = self.#ident()#method_await {
                         props.insert(
                             ::std::string::ToString::to_string(#member_name),
-                            ::std::convert::Into::into(
+                            <#zbus::zvariant::OwnedValue as ::std::convert::TryFrom<_>>::try_from(
                                 <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
                                     prop,
                                 ),
-                            ),
+                            )
+                            .map_err(|e| #zbus::fdo::Error::Failed(e.to_string()))?,
                         );
                     })
                 } else {
                     quote!(props.insert(
                         ::std::string::ToString::to_string(#member_name),
-                        ::std::convert::Into::into(
+                        <#zbus::zvariant::OwnedValue as ::std::convert::TryFrom<_>>::try_from(
                             <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
                                 self.#ident()#method_await,
                             ),
-                        ),
+                        )
+                        .map_err(|e| #zbus::fdo::Error::Failed(e.to_string()))?,
                     );)
                 };
 
@@ -494,16 +513,16 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
 
             async fn get_all(
                 &self,
-            ) -> ::std::collections::HashMap<
+            ) -> #zbus::fdo::Result<::std::collections::HashMap<
                 ::std::string::String,
                 #zbus::zvariant::OwnedValue,
-            > {
+            >> {
                 let mut props: ::std::collections::HashMap<
                     ::std::string::String,
                     #zbus::zvariant::OwnedValue,
                 > = ::std::collections::HashMap::new();
                 #get_all
-                props
+                Ok(props)
             }
 
             fn set<'call>(
