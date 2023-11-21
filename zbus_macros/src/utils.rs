@@ -1,4 +1,4 @@
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::{format_ident, quote};
 use syn::{Attribute, FnArg, Ident, Pat, PatIdent, PatType};
@@ -50,4 +50,33 @@ pub fn pascal_case(s: &str) -> String {
 
 pub fn is_blank(s: &str) -> bool {
     s.trim().is_empty()
+}
+
+/// Standard annotation `org.freedesktop.DBus.Property.EmitsChangedSignal`.
+///
+/// See <https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format>.
+#[derive(Debug, Default)]
+pub enum PropertyEmitsChangedSignal {
+    #[default]
+    True,
+    Invalidates,
+    Const,
+    False,
+}
+
+impl PropertyEmitsChangedSignal {
+    pub fn parse(s: &str, span: Span) -> syn::Result<Self> {
+        use PropertyEmitsChangedSignal::*;
+
+        match s {
+            "true" => Ok(True),
+            "invalidates" => Ok(Invalidates),
+            "const" => Ok(Const),
+            "false" => Ok(False),
+            other => Err(syn::Error::new(
+                span,
+                format!("invalid value \"{other}\" for attribute `property(emits_changed_signal)`"),
+            )),
+        }
+    }
 }

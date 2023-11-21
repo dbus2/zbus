@@ -1,4 +1,4 @@
-use crate::utils::{pat_ident, typed_arg, zbus_path};
+use crate::utils::{pat_ident, typed_arg, zbus_path, PropertyEmitsChangedSignal};
 use proc_macro2::{Literal, Span, TokenStream};
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use regex::Regex;
@@ -630,35 +630,6 @@ fn gen_proxy_method_call(
                     ::std::result::Result::Ok(reply)
                 }
             })
-        }
-    }
-}
-
-/// Standard annotation `org.freedesktop.DBus.Property.EmitsChangedSignal`.
-///
-/// See <https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format>.
-#[derive(Debug, Default)]
-enum PropertyEmitsChangedSignal {
-    #[default]
-    True,
-    Invalidates,
-    Const,
-    False,
-}
-
-impl PropertyEmitsChangedSignal {
-    fn parse(s: &str, span: Span) -> syn::Result<Self> {
-        use PropertyEmitsChangedSignal::*;
-
-        match s {
-            "true" => Ok(True),
-            "invalidates" => Ok(Invalidates),
-            "const" => Ok(Const),
-            "false" => Ok(False),
-            other => Err(syn::Error::new(
-                span,
-                format!("invalid value \"{other}\" for attribute `property(emits_changed_signal)`"),
-            )),
         }
     }
 }
