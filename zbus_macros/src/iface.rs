@@ -484,14 +484,22 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
     let generics = &input.generics;
     let where_clause = &generics.where_clause;
 
+    let generated_signals_impl = if generated_signals.is_empty() {
+        quote!()
+    } else {
+        quote! {
+            impl #generics #self_ty
+            #where_clause
+            {
+                #generated_signals
+            }
+        }
+    };
+
     Ok(quote! {
         #input
 
-        impl #generics #self_ty
-        #where_clause
-        {
-            #generated_signals
-        }
+        #generated_signals_impl
 
         #[#zbus::export::async_trait::async_trait]
         impl #generics #zbus::object_server::Interface for #self_ty
