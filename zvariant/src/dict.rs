@@ -85,16 +85,14 @@ impl<'k, 'v> Dict<'k, 'v> {
         K: ?Sized + std::cmp::Eq + 'k,
         V: ?Sized,
         &'k K: TryFrom<&'k Value<'k>>,
+        <&'k K as TryFrom<&'k Value<'k>>>::Error: Into<crate::Error>,
         &'v V: TryFrom<&'v Value<'v>>,
+        <&'v V as TryFrom<&'v Value<'v>>>::Error: Into<crate::Error>,
     {
         for entry in &self.entries {
-            let entry_key = entry.key.downcast_ref::<K>().ok_or(Error::IncorrectType)?;
+            let entry_key = entry.key.downcast_ref::<K>()?;
             if *entry_key == *key {
-                return entry
-                    .value
-                    .downcast_ref()
-                    .ok_or(Error::IncorrectType)
-                    .map(Some);
+                return entry.value.downcast_ref().map(Some);
             }
         }
 
