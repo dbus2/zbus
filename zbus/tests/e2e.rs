@@ -275,8 +275,6 @@ impl MyIfaceImpl {
     ) -> zbus::fdo::Result<ResponseDispatchNotifier<String>> {
         debug!("`TestResponseNotify` called.");
         let (response, listener) = ResponseDispatchNotifier::new(String::from("Meaning of life"));
-        let mut listener = Box::pin(listener);
-        listener.as_mut().listen();
         let ctxt = ctxt.to_owned();
         conn.executor()
             .spawn(
