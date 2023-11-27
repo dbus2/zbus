@@ -1138,8 +1138,8 @@ mod tests {
         // Also decode it back
         let v = encoded.deserialize().unwrap().0;
         if let Value::Dict(dict) = v {
-            assert_eq!(dict.get::<i64, str>(&1).unwrap().unwrap(), "123");
-            assert_eq!(dict.get::<i64, str>(&2).unwrap().unwrap(), "456");
+            assert_eq!(dict.get::<i64, &str>(&1).unwrap().unwrap(), "123");
+            assert_eq!(dict.get::<i64, &str>(&2).unwrap().unwrap(), "456");
         } else {
             panic!();
         }
@@ -1186,11 +1186,11 @@ mod tests {
         let v: Value<'_> = encoded.deserialize().unwrap().0;
         if let Value::Dict(dict) = v {
             assert_eq!(
-                *dict.get::<_, Value<'_>>("hello").unwrap().unwrap(),
+                dict.get::<&str, Value<'_>>(&"hello").unwrap().unwrap(),
                 Value::new("there")
             );
             assert_eq!(
-                *dict.get::<_, Value<'_>>("bye").unwrap().unwrap(),
+                dict.get::<_, Value<'_>>(&"bye").unwrap().unwrap(),
                 Value::new("now")
             );
 

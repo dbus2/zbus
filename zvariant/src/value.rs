@@ -437,16 +437,15 @@ impl<'a> Value<'a> {
     /// ```
     ///
     /// [`downcast`]: enum.Value.html#method.downcast
-    pub fn downcast_ref<T>(&'a self) -> Result<&'a T, crate::Error>
+    pub fn downcast_ref<T>(&'a self) -> Result<T, crate::Error>
     where
-        T: ?Sized,
-        &'a T: TryFrom<&'a Value<'a>>,
-        <&'a T as TryFrom<&'a Value<'a>>>::Error: Into<crate::Error>,
+        T: ?Sized + TryFrom<&'a Value<'a>>,
+        <T as TryFrom<&'a Value<'a>>>::Error: Into<crate::Error>,
     {
         if let Value::Value(v) = self {
-            <&T>::try_from(v)
+            <T>::try_from(v)
         } else {
-            <&T>::try_from(self)
+            <T>::try_from(self)
         }
         .map_err(Into::into)
     }

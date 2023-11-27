@@ -79,19 +79,17 @@ impl<'k, 'v> Dict<'k, 'v> {
     }
 
     /// Get the value for the given key.
-    pub fn get<'d, K, V>(&'d self, key: &K) -> Result<Option<&'v V>, Error>
+    pub fn get<'d, K, V>(&'d self, key: &K) -> Result<Option<V>, Error>
     where
         'd: 'k + 'v,
-        K: ?Sized + std::cmp::Eq + 'k,
-        V: ?Sized,
-        &'k K: TryFrom<&'k Value<'k>>,
-        <&'k K as TryFrom<&'k Value<'k>>>::Error: Into<crate::Error>,
-        &'v V: TryFrom<&'v Value<'v>>,
-        <&'v V as TryFrom<&'v Value<'v>>>::Error: Into<crate::Error>,
+        K: std::cmp::Eq + TryFrom<&'k Value<'k>>,
+        <K as TryFrom<&'k Value<'k>>>::Error: Into<crate::Error>,
+        V: TryFrom<&'v Value<'v>>,
+        <V as TryFrom<&'v Value<'v>>>::Error: Into<crate::Error>,
     {
         for entry in &self.entries {
             let entry_key = entry.key.downcast_ref::<K>()?;
-            if *entry_key == *key {
+            if entry_key == *key {
                 return entry.value.downcast_ref().map(Some);
             }
         }

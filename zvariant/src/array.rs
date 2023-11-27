@@ -138,7 +138,7 @@ pub(crate) fn array_display_fmt(
             let bytes = leading
                 .iter()
                 .map(|v| {
-                    *v.downcast_ref::<u8>()
+                    v.downcast_ref::<u8>()
                         .expect("item must have a signature of a byte")
                 })
                 .collect::<Vec<_>>();
