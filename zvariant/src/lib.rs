@@ -116,7 +116,7 @@ pub mod export {
 #[allow(clippy::disallowed_names)]
 mod tests {
     use std::{
-        collections::HashMap,
+        collections::{BTreeMap, HashMap},
         net::{IpAddr, Ipv4Addr, Ipv6Addr},
     };
 
@@ -1132,7 +1132,7 @@ mod tests {
         assert_eq!(encoded.len(), 48);
         // Convert it back
         let dict: Dict<'_, '_> = v.try_into().unwrap();
-        let map: HashMap<i64, String> = dict.try_into().unwrap();
+        let map: HashMap<i64, String> = dict.try_clone().unwrap().try_into().unwrap();
         assert_eq!(map[&1], "123");
         assert_eq!(map[&2], "456");
         // Also decode it back
@@ -1143,6 +1143,10 @@ mod tests {
         } else {
             panic!();
         }
+        // Convert it to a BTreeMap too.
+        let map: BTreeMap<i64, String> = dict.try_into().unwrap();
+        assert_eq!(map[&1], "123");
+        assert_eq!(map[&2], "456");
 
         #[cfg(feature = "gvariant")]
         {
@@ -1195,7 +1199,12 @@ mod tests {
             );
 
             // Try converting to a HashMap
-            let map = <HashMap<String, Value<'_>>>::try_from(dict).unwrap();
+            let map = <HashMap<String, Value<'_>>>::try_from(dict.try_clone().unwrap()).unwrap();
+            assert_eq!(map["hello"], Value::new("there"));
+            assert_eq!(map["bye"], Value::new("now"));
+
+            // Try converting to a BTreeMap
+            let map = <BTreeMap<String, Value<'_>>>::try_from(dict).unwrap();
             assert_eq!(map["hello"], Value::new("there"));
             assert_eq!(map["bye"], Value::new("now"));
         } else {

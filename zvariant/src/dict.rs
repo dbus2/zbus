@@ -1,7 +1,7 @@
 use std::{
     collections::{BTreeMap, HashMap},
     fmt::{Display, Write},
-    hash::BuildHasher,
+    hash::{BuildHasher, Hash},
 };
 
 use serde::ser::{Serialize, SerializeSeq, SerializeStruct, Serializer};
@@ -207,69 +207,77 @@ impl<'k, 'v> Serialize for Dict<'k, 'v> {
     }
 }
 
-// Conversion of Dict to HashMap
-impl<'k, 'v, K, V, H> TryFrom<Dict<'k, 'v>> for HashMap<K, V, H>
-where
-    K: Basic + TryFrom<Value<'k>> + std::hash::Hash + std::cmp::Eq,
-    V: TryFrom<Value<'v>>,
-    H: BuildHasher + Default,
-    K::Error: Into<crate::Error>,
-    V::Error: Into<crate::Error>,
-{
-    type Error = Error;
+// Conversion of Dict to Map types
+macro_rules! from_dict {
+    ($ty:ident <K $(: $kbound1:ident $(+ $kbound2:ident)*)*, V $(, $typaram:ident)*>) => {
+        impl<'k, 'v, K, V $(, $typaram)*> TryFrom<Dict<'k, 'v>> for $ty<K, V $(, $typaram)*>
+        where
+            K: Basic + TryFrom<Value<'k>> $(+ $kbound1 $(+ $kbound2)*)*,
+            V: TryFrom<Value<'v>>,
+            K::Error: Into<crate::Error>,
+            V::Error: Into<crate::Error>,
+            $($typaram: BuildHasher + Default,)*
+        {
+            type Error = Error;
 
-    fn try_from(v: Dict<'k, 'v>) -> Result<Self, Self::Error> {
-        let mut map = HashMap::default();
-        for (key, value) in v.map.into_iter() {
-            let key = if let Value::Value(v) = key {
-                K::try_from(*v)
-            } else {
-                K::try_from(key)
+            fn try_from(v: Dict<'k, 'v>) -> Result<Self, Self::Error> {
+                v.map.into_iter().map(|(key, value)| {
+                    let key = if let Value::Value(v) = key {
+                        K::try_from(*v)
+                    } else {
+                        K::try_from(key)
+                    }
+                    .map_err(Into::into)?;
+
+                    let value = if let Value::Value(v) = value {
+                        V::try_from(*v)
+                    } else {
+                        V::try_from(value)
+                    }
+                    .map_err(Into::into)?;
+
+                    Ok((key, value))
+                }).collect::<Result<_, _>>()
             }
-            .map_err(Into::into)?;
-
-            let value = if let Value::Value(v) = value {
-                V::try_from(*v)
-            } else {
-                V::try_from(value)
-            }
-            .map_err(Into::into)?;
-
-            map.insert(key, value);
         }
-        Ok(map)
-    }
+    };
 }
+from_dict!(HashMap<K: Eq + Hash, V, H>);
+from_dict!(BTreeMap<K: Ord, V>);
 
 // TODO: this could be useful
 // impl<'d, 'k, 'v, K, V, H> TryFrom<&'d Dict<'k, 'v>> for HashMap<&'k K, &'v V, H>
 
 // Conversion of Hashmap to Dict
-impl<'k, 'v, K, V, H> From<HashMap<K, V, H>> for Dict<'k, 'v>
-where
-    K: Type + Into<Value<'k>> + std::hash::Hash + std::cmp::Eq,
-    V: Type + Into<Value<'v>>,
-    H: BuildHasher + Default,
-{
-    fn from(value: HashMap<K, V, H>) -> Self {
-        let entries = value
-            .into_iter()
-            .map(|(key, value)| (Value::new(key), Value::new(value)))
-            .collect();
-        let key_signature = K::signature();
-        let value_signature = V::signature();
-        let signature = create_signature(&key_signature, &value_signature);
+macro_rules! to_dict {
+    ($ty:ident <K $(: $kbound1:ident $(+ $kbound2:ident)*)*, V $(, $typaram:ident)*>) => {
+        impl<'k, 'v, K, V $(, $typaram)*> From<$ty<K, V $(, $typaram)*>> for Dict<'k, 'v>
+        where
+            K: Type + Into<Value<'k>>,
+            V: Type + Into<Value<'v>>,
+            $($typaram: BuildHasher,)*
+        {
+            fn from(value: $ty<K, V $(, $typaram)*>) -> Self {
+                let entries = value
+                    .into_iter()
+                    .map(|(key, value)| (Value::new(key), Value::new(value)))
+                    .collect();
+                let key_signature = K::signature();
+                let value_signature = V::signature();
+                let signature = create_signature(&key_signature, &value_signature);
 
-        Self {
-            map: entries,
-            key_signature,
-            value_signature,
-            signature,
+                Self {
+                    map: entries,
+                    key_signature,
+                    value_signature,
+                    signature,
+                }
+            }
         }
-    }
+    };
 }
-
-// TODO: Conversion of Dict from/to BTreeMap
+to_dict!(HashMap<K: Eq + Hash, V, H>);
+to_dict!(BTreeMap<K: Ord, V>);
 
 #[derive(Debug)]
 struct DictEntry<'kref, 'k, 'vref, 'v> {
