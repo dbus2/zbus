@@ -933,6 +933,14 @@ impl<'a> Type for Value<'a> {
     }
 }
 
+impl<'a> TryFrom<&Value<'a>> for Value<'a> {
+    type Error = crate::Error;
+
+    fn try_from(value: &Value<'a>) -> crate::Result<Value<'a>> {
+        value.try_clone()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
