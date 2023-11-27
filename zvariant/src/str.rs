@@ -179,8 +179,8 @@ impl<'a> From<Str<'a>> for String {
     }
 }
 
-impl<'a> From<&'a Str<'a>> for &'a str {
-    fn from(value: &'a Str<'a>) -> &'a str {
+impl<'a> From<&'a Str<'_>> for &'a str {
+    fn from(value: &'a Str<'_>) -> &'a str {
         value.as_str()
     }
 }

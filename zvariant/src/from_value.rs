@@ -28,10 +28,10 @@ macro_rules! value_try_from {
 
 macro_rules! value_try_from_ref {
     ($kind:ident, $to:ty) => {
-        impl<'a> TryFrom<&'a Value<'a>> for &'a $to {
+        impl<'a> TryFrom<&'a Value<'_>> for &'a $to {
             type Error = Error;
 
-            fn try_from(value: &'a Value<'a>) -> Result<Self, Self::Error> {
+            fn try_from(value: &'a Value<'_>) -> Result<Self, Self::Error> {
                 if let Value::$kind(value) = value {
                     Ok(value)
                 } else {
@@ -44,10 +44,10 @@ macro_rules! value_try_from_ref {
 
 macro_rules! value_try_from_ref_clone {
     ($kind:ident, $to:ty) => {
-        impl<'a> TryFrom<&'a Value<'a>> for $to {
+        impl<'a> TryFrom<&Value<'a>> for $to {
             type Error = Error;
 
-            fn try_from(value: &'a Value<'_>) -> Result<Self, Self::Error> {
+            fn try_from(value: &Value<'a>) -> Result<Self, Self::Error> {
                 if let Value::$kind(value) = value {
                     Ok(value.clone().into())
                 } else {
@@ -84,10 +84,10 @@ value_try_from_ref!(Str, str);
 
 macro_rules! value_try_from_ref_try_clone {
     ($kind:ident, $to:ty) => {
-        impl<'a> TryFrom<&'a Value<'a>> for $to {
+        impl<'a> TryFrom<&Value<'a>> for $to {
             type Error = Error;
 
-            fn try_from(value: &'a Value<'_>) -> Result<Self, Self::Error> {
+            fn try_from(value: &Value<'a>) -> Result<Self, Self::Error> {
                 if let Value::$kind(value) = value {
                     value.try_clone().map_err(Into::into)
                 } else {
@@ -124,10 +124,10 @@ value_try_from_ref!(Fd, Fd<'a>);
 #[cfg(unix)]
 value_try_from_ref_try_clone!(Fd, Fd<'a>);
 
-impl<'a> TryFrom<&'a Value<'a>> for String {
+impl TryFrom<&Value<'_>> for String {
     type Error = Error;
 
-    fn try_from(value: &'a Value<'_>) -> Result<Self, Self::Error> {
+    fn try_from(value: &Value<'_>) -> Result<Self, Self::Error> {
         Ok(<&str>::try_from(value)?.into())
     }
 }
