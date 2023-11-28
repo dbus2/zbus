@@ -1,4 +1,5 @@
-use serde::de::{self, DeserializeSeed, EnumAccess, MapAccess, SeqAccess, Visitor};
+use core::convert::TryFrom;
+use serde::de::{self, Deserialize, DeserializeSeed, EnumAccess, MapAccess, SeqAccess, Visitor};
 use static_assertions::assert_impl_all;
 
 use std::{marker::PhantomData, str};
@@ -49,6 +50,7 @@ where
         Ok(Self(DeserializerCommon {
             ctxt,
             sig_parser,
+            resolve_variant: false,
             bytes,
             #[cfg(unix)]
             fds,
@@ -102,7 +104,11 @@ where
     {
         let c = self.0.sig_parser.next_char()?;
 
-        crate::de::deserialize_any::<Self, V>(self, c, visitor)
+        if self.0.resolve_variant {
+            self.deserialize_str(visitor)
+        } else {
+            crate::de::deserialize_any::<Self, V>(self, c, visitor)
+        }
     }
 
     fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value>
@@ -450,6 +456,7 @@ where
         let mut de = Deserializer::<B, F>(DeserializerCommon {
             ctxt,
             sig_parser,
+            resolve_variant: false,
             bytes: subslice(self.de.0.bytes, self.de.0.pos..)?,
             fds: self.de.0.fds,
             pos: 0,
@@ -622,10 +629,19 @@ where
         T: DeserializeSeed<'de>,
     {
         match self.stage {
+            ValueParseStage::Signature if self.de.0.resolve_variant => {
+                self.stage = ValueParseStage::Done;
+                self.de.0.resolve_variant = false;
+                let signature = Signature::deserialize(&mut *self.de)?;
+
+                seed.deserialize(signature).map(Some)
+            }
             ValueParseStage::Signature => {
                 self.stage = ValueParseStage::Value;
-
-                seed.deserialize(&mut *self.de).map(Some)
+                self.de.0.resolve_variant = true;
+                let result = seed.deserialize(&mut *self.de).map(Some);
+                self.de.0.resolve_variant = false;
+                result
             }
             ValueParseStage::Value => {
                 self.stage = ValueParseStage::Done;
@@ -645,6 +661,7 @@ where
                 let mut de = Deserializer::<B, F>(DeserializerCommon {
                     ctxt,
                     sig_parser,
+                    resolve_variant: false,
                     bytes: subslice(self.de.0.bytes, value_start..)?,
                     fds: self.de.0.fds,
                     pos: 0,
