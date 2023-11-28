@@ -60,8 +60,21 @@ impl<'a> Array<'a> {
     }
 
     /// Get all the elements.
-    pub fn get(&self) -> &[Value<'a>] {
+    pub fn inner(&self) -> &[Value<'a>] {
         &self.elements
+    }
+
+    /// Get the value at the given index.
+    pub fn get<V>(&'a self, idx: usize) -> Result<Option<V>>
+    where
+        V: ?Sized + TryFrom<&'a Value<'a>>,
+        <V as TryFrom<&'a Value<'a>>>::Error: Into<crate::Error>,
+    {
+        self.elements
+            .get(idx)
+            .map(|v| v.downcast_ref::<V>())
+            .transpose()
+            .map_err(Into::into)
     }
 
     /// Get the number of elements.
@@ -231,7 +244,7 @@ impl<'a> std::ops::Deref for Array<'a> {
     type Target = [Value<'a>];
 
     fn deref(&self) -> &Self::Target {
-        self.get()
+        self.inner()
     }
 }
 
