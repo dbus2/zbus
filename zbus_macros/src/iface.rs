@@ -119,7 +119,7 @@ impl MethodInfo {
         zbus: &TokenStream,
         method: &ImplItemMethod,
         attrs: &MethodAttributes,
-        cfg_attrs: &Vec<&Attribute>,
+        cfg_attrs: &[&Attribute],
     ) -> syn::Result<MethodInfo> {
         let is_async = method.sig.asyncness.is_some();
         let Signature {
@@ -150,16 +150,16 @@ impl MethodInfo {
 
         let is_mut = if let FnArg::Receiver(r) = inputs
             .first()
-            .ok_or_else(|| Error::new_spanned(&ident, "not &self method"))?
+            .ok_or_else(|| Error::new_spanned(ident, "not &self method"))?
         {
             r.mutability.is_some()
         } else if is_signal {
             false
         } else {
-            return Err(Error::new_spanned(&method, "missing receiver"));
+            return Err(Error::new_spanned(method, "missing receiver"));
         };
         if is_signal && !is_async {
-            return Err(Error::new_spanned(&method, "signals must be async"));
+            return Err(Error::new_spanned(method, "signals must be async"));
         }
         let method_await = if is_async {
             quote! { .await }
@@ -175,7 +175,7 @@ impl MethodInfo {
         let signal_context_arg: Option<PatType> = if is_signal {
             if typed_inputs.is_empty() {
                 return Err(Error::new_spanned(
-                    &inputs,
+                    inputs,
                     "Expected a `&zbus::object_server::SignalContext<'_> argument",
                 ));
             }
@@ -185,11 +185,11 @@ impl MethodInfo {
         };
 
         let mut intro_args = quote!();
-        intro_args.extend(introspect_input_args(&typed_inputs, is_signal, &cfg_attrs));
+        intro_args.extend(introspect_input_args(&typed_inputs, is_signal, cfg_attrs));
         let is_result_output =
-            introspect_add_output_args(&mut intro_args, output, out_args, &cfg_attrs)?;
+            introspect_add_output_args(&mut intro_args, output, out_args, cfg_attrs)?;
 
-        let (args_from_msg, args_names) = get_args_from_inputs(&typed_inputs, &zbus)?;
+        let (args_from_msg, args_names) = get_args_from_inputs(&typed_inputs, zbus)?;
 
         let reply = if is_result_output {
             let ret = quote!(r);
@@ -303,7 +303,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             .filter(|a| a.path.is_ident("cfg"))
             .collect();
 
-        let method_info = MethodInfo::new(&zbus, &method, &attrs, &cfg_attrs)?;
+        let method_info = MethodInfo::new(&zbus, method, &attrs, &cfg_attrs)?;
         if let Some(prop_attrs) = &attrs.property {
             if method_info.method_type == MethodType::Property(PropertyType::NoInputs) {
                 let emits_changed_signal = if let Some(s) = &prop_attrs.emits_changed_signal {
@@ -314,13 +314,11 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 let mut property = Property::new();
                 property.emits_changed_signal = emits_changed_signal;
                 properties.insert(method_info.member_name.to_string(), property);
-            } else {
-                if let Some(_) = &prop_attrs.emits_changed_signal {
-                    return Err(syn::Error::new(
-                        method.span(),
-                        "`emits_changed_signal` cannot be specified on setters",
-                    ));
-                }
+            } else if prop_attrs.emits_changed_signal.is_some() {
+                return Err(syn::Error::new(
+                    method.span(),
+                    "`emits_changed_signal` cannot be specified on setters",
+                ));
             }
         };
         methods.push((method, method_info));
