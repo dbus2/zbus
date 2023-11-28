@@ -55,7 +55,7 @@ pub fn is_blank(s: &str) -> bool {
 /// Standard annotation `org.freedesktop.DBus.Property.EmitsChangedSignal`.
 ///
 /// See <https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format>.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub enum PropertyEmitsChangedSignal {
     #[default]
     True,

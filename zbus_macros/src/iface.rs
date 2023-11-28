@@ -1074,14 +1074,35 @@ fn introspect_properties(
         })?;
 
         let doc_comments = prop.doc_comments;
-        introspection.extend(quote!(
-            #doc_comments
-            ::std::writeln!(
-                writer,
-                "{:indent$}<property name=\"{}\" type=\"{}\" access=\"{}\">",
-                "", #name, <#ty>::signature(), #access, indent = level,
-            ).unwrap();
-        ));
+        if prop.emits_changed_signal == PropertyEmitsChangedSignal::True {
+            introspection.extend(quote!(
+                #doc_comments
+                ::std::writeln!(
+                    writer,
+                    "{:indent$}<property name=\"{}\" type=\"{}\" access=\"{}\"/>",
+                    "", #name, <#ty>::signature(), #access, indent = level,
+                ).unwrap();
+            ));
+        } else {
+            let emits_changed_signal = prop.emits_changed_signal.to_string();
+            introspection.extend(quote!(
+                #doc_comments
+                ::std::writeln!(
+                    writer,
+                    "{:indent$}<property name=\"{}\" type=\"{}\" access=\"{}\">",
+                    "", #name, <#ty>::signature(), #access, indent = level,
+                ).unwrap();
+                ::std::writeln!(
+                    writer,
+                    "{:indent$}<annotation name=\"org.freedesktop.DBus.Property.EmitsChangedSignal\" value=\"{}\"/>",
+                    "", #emits_changed_signal, indent = level + 2,
+                ).unwrap();
+                ::std::writeln!(
+                    writer,
+                    "{:indent$}</property>", "", indent = level,
+                ).unwrap();
+            ));
+        }
     }
 
     Ok(())
