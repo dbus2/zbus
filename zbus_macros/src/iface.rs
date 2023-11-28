@@ -3,9 +3,9 @@ use quote::{format_ident, quote};
 use std::collections::BTreeMap;
 use syn::{
     self, parse_quote, punctuated::Punctuated, spanned::Spanned, AngleBracketedGenericArguments,
-    AttributeArgs, Error, FnArg, GenericArgument, ImplItem, ItemImpl, Lit::Str, Meta,
-    Meta::NameValue, MetaList, MetaNameValue, NestedMeta, PatType, PathArguments, ReturnType,
-    Signature, Token, Type, TypePath,
+    Attribute, AttributeArgs, Error, FnArg, GenericArgument, ImplItem, ImplItemMethod, ItemImpl,
+    Lit::Str, Meta, Meta::NameValue, MetaList, MetaNameValue, NestedMeta, PatType, PathArguments,
+    ReturnType, Signature, Token, Type, TypePath,
 };
 use zvariant_utils::{case, def_attrs};
 
@@ -64,6 +64,156 @@ impl<'a> Property<'a> {
     }
 }
 
+struct MethodInfo {
+    is_property: bool,
+    is_signal: bool,
+    has_inputs: bool,
+    /// Whether the method is async
+    is_async: bool,
+    /// Doc comments on the methods
+    doc_comments: TokenStream,
+    /// Whether self is passed as mutable to the method
+    is_mut: bool,
+    /// The await to append to method calls
+    method_await: TokenStream,
+    /// The typed inputs passed to the method
+    typed_inputs: Vec<PatType>,
+    /// The method arguments' introspection
+    intro_args: TokenStream,
+    /// Whether the output type is a Result
+    is_result_output: bool,
+    /// Code block to deserialize arguments from zbus message
+    args_from_msg: TokenStream,
+    /// Names of all arguments to the method
+    args_names: TokenStream,
+    /// Code stream to match on the reply of the method call
+    reply: TokenStream,
+    /// The signal context object argument
+    signal_context_arg: Option<PatType>,
+    /// The name of the method (setters are stripped of set_ prefix)
+    member_name: String,
+}
+
+impl MethodInfo {
+    fn new(
+        zbus: &TokenStream,
+        method: &ImplItemMethod,
+        attrs: &MethodAttributes,
+        cfg_attrs: &Vec<&Attribute>,
+    ) -> syn::Result<MethodInfo> {
+        let is_async = method.sig.asyncness.is_some();
+        let Signature {
+            ident,
+            inputs,
+            output,
+            ..
+        } = &method.sig;
+        let docs = get_doc_attrs(&method.attrs)
+            .iter()
+            .filter_map(|attr| {
+                if let Ok(NameValue(MetaNameValue { lit: Str(s), .. })) = attr.parse_meta() {
+                    Some(s.value())
+                } else {
+                    // non #[doc = "..."] attributes are not our concern
+                    // we leave them for rustc to handle
+                    None
+                }
+            })
+            .collect();
+        let doc_comments = to_xml_docs(docs);
+        let is_property = attrs.property;
+        let is_signal = attrs.signal;
+        let out_args: Option<&[String]> = attrs.out_args.as_deref();
+        assert!(!is_property || !is_signal);
+
+        let has_inputs = inputs.len() > 1;
+
+        let is_mut = if let FnArg::Receiver(r) = inputs
+            .first()
+            .ok_or_else(|| Error::new_spanned(&ident, "not &self method"))?
+        {
+            r.mutability.is_some()
+        } else if is_signal {
+            false
+        } else {
+            return Err(Error::new_spanned(&method, "missing receiver"));
+        };
+        if is_signal && !is_async {
+            return Err(Error::new_spanned(&method, "signals must be async"));
+        }
+        let method_await = if is_async {
+            quote! { .await }
+        } else {
+            quote! {}
+        };
+
+        let mut typed_inputs = inputs
+            .iter()
+            .filter_map(typed_arg)
+            .cloned()
+            .collect::<Vec<_>>();
+        let signal_context_arg: Option<PatType> = if is_signal {
+            if typed_inputs.is_empty() {
+                return Err(Error::new_spanned(
+                    &inputs,
+                    "Expected a `&zbus::object_server::SignalContext<'_> argument",
+                ));
+            }
+            Some(typed_inputs.remove(0))
+        } else {
+            None
+        };
+
+        let mut intro_args = quote!();
+        intro_args.extend(introspect_input_args(&typed_inputs, is_signal, &cfg_attrs));
+        let is_result_output =
+            introspect_add_output_args(&mut intro_args, output, out_args, &cfg_attrs)?;
+
+        let (args_from_msg, args_names) = get_args_from_inputs(&typed_inputs, &zbus)?;
+
+        let reply = if is_result_output {
+            let ret = quote!(r);
+
+            quote!(match reply {
+                ::std::result::Result::Ok(r) => c.reply(m, &#ret).await,
+                ::std::result::Result::Err(e) => {
+                    let hdr = m.header();
+                    c.reply_dbus_error(&hdr, e).await
+                }
+            })
+        } else {
+            quote!(c.reply(m, &reply).await)
+        };
+
+        let member_name = attrs.name.clone().unwrap_or_else(|| {
+            let mut name = ident.to_string();
+            if is_property && has_inputs {
+                assert!(name.starts_with("set_"));
+                name = name[4..].to_string();
+            }
+            pascal_case(&name)
+        });
+
+        Ok(MethodInfo {
+            is_property,
+            is_signal,
+            has_inputs,
+            is_async,
+            doc_comments,
+            is_mut,
+            method_await,
+            typed_inputs,
+            signal_context_arg,
+            intro_args,
+            is_result_output,
+            args_from_msg,
+            args_names,
+            reply,
+            member_name,
+        })
+    }
+}
+
 pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStream> {
     let zbus = zbus_path();
 
@@ -110,15 +260,6 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             _ => continue,
         };
 
-        let is_async = method.sig.asyncness.is_some();
-
-        let Signature {
-            ident,
-            inputs,
-            output,
-            ..
-        } = &mut method.sig;
-
         let attrs = MethodAttributes::parse(&method.attrs)?;
         method
             .attrs
@@ -129,94 +270,32 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             .filter(|a| a.path.is_ident("cfg"))
             .collect();
 
-        let docs = get_doc_attrs(&method.attrs)
-            .iter()
-            .filter_map(|attr| {
-                if let Ok(NameValue(MetaNameValue { lit: Str(s), .. })) = attr.parse_meta() {
-                    Some(s.value())
-                } else {
-                    // non #[doc = "..."] attributes are not our concern
-                    // we leave them for rustc to handle
-                    None
-                }
-            })
-            .collect();
+        let MethodInfo {
+            is_property,
+            is_signal,
+            has_inputs,
+            is_async,
+            doc_comments,
+            is_mut,
+            method_await,
+            typed_inputs,
+            signal_context_arg,
+            intro_args,
+            is_result_output,
+            args_from_msg,
+            args_names,
+            reply,
+            member_name,
+        } = MethodInfo::new(&zbus, &method, &attrs, &cfg_attrs)?;
 
-        let doc_comments = to_xml_docs(docs);
-        let is_property = attrs.property;
-        let is_signal = attrs.signal;
-        let out_args = attrs.out_args.as_deref();
-        assert!(!is_property || !is_signal);
-
-        let has_inputs = inputs.len() > 1;
-
-        let is_mut = if let FnArg::Receiver(r) = inputs
-            .first()
-            .ok_or_else(|| Error::new_spanned(&ident, "not &self method"))?
-        {
-            r.mutability.is_some()
-        } else if is_signal {
-            false
-        } else {
-            return Err(Error::new_spanned(&method, "missing receiver"));
-        };
-        if is_signal && !is_async {
-            return Err(Error::new_spanned(&method, "signals must be async"));
-        }
-        let method_await = if is_async {
-            quote! { .await }
-        } else {
-            quote! {}
-        };
-
-        let mut typed_inputs = inputs
-            .iter()
-            .filter_map(typed_arg)
-            .cloned()
-            .collect::<Vec<_>>();
-        let signal_context_arg = if is_signal {
-            if typed_inputs.is_empty() {
-                return Err(Error::new_spanned(
-                    &inputs,
-                    "Expected a `&zbus::object_server::SignalContext<'_> argument",
-                ));
-            }
-            Some(typed_inputs.remove(0))
-        } else {
-            None
-        };
-
-        let mut intro_args = quote!();
-        intro_args.extend(introspect_input_args(&typed_inputs, is_signal, &cfg_attrs));
-        let is_result_output =
-            introspect_add_output_args(&mut intro_args, output, out_args, &cfg_attrs)?;
-
-        let (args_from_msg, args_names) = get_args_from_inputs(&typed_inputs, &zbus)?;
+        let Signature {
+            ident,
+            inputs,
+            output,
+            ..
+        } = &mut method.sig;
 
         clean_input_args(inputs);
-
-        let reply = if is_result_output {
-            let ret = quote!(r);
-
-            quote!(match reply {
-                ::std::result::Result::Ok(r) => c.reply(m, &#ret).await,
-                ::std::result::Result::Err(e) => {
-                    let hdr = m.header();
-                    c.reply_dbus_error(&hdr, e).await
-                }
-            })
-        } else {
-            quote!(c.reply(m, &reply).await)
-        };
-
-        let member_name = attrs.name.clone().unwrap_or_else(|| {
-            let mut name = ident.to_string();
-            if is_property && has_inputs {
-                assert!(name.starts_with("set_"));
-                name = name[4..].to_string();
-            }
-            pascal_case(&name)
-        });
 
         if is_signal {
             introspect.extend(doc_comments);
