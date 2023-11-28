@@ -64,6 +64,18 @@ pub enum PropertyEmitsChangedSignal {
     False,
 }
 
+impl ToString for PropertyEmitsChangedSignal {
+    fn to_string(&self) -> String {
+        let emits_changed_signal = match self {
+            PropertyEmitsChangedSignal::True => "true",
+            PropertyEmitsChangedSignal::Const => "const",
+            PropertyEmitsChangedSignal::False => "false",
+            PropertyEmitsChangedSignal::Invalidates => "invalidates",
+        };
+        emits_changed_signal.to_string()
+    }
+}
+
 impl PropertyEmitsChangedSignal {
     pub fn parse(s: &str, span: Span) -> syn::Result<Self> {
         use PropertyEmitsChangedSignal::*;

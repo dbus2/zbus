@@ -53,6 +53,7 @@ use arg_attrs::ArgAttributes;
 struct Property<'a> {
     read: bool,
     write: bool,
+    emits_changed_signal: PropertyEmitsChangedSignal,
     ty: Option<&'a Type>,
     doc_comments: TokenStream,
 }
@@ -62,6 +63,7 @@ impl<'a> Property<'a> {
         Self {
             read: false,
             write: false,
+            emits_changed_signal: PropertyEmitsChangedSignal::True,
             ty: None,
             doc_comments: quote!(),
         }
@@ -283,6 +285,8 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             }
         };
 
+    // Store parsed information about each method
+    let mut methods = vec![];
     for method in &mut input.items {
         let method = match method {
             ImplItem::Method(m) => m,
@@ -293,6 +297,36 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
         method
             .attrs
             .retain(|attr| !attr.path.is_ident("dbus_interface"));
+        let cfg_attrs: Vec<_> = method
+            .attrs
+            .iter()
+            .filter(|a| a.path.is_ident("cfg"))
+            .collect();
+
+        let method_info = MethodInfo::new(&zbus, &method, &attrs, &cfg_attrs)?;
+        if let Some(prop_attrs) = &attrs.property {
+            if method_info.method_type == MethodType::Property(PropertyType::NoInputs) {
+                let emits_changed_signal = if let Some(s) = &prop_attrs.emits_changed_signal {
+                    PropertyEmitsChangedSignal::parse(s, method.span())?
+                } else {
+                    PropertyEmitsChangedSignal::True
+                };
+                let mut property = Property::new();
+                property.emits_changed_signal = emits_changed_signal;
+                properties.insert(method_info.member_name.to_string(), property);
+            } else {
+                if let Some(_) = &prop_attrs.emits_changed_signal {
+                    return Err(syn::Error::new(
+                        method.span(),
+                        "`emits_changed_signal` cannot be specified on setters",
+                    ));
+                }
+            }
+        };
+        methods.push((method, method_info));
+    }
+
+    for (method, method_info) in methods {
         let cfg_attrs: Vec<_> = method
             .attrs
             .iter()
@@ -314,7 +348,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             args_names,
             reply,
             member_name,
-        } = MethodInfo::new(&zbus, &method, &attrs, &cfg_attrs)?;
+        } = method_info;
 
         let Signature {
             ident,
@@ -343,13 +377,15 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                 });
             }
             MethodType::Property(_) => {
-                let p = properties.entry(member_name.to_string());
+                let p = properties.get_mut(&member_name).ok_or(Error::new_spanned(
+                    &member_name,
+                    "Write-only properties aren't supported yet",
+                ))?;
 
                 let sk_member_name = case::snake_case(&member_name);
                 let prop_changed_method_name = format_ident!("{sk_member_name}_changed");
                 let prop_invalidate_method_name = format_ident!("{sk_member_name}_invalidate");
 
-                let p = p.or_insert_with(Property::new);
                 p.doc_comments.extend(doc_comments);
                 if has_inputs {
                     p.write = true;
@@ -415,18 +451,35 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                         .unwrap_or_else(|| value_to_owned.clone()),
                     _ => value_to_owned,
                 };
+                    let prop_changed_method = match p.emits_changed_signal {
+                        PropertyEmitsChangedSignal::True => {
+                            quote!({
+                                self
+                                    .#prop_changed_method_name(&signal_context)
+                                    .await
+                                    .map(|_| set_result)
+                                    .map_err(Into::into)
+                            })
+                        }
+                        PropertyEmitsChangedSignal::Invalidates => {
+                            quote!({
+                                self
+                                    .#prop_invalidate_method_name(&signal_context)
+                                    .await
+                                    .map(|_| set_result)
+                                    .map_err(Into::into)
+                            })
+                        }
+                        PropertyEmitsChangedSignal::False | PropertyEmitsChangedSignal::Const => {
+                            quote!({ Ok(()) })
+                        }
+                    };
                     let do_set = quote!({
                         let value = #value_arg;
                         match ::std::convert::TryInto::try_into(value) {
                             ::std::result::Result::Ok(val) => {
                                 match #set_call {
-                                    ::std::result::Result::Ok(set_result) => {
-                                        self
-                                            .#prop_changed_method_name(&signal_context)
-                                            .await
-                                            .map(|_| set_result)
-                                            .map_err(Into::into)
-                                    }
+                                    ::std::result::Result::Ok(set_result) => #prop_changed_method
                                     e => e,
                                 }
                             }
@@ -541,6 +594,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                             ).await
                         }
                     );
+
                     generated_signals.extend(prop_changed_method);
 
                     let prop_invalidate_method = quote!(
@@ -556,6 +610,7 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                             ).await
                         }
                     );
+
                     generated_signals.extend(prop_invalidate_method);
                 }
             }
@@ -1023,7 +1078,7 @@ fn introspect_properties(
             #doc_comments
             ::std::writeln!(
                 writer,
-                "{:indent$}<property name=\"{}\" type=\"{}\" access=\"{}\"/>",
+                "{:indent$}<property name=\"{}\" type=\"{}\" access=\"{}\">",
                 "", #name, <#ty>::signature(), #access, indent = level,
             ).unwrap();
         ));
