@@ -65,12 +65,15 @@ impl<'a> Maybe<'a> {
     }
 
     /// Get the inner value as a concrete type
-    pub fn get<T>(self) -> core::result::Result<Option<T>, Error>
+    pub fn get<T>(&'a self) -> core::result::Result<Option<T>, Error>
     where
-        T: TryFrom<Value<'a>>,
+        T: ?Sized + TryFrom<&'a Value<'a>>,
+        <T as TryFrom<&'a Value<'a>>>::Error: Into<crate::Error>,
     {
         self.value
-            .map(|v| v.downcast().ok_or(Error::IncorrectType))
+            .as_ref()
+            .as_ref()
+            .map(|v| v.downcast_ref())
             .transpose()
     }
 
