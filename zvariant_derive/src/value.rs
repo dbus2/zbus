@@ -101,7 +101,8 @@ fn impl_struct(
             Some(quote! {
                 where
                 #(
-                    #type_params: ::std::convert::TryFrom<#zv::Value<#value_lifetime>> + #zv::Type
+                    #type_params: ::std::convert::TryFrom<#zv::Value<#value_lifetime>> + #zv::Type,
+                    <#type_params as ::std::convert::TryFrom<#zv::Value<#value_lifetime>>>::Error: ::std::convert::Into<#zv::Error>
                 ),*
             }),
             Some(quote! {
@@ -134,8 +135,7 @@ fn impl_struct(
                                     fields
                                         .remove(stringify!(#field_names))
                                         .ok_or_else(|| #zv::Error::IncorrectType)?
-                                        .downcast()
-                                        .ok_or_else(|| #zv::Error::IncorrectType)?
+                                        .downcast()?
                             ),*
                         })
                     },
@@ -155,11 +155,7 @@ fn impl_struct(
 
                         ::std::result::Result::Ok(Self {
                             #(
-                                #field_names:
-                                    fields
-                                        .remove(0)
-                                        .downcast()
-                                        .ok_or_else(|| #zv::Error::IncorrectType)?
+                                #field_names: fields.remove(0).downcast()?
                             ),*
                         })
                     },

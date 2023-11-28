@@ -356,15 +356,16 @@ impl<'a> Value<'a> {
     /// # Examples
     ///
     /// ```
-    /// use zvariant::{Result, Value};
+    /// use zvariant::{Error, Result, Value};
     ///
     /// fn value_vec_to_type_vec<'a, T>(values: Vec<Value<'a>>) -> Result<Vec<T>>
     /// where
     ///     T: TryFrom<Value<'a>>,
+    ///     <T as TryFrom<Value<'a>>>::Error: Into<Error>,
     /// {
     ///     let mut res = vec![];
     ///     for value in values.into_iter() {
-    ///         res.push(value.downcast().unwrap());
+    ///         res.push(value.downcast()?);
     ///     }
     ///
     ///     Ok(res)
@@ -386,34 +387,37 @@ impl<'a> Value<'a> {
     /// [`Value::Value`]: enum.Value.html#variant.Value
     /// [`TryFrom<Value>`]: https://doc.rust-lang.org/std/convert/trait.TryFrom.html
     /// [`From<Value>`]: https://doc.rust-lang.org/std/convert/trait.From.html
-    pub fn downcast<T: ?Sized>(self) -> Option<T>
+    pub fn downcast<T: ?Sized>(self) -> Result<T, crate::Error>
     where
         T: TryFrom<Value<'a>>,
+        <T as TryFrom<Value<'a>>>::Error: Into<crate::Error>,
     {
         if let Value::Value(v) = self {
-            T::try_from(*v).ok()
+            T::try_from(*v)
         } else {
-            T::try_from(self).ok()
+            T::try_from(self)
         }
+        .map_err(Into::into)
     }
 
-    /// Try to get a reference to the underlying type `T`.
+    /// Try to get the underlying type `T`.
     ///
-    /// Same as [`downcast`] except it doesn't consume `self` and get a reference to the underlying
-    /// value.
+    /// Same as [`downcast`] except it doesn't consume `self` and hence requires
+    /// `T: TryFrom<&Value<_>>`.
     ///
     /// # Examples
     ///
     /// ```
-    /// use zvariant::{Result, Value};
+    /// use zvariant::{Error, Result, Value};
     ///
     /// fn value_vec_to_type_vec<'a, T>(values: &'a Vec<Value<'a>>) -> Result<Vec<&'a T>>
     /// where
     ///     &'a T: TryFrom<&'a Value<'a>>,
+    ///     <&'a T as TryFrom<&'a Value<'a>>>::Error: Into<Error>,
     /// {
     ///     let mut res = vec![];
     ///     for value in values.into_iter() {
-    ///         res.push(value.downcast_ref().unwrap());
+    ///         res.push(value.downcast_ref()?);
     ///     }
     ///
     ///     Ok(res)
@@ -433,16 +437,17 @@ impl<'a> Value<'a> {
     /// ```
     ///
     /// [`downcast`]: enum.Value.html#method.downcast
-    pub fn downcast_ref<T>(&'a self) -> Option<&'a T>
+    pub fn downcast_ref<T>(&'a self) -> Result<T, crate::Error>
     where
-        T: ?Sized,
-        &'a T: TryFrom<&'a Value<'a>>,
+        T: ?Sized + TryFrom<&'a Value<'a>>,
+        <T as TryFrom<&'a Value<'a>>>::Error: Into<crate::Error>,
     {
         if let Value::Value(v) = self {
-            <&T>::try_from(v).ok()
+            <T>::try_from(v)
         } else {
-            <&T>::try_from(self).ok()
+            <T>::try_from(self)
         }
+        .map_err(Into::into)
     }
 }
 
@@ -924,6 +929,14 @@ where
 impl<'a> Type for Value<'a> {
     fn signature() -> Signature<'static> {
         Signature::from_static_str_unchecked(VARIANT_SIGNATURE_STR)
+    }
+}
+
+impl<'a> TryFrom<&Value<'a>> for Value<'a> {
+    type Error = crate::Error;
+
+    fn try_from(value: &Value<'a>) -> crate::Result<Value<'a>> {
+        value.try_clone()
     }
 }
 

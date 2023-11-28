@@ -116,7 +116,7 @@ pub mod export {
 #[allow(clippy::disallowed_names)]
 mod tests {
     use std::{
-        collections::HashMap,
+        collections::{BTreeMap, HashMap},
         net::{IpAddr, Ipv4Addr, Ipv6Addr},
     };
 
@@ -684,8 +684,8 @@ mod tests {
         if let Value::Array(array) = v {
             assert_eq!(*array.element_signature(), "y");
             assert_eq!(array.len(), 2);
-            assert_eq!(array.get()[0], Value::U8(77));
-            assert_eq!(array.get()[1], Value::U8(88));
+            assert_eq!(array.get(0).unwrap(), Some(77u8));
+            assert_eq!(array.get(1).unwrap(), Some(88u8));
         } else {
             panic!();
         }
@@ -781,8 +781,8 @@ mod tests {
         if let Value::Array(array) = v {
             assert_eq!(*array.element_signature(), "s");
             assert_eq!(array.len(), 4);
-            assert_eq!(array.get()[0], Value::new("Hello"));
-            assert_eq!(array.get()[1], Value::new("World"));
+            assert_eq!(array[0], Value::new("Hello"));
+            assert_eq!(array[1], Value::new("World"));
         } else {
             panic!();
         }
@@ -888,7 +888,7 @@ mod tests {
         if let Value::Array(array) = v.try_clone().unwrap() {
             assert_eq!(*array.element_signature(), "(yu(xbxas)s)");
             assert_eq!(array.len(), 1);
-            let r = &array.get()[0];
+            let r = &array[0];
             if let Value::Structure(r) = r {
                 let fields = r.fields();
                 assert_eq!(fields[0], Value::U8(u8::max_value()));
@@ -900,8 +900,8 @@ mod tests {
                     assert_eq!(fields[2], Value::I64(i64::max_value()));
                     if let Value::Array(as_) = &fields[3] {
                         assert_eq!(as_.len(), 2);
-                        assert_eq!(as_.get()[0], Value::new("Hello"));
-                        assert_eq!(as_.get()[1], Value::new("World"));
+                        assert_eq!(as_[0], Value::new("Hello"));
+                        assert_eq!(as_[1], Value::new("World"));
                     } else {
                         panic!();
                     }
@@ -928,7 +928,7 @@ mod tests {
             if let Value::Array(array) = v {
                 assert_eq!(*array.element_signature(), "(yu(xbxas)s)");
                 assert_eq!(array.len(), 1);
-                let r = &array.get()[0];
+                let r = &array.get(0).unwrap().unwrap();
                 if let Value::Structure(r) = r {
                     let fields = r.fields();
                     assert_eq!(fields[0], Value::U8(u8::max_value()));
@@ -940,8 +940,8 @@ mod tests {
                         assert_eq!(fields[2], Value::I64(i64::max_value()));
                         if let Value::Array(as_) = &fields[3] {
                             assert_eq!(as_.len(), 2);
-                            assert_eq!(as_.get()[0], Value::new("Hello"));
-                            assert_eq!(as_.get()[1], Value::new("World"));
+                            assert_eq!(as_.get(0).unwrap(), Some("Hello"));
+                            assert_eq!(as_.get(1).unwrap(), Some("World"));
                         } else {
                             panic!();
                         }
@@ -1132,17 +1132,21 @@ mod tests {
         assert_eq!(encoded.len(), 48);
         // Convert it back
         let dict: Dict<'_, '_> = v.try_into().unwrap();
-        let map: HashMap<i64, String> = dict.try_into().unwrap();
+        let map: HashMap<i64, String> = dict.try_clone().unwrap().try_into().unwrap();
         assert_eq!(map[&1], "123");
         assert_eq!(map[&2], "456");
         // Also decode it back
         let v = encoded.deserialize().unwrap().0;
         if let Value::Dict(dict) = v {
-            assert_eq!(dict.get::<i64, str>(&1).unwrap().unwrap(), "123");
-            assert_eq!(dict.get::<i64, str>(&2).unwrap().unwrap(), "456");
+            assert_eq!(dict.get::<i64, &str>(&1).unwrap().unwrap(), "123");
+            assert_eq!(dict.get::<i64, &str>(&2).unwrap().unwrap(), "456");
         } else {
             panic!();
         }
+        // Convert it to a BTreeMap too.
+        let map: BTreeMap<i64, String> = dict.try_into().unwrap();
+        assert_eq!(map[&1], "123");
+        assert_eq!(map[&2], "456");
 
         #[cfg(feature = "gvariant")]
         {
@@ -1186,16 +1190,21 @@ mod tests {
         let v: Value<'_> = encoded.deserialize().unwrap().0;
         if let Value::Dict(dict) = v {
             assert_eq!(
-                *dict.get::<_, Value<'_>>("hello").unwrap().unwrap(),
+                dict.get::<&str, Value<'_>>(&"hello").unwrap().unwrap(),
                 Value::new("there")
             );
             assert_eq!(
-                *dict.get::<_, Value<'_>>("bye").unwrap().unwrap(),
+                dict.get::<_, Value<'_>>(&"bye").unwrap().unwrap(),
                 Value::new("now")
             );
 
             // Try converting to a HashMap
-            let map = <HashMap<String, Value<'_>>>::try_from(dict).unwrap();
+            let map = <HashMap<String, Value<'_>>>::try_from(dict.try_clone().unwrap()).unwrap();
+            assert_eq!(map["hello"], Value::new("there"));
+            assert_eq!(map["bye"], Value::new("now"));
+
+            // Try converting to a BTreeMap
+            let map = <BTreeMap<String, Value<'_>>>::try_from(dict).unwrap();
             assert_eq!(map["hello"], Value::new("there"));
             assert_eq!(map["bye"], Value::new("now"));
         } else {
@@ -1688,10 +1697,7 @@ mod tests {
             Value::Maybe(maybe) => assert_eq!(maybe.get().unwrap(), mn),
             #[cfg(feature = "option-as-array")]
             Value::Array(array) => {
-                assert_eq!(
-                    i16::try_from(array.get()[0].try_clone().unwrap()).unwrap(),
-                    16i16
-                )
+                assert_eq!(i16::try_from(array[0].try_clone().unwrap()).unwrap(), 16i16)
             }
             _ => panic!("unexpected value {decoded:?}"),
         }
@@ -1750,7 +1756,7 @@ mod tests {
         match &v {
             Value::Array(array) => {
                 assert_eq!(
-                    String::try_from(array.get()[0].try_clone().unwrap()).unwrap(),
+                    String::try_from(array[0].try_clone().unwrap()).unwrap(),
                     ms.unwrap()
                 )
             }
@@ -1771,7 +1777,7 @@ mod tests {
             #[cfg(feature = "option-as-array")]
             Value::Array(array) => {
                 assert_eq!(
-                    String::try_from(array.get()[0].try_clone().unwrap()).unwrap(),
+                    String::try_from(array[0].try_clone().unwrap()).unwrap(),
                     ms.unwrap()
                 )
             }
