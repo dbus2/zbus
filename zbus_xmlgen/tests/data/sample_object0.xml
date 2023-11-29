@@ -10,6 +10,12 @@
        <arg name="baz" type="a{us}" direction="out"/>
        <annotation name="org.freedesktop.DBus.Deprecated" value="true"/>
      </method>
+      <method name="Bazic">
+       <arg name="bar" type="(ii)" direction="in"/>
+       <arg name="foo" type="(i)" direction="in"/>
+       <arg name="baz" type="(ii)" direction="out"/>
+       <arg name="foz" type="a(i)" direction="out"/>
+     </method>
      <method name="Bazify">
        <arg name="bar" type="(iiu)" direction="in"/>
        <arg name="bar" type="v" direction="out"/>

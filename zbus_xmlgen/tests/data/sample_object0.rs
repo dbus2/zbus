@@ -4,6 +4,9 @@ trait SampleInterface0 {
     /// BarplexSig method
     fn barplex_sig(&self, rule: &(&[i32], i32, std::collections::HashMap<&str, &str>, i32, &[i32], i32, &[&str], i32, bool)) -> zbus::Result<Vec<(String, zbus::zvariant::OwnedObjectPath)>>;
 
+    /// Bazic method
+    fn bazic(&self, bar: &(i32, i32), foo: &(i32,)) -> zbus::Result<((i32, i32), Vec<(i32,)>)>;
+
     /// Bazify method
     fn bazify(&self, bar: &(i32, i32, u32)) -> zbus::Result<zbus::zvariant::OwnedValue>;
 

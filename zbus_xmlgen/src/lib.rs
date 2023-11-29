@@ -241,7 +241,7 @@ fn to_rust_type(ty: &CompleteType, input: bool, as_ref: bool) -> String {
                 } else if vec.len() > 1 {
                     format!("{}({})", if as_ref { "&" } else { "" }, vec.join(", "))
                 } else {
-                    vec[0].to_string()
+                    format!("{}({},)", if as_ref { "&" } else { "" }, vec[0])
                 }
             }
             _ => unimplemented!(),
