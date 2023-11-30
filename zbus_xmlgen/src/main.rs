@@ -3,10 +3,10 @@
 use std::{
     env::args,
     error::Error,
-    fs::File,
-    io::Write,
+    fs::{File, OpenOptions},
+    io::{Read, Write},
     path::Path,
-    process::{Command, Stdio},
+    process::{ChildStdin, Command, Stdio},
     result::Result,
 };
 
@@ -22,11 +22,17 @@ use zvariant::ObjectPath;
 fn usage() {
     eprintln!(
         r#"Usage:
-  zbus-xmlgen <interface.xml>
-  zbus-xmlgen --system|--session <service> <object_path>
-  zbus-xmlgen --address <address> <service> <object_path>
+  zbus-xmlgen <interface.xml> [-o|--output <file_path>]
+  zbus-xmlgen --system|--session <service> <object_path> [-o|--output <file_path>]
+  zbus-xmlgen --address <address> <service> <object_path> [-o|--output <file_path>]
 "#
     );
+}
+
+enum OutputTarget {
+    SingleFile(File),
+    Stdout,
+    MultipleFiles,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -113,18 +119,108 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     };
 
-    let mut process = match Command::new("rustfmt").stdin(Stdio::piped()).spawn() {
-        Err(why) => panic!("couldn't spawn rustfmt: {}", why),
-        Ok(process) => process,
-    };
-    let rustfmt_stdin = process.stdin.as_mut().unwrap();
     let fdo_iface_prefix = "org.freedesktop.DBus";
     let (fdo_standard_ifaces, needed_ifaces): (Vec<&Interface<'_>>, Vec<&Interface<'_>>) = node
         .interfaces()
         .iter()
         .partition(|&i| i.name().starts_with(fdo_iface_prefix));
 
-    if let Some((first_iface, following_ifaces)) = needed_ifaces.split_first() {
+    let output_arg = args()
+        .position(|arg| arg == "-o" || arg == "--output")
+        .map(|pos| pos + 1)
+        .and_then(|pos| args().nth(pos));
+    let mut output_target = match output_arg.as_deref() {
+        Some("-") => OutputTarget::Stdout,
+        Some(path) => {
+            let file = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .append(true)
+                .open(path)
+                .expect("Failed to open file");
+            OutputTarget::SingleFile(file)
+        }
+        _ => OutputTarget::MultipleFiles,
+    };
+
+    for interface in needed_ifaces {
+        let output = write_interfaces(
+            &[&interface],
+            &fdo_standard_ifaces,
+            service.clone(),
+            path.clone(),
+            &input_src,
+        )?;
+        match output_target {
+            OutputTarget::SingleFile(ref mut file) => {
+                file.write_all(output.as_bytes())?;
+            }
+            OutputTarget::Stdout => println!("{:?}", output),
+            OutputTarget::MultipleFiles => {
+                std::fs::write(
+                    format!(
+                        "{}.rs",
+                        interface
+                            .name()
+                            .split('.')
+                            .last()
+                            .expect("Failed to split name")
+                    ),
+                    output,
+                )?;
+            }
+        };
+    }
+
+    Ok(())
+}
+
+fn write_interfaces(
+    interfaces: &[&Interface<'_>],
+    standard_interfaces: &[&Interface<'_>],
+    service: Option<BusName<'_>>,
+    path: Option<ObjectPath<'_>>,
+    input_src: &str,
+) -> Result<String, Box<dyn Error>> {
+    let mut process = match Command::new("rustfmt")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+    {
+        Err(why) => panic!("couldn't spawn rustfmt: {}", why),
+        Ok(process) => process,
+    };
+    let rustfmt_stdin = process.stdin.as_mut().unwrap();
+    let mut rustfmt_stdout = process.stdout.take().unwrap();
+
+    write_doc_header(rustfmt_stdin, interfaces, standard_interfaces, input_src)?;
+
+    for interface in interfaces {
+        writeln!(rustfmt_stdin)?;
+        let gen = GenTrait {
+            interface,
+            service: service.as_ref(),
+            path: path.as_ref(),
+        }
+        .to_string();
+        rustfmt_stdin.write_all(gen.as_bytes())?;
+    }
+
+    process.wait()?;
+    let mut buffer = String::new();
+    rustfmt_stdout.read_to_string(&mut buffer)?;
+    Ok(buffer)
+}
+
+/// Write a doc header, listing the included Interfaces and how the
+/// code was generated.
+fn write_doc_header(
+    rustfmt_stdin: &mut ChildStdin,
+    interfaces: &[&Interface<'_>],
+    standard_interfaces: &[&Interface<'_>],
+    input_src: &str,
+) -> std::io::Result<()> {
+    if let Some((first_iface, following_ifaces)) = interfaces.split_first() {
         if following_ifaces.is_empty() {
             writeln!(
                 rustfmt_stdin,
@@ -161,14 +257,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         env!("CARGO_PKG_VERSION"),
         input_src,
     )?;
-    if !fdo_standard_ifaces.is_empty() {
+
+    if !standard_interfaces.is_empty() {
         write!(rustfmt_stdin,
             "//! This DBus object implements
              //! [standard DBus interfaces](https://dbus.freedesktop.org/doc/dbus-specification.html),
              //! (`org.freedesktop.DBus.*`) for which the following zbus proxies can be used:
              //!
             ")?;
-        for iface in &fdo_standard_ifaces {
+        for iface in standard_interfaces {
             let idx = iface.name().rfind('.').unwrap() + 1;
             let name = &iface.name()[idx..];
             writeln!(rustfmt_stdin, "//! * [`zbus::fdo::{name}Proxy`]")?;
@@ -181,22 +278,13 @@ fn main() -> Result<(), Box<dyn Error>> {
             env!("CARGO_BIN_NAME")
         )?;
     }
+
     write!(
         rustfmt_stdin,
         "
         use zbus::dbus_proxy;
         "
     )?;
-    for iface in &needed_ifaces {
-        writeln!(rustfmt_stdin)?;
-        let gen = GenTrait {
-            interface: iface,
-            service: service.as_ref(),
-            path: path.as_ref(),
-        }
-        .to_string();
-        rustfmt_stdin.write_all(gen.as_bytes())?;
-    }
-    process.wait()?;
+
     Ok(())
 }
