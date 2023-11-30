@@ -3,10 +3,10 @@
 use std::{
     env::args,
     error::Error,
-    fs::File,
+    fs::{File, OpenOptions},
     io::{Read, Write},
     path::Path,
-    process::{Child, ChildStdin, ChildStdout, Command, Stdio},
+    process::{ChildStdin, Command, Stdio},
     result::Result,
 };
 
@@ -22,11 +22,16 @@ use zvariant::ObjectPath;
 fn usage() {
     eprintln!(
         r#"Usage:
-  zbus-xmlgen <interface.xml>
-  zbus-xmlgen --system|--session <service> <object_path>
-  zbus-xmlgen --address <address> <service> <object_path>
+  zbus-xmlgen <interface.xml> [-o|--output <file_path>]
+  zbus-xmlgen --system|--session <service> <object_path> [-o|--output <file_path>]
+  zbus-xmlgen --address <address> <service> <object_path> [-o|--output <file_path>]
 "#
     );
+}
+
+enum OutputTarget {
+    SingleFile(File),
+    Stdout,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -119,14 +124,39 @@ fn main() -> Result<(), Box<dyn Error>> {
         .iter()
         .partition(|&i| i.name().starts_with(fdo_iface_prefix));
 
-    let output = write_interfaces(
-        &needed_ifaces,
-        &fdo_standard_ifaces,
-        service,
-        path,
-        &input_src,
-    )?;
-    println!("{}", output);
+    let output_arg = args()
+        .position(|arg| arg == "-o" || arg == "--output")
+        .map(|pos| pos + 1)
+        .and_then(|pos| args().nth(pos));
+    let mut output_target = match output_arg.as_deref() {
+        Some("-") => OutputTarget::Stdout,
+        Some(path) => {
+            let file = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .append(true)
+                .open(path)
+                .expect("Failed to open file");
+            OutputTarget::SingleFile(file)
+        }
+        _ => OutputTarget::Stdout,
+    };
+
+    for interface in needed_ifaces {
+        let output = write_interfaces(
+            &[&interface],
+            &fdo_standard_ifaces,
+            service.clone(),
+            path.clone(),
+            &input_src,
+        )?;
+        match output_target {
+            OutputTarget::SingleFile(ref mut file) => {
+                file.write_all(output.as_bytes())?;
+            }
+            OutputTarget::Stdout => println!("{:?}", output),
+        };
+    }
 
     Ok(())
 }
