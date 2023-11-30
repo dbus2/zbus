@@ -30,4 +30,9 @@ trait SampleInterface0 {
     fn bar(&self) -> zbus::Result<u8>;
     #[dbus_proxy(property)]
     fn set_bar(&self, value: u8) -> zbus::Result<()>;
+
+    /// Matryoshkas property
+    #[dbus_proxy(property)]
+    #[allow(clippy::type_complexity)]
+    fn matryoshkas(&self) -> zbus::Result<Vec<(zbus::zvariant::OwnedObjectPath, i32, Vec<String>, u64, std::collections::HashMap<String, zbus::zvariant::OwnedValue>)>>;
 }
