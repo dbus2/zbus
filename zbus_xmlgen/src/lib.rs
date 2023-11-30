@@ -43,6 +43,7 @@ impl<'i> Display for GenTrait<'i> {
             if pascal_case(&name) != m.name().as_str() {
                 writeln!(f, "    #[dbus_proxy(name = \"{}\")]", m.name())?;
             }
+            hide_clippy_lints(f, m)?;
             writeln!(f, "    fn {name}({inputs}){output};")?;
         }
 
@@ -90,6 +91,15 @@ impl<'i> Display for GenTrait<'i> {
         }
         writeln!(f, "}}")
     }
+}
+
+fn hide_clippy_lints(fmt: &mut Formatter<'_>, method: &zbus_xml::Method<'_>) -> std::fmt::Result {
+    // check for <https://rust-lang.github.io/rust-clippy/master/index.html#/too_many_arguments>
+    // triggers when a functions has at least 7 paramters
+    if method.args().len() >= 7 {
+        writeln!(fmt, "    #[allow(clippy::too_many_arguments)]")?;
+    }
+    Ok(())
 }
 
 fn inputs_output_from_args(args: &[Arg]) -> (String, String) {

@@ -13,6 +13,10 @@ trait SampleInterface0 {
     /// MogrifyMe method
     fn mogrify_me(&self, bar: &(i32, i32, &[zbus::zvariant::Value<'_>])) -> zbus::Result<()>;
 
+    /// Odyssey method
+    #[allow(clippy::too_many_arguments)]
+    fn odyssey(&self, odysseus: i32, penelope: &str, telemachus: u32, circe: i32, athena: bool, polyphemus: i32, calypso: &zbus::zvariant::Value<'_>) -> zbus::Result<()>;
+
     /// Changed signal
     #[dbus_proxy(signal)]
     fn changed(&self, new_value: bool) -> zbus::Result<()>;

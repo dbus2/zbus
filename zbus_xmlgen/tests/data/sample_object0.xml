@@ -21,6 +21,15 @@
        <arg direction="in" name="rule" type="(aiia{ss}iaiiasib)"/>
        <arg direction="out" type="a(so)"/>
      </method>
+     <method name="Odyssey">
+       <arg name="odysseus" type="i"/>
+       <arg name="penelope" type="s"/>
+       <arg name="telemachus" type="u"/>
+       <arg name="circe" type="i"/>
+       <arg name="athena" type="b"/>
+       <arg name="polyphemus" type="i"/>
+       <arg name="calypso" type="v"/>
+     </method>
      <signal name="Changed">
        <arg name="new_value" type="b"/>
      </signal>
