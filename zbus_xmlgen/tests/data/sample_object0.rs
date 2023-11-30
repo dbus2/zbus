@@ -16,6 +16,10 @@ trait SampleInterface0 {
     /// MogrifyMe method
     fn mogrify_me(&self, bar: &(i32, i32, &[zbus::zvariant::Value<'_>])) -> zbus::Result<()>;
 
+    /// Odyssey method
+    #[allow(clippy::too_many_arguments)]
+    fn odyssey(&self, odysseus: i32, penelope: &str, telemachus: u32, circe: i32, athena: bool, polyphemus: i32, calypso: &zbus::zvariant::Value<'_>) -> zbus::Result<()>;
+
     /// Changed signal
     #[dbus_proxy(signal)]
     fn changed(&self, new_value: bool) -> zbus::Result<()>;
@@ -29,4 +33,9 @@ trait SampleInterface0 {
     fn bar(&self) -> zbus::Result<u8>;
     #[dbus_proxy(property)]
     fn set_bar(&self, value: u8) -> zbus::Result<()>;
+
+    /// Matryoshkas property
+    #[dbus_proxy(property)]
+    #[allow(clippy::type_complexity)]
+    fn matryoshkas(&self) -> zbus::Result<Vec<(zbus::zvariant::OwnedObjectPath, i32, Vec<String>, u64, std::collections::HashMap<String, zbus::zvariant::OwnedValue>)>>;
 }

@@ -43,6 +43,7 @@ impl<'i> Display for GenTrait<'i> {
             if pascal_case(&name) != m.name().as_str() {
                 writeln!(f, "    #[dbus_proxy(name = \"{}\")]", m.name())?;
             }
+            hide_clippy_lints(f, m)?;
             writeln!(f, "    fn {name}({inputs}){output};")?;
         }
 
@@ -76,6 +77,7 @@ impl<'i> Display for GenTrait<'i> {
             if p.access().read() {
                 writeln!(f, "{}", fn_attribute)?;
                 let output = to_rust_type(p.ty(), false, false);
+                hide_clippy_type_complexity_lint(f, p.ty().signature())?;
                 writeln!(f, "    fn {name}(&self) -> zbus::Result<{output}>;",)?;
             }
 
@@ -90,6 +92,34 @@ impl<'i> Display for GenTrait<'i> {
         }
         writeln!(f, "}}")
     }
+}
+
+fn hide_clippy_lints(fmt: &mut Formatter<'_>, method: &zbus_xml::Method<'_>) -> std::fmt::Result {
+    // check for <https://rust-lang.github.io/rust-clippy/master/index.html#/too_many_arguments>
+    // triggers when a functions has at least 7 paramters
+    if method.args().len() >= 7 {
+        writeln!(fmt, "    #[allow(clippy::too_many_arguments)]")?;
+    }
+
+    // check for <https://rust-lang.github.io/rust-clippy/master/index.html#/type_complexity>
+    for arg in method.args() {
+        let signature = arg.ty().signature();
+        hide_clippy_type_complexity_lint(fmt, signature)?;
+    }
+
+    Ok(())
+}
+
+fn hide_clippy_type_complexity_lint(
+    fmt: &mut Formatter<'_>,
+    signature: &zvariant::Signature,
+) -> std::fmt::Result {
+    let mut it = signature.as_bytes().iter().peekable();
+    let complexity = estimate_type_complexity(&mut it);
+    if complexity >= 1700 {
+        writeln!(fmt, "    #[allow(clippy::type_complexity)]")?;
+    }
+    Ok(())
 }
 
 fn inputs_output_from_args(args: &[Arg]) -> (String, String) {
@@ -283,4 +313,55 @@ pub fn pascal_case(s: &str) -> String {
         }
     }
     pascal
+}
+
+fn estimate_type_complexity(it: &mut std::iter::Peekable<std::slice::Iter<'_, u8>>) -> u32 {
+    let mut score = 0;
+    let c = it.next().unwrap();
+    match *c as char {
+        u8::SIGNATURE_CHAR
+        | bool::SIGNATURE_CHAR
+        | i16::SIGNATURE_CHAR
+        | u16::SIGNATURE_CHAR
+        | i32::SIGNATURE_CHAR
+        | u32::SIGNATURE_CHAR
+        | i64::SIGNATURE_CHAR
+        | u64::SIGNATURE_CHAR
+        | f64::SIGNATURE_CHAR
+        | <&str>::SIGNATURE_CHAR => {
+            score += 1;
+        }
+        'h' => score += 10,
+        Signature::SIGNATURE_CHAR | VARIANT_SIGNATURE_CHAR | ObjectPath::SIGNATURE_CHAR => {
+            score *= 10
+        }
+        ARRAY_SIGNATURE_CHAR => {
+            let c = it.peek().unwrap();
+            match **c as char {
+                '{' => {
+                    score *= 10;
+                    score += estimate_type_complexity(it);
+                }
+                _ => {
+                    score += 5 * estimate_type_complexity(it);
+                }
+            }
+        }
+        STRUCT_SIG_START_CHAR | DICT_ENTRY_SIG_START_CHAR => {
+            score += 50;
+            loop {
+                let c = it.peek().unwrap();
+                match **c as char {
+                    STRUCT_SIG_END_CHAR | DICT_ENTRY_SIG_END_CHAR => {
+                        // consume the closing character
+                        it.next().unwrap();
+                        break;
+                    }
+                    _ => score += 5 * estimate_type_complexity(it),
+                }
+            }
+        }
+        _ => {}
+    };
+    score
 }
