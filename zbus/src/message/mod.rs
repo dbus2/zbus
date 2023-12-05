@@ -118,11 +118,6 @@ impl Message {
 
     /// Create a message from bytes.
     ///
-    /// The `fds` parameter is only available on unix. It specifies the file descriptors that
-    /// accompany the message. On the wire, values of the UNIX_FD types store the index of the
-    /// corresponding file descriptor in this vector. Passing an empty vector on a message that
-    /// has UNIX_FD will result in an error.
-    ///
     /// **Note:** Since the constructed message is not construct by zbus, the receive sequence,
     /// which can be acquired from [`Message::recv_position`], is not applicable and hence set
     /// to `0`.
