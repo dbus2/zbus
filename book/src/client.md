@@ -615,7 +615,7 @@ There you have it, a Rust-friendly binding for your D-Bus service!
 [`gdbus-codegen`]: https://docs.gtk.org/gio/migrating-gdbus.html#generating-code-and-docs
 [`pkg-config`]: https://www.freedesktop.org/wiki/Software/pkg-config/
 [cob]: blocking.html
-[`Stream`]: https://docs.rs/futures/0.3.17/futures/stream/trait.Stream.html
+[`Stream`]: https://docs.rs/futures/latest/futures/stream/trait.Stream.html
 [`Value`]: https://docs.rs/zvariant/latest/zvariant/derive.Value.html
 [`OwnedValue`]: https://docs.rs/zvariant/latest/zvariant/derive.OwnedValue.html
 
