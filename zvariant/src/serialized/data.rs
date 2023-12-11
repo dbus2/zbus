@@ -6,7 +6,6 @@ use std::{
     sync::Arc,
 };
 
-use byteorder::ByteOrder;
 use serde::{de::DeserializeSeed, Deserialize};
 
 use crate::{
@@ -21,9 +20,9 @@ use crate::{
 /// the serialized bytes. By packing them together, we ensure that the file descriptors are never
 /// closed before the serialized bytes are dropped.
 #[derive(Clone, Debug)]
-pub struct Data<'bytes, 'fds, B: ByteOrder> {
+pub struct Data<'bytes, 'fds> {
     inner: Arc<Inner<'bytes, 'fds>>,
-    context: Context<B>,
+    context: Context,
     range: Range<usize>,
 }
 
@@ -36,14 +35,14 @@ pub struct Inner<'bytes, 'fds> {
     _fds: std::marker::PhantomData<&'fds ()>,
 }
 
-impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
+impl<'bytes, 'fds> Data<'bytes, 'fds> {
     /// Create a new `EncodedBytes` instance containing borrowed file descriptors.
     ///
     /// This method is only available on Unix platforms.
     #[cfg(unix)]
     pub fn new_borrowed_fds<T>(
         bytes: T,
-        context: Context<B>,
+        context: Context,
         fds: impl IntoIterator<Item = impl Into<Fd<'fds>>>,
     ) -> Self
     where
@@ -70,7 +69,7 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
     }
 
     /// The encoding context.
-    pub fn context(&self) -> Context<B> {
+    pub fn context(&self) -> Context {
         self.context
     }
 
@@ -87,7 +86,7 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
     /// # Panics
     ///
     /// Requires that begin <= end and end <= self.len(), otherwise slicing will panic.
-    pub fn slice(&self, range: impl RangeBounds<usize>) -> Data<'bytes, 'fds, B> {
+    pub fn slice(&self, range: impl RangeBounds<usize>) -> Data<'bytes, 'fds> {
         let len = self.range.end - self.range.start;
         let start = match range.start_bound() {
             Bound::Included(&n) => n,
@@ -105,7 +104,11 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
         );
         assert!(end <= len, "range end out of bounds: {end:?} > {len:?}");
 
-        let context = Context::new(self.context.format(), self.context.position() + start);
+        let context = Context::new(
+            self.context.format(),
+            self.context.endian(),
+            self.context.position() + start,
+        );
         let range = Range {
             start: self.range.start + start,
             end: self.range.start + end,
@@ -126,7 +129,7 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
     /// use zvariant::to_bytes;
     /// use zvariant::serialized::Context;
     ///
-    /// let ctxt = Context::<byteorder::LE>::new_dbus(0);
+    /// let ctxt = Context::new_dbus(endi::Endian::Little, 0);
     /// let encoded = to_bytes(ctxt, "hello world").unwrap();
     /// let decoded: &str = encoded.deserialize().unwrap().0;
     /// assert_eq!(decoded, "hello world");
@@ -137,7 +140,6 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
     /// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
     pub fn deserialize<'d, T: ?Sized>(&'d self) -> Result<(T, usize)>
     where
-        B: byteorder::ByteOrder,
         T: Deserialize<'d> + Type,
     {
         let signature = T::signature();
@@ -160,7 +162,7 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
     /// use zvariant::to_bytes_for_signature;
     /// use zvariant::serialized::Context;
     ///
-    /// let ctxt = Context::<byteorder::LE>::new_dbus(0);
+    /// let ctxt = Context::new_dbus(endi::Endian::Little, 0);
     /// #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
     /// enum Unit {
     ///     Variant1,
@@ -233,11 +235,7 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
                 }
                 #[cfg(not(unix))]
                 {
-                    crate::gvariant::Deserializer::<_, ()>::new(
-                        self.bytes(),
-                        signature,
-                        self.context,
-                    )
+                    crate::gvariant::Deserializer::<()>::new(self.bytes(), signature, self.context)
                 }
             }
             .map(Deserializer::GVariant)?,
@@ -248,7 +246,7 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
                 }
                 #[cfg(not(unix))]
                 {
-                    crate::dbus::Deserializer::<_, ()>::new(self.bytes(), signature, self.context)
+                    crate::dbus::Deserializer::<()>::new(self.bytes(), signature, self.context)
                 }
             }
             .map(Deserializer::DBus)?,
@@ -268,7 +266,6 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
     /// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
     pub fn deserialize_for_dynamic_signature<'d, S, T>(&'d self, signature: S) -> Result<(T, usize)>
     where
-        B: byteorder::ByteOrder,
         T: DynamicDeserialize<'d>,
         S: TryInto<Signature<'d>>,
         S::Error: Into<Error>,
@@ -285,7 +282,6 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
     /// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
     pub fn deserialize_with_seed<'d, S>(&'d self, seed: S) -> Result<(S::Value, usize)>
     where
-        B: byteorder::ByteOrder,
         S: DeserializeSeed<'d> + DynamicType,
     {
         let signature = S::dynamic_signature(&seed).to_owned();
@@ -321,7 +317,7 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
                 }
                 #[cfg(not(unix))]
                 {
-                    crate::dbus::Deserializer::<_, ()>::new(self.bytes(), signature, self.context)
+                    crate::dbus::Deserializer::<()>::new(self.bytes(), signature, self.context)
                 }
             }
             .map(Deserializer::DBus)?,
@@ -335,9 +331,9 @@ impl<'bytes, 'fds, B: ByteOrder> Data<'bytes, 'fds, B> {
     }
 }
 
-impl<'bytes, B: ByteOrder> Data<'bytes, 'static, B> {
+impl<'bytes> Data<'bytes, 'static> {
     /// Create a new `EncodedBytes` instance.
-    pub fn new<T>(bytes: T, context: Context<B>) -> Self
+    pub fn new<T>(bytes: T, context: Context) -> Self
     where
         T: Into<Cow<'bytes, [u8]>>,
     {
@@ -365,7 +361,7 @@ impl<'bytes, B: ByteOrder> Data<'bytes, 'static, B> {
     #[cfg(unix)]
     pub fn new_fds<T>(
         bytes: T,
-        context: Context<B>,
+        context: Context,
         fds: impl IntoIterator<Item = impl Into<OwnedFd>>,
     ) -> Self
     where
@@ -387,7 +383,7 @@ impl<'bytes, B: ByteOrder> Data<'bytes, 'static, B> {
     }
 }
 
-impl<B: ByteOrder> Deref for Data<'_, '_, B> {
+impl Deref for Data<'_, '_> {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
@@ -395,10 +391,10 @@ impl<B: ByteOrder> Deref for Data<'_, '_, B> {
     }
 }
 
-impl<B: ByteOrder, T> AsRef<T> for Data<'_, '_, B>
+impl<T> AsRef<T> for Data<'_, '_>
 where
     T: ?Sized,
-    for<'bytes, 'fds> <Data<'bytes, 'fds, B> as Deref>::Target: AsRef<T>,
+    for<'bytes, 'fds> <Data<'bytes, 'fds> as Deref>::Target: AsRef<T>,
 {
     fn as_ref(&self) -> &T {
         self.deref().as_ref()

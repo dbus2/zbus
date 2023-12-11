@@ -127,7 +127,7 @@ impl PrimaryHeader {
     }
 
     pub(crate) fn read(buf: &[u8]) -> Result<(PrimaryHeader, u32), Error> {
-        let ctx = Context::<byteorder::NativeEndian>::new_dbus(0);
+        let ctx = Context::new_dbus(endi::NATIVE_ENDIAN, 0);
         let data = serialized::Data::new(buf, ctx);
         let (primary_header, size) = data.deserialize()?;
         assert_eq!(size, PRIMARY_HEADER_SIZE);

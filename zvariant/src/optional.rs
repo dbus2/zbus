@@ -48,10 +48,10 @@ where
 ///
 /// ```
 /// use zvariant::{serialized::Context, Optional, to_bytes};
-/// use byteorder::LE;
+/// use endi::LE;
 ///
 /// // `Null` case.
-/// let ctxt = Context::<LE>::new_dbus(0);
+/// let ctxt = Context::new_dbus(LE, 0);
 /// let s = Optional::<&str>::default();
 /// let encoded = to_bytes(ctxt, &s).unwrap();
 /// assert_eq!(encoded.bytes(), &[0, 0, 0, 0, 0]);

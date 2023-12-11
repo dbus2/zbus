@@ -1,4 +1,3 @@
-use byteorder::NativeEndian;
 use zvariant::{
     serialized::{self, Data},
     Signature, Type,
@@ -11,12 +10,12 @@ use crate::{Error, Message, Result};
 /// This contains the bytes and the signature of the body.
 #[derive(Clone, Debug)]
 pub struct Body {
-    data: Data<'static, 'static, NativeEndian>,
+    data: Data<'static, 'static>,
     msg: Message,
 }
 
 impl Body {
-    pub(super) fn new(data: Data<'static, 'static, NativeEndian>, msg: Message) -> Self {
+    pub(super) fn new(data: Data<'static, 'static>, msg: Message) -> Self {
         Self { data, msg }
     }
 
@@ -64,7 +63,7 @@ impl Body {
     }
 
     /// Get a reference to the underlying byte encoding of the message.
-    pub fn data(&self) -> &serialized::Data<'static, 'static, NativeEndian> {
+    pub fn data(&self) -> &serialized::Data<'static, 'static> {
         &self.data
     }
 

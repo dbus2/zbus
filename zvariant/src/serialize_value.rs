@@ -11,7 +11,7 @@ use crate::{Signature, Type, Value};
 /// ```
 /// # use zvariant::{to_bytes, serialized::Context, SerializeValue};
 /// #
-/// # let ctxt = Context::<byteorder::LE>::new_dbus(0);
+/// # let ctxt = Context::new_dbus(endi::LE, 0);
 /// let _ = to_bytes(ctxt, &SerializeValue(&[0, 1, 2])).unwrap();
 /// ```
 ///

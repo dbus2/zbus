@@ -1,7 +1,6 @@
 //! D-Bus Message.
 use std::{fmt, num::NonZeroU32, sync::Arc};
 
-use byteorder::NativeEndian;
 use static_assertions::assert_impl_all;
 use zbus_names::{ErrorName, InterfaceName, MemberName};
 use zvariant::serialized;
@@ -61,7 +60,7 @@ pub struct Message {
 pub(super) struct Inner {
     pub(crate) primary_header: PrimaryHeader,
     pub(crate) quick_fields: QuickFields,
-    pub(crate) bytes: serialized::Data<'static, 'static, NativeEndian>,
+    pub(crate) bytes: serialized::Data<'static, 'static>,
     pub(crate) body_offset: usize,
     pub(crate) recv_seq: Sequence,
 }
@@ -125,15 +124,13 @@ impl Message {
     /// # Safety
     ///
     /// This method is unsafe as bytes may have an invalid encoding.
-    pub unsafe fn from_bytes(
-        bytes: serialized::Data<'static, 'static, NativeEndian>,
-    ) -> Result<Self> {
+    pub unsafe fn from_bytes(bytes: serialized::Data<'static, 'static>) -> Result<Self> {
         Self::from_raw_parts(bytes, 0)
     }
 
     /// Create a message from its full contents
     pub(crate) fn from_raw_parts(
-        bytes: serialized::Data<'static, 'static, NativeEndian>,
+        bytes: serialized::Data<'static, 'static>,
         recv_seq: u64,
     ) -> Result<Self> {
         if EndianSig::try_from(bytes[0])? != NATIVE_ENDIAN_SIG {
@@ -264,7 +261,7 @@ impl Message {
     }
 
     /// Get a reference to the underlying byte encoding of the message.
-    pub fn data(&self) -> &serialized::Data<'static, 'static, NativeEndian> {
+    pub fn data(&self) -> &serialized::Data<'static, 'static> {
         &self.inner.bytes
     }
 

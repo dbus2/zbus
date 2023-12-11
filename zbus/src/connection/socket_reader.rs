@@ -180,7 +180,7 @@ impl SocketReader {
         // If we reach here, the message is complete; return it
         let seq = self.prev_seq + 1;
         self.prev_seq = seq;
-        let ctxt = Context::<byteorder::NativeEndian>::new_dbus(0);
+        let ctxt = Context::new_dbus(endi::NATIVE_ENDIAN, 0);
         #[cfg(unix)]
         let bytes = serialized::Data::new_fds(bytes, ctxt, fds);
         #[cfg(not(unix))]

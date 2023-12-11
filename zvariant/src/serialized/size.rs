@@ -1,7 +1,5 @@
 use std::ops::Deref;
 
-use byteorder::ByteOrder;
-
 use crate::serialized::Context;
 
 /// Represents the return value of [`crate::serialized_size`] function.
@@ -11,16 +9,16 @@ use crate::serialized::Context;
 /// On Unix platforms, it also contains the number of file descriptors, whose indexes are included
 /// in the serialized bytes.
 #[derive(Debug)]
-pub struct Size<B: ByteOrder> {
+pub struct Size {
     size: usize,
-    context: Context<B>,
+    context: Context,
     #[cfg(unix)]
     num_fds: u32,
 }
 
-impl<B: ByteOrder> Size<B> {
+impl Size {
     /// Create a new `EncodedSize` instance.
-    pub fn new(size: usize, context: Context<B>) -> Self {
+    pub fn new(size: usize, context: Context) -> Self {
         Self {
             size,
             context,
@@ -42,7 +40,7 @@ impl<B: ByteOrder> Size<B> {
     }
 
     /// The encoding context.
-    pub fn context(&self) -> Context<B> {
+    pub fn context(&self) -> Context {
         self.context
     }
 
@@ -55,7 +53,7 @@ impl<B: ByteOrder> Size<B> {
     }
 }
 
-impl<B: ByteOrder> Deref for Size<B> {
+impl Deref for Size {
     type Target = usize;
 
     fn deref(&self) -> &Self::Target {

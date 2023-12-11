@@ -26,7 +26,7 @@ pub use dict::*;
 
 #[deprecated(since = "4.0.0", note = "Use `serialized::Context` instead")]
 #[doc(hidden)]
-pub type EncodingContext<B> = serialized::Context<B>;
+pub type EncodingContext = serialized::Context;
 #[deprecated(since = "4.0.0", note = "Use `serialized::Format` instead")]
 #[doc(hidden)]
 pub type EncodingFormat = serialized::Format;
@@ -122,7 +122,7 @@ mod tests {
 
     #[cfg(feature = "arrayvec")]
     use arrayvec::{ArrayString, ArrayVec};
-    use byteorder::{self, ByteOrder, NativeEndian, BE, LE};
+    use endi::{BE, LE, NATIVE_ENDIAN};
     #[cfg(feature = "arrayvec")]
     use std::str::FromStr;
 
@@ -142,9 +142,9 @@ mod tests {
 
     // Test through both generic and specific API (wrt byte order)
     macro_rules! basic_type_test {
-        ($trait:ty, $format:ident, $test_value:expr, $expected_len:expr, $expected_ty:ty, $align:literal) => {{
+        ($endian:expr, $format:ident, $test_value:expr, $expected_len:expr, $expected_ty:ty, $align:literal) => {{
             // Lie that we're starting at byte 1 in the overall message to test padding
-            let ctxt = Context::<$trait>::new(Format::$format, 1);
+            let ctxt = Context::new(Format::$format, $endian, 1);
             let encoded = to_bytes(ctxt, &$test_value).unwrap();
             let padding = crate::padding_for_n_bytes(1, $align);
             assert_eq!(
@@ -157,7 +157,7 @@ mod tests {
             assert!(parsed == encoded.len(), "invalid parsing");
 
             // Now encode w/o padding
-            let ctxt = Context::<$trait>::new(Format::$format, 0);
+            let ctxt = Context::new(Format::$format, $endian, 0);
             let encoded = to_bytes(ctxt, &$test_value).unwrap();
             assert_eq!(
                 encoded.len(),
@@ -167,9 +167,9 @@ mod tests {
 
             encoded
         }};
-        ($trait:ty, $format:ident, $test_value:expr, $expected_len:expr, $expected_ty:ty, $align:literal, $kind:ident, $expected_value_len:expr) => {{
+        ($endian:expr, $format:ident, $test_value:expr, $expected_len:expr, $expected_ty:ty, $align:literal, $kind:ident, $expected_value_len:expr) => {{
             let encoded = basic_type_test!(
-                $trait,
+                $endian,
                 $format,
                 $test_value,
                 $expected_len,
@@ -191,8 +191,8 @@ mod tests {
     }
 
     macro_rules! value_test {
-        ($trait:ty, $format:ident, $test_value:expr, $expected_len:expr) => {{
-            let ctxt = Context::<$trait>::new(Format::$format, 0);
+        ($endian:expr, $format:ident, $test_value:expr, $expected_len:expr) => {{
+            let ctxt = Context::new(Format::$format, $endian, 0);
             let encoded = to_bytes(ctxt, &$test_value).unwrap();
             assert_eq!(
                 encoded.len(),
@@ -212,9 +212,9 @@ mod tests {
         value: f64,
         expected_len: usize,
         expected_value_len: usize,
-    ) -> crate::serialized::Data<'static, 'static, NativeEndian> {
+    ) -> crate::serialized::Data<'static, 'static> {
         // Lie that we're starting at byte 1 in the overall message to test padding
-        let ctxt = Context::<NativeEndian>::new(format, 1);
+        let ctxt = Context::new(format, NATIVE_ENDIAN, 1);
         let encoded = to_bytes(ctxt, &value).unwrap();
         let padding = crate::padding_for_n_bytes(1, 8);
         assert_eq!(
@@ -230,7 +230,7 @@ mod tests {
         );
 
         // Now encode w/o padding
-        let ctxt = Context::<NativeEndian>::new(format, 0);
+        let ctxt = Context::new(format, NATIVE_ENDIAN, 0);
         let encoded = to_bytes(ctxt, &value).unwrap();
         assert_eq!(
             encoded.len(),
@@ -252,7 +252,7 @@ mod tests {
     }
 
     fn f64_value_test(format: Format, v: Value<'_>, expected_value_len: usize) {
-        let ctxt = Context::<LE>::new(format, 0);
+        let ctxt = Context::new(format, LE, 0);
         let encoded = to_bytes(ctxt, &v).unwrap();
         assert_eq!(
             encoded.len(),
@@ -328,11 +328,11 @@ mod tests {
 
     #[cfg(unix)]
     macro_rules! fd_value_test {
-        ($trait:ty, $format:ident, $test_value:expr, $expected_len:expr, $align:literal, $expected_value_len:expr) => {{
+        ($endian:expr, $format:ident, $test_value:expr, $expected_len:expr, $align:literal, $expected_value_len:expr) => {{
             use std::os::fd::AsFd;
 
             // Lie that we're starting at byte 1 in the overall message to test padding
-            let ctxt = Context::<$trait>::new(Format::$format, 1);
+            let ctxt = Context::new(Format::$format, $endian, 1);
             let encoded = to_bytes(ctxt, &$test_value).unwrap();
             let padding = crate::padding_for_n_bytes(1, $align);
             assert_eq!(
@@ -348,7 +348,7 @@ mod tests {
             );
 
             // Now encode w/o padding
-            let ctxt = Context::<$trait>::new(Format::$format, 0);
+            let ctxt = Context::new(Format::$format, $endian, 0);
             let encoded = to_bytes(ctxt, &$test_value).unwrap();
             assert_eq!(
                 encoded.len(),
@@ -406,7 +406,7 @@ mod tests {
     #[test]
     fn i16_value() {
         let encoded = basic_type_test!(BE, DBus, -0xAB0_i16, 2, i16, 2, I16, 6);
-        assert_eq!(LE::read_i16(&encoded), 0x50F5_i16);
+        assert_eq!(LE.read_i16(&encoded), 0x50F5_i16);
         #[cfg(feature = "gvariant")]
         {
             decode_num_with_gvariant::<_, i16>(encoded, Some((0x50F5_i16, -0xAB0_i16)));
@@ -428,7 +428,7 @@ mod tests {
     #[test]
     fn i32_value() {
         let encoded = basic_type_test!(BE, DBus, -0xABBA_AB0_i32, 4, i32, 4, I32, 8);
-        assert_eq!(LE::read_i32(&encoded), 0x5055_44F5_i32);
+        assert_eq!(LE.read_i32(&encoded), 0x5055_44F5_i32);
         #[cfg(feature = "gvariant")]
         {
             decode_num_with_gvariant::<_, i32>(encoded, Some((0x5055_44F5_i32, -0xABBA_AB0_i32)));
@@ -441,7 +441,7 @@ mod tests {
     #[test]
     fn i64_value() {
         let encoded = basic_type_test!(BE, DBus, -0xABBA_ABBA_ABBA_AB0_i64, 8, i64, 8, I64, 16);
-        assert_eq!(LE::read_i64(&encoded), 0x5055_4455_4455_44F5_i64);
+        assert_eq!(LE.read_i64(&encoded), 0x5055_4455_4455_44F5_i64);
         #[cfg(feature = "gvariant")]
         {
             decode_num_with_gvariant::<_, i64>(
@@ -455,7 +455,7 @@ mod tests {
     #[test]
     fn f64_value() {
         let encoded = f64_type_test(Format::DBus, 99999.99999_f64, 8, 16);
-        assert!((NativeEndian::read_f64(&encoded) - 99999.99999_f64).abs() < f64::EPSILON);
+        assert!((NATIVE_ENDIAN.read_f64(&encoded) - 99999.99999_f64).abs() < f64::EPSILON);
         #[cfg(feature = "gvariant")]
         {
             assert!(
@@ -503,7 +503,7 @@ mod tests {
         assert_eq!(v, "hello world");
 
         // Check for interior null bytes which are not allowed
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
         assert!(Data::new(&b"\x0b\0\0\0hello\0world\0"[..], ctxt)
             .deserialize::<&str>()
             .is_err());
@@ -512,7 +512,7 @@ mod tests {
         // GVariant format doesn't allow null bytes either
         #[cfg(feature = "gvariant")]
         {
-            let ctxt = Context::<LE>::new_gvariant(0);
+            let ctxt = Context::new_gvariant(LE, 0);
             assert!(Data::new(&b"\x0b\0\0\0hello\0world\0"[..], ctxt)
                 .deserialize::<&str>()
                 .is_err());
@@ -527,8 +527,8 @@ mod tests {
         // As Value
         let v: Value<'_> = "c".into();
         assert_eq!(v.value_signature(), "s");
-        let ctxt = Context::new_dbus(0);
-        let encoded = to_bytes::<LE, _>(ctxt, &v).unwrap();
+        let ctxt = Context::new_dbus(LE, 0);
+        let encoded = to_bytes(ctxt, &v).unwrap();
         assert_eq!(encoded.len(), 10);
         let (v, _) = encoded.deserialize::<Value<'_>>().unwrap();
         assert_eq!(v, Value::new("c"));
@@ -538,7 +538,7 @@ mod tests {
     #[test]
     fn array_string_value() {
         let s = ArrayString::<32>::from_str("hello world!").unwrap();
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
         let encoded = to_bytes(ctxt, &s).unwrap();
         assert_eq!(encoded.len(), 17);
         let decoded: ArrayString<32> = encoded.deserialize().unwrap().0;
@@ -608,7 +608,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn unit_fds() {
-        let ctxt = Context::<BE>::new_dbus(0);
+        let ctxt = Context::new_dbus(BE, 0);
         let encoded = to_bytes(ctxt, &()).unwrap();
         assert_eq!(encoded.len(), 0, "invalid encoding using `to_bytes`");
         let _: () = encoded
@@ -619,7 +619,7 @@ mod tests {
 
     #[test]
     fn unit() {
-        let ctxt = Context::<BE>::new_dbus(0);
+        let ctxt = Context::new_dbus(BE, 0);
         let encoded = to_bytes(ctxt, &()).unwrap();
         assert_eq!(encoded.len(), 0, "invalid encoding using `to_bytes`");
         let _: () = encoded
@@ -638,7 +638,7 @@ mod tests {
         // First a normal Rust array that is actually serialized as a struct (thank you Serde!)
         assert_eq!(<[u8; 2]>::signature(), "(yy)");
         let ay = [77u8, 88];
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
         let encoded = to_bytes(ctxt, &ay).unwrap();
         assert_eq!(encoded.len(), 2);
         let decoded: [u8; 2] = encoded.deserialize().unwrap().0;
@@ -649,7 +649,7 @@ mod tests {
         let ay = ArrayVec::from([77u8, 88]);
         #[cfg(not(feature = "arrayvec"))]
         let ay = vec![77u8, 88];
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
         let encoded = to_bytes(ctxt, &ay).unwrap();
         assert_eq!(encoded.len(), 6);
 
@@ -662,7 +662,7 @@ mod tests {
         // GVariant format now
         #[cfg(feature = "gvariant")]
         {
-            let ctxt = Context::<LE>::new_gvariant(0);
+            let ctxt = Context::new_gvariant(LE, 0);
             let gv_encoded = to_bytes(ctxt, &ay).unwrap();
             assert_eq!(gv_encoded.len(), 2);
 
@@ -673,12 +673,12 @@ mod tests {
             assert_eq!(variant.child_value(0).get::<u8>().unwrap(), 77);
             assert_eq!(variant.child_value(1).get::<u8>().unwrap(), 88);
         }
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
 
         // As Value
         let v: Value<'_> = ay[..].into();
         assert_eq!(v.value_signature(), "ay");
-        let encoded = to_bytes::<LE, _>(ctxt, &v).unwrap();
+        let encoded = to_bytes(ctxt, &v).unwrap();
         assert_eq!(encoded.len(), 10);
         let v = encoded.deserialize::<Value<'_>>().unwrap().0;
         if let Value::Array(array) = v {
@@ -692,35 +692,35 @@ mod tests {
 
         // Now try as Vec
         let vec = ay.to_vec();
-        let encoded = to_bytes::<LE, _>(ctxt, &vec).unwrap();
+        let encoded = to_bytes(ctxt, &vec).unwrap();
         assert_eq!(encoded.len(), 6);
 
         // Vec as Value
         let v: Value<'_> = Array::from(&vec).into();
         assert_eq!(v.value_signature(), "ay");
-        let encoded = to_bytes::<LE, _>(ctxt, &v).unwrap();
+        let encoded = to_bytes(ctxt, &v).unwrap();
         assert_eq!(encoded.len(), 10);
 
         // Empty array
         let at: Vec<u64> = vec![];
-        let encoded = to_bytes::<LE, _>(ctxt, &at).unwrap();
+        let encoded = to_bytes(ctxt, &at).unwrap();
         assert_eq!(encoded.len(), 8);
 
         // GVariant format now
         #[cfg(feature = "gvariant")]
         {
-            let ctxt = Context::<LE>::new_gvariant(0);
+            let ctxt = Context::new_gvariant(LE, 0);
             let gv_encoded = to_bytes(ctxt, &at).unwrap();
             assert_eq!(gv_encoded.len(), 0);
             let at = encoded.deserialize::<Vec<u64>>().unwrap().0;
             assert_eq!(at.len(), 0);
         }
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
 
         // As Value
         let v: Value<'_> = at[..].into();
         assert_eq!(v.value_signature(), "at");
-        let encoded = to_bytes::<LE, _>(ctxt, &v).unwrap();
+        let encoded = to_bytes(ctxt, &v).unwrap();
         assert_eq!(encoded.len(), 8);
         let v = encoded.deserialize::<Value<'_>>().unwrap().0;
         if let Value::Array(array) = v {
@@ -733,7 +733,7 @@ mod tests {
         // GVariant format now
         #[cfg(feature = "gvariant")]
         {
-            let ctxt = Context::<LE>::new_gvariant(0);
+            let ctxt = Context::new_gvariant(LE, 0);
             let v: Value<'_> = at[..].into();
             let gv_encoded = to_bytes(ctxt, &v).unwrap();
             assert_eq!(gv_encoded.len(), 3);
@@ -750,14 +750,14 @@ mod tests {
             let variant = Variant::from_bytes::<&[&str]>(&bytes);
             assert_eq!(variant.n_children(), 0);
         }
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
 
         //
         // Array of strings
         //
         // Can't use 'as' as it's a keyword
         let as_ = vec!["Hello", "World", "Now", "Bye!"];
-        let encoded = to_bytes::<LE, _>(ctxt, &as_).unwrap();
+        let encoded = to_bytes(ctxt, &as_).unwrap();
         assert_eq!(encoded.len(), 45);
         let decoded = encoded.deserialize::<Vec<&str>>().unwrap().0;
         assert_eq!(decoded.len(), 4);
@@ -794,7 +794,7 @@ mod tests {
         // GVariant format now
         #[cfg(feature = "gvariant")]
         {
-            let ctxt = Context::<LE>::new_gvariant(0);
+            let ctxt = Context::new_gvariant(LE, 0);
             let v: Value<'_> = as_[..].into();
             let gv_encoded = to_bytes(ctxt, &v).unwrap();
             assert_eq!(gv_encoded.len(), 28);
@@ -825,7 +825,7 @@ mod tests {
             // one more top-most simple field
             "hello",
         )];
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
         let encoded = to_bytes(ctxt, &ar).unwrap();
         assert_eq!(encoded.len(), 78);
         let decoded: Vec<(u8, u32, (i64, bool, i64, Vec<&str>), &str)> =
@@ -847,7 +847,7 @@ mod tests {
         // GVariant format now
         #[cfg(feature = "gvariant")]
         {
-            let ctxt = Context::<LE>::new_gvariant(0);
+            let ctxt = Context::new_gvariant(LE, 0);
             let gv_encoded = to_bytes(ctxt, &ar).unwrap();
             assert_eq!(gv_encoded.len(), 54);
             let decoded: Vec<(u8, u32, (i64, bool, i64, Vec<&str>), &str)> =
@@ -877,12 +877,12 @@ mod tests {
             assert_eq!(r.0, u8::max_value());
             assert_eq!(r.1, u32::max_value());
         }
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
 
         // As Value
         let v: Value<'_> = ar[..].into();
         assert_eq!(v.value_signature(), "a(yu(xbxas)s)");
-        let encoded = to_bytes::<LE, _>(ctxt, &v).unwrap();
+        let encoded = to_bytes(ctxt, &v).unwrap();
         assert_eq!(encoded.len(), 94);
         let v = encoded.deserialize::<Value<'_>>().unwrap().0;
         if let Value::Array(array) = v.try_clone().unwrap() {
@@ -921,7 +921,7 @@ mod tests {
         {
             use rand::{distributions::Alphanumeric, thread_rng, Rng};
 
-            let ctxt = Context::<LE>::new_gvariant(0);
+            let ctxt = Context::new_gvariant(LE, 0);
             let gv_encoded = to_bytes(ctxt, &v).unwrap();
             assert_eq!(gv_encoded.len(), 68);
             let v: Value<'_> = gv_encoded.deserialize().unwrap().0;
@@ -1011,7 +1011,7 @@ mod tests {
 
     #[test]
     fn struct_byte_array() {
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
         let value: (Vec<u8>, HashMap<String, Value<'_>>) = (Vec::new(), HashMap::new());
         let value = zvariant::to_bytes(ctxt, &value).unwrap();
         #[cfg(feature = "serde_bytes")]
@@ -1034,7 +1034,7 @@ mod tests {
         // Struct->Value
         let s: Value<'_> = ("a", "b", (1, 2)).into();
 
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
         let encoded = to_bytes(ctxt, &s).unwrap();
         assert_eq!(dbg!(encoded.len()), 40);
         let decoded: Value<'_> = encoded.deserialize().unwrap().0;
@@ -1078,7 +1078,7 @@ mod tests {
 
         #[cfg(feature = "gvariant")]
         {
-            let ctxt = Context::<LE>::new_gvariant(0);
+            let ctxt = Context::new_gvariant(LE, 0);
             let encoded = to_bytes(ctxt, &NoFields {}).unwrap();
             assert_eq!(encoded.len(), 1);
             let _decoded: NoFields = encoded.deserialize().unwrap().0;
@@ -1087,7 +1087,7 @@ mod tests {
 
     #[test]
     fn struct_ref() {
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
         let encoded = to_bytes(ctxt, &(&1u32, &2u32)).unwrap();
         let decoded: [u32; 2] = encoded.deserialize().unwrap().0;
         assert_eq!(decoded, [1u32, 2u32]);
@@ -1098,7 +1098,7 @@ mod tests {
         let mut map: HashMap<i64, &str> = HashMap::new();
         map.insert(1, "123");
         map.insert(2, "456");
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
         let encoded = to_bytes(ctxt, &map).unwrap();
         assert_eq!(dbg!(encoded.len()), 40);
         let decoded: HashMap<i64, &str> = encoded.deserialize().unwrap().0;
@@ -1108,7 +1108,7 @@ mod tests {
         // GVariant format now
         #[cfg(feature = "gvariant")]
         {
-            let ctxt = Context::<NativeEndian>::new_gvariant(0);
+            let ctxt = Context::new_gvariant(NATIVE_ENDIAN, 0);
             let gv_encoded = to_bytes(ctxt, &map).unwrap();
             assert_eq!(gv_encoded.len(), 30);
             let map: HashMap<i64, &str> = encoded.deserialize().unwrap().0;
@@ -1123,7 +1123,7 @@ mod tests {
             assert_eq!(map[&1], "123");
             assert_eq!(map[&2], "456");
         }
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
 
         // As Value
         let v: Value<'_> = Dict::from(map).into();
@@ -1155,7 +1155,7 @@ mod tests {
             let mut map: HashMap<&str, &str> = HashMap::new();
             map.insert("hi", "1234");
             map.insert("world", "561");
-            let ctxt = Context::<NativeEndian>::new_gvariant(0);
+            let ctxt = Context::new_gvariant(NATIVE_ENDIAN, 0);
             let gv_encoded = to_bytes(ctxt, &map).unwrap();
             assert_eq!(gv_encoded.len(), 22);
             let map: HashMap<&str, &str> = gv_encoded.deserialize().unwrap().0;
@@ -1177,7 +1177,7 @@ mod tests {
             let map: HashMap<&str, &str> = gv_encoded.deserialize().unwrap().0;
             assert_eq!(map.len(), 0);
         }
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
 
         // Now a hand-crafted Dict Value but with a Value as value
         let mut dict = Dict::new(<&str>::signature(), Value::signature());
@@ -1287,20 +1287,20 @@ mod tests {
 
     #[test]
     fn value_value() {
-        let ctxt = Context::<BE>::new_dbus(0);
+        let ctxt = Context::new_dbus(BE, 0);
         let encoded = to_bytes(ctxt, &0xABBA_ABBA_ABBA_ABBA_u64).unwrap();
         assert_eq!(encoded.len(), 8);
-        assert_eq!(LE::read_u64(&encoded), 0xBAAB_BAAB_BAAB_BAAB_u64);
+        assert_eq!(LE.read_u64(&encoded), 0xBAAB_BAAB_BAAB_BAAB_u64);
         let decoded: u64 = encoded.deserialize().unwrap().0;
         assert_eq!(decoded, 0xABBA_ABBA_ABBA_ABBA);
 
         // Lie about there being bytes before
-        let ctxt = Context::<LE>::new_dbus(2);
+        let ctxt = Context::new_dbus(LE, 2);
         let encoded = to_bytes(ctxt, &0xABBA_ABBA_ABBA_ABBA_u64).unwrap();
         assert_eq!(encoded.len(), 14);
         let decoded: u64 = encoded.deserialize().unwrap().0;
         assert_eq!(decoded, 0xABBA_ABBA_ABBA_ABBA_u64);
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
 
         // As Value
         let v: Value<'_> = 0xFEFE_u64.into();
@@ -1343,19 +1343,19 @@ mod tests {
         let ctxts_n_expected_lens = [
             // Unit variants are encoded as u32 and that has the same encoding in both formats.
             [
-                (Context::<BE>::new_dbus(0), 4usize),
-                (Context::<BE>::new_dbus(1), 7),
-                (Context::<BE>::new_dbus(2), 6),
-                (Context::<BE>::new_dbus(3), 5),
-                (Context::<BE>::new_dbus(4), 4),
+                (Context::new_dbus(BE, 0), 4usize),
+                (Context::new_dbus(BE, 1), 7),
+                (Context::new_dbus(BE, 2), 6),
+                (Context::new_dbus(BE, 3), 5),
+                (Context::new_dbus(BE, 4), 4),
             ],
             #[cfg(feature = "gvariant")]
             [
-                (Context::<BE>::new_gvariant(0), 4usize),
-                (Context::<BE>::new_gvariant(1), 7),
-                (Context::<BE>::new_gvariant(2), 6),
-                (Context::<BE>::new_gvariant(3), 5),
-                (Context::<BE>::new_gvariant(4), 4),
+                (Context::new_gvariant(BE, 0), 4usize),
+                (Context::new_gvariant(BE, 1), 7),
+                (Context::new_gvariant(BE, 2), 6),
+                (Context::new_gvariant(BE, 3), 5),
+                (Context::new_gvariant(BE, 4), 4),
             ],
         ];
         for ctxts_n_expected_len in ctxts_n_expected_lens {
@@ -1376,19 +1376,19 @@ mod tests {
 
         let ctxts_n_expected_lens = [
             [
-                (Context::<BE>::new_dbus(0), 14usize),
-                (Context::<BE>::new_dbus(1), 21),
-                (Context::<BE>::new_dbus(2), 20),
-                (Context::<BE>::new_dbus(3), 19),
-                (Context::<BE>::new_dbus(4), 18),
+                (Context::new_dbus(BE, 0), 14usize),
+                (Context::new_dbus(BE, 1), 21),
+                (Context::new_dbus(BE, 2), 20),
+                (Context::new_dbus(BE, 3), 19),
+                (Context::new_dbus(BE, 4), 18),
             ],
             #[cfg(feature = "gvariant")]
             [
-                (Context::<BE>::new_gvariant(0), 10usize),
-                (Context::<BE>::new_gvariant(1), 13),
-                (Context::<BE>::new_gvariant(2), 12),
-                (Context::<BE>::new_gvariant(3), 11),
-                (Context::<BE>::new_gvariant(4), 10),
+                (Context::new_gvariant(BE, 0), 10usize),
+                (Context::new_gvariant(BE, 1), 13),
+                (Context::new_gvariant(BE, 2), 12),
+                (Context::new_gvariant(BE, 3), 11),
+                (Context::new_gvariant(BE, 4), 10),
             ],
         ];
         for ctxts_n_expected_len in ctxts_n_expected_lens {
@@ -1409,19 +1409,19 @@ mod tests {
 
         let ctxts_n_expected_lens = [
             [
-                (Context::<BE>::new_dbus(0), 16usize),
-                (Context::<BE>::new_dbus(1), 23),
-                (Context::<BE>::new_dbus(2), 22),
-                (Context::<BE>::new_dbus(3), 21),
-                (Context::<BE>::new_dbus(4), 20),
+                (Context::new_dbus(BE, 0), 16usize),
+                (Context::new_dbus(BE, 1), 23),
+                (Context::new_dbus(BE, 2), 22),
+                (Context::new_dbus(BE, 3), 21),
+                (Context::new_dbus(BE, 4), 20),
             ],
             #[cfg(feature = "gvariant")]
             [
-                (Context::<BE>::new_gvariant(0), 12usize),
-                (Context::<BE>::new_gvariant(1), 15),
-                (Context::<BE>::new_gvariant(2), 14),
-                (Context::<BE>::new_gvariant(3), 13),
-                (Context::<BE>::new_gvariant(4), 12),
+                (Context::new_gvariant(BE, 0), 12usize),
+                (Context::new_gvariant(BE, 1), 15),
+                (Context::new_gvariant(BE, 2), 14),
+                (Context::new_gvariant(BE, 3), 13),
+                (Context::new_gvariant(BE, 4), 12),
             ],
         ];
         // TODO: Provide convenience API to create complex signatures
@@ -1461,7 +1461,7 @@ mod tests {
             field2: 0xFF_FF_FF_FF_FF_FF,
             field3: "hello",
         };
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
         let encoded = to_bytes(ctxt, &s).unwrap();
         assert_eq!(encoded.len(), 26);
         let decoded: Struct<'_> = encoded.deserialize().unwrap().0;
@@ -1574,7 +1574,7 @@ mod tests {
 
     #[test]
     fn serialized_size() {
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
         let l = crate::serialized_size(ctxt, &()).unwrap();
         assert_eq!(*l, 0);
 
@@ -1600,7 +1600,7 @@ mod tests {
         use serde::{Deserialize, Serialize};
         use serde_bytes::*;
 
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
         let ay = Bytes::new(&[77u8; 1_000_000]);
         let encoded = to_bytes(ctxt, &ay).unwrap();
         assert_eq!(encoded.len(), 1_000_004);
@@ -1632,7 +1632,7 @@ mod tests {
         use serde::{Deserialize, Serialize};
         use serde_bytes::*;
 
-        let ctxt = Context::<LE>::new_gvariant(0);
+        let ctxt = Context::new_gvariant(LE, 0);
         let ay = Bytes::new(&[77u8; 1_000_000]);
         let encoded = to_bytes(ctxt, &ay).unwrap();
         assert_eq!(encoded.len(), 1_000_000);
@@ -1662,9 +1662,9 @@ mod tests {
     #[cfg(any(feature = "gvariant", feature = "option-as-array"))]
     fn option_value() {
         #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
-        let ctxt = Context::<NativeEndian>::new_gvariant(0);
+        let ctxt = Context::new_gvariant(NATIVE_ENDIAN, 0);
         #[cfg(feature = "option-as-array")]
-        let ctxt = Context::<NativeEndian>::new_dbus(0);
+        let ctxt = Context::new_dbus(NATIVE_ENDIAN, 0);
 
         // First a Some fixed-sized value
         let mn = Some(16i16);
@@ -1912,7 +1912,7 @@ mod tests {
         let foo = Foo { hmap };
         assert_eq!(Foo::signature(), "(a{ss})");
 
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
         let encoded = to_bytes(ctxt, &(&foo, 1)).unwrap();
         let f: Foo = encoded.deserialize().unwrap().0;
         assert_eq!(f, foo);
@@ -1921,7 +1921,7 @@ mod tests {
     #[test]
     fn issue_59() {
         // Ensure we don't panic on deserializing tuple of smaller than expected length.
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
         let encoded = to_bytes(ctxt, &("hello",)).unwrap();
         let result: Result<((&str, &str), _)> = encoded.deserialize();
         assert!(result.is_err());
@@ -1939,7 +1939,7 @@ mod tests {
 
         let element = ZVStruct(dict);
 
-        let ctxt = Context::<LE>::new_gvariant(0);
+        let ctxt = Context::new_gvariant(LE, 0);
         let signature = ZVStruct::signature();
 
         let encoded = to_bytes_for_signature(ctxt, &signature, &element).unwrap();
@@ -1948,7 +1948,7 @@ mod tests {
 
     #[test]
     fn ip_addr() {
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
 
         // First the bare specific types.
         let localhost_v4 = Ipv4Addr::new(127, 0, 0, 1);
@@ -1986,7 +1986,7 @@ mod tests {
         struct Metadata<'a>(u64, Vec<u8>, #[serde(borrow)] HashMap<&'a str, Value<'a>>);
 
         let encoded = std::fs::read("../test-data/flatpak-summary.dump").unwrap();
-        let ctxt = Context::<LE>::new_gvariant(0);
+        let ctxt = Context::new_gvariant(LE, 0);
         let encoded = Data::new(encoded, ctxt);
         let _: Summary<'_> = encoded.deserialize().unwrap().0;
         // If we're able to deserialize all the data successfully, don't bother checking the summary
@@ -1998,35 +1998,35 @@ mod tests {
     fn time() {
         // time::Date
         let date = time::Date::from_calendar_date(2011, time::Month::June, 21).unwrap();
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
         let encoded = to_bytes(ctxt, &date).unwrap();
         let decoded: time::Date = encoded.deserialize().unwrap().0;
         assert_eq!(date, decoded);
 
         // time::Duration
         let duration = time::Duration::new(42, 123456789);
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
         let encoded = to_bytes(ctxt, &duration).unwrap();
         let decoded: time::Duration = encoded.deserialize().unwrap().0;
         assert_eq!(duration, decoded);
 
         // time::OffsetDateTime
         let offset = time::OffsetDateTime::now_utc();
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
         let encoded = to_bytes(ctxt, &offset).unwrap();
         let decoded: time::OffsetDateTime = encoded.deserialize().unwrap().0;
         assert_eq!(offset, decoded);
 
         // time::Time
         let time = time::Time::from_hms(23, 42, 59).unwrap();
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
         let encoded = to_bytes(ctxt, &time).unwrap();
         let decoded: time::Time = encoded.deserialize().unwrap().0;
         assert_eq!(time, decoded);
 
         // time::PrimitiveDateTime
         let date = time::PrimitiveDateTime::new(date, time);
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
         let encoded = to_bytes(ctxt, &date).unwrap();
         let decoded: time::PrimitiveDateTime = encoded.deserialize().unwrap().0;
         assert_eq!(date, decoded);
@@ -2034,7 +2034,7 @@ mod tests {
 
     #[test]
     fn recursion_limits() {
-        let ctxt = Context::<LE>::new_dbus(0);
+        let ctxt = Context::new_dbus(LE, 0);
         // Total container depth exceeds limit (64)
         let mut value = Value::from(0u8);
         for _ in 0..64 {

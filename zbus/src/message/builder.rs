@@ -26,7 +26,7 @@ type BuildGenericResult = ();
 
 macro_rules! dbus_context {
     ($n_bytes_before: expr) => {
-        Context::<byteorder::NativeEndian>::new_dbus($n_bytes_before)
+        Context::new_dbus(endi::NATIVE_ENDIAN, $n_bytes_before)
     };
 }
 
@@ -269,7 +269,7 @@ impl<'a> Builder<'a> {
     fn build_generic<WriteFunc>(
         self,
         mut signature: Signature<'_>,
-        body_size: serialized::Size<byteorder::NativeEndian>,
+        body_size: serialized::Size,
         write_body: WriteFunc,
     ) -> Result<Message>
     where
