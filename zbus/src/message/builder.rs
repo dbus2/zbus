@@ -13,7 +13,7 @@ use crate::{
     message::{Field, FieldCode, Fields, Flags, Header, Message, PrimaryHeader, Sequence, Type},
     utils::padding_for_8_bytes,
     zvariant::{serialized::Context, DynamicType, ObjectPath, Signature},
-    Error, Result,
+    EndianSig, Error, Result,
 };
 
 use crate::message::{fields::QuickFields, header::MAX_MESSAGE_SIZE};
@@ -25,8 +25,8 @@ type BuildGenericResult = Vec<OwnedFd>;
 type BuildGenericResult = ();
 
 macro_rules! dbus_context {
-    ($n_bytes_before: expr) => {
-        Context::new_dbus(endi::NATIVE_ENDIAN, $n_bytes_before)
+    ($self:ident, $n_bytes_before: expr) => {
+        Context::new_dbus($self.header.primary().endian_sig().into(), $n_bytes_before)
     };
 }
 
@@ -187,6 +187,16 @@ impl<'a> Builder<'a> {
         }
     }
 
+    /// Set the endianness of the message.
+    ///
+    /// The default endianness is native.
+    pub fn endian(mut self, endian: endi::Endian) -> Self {
+        let sig = EndianSig::from(endian);
+        self.header.primary_mut().set_endian_sig(sig);
+
+        self
+    }
+
     /// Build the [`Message`] with the given body.
     ///
     /// You may pass `()` as the body if the message has no body.
@@ -201,7 +211,7 @@ impl<'a> Builder<'a> {
     where
         B: serde::ser::Serialize + DynamicType,
     {
-        let ctxt = dbus_context!(0);
+        let ctxt = dbus_context!(self, 0);
 
         // Note: this iterates the body twice, but we prefer efficient handling of large messages
         // to efficient handling of ones that are complex to serialize.
@@ -244,7 +254,7 @@ impl<'a> Builder<'a> {
         S::Error: Into<Error>,
     {
         let signature: Signature<'b> = signature.try_into().map_err(Into::into)?;
-        let body_size = serialized::Size::new(body_bytes.len(), dbus_context!(0));
+        let body_size = serialized::Size::new(body_bytes.len(), dbus_context!(self, 0));
         #[cfg(unix)]
         let body_size = {
             let num_fds = fds.len().try_into().map_err(|_| Error::ExcessData)?;
@@ -275,7 +285,7 @@ impl<'a> Builder<'a> {
     where
         WriteFunc: FnOnce(&mut Cursor<&mut Vec<u8>>) -> Result<BuildGenericResult>,
     {
-        let ctxt = dbus_context!(0);
+        let ctxt = dbus_context!(self, 0);
         let mut header = self.header;
 
         if !signature.is_empty() {
