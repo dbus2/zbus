@@ -123,6 +123,36 @@ trait MyIface {
 
     #[dbus_proxy(allow_interactive_auth)]
     fn test_interactive_auth(&self) -> zbus::Result<()>;
+
+    #[dbus_proxy(property)]
+    fn emits_changed_default(&self) -> zbus::Result<u32>;
+
+    #[dbus_proxy(property)]
+    fn set_emits_changed_default(&self, count: u32) -> zbus::Result<()>;
+
+    #[dbus_proxy(property(emits_changed_signal = "true"))]
+    fn emits_changed_true(&self) -> zbus::Result<u32>;
+
+    #[dbus_proxy(property)]
+    fn set_emits_changed_true(&self, count: u32) -> zbus::Result<()>;
+
+    #[dbus_proxy(property(emits_changed_signal = "invalidates"))]
+    fn emits_changed_invalidates(&self) -> zbus::Result<u32>;
+
+    #[dbus_proxy(property)]
+    fn set_emits_changed_invalidates(&self, count: u32) -> zbus::Result<()>;
+
+    #[dbus_proxy(property(emits_changed_signal = "const"))]
+    fn emits_changed_const(&self) -> zbus::Result<u32>;
+
+    #[dbus_proxy(property)]
+    fn set_emits_changed_const(&self, count: u32) -> zbus::Result<()>;
+
+    #[dbus_proxy(property(emits_changed_signal = "false"))]
+    fn emits_changed_false(&self) -> zbus::Result<u32>;
+
+    #[dbus_proxy(property)]
+    fn set_emits_changed_false(&self, count: u32) -> zbus::Result<()>;
 }
 
 #[derive(Debug, Clone)]
@@ -136,11 +166,24 @@ enum NextAction {
 struct MyIfaceImpl {
     next_tx: Sender<NextAction>,
     count: u32,
+    emits_changed_default: u32,
+    emits_changed_true: u32,
+    emits_changed_invalidates: u32,
+    emits_changed_const: u32,
+    emits_changed_false: u32,
 }
 
 impl MyIfaceImpl {
     fn new(next_tx: Sender<NextAction>) -> Self {
-        Self { next_tx, count: 0 }
+        Self {
+            next_tx,
+            count: 0,
+            emits_changed_default: 0,
+            emits_changed_true: 0,
+            emits_changed_invalidates: 0,
+            emits_changed_const: 0,
+            emits_changed_false: 0,
+        }
     }
 }
 
@@ -428,6 +471,81 @@ impl MyIfaceImpl {
 
     #[dbus_interface(signal)]
     async fn alert_count(ctxt: &SignalContext<'_>, val: u32) -> zbus::Result<()>;
+
+    #[instrument]
+    #[dbus_interface(property)]
+    fn emits_changed_default(&self) -> u32 {
+        debug!("`EmitsChangedDefault` getter called.");
+        self.emits_changed_default
+    }
+
+    #[instrument]
+    #[dbus_interface(property)]
+    fn set_emits_changed_default(&mut self, val: u32) -> zbus::fdo::Result<()> {
+        debug!("`EmitsChangedDefault` setter called.");
+        self.emits_changed_default = val;
+        Ok(())
+    }
+
+    #[instrument]
+    #[dbus_interface(property(emits_changed_signal = "true"))]
+    fn emits_changed_true(&self) -> u32 {
+        debug!("`EmitsChangedTrue` getter called.");
+        self.emits_changed_true
+    }
+
+    #[instrument]
+    #[dbus_interface(property)]
+    fn set_emits_changed_true(&mut self, val: u32) -> zbus::fdo::Result<()> {
+        debug!("`EmitsChangedTrue` setter called.");
+        self.emits_changed_true = val;
+        Ok(())
+    }
+
+    #[instrument]
+    #[dbus_interface(property(emits_changed_signal = "invalidates"))]
+    fn emits_changed_invalidates(&self) -> u32 {
+        debug!("`EmitsChangedInvalidates` getter called.");
+        self.emits_changed_invalidates
+    }
+
+    #[instrument]
+    #[dbus_interface(property)]
+    fn set_emits_changed_invalidates(&mut self, val: u32) -> zbus::fdo::Result<()> {
+        debug!("`EmitsChangedInvalidates` setter called.");
+        self.emits_changed_invalidates = val;
+        Ok(())
+    }
+
+    #[instrument]
+    #[dbus_interface(property(emits_changed_signal = "const"))]
+    fn emits_changed_const(&self) -> u32 {
+        debug!("`EmitsChangedConst` getter called.");
+        self.emits_changed_const
+    }
+
+    #[instrument]
+    #[dbus_interface(property)]
+    fn set_emits_changed_const(&mut self, val: u32) -> zbus::fdo::Result<()> {
+        debug!("`EmitsChangedConst` setter called.");
+        self.emits_changed_const = val;
+        Ok(())
+    }
+
+    #[instrument]
+    #[dbus_interface(property(emits_changed_signal = "false"))]
+    fn emits_changed_false(&self) -> u32 {
+        debug!("`EmitsChangedFalse` getter called.");
+        self.emits_changed_false
+    }
+
+    #[instrument]
+    #[dbus_interface(property)]
+    fn set_emits_changed_false(&mut self, val: u32) -> zbus::fdo::Result<()> {
+        debug!("`EmitsChangedFalse` setter called.");
+        self.emits_changed_false = val;
+        Ok(())
+    }
 }
 
 fn check_hash_map(map: HashMap<String, String>) {
@@ -699,6 +817,95 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
     created_inside_proxy.ping().await?;
     proxy.destroy_obj("CreatedInside").await?;
 
+    // Test that interfaces emit signals when properties change
+    // according to their emits_changed_signal flags.
+    let mut props_changed = props_proxy.receive_properties_changed().await?;
+    let expected_property_value = 4;
+
+    proxy
+        .set_emits_changed_default(expected_property_value)
+        .await?;
+    let changed = props_changed.next().await.unwrap();
+    let expected_property_key = "EmitsChangedDefault";
+    let args = changed.args()?;
+    assert_eq!(
+        args.invalidated_properties(),
+        &vec![expected_property_key.to_string()]
+    );
+
+    let changed_prop_key = *args.changed_properties().keys().next().unwrap();
+    assert_eq!(changed_prop_key, expected_property_key);
+
+    let changed_value = &args.changed_properties()[expected_property_key];
+    assert_eq!(
+        <&Value as TryInto<u32>>::try_into(changed_value).unwrap(),
+        expected_property_value
+    );
+
+    proxy
+        .set_emits_changed_true(expected_property_value)
+        .await?;
+    let changed = props_changed.next().await.unwrap();
+    let expected_property_key = "EmitsChangedTrue";
+    let args = changed.args()?;
+    assert_eq!(
+        args.invalidated_properties(),
+        &vec![expected_property_key.to_string()]
+    );
+
+    let changed_prop_key = *args.changed_properties().keys().next().unwrap();
+    assert_eq!(changed_prop_key, expected_property_key);
+
+    let changed_value = &args.changed_properties()[expected_property_key];
+    assert_eq!(
+        <&Value as TryInto<u32>>::try_into(changed_value).unwrap(),
+        expected_property_value
+    );
+
+    proxy
+        .set_emits_changed_invalidates(expected_property_value)
+        .await?;
+    let changed = props_changed.next().await.unwrap();
+    let expected_property_key = "EmitsChangedInvalidates";
+    let args = changed.args()?;
+    assert_eq!(
+        args.invalidated_properties(),
+        &vec![expected_property_key.to_string()]
+    );
+    assert_eq!(args.changed_properties().keys().len(), 0);
+
+    // First set a property for which we don't expect a signal
+    // then set a property for which we do (and we checked above
+    // that we receive it. The next item in the iter should correspond
+    // to the second property we set.
+    proxy
+        .set_emits_changed_const(expected_property_value)
+        .await?;
+    proxy
+        .set_emits_changed_true(expected_property_value)
+        .await?;
+    let changed = props_changed.next().await.unwrap();
+    let unexpected_property_key = "EmitsChangedConst";
+    let args = changed.args()?;
+    assert_ne!(
+        args.invalidated_properties(),
+        &vec![unexpected_property_key.to_string()]
+    );
+
+    proxy
+        .set_emits_changed_false(expected_property_value)
+        .await?;
+    proxy
+        .set_emits_changed_true(expected_property_value)
+        .await?;
+    let changed = props_changed.next().await.unwrap();
+    let unexpected_property_key = "EmitsChangedFalse";
+    let args = changed.args()?;
+    assert_ne!(
+        args.invalidated_properties(),
+        &vec![unexpected_property_key.to_string()]
+    );
+
     proxy.quit().await?;
     Ok(val)
 }
@@ -768,6 +975,8 @@ async fn iface_and_proxy_(p2p: bool) {
             .name("org.freedesktop.MyService.foo")
             .unwrap()
             .name("org.freedesktop.MyService.bar")
+            .unwrap()
+            .name("org.freedesktop.MyEmitsChangedSignalIface")
             .unwrap();
         let client_conn_builder = connection::Builder::session().unwrap();
 
