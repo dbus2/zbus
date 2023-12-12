@@ -133,7 +133,8 @@ impl Message {
         bytes: serialized::Data<'static, 'static>,
         recv_seq: u64,
     ) -> Result<Self> {
-        if EndianSig::try_from(bytes[0])? != NATIVE_ENDIAN_SIG {
+        let endian = endi::Endian::from(EndianSig::try_from(bytes[0])?);
+        if endian != bytes.context().endian() {
             return Err(Error::IncorrectEndian);
         }
 
