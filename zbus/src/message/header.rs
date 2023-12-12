@@ -135,12 +135,12 @@ impl PrimaryHeader {
         Ok((primary_header, fields_len))
     }
 
-    /// D-Bus code for bytorder encoding of the message.
+    /// D-Bus code for endian encoding of the message.
     pub fn endian_sig(&self) -> EndianSig {
         self.endian_sig
     }
 
-    /// Set the D-Bus code for bytorder encoding of the message.
+    /// Set the D-Bus code for endian encoding of the message.
     pub fn set_endian_sig(&mut self, sig: EndianSig) {
         self.endian_sig = sig;
     }
