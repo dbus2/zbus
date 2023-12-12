@@ -138,7 +138,7 @@ impl Message {
             return Err(Error::IncorrectEndian);
         }
 
-        let (primary_header, fields_len) = PrimaryHeader::read(&bytes)?;
+        let (primary_header, fields_len) = PrimaryHeader::read_from_data(&bytes)?;
         let (header, _) = bytes.deserialize()?;
 
         let header_len = MIN_MESSAGE_SIZE + fields_len as usize;

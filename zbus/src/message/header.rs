@@ -149,6 +149,13 @@ impl PrimaryHeader {
         let endian = Endian::from(EndianSig::try_from(buf[0])?);
         let ctx = Context::new_dbus(endian, 0);
         let data = serialized::Data::new(buf, ctx);
+
+        Self::read_from_data(&data)
+    }
+
+    pub(crate) fn read_from_data(
+        data: &serialized::Data<'_, '_>,
+    ) -> Result<(PrimaryHeader, u32), Error> {
         let (primary_header, size) = data.deserialize()?;
         assert_eq!(size, PRIMARY_HEADER_SIZE);
         let (fields_len, _) = data.slice(PRIMARY_HEADER_SIZE..).deserialize()?;
