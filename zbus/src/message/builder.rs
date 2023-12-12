@@ -179,6 +179,7 @@ impl<'a> Builder<'a> {
     fn reply_to(mut self, reply_to: &Header<'_>) -> Result<Self> {
         let serial = reply_to.primary().serial_num();
         self.header.fields_mut().replace(Field::ReplySerial(serial));
+        self = self.endian(reply_to.primary().endian_sig().into());
 
         if let Some(sender) = reply_to.sender() {
             self.destination(sender.to_owned())
