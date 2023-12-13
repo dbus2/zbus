@@ -10,9 +10,8 @@ macros for your convenience so you do not need to use this crate directly.
 ## Example code
 
 ```rust
-use zvariant::{serialized::Context, to_bytes, Type};
+use zvariant::{serialized::Context, to_bytes, Type, LE};
 use serde::{Deserialize, Serialize};
-use endi::LE;
 
 #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
 struct Struct<'s> {

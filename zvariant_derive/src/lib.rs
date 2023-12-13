@@ -25,9 +25,8 @@ mod value;
 /// For structs it works just like serde's [`Serialize`] and [`Deserialize`] macros:
 ///
 /// ```
-/// use zvariant::{serialized::Context, to_bytes, Type};
+/// use zvariant::{serialized::Context, to_bytes, Type, LE};
 /// use serde::{Deserialize, Serialize};
-/// use endi::LE;
 ///
 /// #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
 /// struct Struct<'s> {
@@ -53,10 +52,9 @@ mod value;
 /// `repr` attribute (like in the example below), you'll also need [serde_repr] crate.
 ///
 /// ```
-/// use zvariant::{serialized::Context, to_bytes, Type};
+/// use zvariant::{serialized::Context, to_bytes, Type, LE};
 /// use serde::{Deserialize, Serialize};
 /// use serde_repr::{Deserialize_repr, Serialize_repr};
-/// use endi::LE;
 ///
 /// #[repr(u8)]
 /// #[derive(Deserialize_repr, Serialize_repr, Type, Debug, PartialEq)]
@@ -111,8 +109,7 @@ mod value;
 /// an alias for `a{sv}`. Here is an example:
 ///
 /// ```
-/// use zvariant::{SerializeDict, DeserializeDict, serialized::Context, to_bytes, Type};
-/// use endi::LE;
+/// use zvariant::{SerializeDict, DeserializeDict, serialized::Context, to_bytes, Type, LE};
 ///
 /// #[derive(DeserializeDict, SerializeDict, Type, PartialEq, Debug)]
 /// // `#[zvariant(signature = "a{sv}")]` would be the same.
@@ -138,9 +135,8 @@ mod value;
 /// Another common use for custom signatures is (de)serialization of unit enums as strings:
 ///
 /// ```
-/// use zvariant::{serialized::Context, to_bytes, Type};
+/// use zvariant::{serialized::Context, to_bytes, Type, LE};
 /// use serde::{Deserialize, Serialize};
-/// use endi::LE;
 ///
 /// #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
 /// #[zvariant(signature = "s")]

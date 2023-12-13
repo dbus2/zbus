@@ -1,10 +1,9 @@
 #![allow(dead_code)]
 
-use endi::LE;
 use std::collections::HashMap;
 use zvariant::{
     serialized::{Context, Format},
-    DeserializeDict, OwnedValue, SerializeDict, Type, Value,
+    DeserializeDict, OwnedValue, SerializeDict, Type, Value, LE,
 };
 
 #[test]
