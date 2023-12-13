@@ -17,7 +17,7 @@ pub struct Size {
 }
 
 impl Size {
-    /// Create a new `EncodedSize` instance.
+    /// Create a new `Size` instance.
     pub fn new(size: usize, context: Context) -> Self {
         Self {
             size,

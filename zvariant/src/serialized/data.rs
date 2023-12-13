@@ -36,7 +36,7 @@ pub struct Inner<'bytes, 'fds> {
 }
 
 impl<'bytes, 'fds> Data<'bytes, 'fds> {
-    /// Create a new `EncodedBytes` instance containing borrowed file descriptors.
+    /// Create a new `Data` instance containing borrowed file descriptors.
     ///
     /// This method is only available on Unix platforms.
     #[cfg(unix)]
@@ -334,7 +334,7 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
 }
 
 impl<'bytes> Data<'bytes, 'static> {
-    /// Create a new `EncodedBytes` instance.
+    /// Create a new `Data` instance.
     pub fn new<T>(bytes: T, context: Context) -> Self
     where
         T: Into<Cow<'bytes, [u8]>>,
