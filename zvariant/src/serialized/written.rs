@@ -19,7 +19,7 @@ pub struct Written {
 }
 
 impl Written {
-    /// Create a new `EncodedSize` instance.
+    /// Create a new `Written` instance.
     pub fn new(size: usize, context: Context) -> Self {
         Self {
             size,

@@ -408,8 +408,8 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                     // * For argument type with lifetimes, we convert from `Value` (so
                     //   `TryFrom<Value<'_>>` is required).
                     //
-                    // * For all other arg types, we convert the passed value to `OwnedValue` first and
-                    //   then pass it as `Value` (so `TryFrom<OwnedValue>` is required).
+                    // * For all other arg types, we convert the passed value to `OwnedValue` first
+                    //   and then pass it as `Value` (so `TryFrom<OwnedValue>` is required).
                     let value_to_owned = quote! {
                         match ::zbus::zvariant::Value::try_to_owned(value) {
                             ::std::result::Result::Ok(val) => ::zbus::zvariant::Value::from(val),

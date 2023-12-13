@@ -90,7 +90,8 @@ jobs:
       RUST_LOG: trace
       ErrorActionPreference: Stop
       WarningPreference: Stop
-      PKG_CONFIG_PATH: C:/lib/pkgconfig
+      PKG_CONFIG: C:\bin\pkg-config.exe
+      PKG_CONFIG_PATH: C:\lib\pkgconfig
       DBUS_SESSION_BUS_ADDRESS: tcp:host=127.0.0.1,port=9876
       TRYBUILD: overwrite # ignore ui tests
     steps:
@@ -107,6 +108,7 @@ jobs:
             c:/bin/xmlwf.exe
             c:/bin/*dbus*
             c:/lib/*dbus*
+            c:/bin/*pkg-config*
             c:/var/lib/*dbus*
             c:/lib/*glib*
             c:/lib/*gio*
@@ -133,17 +135,20 @@ jobs:
             c:/bin/*intl*
           key: ${{ runner.os }}-cache
 
-      - name: Install pkg-config
-        shell: pwsh
-        run: |
-          # This is needed for some reason: https://github.com/dbus2/zbus/actions/runs/4917893488/jobs/8783555606
-          choco feature enable -n allowEmptyChecksums
-          choco install -y pkgconfiglite
-
-      - name: Install Meson
+      - name: Install Meson and Ninja
         if: steps.cache-deps.outputs.cache-hit != 'true'
         shell: pwsh
-        run: pip3 install meson
+        run: pip3 install meson ninja
+
+      - name: Install pkg-config
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          git clone --branch meson-glib-subproject --depth 1 https://gitlab.freedesktop.org/tpm/pkg-config.git
+          cd pkg-config
+          meson build -Dprefix=C:\ --buildtype release
+          ninja -C build
+          ninja -C build install
 
       - name: Setup MSVC Environment
         if: steps.cache-deps.outputs.cache-hit != 'true'
