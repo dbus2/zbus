@@ -1,10 +1,9 @@
-use endi::LE;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
-use zvariant::{serialized::Context, to_bytes_for_signature, Type, Value};
+use zvariant::{serialized::Context, to_bytes_for_signature, Type, Value, LE};
 
 fn fixed_size_array(c: &mut Criterion) {
     let ay = vec![77u8; 100_000];

@@ -47,8 +47,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use zvariant::{serialized::Context, Optional, to_bytes};
-/// use endi::LE;
+/// use zvariant::{serialized::Context, Optional, to_bytes, LE};
 ///
 /// // `Null` case.
 /// let ctxt = Context::new_dbus(LE, 0);

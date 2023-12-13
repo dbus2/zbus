@@ -1,4 +1,3 @@
-use endi::WriteBytes;
 use serde::{ser, ser::SerializeSeq, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
@@ -11,7 +10,7 @@ use crate::{
     serialized::{Context, Format},
     signature_parser::SignatureParser,
     utils::*,
-    Basic, Error, ObjectPath, Result, Signature,
+    Basic, Error, ObjectPath, Result, Signature, WriteBytes,
 };
 
 #[cfg(unix)]

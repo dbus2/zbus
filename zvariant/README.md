@@ -19,9 +19,8 @@ Serialization and deserialization is achieved through the [toplevel functions]:
 
 ```rust
 use std::collections::HashMap;
-use zvariant::{serialized::Context, to_bytes, Type};
+use zvariant::{serialized::Context, to_bytes, Type, LE};
 use serde::{Deserialize, Serialize};
-use endi::LE;
 
 // All serialization and deserialization API, needs a context.
 let ctxt = Context::new_dbus(LE, 0);

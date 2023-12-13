@@ -281,10 +281,9 @@ impl<'de> Deserialize<'de> for OwnedValue {
 
 #[cfg(test)]
 mod tests {
-    use endi::LE;
     use std::{collections::HashMap, error::Error, result::Result};
 
-    use crate::{serialized::Context, to_bytes, OwnedValue, Value};
+    use crate::{serialized::Context, to_bytes, OwnedValue, Value, LE};
 
     #[cfg(feature = "enumflags2")]
     #[test]

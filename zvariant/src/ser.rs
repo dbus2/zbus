@@ -1,4 +1,3 @@
-use endi::WriteBytes;
 use serde::Serialize;
 use std::io::{Seek, Write};
 
@@ -13,7 +12,7 @@ use crate::{
     serialized::{Context, Data, Format, Size, Written},
     signature_parser::SignatureParser,
     utils::*,
-    Basic, DynamicType, Error, Result, Signature,
+    Basic, DynamicType, Error, Result, Signature, WriteBytes,
 };
 
 struct NullWriteSeek;
@@ -39,9 +38,9 @@ impl Seek for NullWriteSeek {
 /// # Examples
 ///
 /// ```
-/// use zvariant::{serialized::Context, serialized_size};
+/// use zvariant::{serialized::Context, serialized_size, LE};
 ///
-/// let ctxt = Context::new_dbus(endi::LE, 0);
+/// let ctxt = Context::new_dbus(LE, 0);
 /// let len = serialized_size(ctxt, "hello world").unwrap();
 /// assert_eq!(*len, 16);
 ///
@@ -98,9 +97,9 @@ where
 /// # Examples
 ///
 /// ```
-/// use zvariant::{serialized::{Context, Data}, to_writer};
+/// use zvariant::{serialized::{Context, Data}, to_writer, LE};
 ///
-/// let ctxt = Context::new_dbus(endi::LE, 0);
+/// let ctxt = Context::new_dbus(LE, 0);
 /// let mut cursor = std::io::Cursor::new(vec![]);
 /// // SAFETY: No FDs are being serialized here so its completely safe.
 /// unsafe { to_writer(&mut cursor, ctxt, &42u32) }.unwrap();

@@ -1,7 +1,6 @@
-use endi::Endian;
 use static_assertions::assert_impl_all;
 
-use crate::serialized::Format;
+use crate::{serialized::Format, Endian};
 
 /// The encoding context to use with the [serialization and deserialization] API.
 ///
@@ -13,8 +12,7 @@ use crate::serialized::Format;
 /// # Examples
 ///
 /// ```
-/// use endi::Endian;
-///
+/// use zvariant::Endian;
 /// use zvariant::serialized::Context;
 /// use zvariant::to_bytes;
 ///

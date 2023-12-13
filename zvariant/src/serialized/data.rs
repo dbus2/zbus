@@ -126,10 +126,11 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
     /// # Examples
     ///
     /// ```
+    /// use zvariant::LE;
     /// use zvariant::to_bytes;
     /// use zvariant::serialized::Context;
     ///
-    /// let ctxt = Context::new_dbus(endi::Endian::Little, 0);
+    /// let ctxt = Context::new_dbus(LE, 0);
     /// let encoded = to_bytes(ctxt, "hello world").unwrap();
     /// let decoded: &str = encoded.deserialize().unwrap().0;
     /// assert_eq!(decoded, "hello world");
@@ -158,11 +159,12 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
     ///
     /// ```
     /// use serde::{Deserialize, Serialize};
+    /// use zvariant::LE;
     ///
     /// use zvariant::to_bytes_for_signature;
     /// use zvariant::serialized::Context;
     ///
-    /// let ctxt = Context::new_dbus(endi::Endian::Little, 0);
+    /// let ctxt = Context::new_dbus(LE, 0);
     /// #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
     /// enum Unit {
     ///     Variant1,

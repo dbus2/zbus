@@ -112,6 +112,9 @@ pub mod export {
     pub use serde;
 }
 
+// Re-export all of the `endi` API for ease of use.
+pub use endi::*;
+
 #[cfg(test)]
 #[allow(clippy::disallowed_names)]
 mod tests {
@@ -122,7 +125,6 @@ mod tests {
 
     #[cfg(feature = "arrayvec")]
     use arrayvec::{ArrayString, ArrayVec};
-    use endi::{BE, LE, NATIVE_ENDIAN};
     #[cfg(feature = "arrayvec")]
     use std::str::FromStr;
 
@@ -137,7 +139,8 @@ mod tests {
     use crate::{
         serialized::{Context, Format},
         Array, Basic, DeserializeDict, DeserializeValue, Dict, Error, ObjectPath, Result,
-        SerializeDict, SerializeValue, Signature, Str, Structure, Type, Value,
+        SerializeDict, SerializeValue, Signature, Str, Structure, Type, Value, BE, LE,
+        NATIVE_ENDIAN,
     };
 
     // Test through both generic and specific API (wrt byte order)
