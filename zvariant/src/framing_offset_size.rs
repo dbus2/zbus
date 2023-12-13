@@ -1,5 +1,4 @@
-use crate::{Error, Result};
-use byteorder::{ByteOrder, WriteBytesExt, LE};
+use crate::{Error, Result, WriteBytes, LE};
 
 // Used internally for GVariant encoding and decoding.
 //
@@ -39,11 +38,11 @@ impl FramingOffsetSize {
         W: std::io::Write,
     {
         match self {
-            FramingOffsetSize::U8 => writer.write_u8(offset as u8),
-            FramingOffsetSize::U16 => writer.write_u16::<LE>(offset as u16),
-            FramingOffsetSize::U32 => writer.write_u32::<LE>(offset as u32),
+            FramingOffsetSize::U8 => writer.write_u8(LE, offset as u8),
+            FramingOffsetSize::U16 => writer.write_u16(LE, offset as u16),
+            FramingOffsetSize::U32 => writer.write_u32(LE, offset as u32),
             #[cfg(not(target_pointer_width = "32"))]
-            FramingOffsetSize::U64 => writer.write_u64::<LE>(offset as u64),
+            FramingOffsetSize::U64 => writer.write_u64(LE, offset as u64),
         }
         .map_err(|e| Error::InputOutput(e.into()))
     }
@@ -56,10 +55,10 @@ impl FramingOffsetSize {
         let end = buffer.len();
         match self {
             FramingOffsetSize::U8 => buffer[end - 1] as usize,
-            FramingOffsetSize::U16 => LE::read_u16(&buffer[end - 2..end]) as usize,
-            FramingOffsetSize::U32 => LE::read_u32(&buffer[end - 4..end]) as usize,
+            FramingOffsetSize::U16 => LE.read_u16(&buffer[end - 2..end]) as usize,
+            FramingOffsetSize::U32 => LE.read_u32(&buffer[end - 4..end]) as usize,
             #[cfg(not(target_pointer_width = "32"))]
-            FramingOffsetSize::U64 => LE::read_u64(&buffer[end - 8..end]) as usize,
+            FramingOffsetSize::U64 => LE.read_u64(&buffer[end - 8..end]) as usize,
         }
     }
 

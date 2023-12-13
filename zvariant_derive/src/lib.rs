@@ -25,9 +25,8 @@ mod value;
 /// For structs it works just like serde's [`Serialize`] and [`Deserialize`] macros:
 ///
 /// ```
-/// use zvariant::{serialized::Context, to_bytes, Type};
+/// use zvariant::{serialized::Context, to_bytes, Type, LE};
 /// use serde::{Deserialize, Serialize};
-/// use byteorder::LE;
 ///
 /// #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
 /// struct Struct<'s> {
@@ -42,7 +41,7 @@ mod value;
 ///     field2: i64::max_value(),
 ///     field3: "hello",
 /// };
-/// let ctxt = Context::<LE>::new_dbus(0);
+/// let ctxt = Context::new_dbus(LE, 0);
 /// let encoded = to_bytes(ctxt, &s).unwrap();
 /// let decoded: Struct = encoded.deserialize().unwrap().0;
 /// assert_eq!(decoded, s);
@@ -53,10 +52,9 @@ mod value;
 /// `repr` attribute (like in the example below), you'll also need [serde_repr] crate.
 ///
 /// ```
-/// use zvariant::{serialized::Context, to_bytes, Type};
+/// use zvariant::{serialized::Context, to_bytes, Type, LE};
 /// use serde::{Deserialize, Serialize};
 /// use serde_repr::{Deserialize_repr, Serialize_repr};
-/// use byteorder::LE;
 ///
 /// #[repr(u8)]
 /// #[derive(Deserialize_repr, Serialize_repr, Type, Debug, PartialEq)]
@@ -65,7 +63,7 @@ mod value;
 ///     Variant2,
 /// }
 /// assert_eq!(Enum::signature(), u8::signature());
-/// let ctxt = Context::<LE>::new_dbus(0);
+/// let ctxt = Context::new_dbus(LE, 0);
 /// let encoded = to_bytes(ctxt, &Enum::Variant2).unwrap();
 /// let decoded: Enum = encoded.deserialize().unwrap().0;
 /// assert_eq!(decoded, Enum::Variant2);
@@ -111,8 +109,7 @@ mod value;
 /// an alias for `a{sv}`. Here is an example:
 ///
 /// ```
-/// use zvariant::{SerializeDict, DeserializeDict, serialized::Context, to_bytes, Type};
-/// use byteorder::LE;
+/// use zvariant::{SerializeDict, DeserializeDict, serialized::Context, to_bytes, Type, LE};
 ///
 /// #[derive(DeserializeDict, SerializeDict, Type, PartialEq, Debug)]
 /// // `#[zvariant(signature = "a{sv}")]` would be the same.
@@ -129,7 +126,7 @@ mod value;
 ///     field2: i64::max_value(),
 ///     field3: "hello".to_string(),
 /// };
-/// let ctxt = Context::<LE>::new_dbus(0);
+/// let ctxt = Context::new_dbus(LE, 0);
 /// let encoded = to_bytes(ctxt, &s).unwrap();
 /// let decoded: Struct = encoded.deserialize().unwrap().0;
 /// assert_eq!(decoded, s);
@@ -138,9 +135,8 @@ mod value;
 /// Another common use for custom signatures is (de)serialization of unit enums as strings:
 ///
 /// ```
-/// use zvariant::{serialized::Context, to_bytes, Type};
+/// use zvariant::{serialized::Context, to_bytes, Type, LE};
 /// use serde::{Deserialize, Serialize};
-/// use byteorder::LE;
 ///
 /// #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
 /// #[zvariant(signature = "s")]
@@ -151,7 +147,7 @@ mod value;
 /// }
 ///
 /// assert_eq!(StrEnum::signature(), "s");
-/// let ctxt = Context::<LE>::new_dbus(0);
+/// let ctxt = Context::new_dbus(LE, 0);
 /// let encoded = to_bytes(ctxt, &StrEnum::Variant2).unwrap();
 /// assert_eq!(encoded.len(), 13);
 /// let decoded: StrEnum = encoded.deserialize().unwrap().0;

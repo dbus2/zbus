@@ -19,14 +19,13 @@ Serialization and deserialization is achieved through the [toplevel functions]:
 
 ```rust
 use std::collections::HashMap;
-use zvariant::{serialized::Context, to_bytes, Type};
+use zvariant::{serialized::Context, to_bytes, Type, LE};
 use serde::{Deserialize, Serialize};
-use byteorder::LE;
 
 // All serialization and deserialization API, needs a context.
-let ctxt = Context::<LE>::new_dbus(0);
+let ctxt = Context::new_dbus(LE, 0);
 // You can also use the more efficient GVariant format:
-// let ctxt = Context::<LE>::new_gvariant(0);
+// let ctxt = Context::new_gvariant(LE, 0);
 
 // i16
 let encoded = to_bytes(ctxt, &42i16).unwrap();
@@ -73,7 +72,7 @@ let s = Struct {
     field2: i64::max_value(),
     field3: "hello",
 };
-let ctxt = Context::<LE>::new_dbus(0);
+let ctxt = Context::new_dbus(LE, 0);
 let encoded = to_bytes(ctxt, &s).unwrap();
 let decoded: Struct = encoded.deserialize().unwrap().0;
 assert_eq!(decoded, s);

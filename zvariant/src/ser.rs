@@ -1,9 +1,5 @@
-use byteorder::WriteBytesExt;
 use serde::Serialize;
-use std::{
-    io::{Seek, Write},
-    marker::PhantomData,
-};
+use std::io::{Seek, Write};
 
 #[cfg(unix)]
 use std::os::fd::OwnedFd;
@@ -16,7 +12,7 @@ use crate::{
     serialized::{Context, Data, Format, Size, Written},
     signature_parser::SignatureParser,
     utils::*,
-    Basic, DynamicType, Error, Result, Signature,
+    Basic, DynamicType, Error, Result, Signature, WriteBytes,
 };
 
 struct NullWriteSeek;
@@ -42,18 +38,17 @@ impl Seek for NullWriteSeek {
 /// # Examples
 ///
 /// ```
-/// use zvariant::{serialized::Context, serialized_size};
+/// use zvariant::{serialized::Context, serialized_size, LE};
 ///
-/// let ctxt = Context::<byteorder::LE>::new_dbus(0);
+/// let ctxt = Context::new_dbus(LE, 0);
 /// let len = serialized_size(ctxt, "hello world").unwrap();
 /// assert_eq!(*len, 16);
 ///
 /// let len = serialized_size(ctxt, &("hello world!", 42_u64)).unwrap();
 /// assert_eq!(*len, 32);
 /// ```
-pub fn serialized_size<B, T: ?Sized>(ctxt: Context<B>, value: &T) -> Result<Size<B>>
+pub fn serialized_size<T: ?Sized>(ctxt: Context, value: &T) -> Result<Size>
 where
-    B: byteorder::ByteOrder,
     T: Serialize + DynamicType,
 {
     let mut null = NullWriteSeek;
@@ -63,7 +58,7 @@ where
 
     let len = match ctxt.format() {
         Format::DBus => {
-            let mut ser = DBusSerializer::<B, NullWriteSeek>::new(
+            let mut ser = DBusSerializer::<NullWriteSeek>::new(
                 signature,
                 &mut null,
                 #[cfg(unix)]
@@ -75,7 +70,7 @@ where
         }
         #[cfg(feature = "gvariant")]
         Format::GVariant => {
-            let mut ser = GVSerializer::<B, NullWriteSeek>::new(
+            let mut ser = GVSerializer::<NullWriteSeek>::new(
                 signature,
                 &mut null,
                 #[cfg(unix)]
@@ -102,9 +97,9 @@ where
 /// # Examples
 ///
 /// ```
-/// use zvariant::{serialized::{Context, Data}, to_writer};
+/// use zvariant::{serialized::{Context, Data}, to_writer, LE};
 ///
-/// let ctxt = Context::<byteorder::LE>::new_dbus(0);
+/// let ctxt = Context::new_dbus(LE, 0);
 /// let mut cursor = std::io::Cursor::new(vec![]);
 /// // SAFETY: No FDs are being serialized here so its completely safe.
 /// unsafe { to_writer(&mut cursor, ctxt, &42u32) }.unwrap();
@@ -124,13 +119,8 @@ where
 /// hence is safe to drop.
 ///
 /// [`to_writer_fds`]: fn.to_writer_fds.html
-pub unsafe fn to_writer<B, W, T: ?Sized>(
-    writer: &mut W,
-    ctxt: Context<B>,
-    value: &T,
-) -> Result<Written<B>>
+pub unsafe fn to_writer<W, T: ?Sized>(writer: &mut W, ctxt: Context, value: &T) -> Result<Written>
 where
-    B: byteorder::ByteOrder,
     W: Write + Seek,
     T: Serialize + DynamicType,
 {
@@ -142,9 +132,8 @@ where
 /// Serialize `T` as a byte vector.
 ///
 /// See [`Data::deserialize`] documentation for an example of how to use this function.
-pub fn to_bytes<B, T: ?Sized>(ctxt: Context<B>, value: &T) -> Result<Data<'static, 'static, B>>
+pub fn to_bytes<T: ?Sized>(ctxt: Context, value: &T) -> Result<Data<'static, 'static>>
 where
-    B: byteorder::ByteOrder,
     T: Serialize + DynamicType,
 {
     to_bytes_for_signature(ctxt, value.dynamic_signature(), value)
@@ -166,14 +155,13 @@ where
 /// hence is safe to drop.
 ///
 /// [`to_writer`]: fn.to_writer.html
-pub unsafe fn to_writer_for_signature<'s, B, W, S, T: ?Sized>(
+pub unsafe fn to_writer_for_signature<'s, W, S, T: ?Sized>(
     writer: &mut W,
-    ctxt: Context<B>,
+    ctxt: Context,
     signature: S,
     value: &T,
-) -> Result<Written<B>>
+) -> Result<Written>
 where
-    B: byteorder::ByteOrder,
     W: Write + Seek,
     S: TryInto<Signature<'s>>,
     S::Error: Into<Error>,
@@ -184,7 +172,7 @@ where
 
     let len = match ctxt.format() {
         Format::DBus => {
-            let mut ser = DBusSerializer::<B, W>::new(
+            let mut ser = DBusSerializer::<W>::new(
                 signature,
                 writer,
                 #[cfg(unix)]
@@ -196,7 +184,7 @@ where
         }
         #[cfg(feature = "gvariant")]
         Format::GVariant => {
-            let mut ser = GVSerializer::<B, W>::new(
+            let mut ser = GVSerializer::<W>::new(
                 signature,
                 writer,
                 #[cfg(unix)]
@@ -226,13 +214,12 @@ where
 ///
 /// [`to_bytes`]: fn.to_bytes.html
 /// [`from_slice_for_signature`]: fn.from_slice_for_signature.html#examples
-pub fn to_bytes_for_signature<'s, B, S, T: ?Sized>(
-    ctxt: Context<B>,
+pub fn to_bytes_for_signature<'s, S, T: ?Sized>(
+    ctxt: Context,
     signature: S,
     value: &T,
-) -> Result<Data<'static, 'static, B>>
+) -> Result<Data<'static, 'static>>
 where
-    B: byteorder::ByteOrder,
     S: TryInto<Signature<'s>>,
     S::Error: Into<Error>,
     T: Serialize,
@@ -253,8 +240,8 @@ where
 }
 
 /// Context for all our serializers and provides shared functionality.
-pub(crate) struct SerializerCommon<'ser, 'sig, B, W> {
-    pub(crate) ctxt: Context<B>,
+pub(crate) struct SerializerCommon<'ser, 'sig, W> {
+    pub(crate) ctxt: Context,
     pub(crate) writer: &'ser mut W,
     pub(crate) bytes_written: usize,
     #[cfg(unix)]
@@ -265,8 +252,6 @@ pub(crate) struct SerializerCommon<'ser, 'sig, B, W> {
     pub(crate) value_sign: Option<Signature<'static>>,
 
     pub(crate) container_depths: ContainerDepths,
-
-    pub(crate) b: PhantomData<B>,
 }
 
 #[cfg(unix)]
@@ -275,9 +260,8 @@ pub(crate) enum FdList {
     Number(u32),
 }
 
-impl<'ser, 'sig, B, W> SerializerCommon<'ser, 'sig, B, W>
+impl<'ser, 'sig, W> SerializerCommon<'ser, 'sig, W>
 where
-    B: byteorder::ByteOrder,
     W: Write + Seek,
 {
     #[cfg(unix)]
@@ -346,7 +330,7 @@ where
         self.add_padding(alignment)?;
 
         // Now serialize the veriant index.
-        self.write_u32::<B>(variant_index)
+        self.write_u32(self.ctxt.endian(), variant_index)
             .map_err(|e| Error::InputOutput(e.into()))?;
 
         // Skip the `(`, `u`.
@@ -360,9 +344,8 @@ where
     }
 }
 
-impl<'ser, 'sig, B, W> Write for SerializerCommon<'ser, 'sig, B, W>
+impl<'ser, 'sig, W> Write for SerializerCommon<'ser, 'sig, W>
 where
-    B: byteorder::ByteOrder,
     W: Write + Seek,
 {
     /// Write `buf` and increment internal bytes written counter.

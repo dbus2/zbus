@@ -2,7 +2,10 @@ use std::{collections::HashMap, sync::Arc};
 
 use event_listener::Event;
 use tracing::{debug, instrument, trace};
-use zvariant::serialized::{self, Context};
+use zvariant::{
+    serialized::{self, Context},
+    Endian,
+};
 
 use crate::{
     async_lock::Mutex,
@@ -180,7 +183,8 @@ impl SocketReader {
         // If we reach here, the message is complete; return it
         let seq = self.prev_seq + 1;
         self.prev_seq = seq;
-        let ctxt = Context::<byteorder::NativeEndian>::new_dbus(0);
+        let endian = Endian::from(primary_header.endian_sig());
+        let ctxt = Context::new_dbus(endian, 0);
         #[cfg(unix)]
         let bytes = serialized::Data::new_fds(bytes, ctxt, fds);
         #[cfg(not(unix))]

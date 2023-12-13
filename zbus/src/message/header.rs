@@ -11,7 +11,7 @@ use static_assertions::assert_impl_all;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 use zvariant::{
     serialized::{self, Context},
-    ObjectPath, Signature, Type as VariantType,
+    Endian, ObjectPath, Signature, Type as VariantType,
 };
 
 use crate::{
@@ -55,6 +55,24 @@ pub const NATIVE_ENDIAN_SIG: EndianSig = EndianSig::Big;
 #[cfg(target_endian = "little")]
 /// Signature of the target's native endian.
 pub const NATIVE_ENDIAN_SIG: EndianSig = EndianSig::Little;
+
+impl From<Endian> for EndianSig {
+    fn from(endian: Endian) -> Self {
+        match endian {
+            Endian::Little => EndianSig::Little,
+            Endian::Big => EndianSig::Big,
+        }
+    }
+}
+
+impl From<EndianSig> for Endian {
+    fn from(endian_sig: EndianSig) -> Self {
+        match endian_sig {
+            EndianSig::Little => Endian::Little,
+            EndianSig::Big => Endian::Big,
+        }
+    }
+}
 
 /// Message header representing the D-Bus type of the message.
 #[repr(u8)]
@@ -127,20 +145,28 @@ impl PrimaryHeader {
     }
 
     pub(crate) fn read(buf: &[u8]) -> Result<(PrimaryHeader, u32), Error> {
-        let ctx = Context::<byteorder::NativeEndian>::new_dbus(0);
+        let endian = Endian::from(EndianSig::try_from(buf[0])?);
+        let ctx = Context::new_dbus(endian, 0);
         let data = serialized::Data::new(buf, ctx);
+
+        Self::read_from_data(&data)
+    }
+
+    pub(crate) fn read_from_data(
+        data: &serialized::Data<'_, '_>,
+    ) -> Result<(PrimaryHeader, u32), Error> {
         let (primary_header, size) = data.deserialize()?;
         assert_eq!(size, PRIMARY_HEADER_SIZE);
         let (fields_len, _) = data.slice(PRIMARY_HEADER_SIZE..).deserialize()?;
         Ok((primary_header, fields_len))
     }
 
-    /// D-Bus code for bytorder encoding of the message.
+    /// D-Bus code for endian encoding of the message.
     pub fn endian_sig(&self) -> EndianSig {
         self.endian_sig
     }
 
-    /// Set the D-Bus code for bytorder encoding of the message.
+    /// Set the D-Bus code for endian encoding of the message.
     pub fn set_endian_sig(&mut self, sig: EndianSig) {
         self.endian_sig = sig;
     }

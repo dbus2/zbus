@@ -1,14 +1,13 @@
-use byteorder::LE;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
-use zvariant::{serialized::Context, to_bytes_for_signature, Type, Value};
+use zvariant::{serialized::Context, to_bytes_for_signature, Type, Value, LE};
 
 fn fixed_size_array(c: &mut Criterion) {
     let ay = vec![77u8; 100_000];
-    let ctxt = Context::<LE>::new_dbus(0);
+    let ctxt = Context::new_dbus(LE, 0);
     let signature = Vec::<u8>::signature();
     c.bench_function("byte_array_ser", |b| {
         b.iter(|| {
@@ -70,7 +69,7 @@ fn big_array_ser_and_de(c: &mut Criterion) {
     };
 
     // Let's try with DBus format first
-    let ctxt = Context::<LE>::new_dbus(0);
+    let ctxt = Context::new_dbus(LE, 0);
     let signature = ZVStruct::signature();
 
     c.bench_function("big_array_ser_dbus", |b| {
@@ -95,7 +94,7 @@ fn big_array_ser_and_de(c: &mut Criterion) {
     // Now GVariant.
     #[cfg(feature = "gvariant")]
     {
-        let ctxt = Context::<LE>::new_gvariant(0);
+        let ctxt = Context::new_gvariant(LE, 0);
 
         c.bench_function("big_array_ser_gvariant", |b| {
             b.iter(|| {

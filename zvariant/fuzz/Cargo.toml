@@ -9,7 +9,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-byteorder = "*"
+endi = "1.1.0"
 
 [dependencies.zvariant]
 path = ".."

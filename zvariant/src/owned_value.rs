@@ -281,10 +281,9 @@ impl<'de> Deserialize<'de> for OwnedValue {
 
 #[cfg(test)]
 mod tests {
-    use byteorder::LE;
     use std::{collections::HashMap, error::Error, result::Result};
 
-    use crate::{serialized::Context, to_bytes, OwnedValue, Value};
+    use crate::{serialized::Context, to_bytes, OwnedValue, Value, LE};
 
     #[cfg(feature = "enumflags2")]
     #[test]
@@ -313,7 +312,7 @@ mod tests {
 
     #[test]
     fn serde() -> Result<(), Box<dyn Error>> {
-        let ec = Context::<LE>::new_dbus(0);
+        let ec = Context::new_dbus(LE, 0);
         let ov: OwnedValue = Value::from("hi!").try_into()?;
         let ser = to_bytes(ec, &ov)?;
         let (de, parsed): (Value<'_>, _) = ser.deserialize()?;

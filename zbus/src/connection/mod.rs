@@ -1308,6 +1308,7 @@ mod tests {
     use futures_util::stream::TryStreamExt;
     use ntest::timeout;
     use test_log::test;
+    use zvariant::{Endian, NATIVE_ENDIAN};
 
     use crate::{fdo::DBusProxy, AuthMechanism};
 
@@ -1354,6 +1355,7 @@ mod tests {
             let method = loop {
                 let m = stream.try_next().await?.unwrap();
                 if m.to_string() == "Method call Test" {
+                    assert_eq!(m.body().deserialize::<u64>().unwrap(), 64);
                     break m;
                 }
             };
@@ -1371,14 +1373,26 @@ mod tests {
         let client_future = async move {
             let mut stream = MessageStream::from(&client1);
             server_ready_listener.await;
-            let reply = client1
-                .call_method(None::<()>, "/", Some("org.zbus.p2p"), "Test", &())
-                .await?;
-            assert_eq!(reply.to_string(), "Method return");
+            // We want to set non-native endian to ensure that:
+            // 1. the message is actually encoded with the specified endian.
+            // 2. the server side is able to decode it and replies in the same encoding.
+            let endian = match NATIVE_ENDIAN {
+                Endian::Little => Endian::Big,
+                Endian::Big => Endian::Little,
+            };
+            let method = Message::method("/", "Test")?
+                .interface("org.zbus.p2p")?
+                .endian(endian)
+                .build(&64u64)?;
+            client1.send(&method).await?;
             // Check we didn't miss the signal that was sent during the call.
             let m = stream.try_next().await?.unwrap();
             client_done.notify(1);
             assert_eq!(m.to_string(), "Signal ASignalForYou");
+            let reply = stream.try_next().await?.unwrap();
+            assert_eq!(reply.to_string(), "Method return");
+            // Check if the reply was in the non-native endian.
+            assert_eq!(Endian::from(reply.primary_header().endian_sig()), endian);
             reply.body().deserialize::<String>()
         };
 

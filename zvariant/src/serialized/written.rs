@@ -2,8 +2,6 @@ use std::ops::Deref;
 #[cfg(unix)]
 use std::os::fd::OwnedFd;
 
-use byteorder::ByteOrder;
-
 use crate::serialized::Context;
 
 /// Represents the return value of [`crate::to_writer`] function.
@@ -13,16 +11,16 @@ use crate::serialized::Context;
 /// On Unix platforms, it also contains a list of file descriptors, whose indexes are included in
 /// the serialized bytes.
 #[derive(Debug)]
-pub struct Written<B: ByteOrder> {
+pub struct Written {
     size: usize,
-    context: Context<B>,
+    context: Context,
     #[cfg(unix)]
     fds: Vec<OwnedFd>,
 }
 
-impl<B: ByteOrder> Written<B> {
+impl Written {
     /// Create a new `EncodedSize` instance.
-    pub fn new(size: usize, context: Context<B>) -> Self {
+    pub fn new(size: usize, context: Context) -> Self {
         Self {
             size,
             context,
@@ -44,7 +42,7 @@ impl<B: ByteOrder> Written<B> {
     }
 
     /// The encoding context.
-    pub fn context(&self) -> Context<B> {
+    pub fn context(&self) -> Context {
         self.context
     }
 
@@ -65,7 +63,7 @@ impl<B: ByteOrder> Written<B> {
     }
 }
 
-impl<B: ByteOrder> Deref for Written<B> {
+impl Deref for Written {
     type Target = usize;
 
     fn deref(&self) -> &Self::Target {

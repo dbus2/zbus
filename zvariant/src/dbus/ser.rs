@@ -1,9 +1,7 @@
-use byteorder::WriteBytesExt;
 use serde::{ser, ser::SerializeSeq, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
     io::{Seek, Write},
-    marker::PhantomData,
     str,
 };
 
@@ -12,22 +10,19 @@ use crate::{
     serialized::{Context, Format},
     signature_parser::SignatureParser,
     utils::*,
-    Basic, Error, ObjectPath, Result, Signature,
+    Basic, Error, ObjectPath, Result, Signature, WriteBytes,
 };
 
 #[cfg(unix)]
 use crate::Fd;
 
 /// Our D-Bus serialization implementation.
-pub(crate) struct Serializer<'ser, 'sig, B, W>(
-    pub(crate) crate::SerializerCommon<'ser, 'sig, B, W>,
-);
+pub(crate) struct Serializer<'ser, 'sig, W>(pub(crate) crate::SerializerCommon<'ser, 'sig, W>);
 
-assert_impl_all!(Serializer<'_, '_, i32, i32>: Send, Sync, Unpin);
+assert_impl_all!(Serializer<'_, '_, i32>: Send, Sync, Unpin);
 
-impl<'ser, 'sig, B, W> Serializer<'ser, 'sig, B, W>
+impl<'ser, 'sig, W> Serializer<'ser, 'sig, W>
 where
-    B: byteorder::ByteOrder,
     W: Write + Seek,
 {
     /// Create a D-Bus Serializer struct instance.
@@ -37,7 +32,7 @@ where
         signature: S,
         writer: &'w mut W,
         #[cfg(unix)] fds: &'f mut crate::ser::FdList,
-        ctxt: Context<B>,
+        ctxt: Context,
     ) -> Result<Self>
     where
         S: TryInto<Signature<'sig>>,
@@ -56,7 +51,6 @@ where
             bytes_written: 0,
             value_sign: None,
             container_depths: Default::default(),
-            b: PhantomData,
         }))
     }
 }
@@ -68,26 +62,25 @@ macro_rules! serialize_basic {
     ($method:ident($type:ty) $write_method:ident($as:ty)) => {
         fn $method(self, v: $type) -> Result<()> {
             self.0.prep_serialize_basic::<$type>()?;
-            self.0.$write_method::<B>(v as $as).map_err(|e| Error::InputOutput(e.into()))
+            self.0.$write_method(self.0.ctxt.endian(), v as $as).map_err(|e| Error::InputOutput(e.into()))
         }
     };
 }
 
-impl<'ser, 'sig, 'b, B, W> ser::Serializer for &'b mut Serializer<'ser, 'sig, B, W>
+impl<'ser, 'sig, 'b, W> ser::Serializer for &'b mut Serializer<'ser, 'sig, W>
 where
-    B: byteorder::ByteOrder,
     W: Write + Seek,
 {
     type Ok = ();
     type Error = Error;
 
-    type SerializeSeq = SeqSerializer<'ser, 'sig, 'b, B, W>;
-    type SerializeTuple = StructSeqSerializer<'ser, 'sig, 'b, B, W>;
-    type SerializeTupleStruct = StructSeqSerializer<'ser, 'sig, 'b, B, W>;
-    type SerializeTupleVariant = StructSeqSerializer<'ser, 'sig, 'b, B, W>;
-    type SerializeMap = SeqSerializer<'ser, 'sig, 'b, B, W>;
-    type SerializeStruct = StructSeqSerializer<'ser, 'sig, 'b, B, W>;
-    type SerializeStructVariant = StructSeqSerializer<'ser, 'sig, 'b, B, W>;
+    type SerializeSeq = SeqSerializer<'ser, 'sig, 'b, W>;
+    type SerializeTuple = StructSeqSerializer<'ser, 'sig, 'b, W>;
+    type SerializeTupleStruct = StructSeqSerializer<'ser, 'sig, 'b, W>;
+    type SerializeTupleVariant = StructSeqSerializer<'ser, 'sig, 'b, W>;
+    type SerializeMap = SeqSerializer<'ser, 'sig, 'b, W>;
+    type SerializeStruct = StructSeqSerializer<'ser, 'sig, 'b, W>;
+    type SerializeStructVariant = StructSeqSerializer<'ser, 'sig, 'b, W>;
 
     serialize_basic!(serialize_bool(bool) write_u32(u32));
     // No i8 type in D-Bus/GVariant, let's pretend it's i16
@@ -103,13 +96,13 @@ where
                 self.0.add_padding(u32::alignment(Format::DBus))?;
                 let idx = self.0.add_fd(v)?;
                 self.0
-                    .write_u32::<B>(idx)
+                    .write_u32(self.0.ctxt.endian(), idx)
                     .map_err(|e| Error::InputOutput(e.into()))
             }
             _ => {
                 self.0.prep_serialize_basic::<i32>()?;
                 self.0
-                    .write_i32::<B>(v)
+                    .write_i32(self.0.ctxt.endian(), v)
                     .map_err(|e| Error::InputOutput(e.into()))
             }
         }
@@ -118,7 +111,9 @@ where
     fn serialize_u8(self, v: u8) -> Result<()> {
         self.0.prep_serialize_basic::<u8>()?;
         // Endianness is irrelevant for single bytes.
-        self.0.write_u8(v).map_err(|e| Error::InputOutput(e.into()))
+        self.0
+            .write_u8(self.0.ctxt.endian(), v)
+            .map_err(|e| Error::InputOutput(e.into()))
     }
 
     serialize_basic!(serialize_u16(u16) write_u16);
@@ -149,12 +144,12 @@ where
             ObjectPath::SIGNATURE_CHAR | <&str>::SIGNATURE_CHAR => {
                 self.0.add_padding(<&str>::alignment(Format::DBus))?;
                 self.0
-                    .write_u32::<B>(usize_to_u32(v.len()))
+                    .write_u32(self.0.ctxt.endian(), usize_to_u32(v.len()))
                     .map_err(|e| Error::InputOutput(e.into()))?;
             }
             Signature::SIGNATURE_CHAR | VARIANT_SIGNATURE_CHAR => {
                 self.0
-                    .write_u8(usize_to_u8(v.len()))
+                    .write_u8(self.0.ctxt.endian(), usize_to_u8(v.len()))
                     .map_err(|e| Error::InputOutput(e.into()))?;
             }
             _ => {
@@ -276,7 +271,7 @@ where
         // Length in bytes (unfortunately not the same as len passed to us here) which we
         // initially set to 0.
         self.0
-            .write_u32::<B>(0_u32)
+            .write_u32(self.0.ctxt.endian(), 0_u32)
             .map_err(|e| Error::InputOutput(e.into()))?;
 
         let element_signature = self.0.sig_parser.next_signature()?;
@@ -358,8 +353,8 @@ where
 }
 
 #[doc(hidden)]
-pub struct SeqSerializer<'ser, 'sig, 'b, B, W> {
-    ser: &'b mut Serializer<'ser, 'sig, B, W>,
+pub struct SeqSerializer<'ser, 'sig, 'b, W> {
+    ser: &'b mut Serializer<'ser, 'sig, W>,
     start: usize,
     // alignment of element
     element_alignment: usize,
@@ -369,9 +364,8 @@ pub struct SeqSerializer<'ser, 'sig, 'b, B, W> {
     first_padding: usize,
 }
 
-impl<'ser, 'sig, 'b, B, W> SeqSerializer<'ser, 'sig, 'b, B, W>
+impl<'ser, 'sig, 'b, W> SeqSerializer<'ser, 'sig, 'b, W>
 where
-    B: byteorder::ByteOrder,
     W: Write + Seek,
 {
     pub(self) fn end_seq(self) -> Result<()> {
@@ -392,7 +386,7 @@ where
         self.ser
             .0
             .writer
-            .write_u32::<B>(len)
+            .write_u32(self.ser.0.ctxt.endian(), len)
             .map_err(|e| Error::InputOutput(e.into()))?;
         self.ser
             .0
@@ -406,9 +400,8 @@ where
     }
 }
 
-impl<'ser, 'sig, 'b, B, W> ser::SerializeSeq for SeqSerializer<'ser, 'sig, 'b, B, W>
+impl<'ser, 'sig, 'b, W> ser::SerializeSeq for SeqSerializer<'ser, 'sig, 'b, W>
 where
-    B: byteorder::ByteOrder,
     W: Write + Seek,
 {
     type Ok = ();
@@ -435,20 +428,19 @@ where
 }
 
 #[doc(hidden)]
-pub struct StructSerializer<'ser, 'sig, 'b, B, W> {
-    ser: &'b mut Serializer<'ser, 'sig, B, W>,
+pub struct StructSerializer<'ser, 'sig, 'b, W> {
+    ser: &'b mut Serializer<'ser, 'sig, W>,
     // The number of `)` in the signature to skip at the end.
     end_parens: u8,
     // The original container depths. We restore to that at the end.
     container_depths: ContainerDepths,
 }
 
-impl<'ser, 'sig, 'b, B, W> StructSerializer<'ser, 'sig, 'b, B, W>
+impl<'ser, 'sig, 'b, W> StructSerializer<'ser, 'sig, 'b, W>
 where
-    B: byteorder::ByteOrder,
     W: Write + Seek,
 {
-    fn variant(ser: &'b mut Serializer<'ser, 'sig, B, W>) -> Result<Self> {
+    fn variant(ser: &'b mut Serializer<'ser, 'sig, W>) -> Result<Self> {
         ser.0.add_padding(VARIANT_ALIGNMENT_DBUS)?;
         let container_depths = ser.0.container_depths;
         ser.0.container_depths = ser.0.container_depths.inc_variant()?;
@@ -460,7 +452,7 @@ where
         })
     }
 
-    fn structure(ser: &'b mut Serializer<'ser, 'sig, B, W>) -> Result<Self> {
+    fn structure(ser: &'b mut Serializer<'ser, 'sig, W>) -> Result<Self> {
         let c = ser.0.sig_parser.next_char()?;
         if c != STRUCT_SIG_START_CHAR && c != DICT_ENTRY_SIG_START_CHAR {
             let expected = format!("`{STRUCT_SIG_START_STR}` or `{DICT_ENTRY_SIG_START_STR}`",);
@@ -486,7 +478,7 @@ where
         })
     }
 
-    fn unit(ser: &'b mut Serializer<'ser, 'sig, B, W>) -> Result<Self> {
+    fn unit(ser: &'b mut Serializer<'ser, 'sig, W>) -> Result<Self> {
         // serialize as a `0u8`
         serde::Serializer::serialize_u8(&mut *ser, 0)?;
 
@@ -498,7 +490,7 @@ where
         })
     }
 
-    fn enum_variant(ser: &'b mut Serializer<'ser, 'sig, B, W>) -> Result<Self> {
+    fn enum_variant(ser: &'b mut Serializer<'ser, 'sig, W>) -> Result<Self> {
         let mut ser = Self::structure(ser)?;
         ser.end_parens += 1;
 
@@ -522,7 +514,7 @@ where
 
                 let sig_parser = SignatureParser::new(signature);
                 let bytes_written = self.ser.0.bytes_written;
-                let mut ser = Serializer(crate::SerializerCommon::<B, W> {
+                let mut ser = Serializer(crate::SerializerCommon::<W> {
                     ctxt: self.ser.0.ctxt,
                     sig_parser,
                     writer: self.ser.0.writer,
@@ -531,7 +523,6 @@ where
                     bytes_written,
                     value_sign: None,
                     container_depths: self.ser.0.container_depths,
-                    b: PhantomData,
                 });
                 value.serialize(&mut ser)?;
                 self.ser.0.bytes_written = ser.0.bytes_written;
@@ -555,16 +546,15 @@ where
 
 #[doc(hidden)]
 /// Allows us to serialize a struct as an ARRAY.
-pub enum StructSeqSerializer<'ser, 'sig, 'b, B, W> {
-    Struct(StructSerializer<'ser, 'sig, 'b, B, W>),
-    Seq(SeqSerializer<'ser, 'sig, 'b, B, W>),
+pub enum StructSeqSerializer<'ser, 'sig, 'b, W> {
+    Struct(StructSerializer<'ser, 'sig, 'b, W>),
+    Seq(SeqSerializer<'ser, 'sig, 'b, W>),
 }
 
 macro_rules! serialize_struct_anon_fields {
     ($trait:ident $method:ident) => {
-        impl<'ser, 'sig, 'b, B, W> ser::$trait for StructSerializer<'ser, 'sig, 'b, B, W>
+        impl<'ser, 'sig, 'b, W> ser::$trait for StructSerializer<'ser, 'sig, 'b, W>
         where
-            B: byteorder::ByteOrder,
             W: Write + Seek,
         {
             type Ok = ();
@@ -582,9 +572,8 @@ macro_rules! serialize_struct_anon_fields {
             }
         }
 
-        impl<'ser, 'sig, 'b, B, W> ser::$trait for StructSeqSerializer<'ser, 'sig, 'b, B, W>
+        impl<'ser, 'sig, 'b, W> ser::$trait for StructSeqSerializer<'ser, 'sig, 'b, W>
         where
-            B: byteorder::ByteOrder,
             W: Write + Seek,
         {
             type Ok = ();
@@ -613,9 +602,8 @@ serialize_struct_anon_fields!(SerializeTuple serialize_element);
 serialize_struct_anon_fields!(SerializeTupleStruct serialize_field);
 serialize_struct_anon_fields!(SerializeTupleVariant serialize_field);
 
-impl<'ser, 'sig, 'b, B, W> ser::SerializeMap for SeqSerializer<'ser, 'sig, 'b, B, W>
+impl<'ser, 'sig, 'b, W> ser::SerializeMap for SeqSerializer<'ser, 'sig, 'b, W>
 where
-    B: byteorder::ByteOrder,
     W: Write + Seek,
 {
     type Ok = ();
@@ -667,9 +655,8 @@ where
 
 macro_rules! serialize_struct_named_fields {
     ($trait:ident) => {
-        impl<'ser, 'sig, 'b, B, W> ser::$trait for StructSerializer<'ser, 'sig, 'b, B, W>
+        impl<'ser, 'sig, 'b, W> ser::$trait for StructSerializer<'ser, 'sig, 'b, W>
         where
-            B: byteorder::ByteOrder,
             W: Write + Seek,
         {
             type Ok = ();
@@ -687,9 +674,8 @@ macro_rules! serialize_struct_named_fields {
             }
         }
 
-        impl<'ser, 'sig, 'b, B, W> ser::$trait for StructSeqSerializer<'ser, 'sig, 'b, B, W>
+        impl<'ser, 'sig, 'b, W> ser::$trait for StructSeqSerializer<'ser, 'sig, 'b, W>
         where
-            B: byteorder::ByteOrder,
             W: Write + Seek,
         {
             type Ok = ();

@@ -7,13 +7,13 @@ use std::{
 
 use enumflags2::BitFlags;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
-use zvariant::serialized;
+use zvariant::{serialized, Endian};
 
 use crate::{
     message::{Field, FieldCode, Fields, Flags, Header, Message, PrimaryHeader, Sequence, Type},
     utils::padding_for_8_bytes,
     zvariant::{serialized::Context, DynamicType, ObjectPath, Signature},
-    Error, Result,
+    EndianSig, Error, Result,
 };
 
 use crate::message::{fields::QuickFields, header::MAX_MESSAGE_SIZE};
@@ -25,8 +25,8 @@ type BuildGenericResult = Vec<OwnedFd>;
 type BuildGenericResult = ();
 
 macro_rules! dbus_context {
-    ($n_bytes_before: expr) => {
-        Context::<byteorder::NativeEndian>::new_dbus($n_bytes_before)
+    ($self:ident, $n_bytes_before: expr) => {
+        Context::new_dbus($self.header.primary().endian_sig().into(), $n_bytes_before)
     };
 }
 
@@ -179,12 +179,23 @@ impl<'a> Builder<'a> {
     fn reply_to(mut self, reply_to: &Header<'_>) -> Result<Self> {
         let serial = reply_to.primary().serial_num();
         self.header.fields_mut().replace(Field::ReplySerial(serial));
+        self = self.endian(reply_to.primary().endian_sig().into());
 
         if let Some(sender) = reply_to.sender() {
             self.destination(sender.to_owned())
         } else {
             Ok(self)
         }
+    }
+
+    /// Set the endianness of the message.
+    ///
+    /// The default endianness is native.
+    pub fn endian(mut self, endian: Endian) -> Self {
+        let sig = EndianSig::from(endian);
+        self.header.primary_mut().set_endian_sig(sig);
+
+        self
     }
 
     /// Build the [`Message`] with the given body.
@@ -201,7 +212,7 @@ impl<'a> Builder<'a> {
     where
         B: serde::ser::Serialize + DynamicType,
     {
-        let ctxt = dbus_context!(0);
+        let ctxt = dbus_context!(self, 0);
 
         // Note: this iterates the body twice, but we prefer efficient handling of large messages
         // to efficient handling of ones that are complex to serialize.
@@ -244,7 +255,7 @@ impl<'a> Builder<'a> {
         S::Error: Into<Error>,
     {
         let signature: Signature<'b> = signature.try_into().map_err(Into::into)?;
-        let body_size = serialized::Size::new(body_bytes.len(), dbus_context!(0));
+        let body_size = serialized::Size::new(body_bytes.len(), dbus_context!(self, 0));
         #[cfg(unix)]
         let body_size = {
             let num_fds = fds.len().try_into().map_err(|_| Error::ExcessData)?;
@@ -269,13 +280,13 @@ impl<'a> Builder<'a> {
     fn build_generic<WriteFunc>(
         self,
         mut signature: Signature<'_>,
-        body_size: serialized::Size<byteorder::NativeEndian>,
+        body_size: serialized::Size,
         write_body: WriteFunc,
     ) -> Result<Message>
     where
         WriteFunc: FnOnce(&mut Cursor<&mut Vec<u8>>) -> Result<BuildGenericResult>,
     {
-        let ctxt = dbus_context!(0);
+        let ctxt = dbus_context!(self, 0);
         let mut header = self.header;
 
         if !signature.is_empty() {
