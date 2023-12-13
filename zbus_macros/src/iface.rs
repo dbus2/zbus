@@ -3,9 +3,9 @@ use quote::{format_ident, quote};
 use std::collections::BTreeMap;
 use syn::{
     self, parse_quote, punctuated::Punctuated, spanned::Spanned, AngleBracketedGenericArguments,
-    AttributeArgs, Error, FnArg, GenericArgument, ImplItem, ItemImpl, Lit::Str, Meta,
-    Meta::NameValue, MetaList, MetaNameValue, NestedMeta, PatType, PathArguments, ReturnType,
-    Signature, Token, Type, TypePath,
+    Attribute, AttributeArgs, Error, FnArg, GenericArgument, ImplItem, ImplItemMethod, ItemImpl,
+    Lit::Str, Meta, Meta::NameValue, MetaList, MetaNameValue, NestedMeta, PatType, PathArguments,
+    ReturnType, Signature, Token, Type, TypePath,
 };
 use zvariant_utils::{case, def_attrs};
 
@@ -23,7 +23,11 @@ def_attrs! {
     pub MethodAttributes("method") {
         name str,
         signal none,
-        property none,
+        property {
+            pub PropertyAttributes("property") {
+                emits_changed_signal str
+            }
+        },
         out_args [str]
     };
 }
@@ -49,6 +53,7 @@ use arg_attrs::ArgAttributes;
 struct Property<'a> {
     read: bool,
     write: bool,
+    emits_changed_signal: PropertyEmitsChangedSignal,
     ty: Option<&'a Type>,
     doc_comments: TokenStream,
 }
@@ -58,9 +63,185 @@ impl<'a> Property<'a> {
         Self {
             read: false,
             write: false,
+            emits_changed_signal: PropertyEmitsChangedSignal::True,
             ty: None,
             doc_comments: quote!(),
         }
+    }
+}
+
+#[derive(PartialEq)]
+enum MethodType {
+    Signal,
+    Property(PropertyType),
+    Other,
+}
+
+#[derive(PartialEq)]
+enum PropertyType {
+    Inputs,
+    NoInputs,
+}
+
+struct MethodInfo {
+    /// The type of method being parsed
+    method_type: MethodType,
+    /// Whether the method has inputs
+    has_inputs: bool,
+    /// Whether the method is async
+    is_async: bool,
+    /// Doc comments on the methods
+    doc_comments: TokenStream,
+    /// Whether self is passed as mutable to the method
+    is_mut: bool,
+    /// The await to append to method calls
+    method_await: TokenStream,
+    /// The typed inputs passed to the method
+    typed_inputs: Vec<PatType>,
+    /// The method arguments' introspection
+    intro_args: TokenStream,
+    /// Whether the output type is a Result
+    is_result_output: bool,
+    /// Code block to deserialize arguments from zbus message
+    args_from_msg: TokenStream,
+    /// Names of all arguments to the method
+    args_names: TokenStream,
+    /// Code stream to match on the reply of the method call
+    reply: TokenStream,
+    /// The signal context object argument
+    signal_context_arg: Option<PatType>,
+    /// The name of the method (setters are stripped of set_ prefix)
+    member_name: String,
+}
+
+impl MethodInfo {
+    fn new(
+        zbus: &TokenStream,
+        method: &ImplItemMethod,
+        attrs: &MethodAttributes,
+        cfg_attrs: &[&Attribute],
+    ) -> syn::Result<MethodInfo> {
+        let is_async = method.sig.asyncness.is_some();
+        let Signature {
+            ident,
+            inputs,
+            output,
+            ..
+        } = &method.sig;
+        let docs = get_doc_attrs(&method.attrs)
+            .iter()
+            .filter_map(|attr| {
+                if let Ok(NameValue(MetaNameValue { lit: Str(s), .. })) = attr.parse_meta() {
+                    Some(s.value())
+                } else {
+                    // non #[doc = "..."] attributes are not our concern
+                    // we leave them for rustc to handle
+                    None
+                }
+            })
+            .collect();
+        let doc_comments = to_xml_docs(docs);
+        let is_property = attrs.property.is_some();
+        let is_signal = attrs.signal;
+        let out_args: Option<&[String]> = attrs.out_args.as_deref();
+        assert!(!is_property || !is_signal);
+
+        let has_inputs = inputs.len() > 1;
+
+        let is_mut = if let FnArg::Receiver(r) = inputs
+            .first()
+            .ok_or_else(|| Error::new_spanned(ident, "not &self method"))?
+        {
+            r.mutability.is_some()
+        } else if is_signal {
+            false
+        } else {
+            return Err(Error::new_spanned(method, "missing receiver"));
+        };
+        if is_signal && !is_async {
+            return Err(Error::new_spanned(method, "signals must be async"));
+        }
+        let method_await = if is_async {
+            quote! { .await }
+        } else {
+            quote! {}
+        };
+
+        let mut typed_inputs = inputs
+            .iter()
+            .filter_map(typed_arg)
+            .cloned()
+            .collect::<Vec<_>>();
+        let signal_context_arg: Option<PatType> = if is_signal {
+            if typed_inputs.is_empty() {
+                return Err(Error::new_spanned(
+                    inputs,
+                    "Expected a `&zbus::object_server::SignalContext<'_> argument",
+                ));
+            }
+            Some(typed_inputs.remove(0))
+        } else {
+            None
+        };
+
+        let mut intro_args = quote!();
+        intro_args.extend(introspect_input_args(&typed_inputs, is_signal, cfg_attrs));
+        let is_result_output =
+            introspect_add_output_args(&mut intro_args, output, out_args, cfg_attrs)?;
+
+        let (args_from_msg, args_names) = get_args_from_inputs(&typed_inputs, zbus)?;
+
+        let reply = if is_result_output {
+            let ret = quote!(r);
+
+            quote!(match reply {
+                ::std::result::Result::Ok(r) => c.reply(m, &#ret).await,
+                ::std::result::Result::Err(e) => {
+                    let hdr = m.header();
+                    c.reply_dbus_error(&hdr, e).await
+                }
+            })
+        } else {
+            quote!(c.reply(m, &reply).await)
+        };
+
+        let member_name = attrs.name.clone().unwrap_or_else(|| {
+            let mut name = ident.to_string();
+            if is_property && has_inputs {
+                assert!(name.starts_with("set_"));
+                name = name[4..].to_string();
+            }
+            pascal_case(&name)
+        });
+
+        let method_type = if is_signal {
+            MethodType::Signal
+        } else if is_property {
+            if has_inputs {
+                MethodType::Property(PropertyType::Inputs)
+            } else {
+                MethodType::Property(PropertyType::NoInputs)
+            }
+        } else {
+            MethodType::Other
+        };
+
+        Ok(MethodInfo {
+            method_type,
+            has_inputs,
+            is_async,
+            doc_comments,
+            is_mut,
+            method_await,
+            typed_inputs,
+            signal_context_arg,
+            intro_args,
+            is_result_output,
+            args_from_msg,
+            args_names,
+            reply,
+            member_name,
+        })
     }
 }
 
@@ -104,22 +285,15 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             }
         };
 
+    // Store parsed information about each method
+    let mut methods = vec![];
     for method in &mut input.items {
         let method = match method {
             ImplItem::Method(m) => m,
             _ => continue,
         };
-
-        let is_async = method.sig.asyncness.is_some();
-
-        let Signature {
-            ident,
-            inputs,
-            output,
-            ..
-        } = &mut method.sig;
-
         let attrs = MethodAttributes::parse(&method.attrs)?;
+
         method
             .attrs
             .retain(|attr| !attr.path.is_ident("dbus_interface"));
@@ -129,155 +303,124 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
             .filter(|a| a.path.is_ident("cfg"))
             .collect();
 
-        let docs = get_doc_attrs(&method.attrs)
-            .iter()
-            .filter_map(|attr| {
-                if let Ok(NameValue(MetaNameValue { lit: Str(s), .. })) = attr.parse_meta() {
-                    Some(s.value())
+        let method_info = MethodInfo::new(&zbus, method, &attrs, &cfg_attrs)?;
+        if let Some(prop_attrs) = &attrs.property {
+            if method_info.method_type == MethodType::Property(PropertyType::NoInputs) {
+                let emits_changed_signal = if let Some(s) = &prop_attrs.emits_changed_signal {
+                    PropertyEmitsChangedSignal::parse(s, method.span())?
                 } else {
-                    // non #[doc = "..."] attributes are not our concern
-                    // we leave them for rustc to handle
-                    None
-                }
-            })
-            .collect();
-
-        let doc_comments = to_xml_docs(docs);
-        let is_property = attrs.property;
-        let is_signal = attrs.signal;
-        let out_args = attrs.out_args.as_deref();
-        assert!(!is_property || !is_signal);
-
-        let has_inputs = inputs.len() > 1;
-
-        let is_mut = if let FnArg::Receiver(r) = inputs
-            .first()
-            .ok_or_else(|| Error::new_spanned(&ident, "not &self method"))?
-        {
-            r.mutability.is_some()
-        } else if is_signal {
-            false
-        } else {
-            return Err(Error::new_spanned(&method, "missing receiver"));
-        };
-        if is_signal && !is_async {
-            return Err(Error::new_spanned(&method, "signals must be async"));
-        }
-        let method_await = if is_async {
-            quote! { .await }
-        } else {
-            quote! {}
-        };
-
-        let mut typed_inputs = inputs
-            .iter()
-            .filter_map(typed_arg)
-            .cloned()
-            .collect::<Vec<_>>();
-        let signal_context_arg = if is_signal {
-            if typed_inputs.is_empty() {
-                return Err(Error::new_spanned(
-                    &inputs,
-                    "Expected a `&zbus::object_server::SignalContext<'_> argument",
+                    PropertyEmitsChangedSignal::True
+                };
+                let mut property = Property::new();
+                property.emits_changed_signal = emits_changed_signal;
+                properties.insert(method_info.member_name.to_string(), property);
+            } else if prop_attrs.emits_changed_signal.is_some() {
+                return Err(syn::Error::new(
+                    method.span(),
+                    "`emits_changed_signal` cannot be specified on setters",
                 ));
             }
-            Some(typed_inputs.remove(0))
-        } else {
-            None
         };
+        methods.push((method, method_info));
+    }
 
-        let mut intro_args = quote!();
-        intro_args.extend(introspect_input_args(&typed_inputs, is_signal, &cfg_attrs));
-        let is_result_output =
-            introspect_add_output_args(&mut intro_args, output, out_args, &cfg_attrs)?;
+    for (method, method_info) in methods {
+        let cfg_attrs: Vec<_> = method
+            .attrs
+            .iter()
+            .filter(|a| a.path.is_ident("cfg"))
+            .collect();
 
-        let (args_from_msg, args_names) = get_args_from_inputs(&typed_inputs, &zbus)?;
+        let MethodInfo {
+            method_type,
+            has_inputs,
+            is_async,
+            doc_comments,
+            is_mut,
+            method_await,
+            typed_inputs,
+            signal_context_arg,
+            intro_args,
+            is_result_output,
+            args_from_msg,
+            args_names,
+            reply,
+            member_name,
+        } = method_info;
+
+        let Signature {
+            ident,
+            inputs,
+            output,
+            ..
+        } = &mut method.sig;
 
         clean_input_args(inputs);
 
-        let reply = if is_result_output {
-            let ret = quote!(r);
+        match method_type {
+            MethodType::Signal => {
+                introspect.extend(doc_comments);
+                introspect.extend(introspect_signal(&member_name, &intro_args));
+                let signal_context = signal_context_arg.unwrap().pat;
 
-            quote!(match reply {
-                ::std::result::Result::Ok(r) => c.reply(m, &#ret).await,
-                ::std::result::Result::Err(e) => {
-                    let hdr = m.header();
-                    c.reply_dbus_error(&hdr, e).await
-                }
-            })
-        } else {
-            quote!(c.reply(m, &reply).await)
-        };
-
-        let member_name = attrs.name.clone().unwrap_or_else(|| {
-            let mut name = ident.to_string();
-            if is_property && has_inputs {
-                assert!(name.starts_with("set_"));
-                name = name[4..].to_string();
-            }
-            pascal_case(&name)
-        });
-
-        if is_signal {
-            introspect.extend(doc_comments);
-            introspect.extend(introspect_signal(&member_name, &intro_args));
-            let signal_context = signal_context_arg.unwrap().pat;
-
-            method.block = parse_quote!({
-                #signal_context.connection().emit_signal(
-                    #signal_context.destination(),
-                    #signal_context.path(),
-                    <#self_ty as #zbus::object_server::Interface>::name(),
-                    #member_name,
-                    &(#args_names),
-                )
-                .await
-            });
-        } else if is_property {
-            let p = properties.entry(member_name.to_string());
-
-            let sk_member_name = case::snake_case(&member_name);
-            let prop_changed_method_name = format_ident!("{sk_member_name}_changed");
-            let prop_invalidate_method_name = format_ident!("{sk_member_name}_invalidate");
-
-            let p = p.or_insert_with(Property::new);
-            p.doc_comments.extend(doc_comments);
-            if has_inputs {
-                p.write = true;
-
-                let set_call = if is_result_output {
-                    quote!(self.#ident(val)#method_await)
-                } else if is_async {
-                    quote!(
-                            #zbus::export::futures_util::future::FutureExt::map(
-                                self.#ident(val),
-                                ::std::result::Result::Ok,
-                            )
-                            .await
+                method.block = parse_quote!({
+                    #signal_context.connection().emit_signal(
+                        #signal_context.destination(),
+                        #signal_context.path(),
+                        <#self_ty as #zbus::object_server::Interface>::name(),
+                        #member_name,
+                        &(#args_names),
                     )
-                } else {
-                    quote!(::std::result::Result::Ok(self.#ident(val)))
-                };
+                    .await
+                });
+            }
+            MethodType::Property(_) => {
+                let p = properties.get_mut(&member_name).ok_or(Error::new_spanned(
+                    &member_name,
+                    "Write-only properties aren't supported yet",
+                ))?;
 
-                // * For reference arg, we convert from `&Value` (so `TryFrom<&Value<'_>>` is
-                //   required).
-                //
-                // * For argument type with lifetimes, we convert from `Value` (so
-                //   `TryFrom<Value<'_>>` is required).
-                //
-                // * For all other arg types, we convert the passed value to `OwnedValue` first and
-                //   then pass it as `Value` (so `TryFrom<OwnedValue>` is required).
-                let value_to_owned = quote! {
-                    match ::zbus::zvariant::Value::try_to_owned(value) {
-                        ::std::result::Result::Ok(val) => ::zbus::zvariant::Value::from(val),
-                        ::std::result::Result::Err(e) => {
-                            return ::std::result::Result::Err(
-                                ::std::convert::Into::into(#zbus::Error::Variant(::std::convert::Into::into(e)))
-                            );
+                let sk_member_name = case::snake_case(&member_name);
+                let prop_changed_method_name = format_ident!("{sk_member_name}_changed");
+                let prop_invalidate_method_name = format_ident!("{sk_member_name}_invalidate");
+
+                p.doc_comments.extend(doc_comments);
+                if has_inputs {
+                    p.write = true;
+
+                    let set_call = if is_result_output {
+                        quote!(self.#ident(val)#method_await)
+                    } else if is_async {
+                        quote!(
+                                #zbus::export::futures_util::future::FutureExt::map(
+                                    self.#ident(val),
+                                    ::std::result::Result::Ok,
+                                )
+                                .await
+                        )
+                    } else {
+                        quote!(::std::result::Result::Ok(self.#ident(val)))
+                    };
+
+                    // * For reference arg, we convert from `&Value` (so `TryFrom<&Value<'_>>` is
+                    //   required).
+                    //
+                    // * For argument type with lifetimes, we convert from `Value` (so
+                    //   `TryFrom<Value<'_>>` is required).
+                    //
+                    // * For all other arg types, we convert the passed value to `OwnedValue` first and
+                    //   then pass it as `Value` (so `TryFrom<OwnedValue>` is required).
+                    let value_to_owned = quote! {
+                        match ::zbus::zvariant::Value::try_to_owned(value) {
+                            ::std::result::Result::Ok(val) => ::zbus::zvariant::Value::from(val),
+                            ::std::result::Result::Err(e) => {
+                                return ::std::result::Result::Err(
+                                    ::std::convert::Into::into(#zbus::Error::Variant(::std::convert::Into::into(e)))
+                                );
+                            }
                         }
-                    }
-                };
-                let value_arg = match &*typed_inputs
+                    };
+                    let value_arg = match &*typed_inputs
                     .first()
                     .ok_or_else(|| Error::new_spanned(&inputs, "Expected a value argument"))?
                     .ty
@@ -306,98 +449,115 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                         .unwrap_or_else(|| value_to_owned.clone()),
                     _ => value_to_owned,
                 };
-                let do_set = quote!({
-                    let value = #value_arg;
-                    match ::std::convert::TryInto::try_into(value) {
-                        ::std::result::Result::Ok(val) => {
-                            match #set_call {
-                                ::std::result::Result::Ok(set_result) => {
-                                    self
-                                        .#prop_changed_method_name(&signal_context)
-                                        .await
-                                        .map(|_| set_result)
-                                        .map_err(Into::into)
+                    let prop_changed_method = match p.emits_changed_signal {
+                        PropertyEmitsChangedSignal::True => {
+                            quote!({
+                                self
+                                    .#prop_changed_method_name(&signal_context)
+                                    .await
+                                    .map(|_| set_result)
+                                    .map_err(Into::into)
+                            })
+                        }
+                        PropertyEmitsChangedSignal::Invalidates => {
+                            quote!({
+                                self
+                                    .#prop_invalidate_method_name(&signal_context)
+                                    .await
+                                    .map(|_| set_result)
+                                    .map_err(Into::into)
+                            })
+                        }
+                        PropertyEmitsChangedSignal::False | PropertyEmitsChangedSignal::Const => {
+                            quote!({ Ok(()) })
+                        }
+                    };
+                    let do_set = quote!({
+                        let value = #value_arg;
+                        match ::std::convert::TryInto::try_into(value) {
+                            ::std::result::Result::Ok(val) => {
+                                match #set_call {
+                                    ::std::result::Result::Ok(set_result) => #prop_changed_method
+                                    e => e,
                                 }
-                                e => e,
+                            }
+                            ::std::result::Result::Err(e) => {
+                                ::std::result::Result::Err(
+                                    ::std::convert::Into::into(#zbus::Error::Variant(::std::convert::Into::into(e))),
+                                )
                             }
                         }
-                        ::std::result::Result::Err(e) => {
-                            ::std::result::Result::Err(
-                                ::std::convert::Into::into(#zbus::Error::Variant(::std::convert::Into::into(e))),
-                            )
-                        }
-                    }
-                });
+                    });
 
-                if is_mut {
-                    let q = quote!(
-                        #(#cfg_attrs)*
-                        #member_name => {
-                            ::std::option::Option::Some((move || async move { #do_set }) ().await)
-                        }
-                    );
-                    set_mut_dispatch.extend(q);
-
-                    let q = quote!(
-                        #(#cfg_attrs)*
-                        #member_name => #zbus::object_server::DispatchResult::RequiresMut,
-                    );
-                    set_dispatch.extend(q);
-                } else {
-                    let q = quote!(
-                        #(#cfg_attrs)*
-                        #member_name => {
-                            #zbus::object_server::DispatchResult::Async(::std::boxed::Box::pin(async move {
-                                #do_set
-                            }))
-                        }
-                    );
-                    set_dispatch.extend(q);
-                }
-            } else {
-                let is_fallible_property = is_result_output;
-
-                p.ty = Some(get_property_type(output)?);
-                p.read = true;
-                let value_convert = quote!(
-                    <#zbus::zvariant::OwnedValue as ::std::convert::TryFrom<_>>::try_from(
-                        <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
-                            value,
-                        ),
-                    )
-                    .map_err(|e| #zbus::fdo::Error::Failed(e.to_string()))
-                );
-                let inner = if is_fallible_property {
-                    quote!(self.#ident() #method_await .and_then(|value| #value_convert))
-                } else {
-                    quote!({
-                        let value = self.#ident()#method_await;
-                        #value_convert
-                    })
-                };
-
-                let q = quote!(
-                    #(#cfg_attrs)*
-                    #member_name => {
-                        ::std::option::Option::Some(#inner)
-                    },
-                );
-                get_dispatch.extend(q);
-
-                let q = if is_fallible_property {
-                    quote!(if let Ok(prop) = self.#ident()#method_await {
-                        props.insert(
-                            ::std::string::ToString::to_string(#member_name),
-                            <#zbus::zvariant::OwnedValue as ::std::convert::TryFrom<_>>::try_from(
-                                <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
-                                    prop,
-                                ),
-                            )
-                            .map_err(|e| #zbus::fdo::Error::Failed(e.to_string()))?,
+                    if is_mut {
+                        let q = quote!(
+                            #(#cfg_attrs)*
+                            #member_name => {
+                                ::std::option::Option::Some((move || async move { #do_set }) ().await)
+                            }
                         );
-                    })
+                        set_mut_dispatch.extend(q);
+
+                        let q = quote!(
+                            #(#cfg_attrs)*
+                            #member_name => #zbus::object_server::DispatchResult::RequiresMut,
+                        );
+                        set_dispatch.extend(q);
+                    } else {
+                        let q = quote!(
+                            #(#cfg_attrs)*
+                            #member_name => {
+                                #zbus::object_server::DispatchResult::Async(::std::boxed::Box::pin(async move {
+                                    #do_set
+                                }))
+                            }
+                        );
+                        set_dispatch.extend(q);
+                    }
                 } else {
-                    quote!(props.insert(
+                    let is_fallible_property = is_result_output;
+
+                    p.ty = Some(get_property_type(output)?);
+                    p.read = true;
+                    let value_convert = quote!(
+                        <#zbus::zvariant::OwnedValue as ::std::convert::TryFrom<_>>::try_from(
+                            <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
+                                value,
+                            ),
+                        )
+                        .map_err(|e| #zbus::fdo::Error::Failed(e.to_string()))
+                    );
+                    let inner = if is_fallible_property {
+                        quote!(self.#ident() #method_await .and_then(|value| #value_convert))
+                    } else {
+                        quote!({
+                            let value = self.#ident()#method_await;
+                            #value_convert
+                        })
+                    };
+
+                    let q = quote!(
+                        #(#cfg_attrs)*
+                        #member_name => {
+                            ::std::option::Option::Some(#inner)
+                        },
+                    );
+                    get_dispatch.extend(q);
+
+                    let q = if is_fallible_property {
+                        quote!(if let Ok(prop) = self.#ident()#method_await {
+                            props.insert(
+                                ::std::string::ToString::to_string(#member_name),
+                                <#zbus::zvariant::OwnedValue as ::std::convert::TryFrom<_>>::try_from(
+                                    <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
+                                        prop,
+                                    ),
+                                )
+                                .map_err(|e| #zbus::fdo::Error::Failed(e.to_string()))?,
+                            );
+                        })
+                    } else {
+                        quote!(props.insert(
                         ::std::string::ToString::to_string(#member_name),
                         <#zbus::zvariant::OwnedValue as ::std::convert::TryFrom<_>>::try_from(
                             <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
@@ -406,75 +566,79 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
                         )
                         .map_err(|e| #zbus::fdo::Error::Failed(e.to_string()))?,
                     );)
-                };
-
-                get_all.extend(q);
-
-                let prop_value_handled = if is_fallible_property {
-                    quote!(self.#ident()#method_await?)
-                } else {
-                    quote!(self.#ident()#method_await)
-                };
-
-                let prop_changed_method = quote!(
-                    pub async fn #prop_changed_method_name(
-                        &self,
-                        signal_context: &#zbus::object_server::SignalContext<'_>,
-                    ) -> #zbus::Result<()> {
-                        let mut changed = ::std::collections::HashMap::new();
-                        let value = <#zbus::zvariant::Value as ::std::convert::From<_>>::from(#prop_value_handled);
-                        changed.insert(#member_name, &value);
-                        #zbus::fdo::Properties::properties_changed(
-                            signal_context,
-                            #zbus::names::InterfaceName::from_static_str_unchecked(#iface_name),
-                            &changed,
-                            &[],
-                        ).await
-                    }
-                );
-                generated_signals.extend(prop_changed_method);
-
-                let prop_invalidate_method = quote!(
-                    pub async fn #prop_invalidate_method_name(
-                        &self,
-                        signal_context: &#zbus::object_server::SignalContext<'_>,
-                    ) -> #zbus::Result<()> {
-                        #zbus::fdo::Properties::properties_changed(
-                            signal_context,
-                            #zbus::names::InterfaceName::from_static_str_unchecked(#iface_name),
-                            &::std::collections::HashMap::new(),
-                            &[#member_name],
-                        ).await
-                    }
-                );
-                generated_signals.extend(prop_invalidate_method);
-            }
-        } else {
-            introspect.extend(doc_comments);
-            introspect.extend(introspect_method(&member_name, &intro_args));
-
-            let m = quote! {
-                #(#cfg_attrs)*
-                #member_name => {
-                    let future = async move {
-                        #args_from_msg
-                        let reply = self.#ident(#args_names)#method_await;
-                        #reply
                     };
-                    #zbus::object_server::DispatchResult::Async(::std::boxed::Box::pin(async move {
-                        future.await
-                    }))
-                },
-            };
 
-            if is_mut {
-                call_dispatch.extend(quote! {
+                    get_all.extend(q);
+
+                    let prop_value_handled = if is_fallible_property {
+                        quote!(self.#ident()#method_await?)
+                    } else {
+                        quote!(self.#ident()#method_await)
+                    };
+
+                    let prop_changed_method = quote!(
+                        pub async fn #prop_changed_method_name(
+                            &self,
+                            signal_context: &#zbus::object_server::SignalContext<'_>,
+                        ) -> #zbus::Result<()> {
+                            let mut changed = ::std::collections::HashMap::new();
+                            let value = <#zbus::zvariant::Value as ::std::convert::From<_>>::from(#prop_value_handled);
+                            changed.insert(#member_name, &value);
+                            #zbus::fdo::Properties::properties_changed(
+                                signal_context,
+                                #zbus::names::InterfaceName::from_static_str_unchecked(#iface_name),
+                                &changed,
+                                &[#member_name],
+                            ).await
+                        }
+                    );
+
+                    generated_signals.extend(prop_changed_method);
+
+                    let prop_invalidate_method = quote!(
+                        pub async fn #prop_invalidate_method_name(
+                            &self,
+                            signal_context: &#zbus::object_server::SignalContext<'_>,
+                        ) -> #zbus::Result<()> {
+                            #zbus::fdo::Properties::properties_changed(
+                                signal_context,
+                                #zbus::names::InterfaceName::from_static_str_unchecked(#iface_name),
+                                &::std::collections::HashMap::new(),
+                                &[#member_name],
+                            ).await
+                        }
+                    );
+
+                    generated_signals.extend(prop_invalidate_method);
+                }
+            }
+            MethodType::Other => {
+                introspect.extend(doc_comments);
+                introspect.extend(introspect_method(&member_name, &intro_args));
+
+                let m = quote! {
                     #(#cfg_attrs)*
-                    #member_name => #zbus::object_server::DispatchResult::RequiresMut,
-                });
-                call_mut_dispatch.extend(m);
-            } else {
-                call_dispatch.extend(m);
+                    #member_name => {
+                        let future = async move {
+                            #args_from_msg
+                            let reply = self.#ident(#args_names)#method_await;
+                            #reply
+                        };
+                        #zbus::object_server::DispatchResult::Async(::std::boxed::Box::pin(async move {
+                            future.await
+                        }))
+                    },
+                };
+
+                if is_mut {
+                    call_dispatch.extend(quote! {
+                        #(#cfg_attrs)*
+                        #member_name => #zbus::object_server::DispatchResult::RequiresMut,
+                    });
+                    call_mut_dispatch.extend(m);
+                } else {
+                    call_dispatch.extend(m);
+                }
             }
         }
     }
@@ -484,14 +648,22 @@ pub fn expand(args: AttributeArgs, mut input: ItemImpl) -> syn::Result<TokenStre
     let generics = &input.generics;
     let where_clause = &generics.where_clause;
 
+    let generated_signals_impl = if generated_signals.is_empty() {
+        quote!()
+    } else {
+        quote! {
+            impl #generics #self_ty
+            #where_clause
+            {
+                #generated_signals
+            }
+        }
+    };
+
     Ok(quote! {
         #input
 
-        impl #generics #self_ty
-        #where_clause
-        {
-            #generated_signals
-        }
+        #generated_signals_impl
 
         #[#zbus::export::async_trait::async_trait]
         impl #generics #zbus::object_server::Interface for #self_ty
@@ -900,14 +1072,35 @@ fn introspect_properties(
         })?;
 
         let doc_comments = prop.doc_comments;
-        introspection.extend(quote!(
-            #doc_comments
-            ::std::writeln!(
-                writer,
-                "{:indent$}<property name=\"{}\" type=\"{}\" access=\"{}\"/>",
-                "", #name, <#ty>::signature(), #access, indent = level,
-            ).unwrap();
-        ));
+        if prop.emits_changed_signal == PropertyEmitsChangedSignal::True {
+            introspection.extend(quote!(
+                #doc_comments
+                ::std::writeln!(
+                    writer,
+                    "{:indent$}<property name=\"{}\" type=\"{}\" access=\"{}\"/>",
+                    "", #name, <#ty>::signature(), #access, indent = level,
+                ).unwrap();
+            ));
+        } else {
+            let emits_changed_signal = prop.emits_changed_signal.to_string();
+            introspection.extend(quote!(
+                #doc_comments
+                ::std::writeln!(
+                    writer,
+                    "{:indent$}<property name=\"{}\" type=\"{}\" access=\"{}\">",
+                    "", #name, <#ty>::signature(), #access, indent = level,
+                ).unwrap();
+                ::std::writeln!(
+                    writer,
+                    "{:indent$}<annotation name=\"org.freedesktop.DBus.Property.EmitsChangedSignal\" value=\"{}\"/>",
+                    "", #emits_changed_signal, indent = level + 2,
+                ).unwrap();
+                ::std::writeln!(
+                    writer,
+                    "{:indent$}</property>", "", indent = level,
+                ).unwrap();
+            ));
+        }
     }
 
     Ok(())

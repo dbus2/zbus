@@ -211,8 +211,17 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// * `property` - expose the method as a property. If the method takes an argument, it must be a
 ///   setter, with a `set_` prefix. Otherwise, it's a getter. If it may fail, a property method must
-///   return `zbus::fdo::Result`.
-///
+///   return `zbus::fdo::Result`. An additional sub-attribute exists to control the emission of
+///   signals on changes to the property:
+///   * `emits_changed_signal` - specifies how property changes are signaled. Valid values are those
+///     documented in [DBus specifications][dbus_emits_changed_signal]:
+///     * `"true"` - (default) the change signal is always emitted when the property's setter is
+///     called. The value of the property is included in the signal.
+///     * `"invalidates"` - the change signal is emitted, but the value is not included in the
+///     signal.
+///     * `"const"` - the property never changes, thus no signal is ever emitted for it.
+///     * `"false"` - the change signal is not emitted if the property changes.
+
 /// * `signal` - the method is a "signal". It must be a method declaration (without body). Its code
 ///   block will be expanded to emit the signal from the object path associated with the interface
 ///   instance.
@@ -321,6 +330,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// [`Connection::emit_signal()`]: https://docs.rs/zbus/latest/zbus/connection/struct.Connection.html#method.emit_signal
 /// [`SignalContext`]: https://docs.rs/zbus/latest/zbus/object_server/struct.SignalContext.html
 /// [`Interface`]: https://docs.rs/zbus/latest/zbus/object_server/trait.Interface.html
+/// [dbus_emits_changed_signal]: https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format
 #[proc_macro_attribute]
 pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as AttributeArgs);

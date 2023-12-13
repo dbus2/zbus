@@ -170,6 +170,22 @@ fn test_interface() {
             _value = MyCustomPropertyType(42);
         }
 
+        // Test that the emits_changed_signal property results in the correct annotation
+        #[dbus_interface(property(emits_changed_signal = "false"))]
+        fn my_custom_property_emits_false(&self) -> MyCustomPropertyType {
+            unimplemented!()
+        }
+
+        #[dbus_interface(property(emits_changed_signal = "invalidates"))]
+        fn my_custom_property_emits_invalidates(&self) -> MyCustomPropertyType {
+            unimplemented!()
+        }
+
+        #[dbus_interface(property(emits_changed_signal = "const"))]
+        fn my_custom_property_emits_const(&self) -> MyCustomPropertyType {
+            unimplemented!()
+        }
+
         #[dbus_interface(name = "CheckVEC")]
         fn check_vec(&self) -> Vec<u8> {
             unimplemented!()
@@ -221,6 +237,15 @@ fn test_interface() {
     <arg name="other" type="s"/>
   </signal>
   <property name="MyCustomProperty" type="u" access="readwrite"/>
+  <property name="MyCustomPropertyEmitsConst" type="u" access="read">
+    <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="const"/>
+  </property>
+  <property name="MyCustomPropertyEmitsFalse" type="u" access="read">
+    <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="false"/>
+  </property>
+  <property name="MyCustomPropertyEmitsInvalidates" type="u" access="read">
+    <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="invalidates"/>
+  </property>
   <!--
    Testing my_prop documentation is reflected in XML.
 
