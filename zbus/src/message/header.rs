@@ -3,7 +3,6 @@ use std::{
     sync::atomic::{AtomicU32, Ordering::SeqCst},
 };
 
-use endi::Endian;
 use enumflags2::{bitflags, BitFlags};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -12,7 +11,7 @@ use static_assertions::assert_impl_all;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 use zvariant::{
     serialized::{self, Context},
-    ObjectPath, Signature, Type as VariantType,
+    Endian, ObjectPath, Signature, Type as VariantType,
 };
 
 use crate::{

@@ -3,7 +3,7 @@ use std::{fmt, num::NonZeroU32, sync::Arc};
 
 use static_assertions::assert_impl_all;
 use zbus_names::{ErrorName, InterfaceName, MemberName};
-use zvariant::serialized;
+use zvariant::{serialized, Endian};
 
 use crate::{utils::padding_for_8_bytes, zvariant::ObjectPath, Error, Result};
 
@@ -133,7 +133,7 @@ impl Message {
         bytes: serialized::Data<'static, 'static>,
         recv_seq: u64,
     ) -> Result<Self> {
-        let endian = endi::Endian::from(EndianSig::try_from(bytes[0])?);
+        let endian = Endian::from(EndianSig::try_from(bytes[0])?);
         if endian != bytes.context().endian() {
             return Err(Error::IncorrectEndian);
         }

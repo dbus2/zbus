@@ -1305,10 +1305,10 @@ enum NameStatus {
 
 #[cfg(test)]
 mod tests {
-    use endi::{Endian, NATIVE_ENDIAN};
     use futures_util::stream::TryStreamExt;
     use ntest::timeout;
     use test_log::test;
+    use zvariant::{Endian, NATIVE_ENDIAN};
 
     use crate::{fdo::DBusProxy, AuthMechanism};
 

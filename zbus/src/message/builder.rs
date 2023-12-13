@@ -7,7 +7,7 @@ use std::{
 
 use enumflags2::BitFlags;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
-use zvariant::serialized;
+use zvariant::{serialized, Endian};
 
 use crate::{
     message::{Field, FieldCode, Fields, Flags, Header, Message, PrimaryHeader, Sequence, Type},
@@ -191,7 +191,7 @@ impl<'a> Builder<'a> {
     /// Set the endianness of the message.
     ///
     /// The default endianness is native.
-    pub fn endian(mut self, endian: endi::Endian) -> Self {
+    pub fn endian(mut self, endian: Endian) -> Self {
         let sig = EndianSig::from(endian);
         self.header.primary_mut().set_endian_sig(sig);
 
