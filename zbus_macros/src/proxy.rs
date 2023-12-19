@@ -1079,20 +1079,6 @@ fn gen_proxy_signal(
             }
         }
 
-        impl<'a> std::ops::Deref for #stream_name<'a> {
-            type Target = #zbus::#signal_type<'a>;
-
-            fn deref(&self) -> &Self::Target {
-                &self.0
-            }
-        }
-
-        impl ::std::ops::DerefMut for #stream_name<'_> {
-            fn deref_mut(&mut self) -> &mut Self::Target {
-                &mut self.0
-            }
-        }
-
         #stream_impl
 
         #args_struct_decl
