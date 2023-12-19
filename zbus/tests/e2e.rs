@@ -685,7 +685,7 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
 
     assert_eq!(proxy.optional_property().await?, Some(42).into());
 
-    let xml = proxy.introspect().await?;
+    let xml = proxy.inner().introspect().await?;
     debug!("Introspection: {}", xml);
     let node =
         zbus_xml::Node::from_reader(xml.as_bytes()).map_err(|e| Error::Failure(e.to_string()))?;
@@ -761,7 +761,7 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
     // TODO: Check if the properties are correct.
 
     // issue#207: interface panics on incorrect number of args.
-    assert!(proxy.call_method("CreateObj", &()).await.is_err());
+    assert!(proxy.inner().call_method("CreateObj", &()).await.is_err());
 
     let my_obj_proxy = MyIfaceProxy::builder(&conn)
         .destination("org.freedesktop.MyService")?
@@ -776,7 +776,7 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
     assert_eq!(my_obj_proxy.count().await?, 0);
     assert_eq!(my_obj_proxy.cached_count()?, Some(0));
     assert_eq!(
-        my_obj_proxy.cached_property_raw("Count").as_deref(),
+        my_obj_proxy.inner().cached_property_raw("Count").as_deref(),
         Some(&Value::from(0u32))
     );
     my_obj_proxy.ping().await?;
@@ -801,12 +801,13 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
     assert_eq!(args.object_path(), "/zbus/test/MyObj");
     assert_eq!(args.interfaces(), &["org.freedesktop.MyIface"]);
 
-    assert!(my_obj_proxy.introspect().await.is_err());
+    assert!(my_obj_proxy.inner().introspect().await.is_err());
     assert!(my_obj_proxy.ping().await.is_err());
 
     // Make sure methods modifying the ObjectServer can be called without
     // deadlocks.
     proxy
+        .inner()
         .call_method("CreateObjInside", &("CreatedInside"))
         .await?;
     let created_inside_proxy = MyIfaceProxy::builder(&conn)

@@ -402,29 +402,15 @@ pub fn create_proxy(
             }
         }
 
-        impl<'p> ::std::ops::Deref for #proxy_name<'p> {
-            type Target = #proxy_struct<'p>;
-
-            fn deref(&self) -> &Self::Target {
-                &self.0
-            }
-        }
-
-        impl<'p> ::std::ops::DerefMut for #proxy_name<'p> {
-            fn deref_mut(&mut self) -> &mut Self::Target {
-                &mut self.0
-            }
-        }
-
         impl<'p> ::std::convert::AsRef<#proxy_struct<'p>> for #proxy_name<'p> {
             fn as_ref(&self) -> &#proxy_struct<'p> {
-                &*self
+                self.inner()
             }
         }
 
         impl<'p> ::std::convert::AsMut<#proxy_struct<'p>> for #proxy_name<'p> {
             fn as_mut(&mut self) -> &mut #proxy_struct<'p> {
-                &mut *self
+                self.inner_mut()
             }
         }
 
@@ -881,7 +867,7 @@ fn gen_proxy_signal(
             #(#other_attrs)*
             pub #usage fn #receiver_with_args_name(&self, args: &[(u8, &str)]) -> #zbus::Result<#stream_name<'static>>
             {
-                self.receive_signal_with_args(#signal_name, args)#wait.map(#stream_name)
+                self.0.receive_signal_with_args(#signal_name, args)#wait.map(#stream_name)
             }
         }
     };
@@ -890,7 +876,7 @@ fn gen_proxy_signal(
         #(#other_attrs)*
         pub #usage fn #receiver_name(&self) -> #zbus::Result<#stream_name<'static>>
         {
-            self.receive_signal(#signal_name)#wait.map(#stream_name)
+            self.0.receive_signal(#signal_name)#wait.map(#stream_name)
         }
 
         #receive_signal_with_args
