@@ -16,6 +16,11 @@ use crate::Type;
 /// Since use of default values as none is typical, this trait is implemented for all types that
 /// implement [`Default`] for convenience. Unfortunately, this means you can not implement this
 /// trait manually for types that implement [`Default`].
+///
+/// Moreoever, since `bool` implements [`Default`], `NoneValue` gets implemented for `bool` as well.
+/// However, this is unsound since its not possible to distinguish between `false` and `None` in
+/// this case. This is why you'll get a panic on trying to serialize or deserialize an
+/// `Optionanl<bool>`.
 pub trait NoneValue {
     type NoneType;
 
@@ -89,6 +94,10 @@ where
     where
         S: Serializer,
     {
+        if T::signature() == bool::signature() {
+            panic!("`Optional<bool>` type is not supported");
+        }
+
         match &self.0 {
             Some(value) => value.serialize(serializer),
             None => T::null_value().serialize(serializer),
@@ -106,6 +115,10 @@ where
     where
         D: Deserializer<'de>,
     {
+        if T::signature() == bool::signature() {
+            panic!("`Optional<bool>` type is not supported");
+        }
+
         let value = <<T as NoneValue>::NoneType>::deserialize(deserializer)?;
         if value == T::null_value() {
             Ok(Optional(None))
@@ -144,5 +157,24 @@ impl<T> DerefMut for Optional<T> {
 impl<T> Default for Optional<T> {
     fn default() -> Self {
         Self(None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::panic::catch_unwind;
+
+    #[test]
+    fn bool_in_optional() {
+        // Ensure trying to encode/decode `bool` in `Optional` fails.
+        use crate::{to_bytes, Optional, LE};
+
+        let ctxt = crate::serialized::Context::new_dbus(LE, 0);
+        let res = catch_unwind(|| to_bytes(ctxt, &Optional::<bool>::default()));
+        assert!(res.is_err());
+
+        let data = crate::serialized::Data::new([0, 0, 0, 0].as_slice(), ctxt);
+        let res = catch_unwind(|| data.deserialize::<Optional<bool>>());
+        assert!(res.is_err());
     }
 }
