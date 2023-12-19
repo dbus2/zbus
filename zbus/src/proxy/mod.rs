@@ -332,11 +332,12 @@ impl PropertiesCache {
         let prop_changes = proxy.receive_properties_changed().await?.map(Either::Left);
 
         let get_all = proxy
+            .inner()
             .connection()
             .call_method_raw(
-                Some(proxy.destination()),
-                proxy.path(),
-                Some(proxy.interface()),
+                Some(proxy.inner().destination()),
+                proxy.inner().path(),
+                Some(proxy.inner().interface()),
                 "GetAll",
                 BitFlags::empty(),
                 &interface,
@@ -1358,17 +1359,18 @@ mod tests {
 
         let proxy = fdo::DBusProxy::new(&dest_conn).await?;
         let mut name_acquired_stream = proxy
+            .inner()
             .receive_signal_with_args("NameAcquired", &[(0, well_known)])
             .await?;
 
-        let prop_stream =
-            proxy
-                .receive_property_changed("SomeProp")
-                .await
-                .filter_map(|changed| async move {
-                    let v: Option<u32> = changed.get().await.ok();
-                    dbg!(v)
-                });
+        let prop_stream = proxy
+            .inner()
+            .receive_property_changed("SomeProp")
+            .await
+            .filter_map(|changed| async move {
+                let v: Option<u32> = changed.get().await.ok();
+                dbg!(v)
+            });
         drop(proxy);
         drop(prop_stream);
 

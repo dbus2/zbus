@@ -1,7 +1,5 @@
 //! The object server API.
 
-use std::ops::Deref;
-
 use static_assertions::assert_impl_all;
 use zvariant::ObjectPath;
 
@@ -232,14 +230,6 @@ impl ObjectServer {
     /// Get the underlying async ObjectServer, consuming `self`.
     pub fn into_inner(self) -> crate::ObjectServer {
         self.azync
-    }
-}
-
-impl Deref for ObjectServer {
-    type Target = crate::ObjectServer;
-
-    fn deref(&self) -> &Self::Target {
-        self.inner()
     }
 }
 

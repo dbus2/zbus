@@ -258,7 +258,7 @@ async fn main() -> Result<()> {
 
     let props = zbus::fdo::PropertiesProxy::builder(&conn)
         .destination("org.freedesktop.GeoClue2")?
-        .path(client.path())?
+        .path(client.inner().path())?
         .build()
         .await?;
     let mut props_changed = props.receive_properties_changed().await?;
