@@ -383,7 +383,9 @@ impl<'a> Builder<'a> {
             let object_server = conn.sync_object_server(false, None);
             for (path, interfaces) in self.interfaces {
                 for (name, iface) in interfaces {
-                    let future = object_server.at_ready(path.to_owned(), name, || iface);
+                    let future = object_server
+                        .inner()
+                        .at_ready(path.to_owned(), name, || iface);
                     let added = future.await?;
                     // Duplicates shouldn't happen.
                     assert!(added);
