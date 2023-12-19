@@ -374,6 +374,11 @@ pub fn create_proxy(
                 &self.0
             }
 
+            /// The mutable reference to the underlying `zbus::Proxy`.
+            pub fn inner_mut(&mut self) -> &mut #proxy_struct<'p> {
+                &mut self.0
+            }
+
             #methods
         }
 
