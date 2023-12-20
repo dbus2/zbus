@@ -1579,10 +1579,11 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn connect_launchd_session_bus() {
+        use crate::address::{transport::Launchd, Address, Transport};
         crate::block_on(async {
-            let addr = crate::address::macos_launchd_bus_address("DBUS_LAUNCHD_SESSION_BUS_SOCKET")
-                .await
-                .expect("Unable to get Launchd session bus address");
+            let addr = Address::from(Transport::Launchd(Launchd::new(
+                "DBUS_LAUNCHD_SESSION_BUS_SOCKET",
+            )));
             addr.connect().await
         })
         .expect("Unable to connect to session bus");

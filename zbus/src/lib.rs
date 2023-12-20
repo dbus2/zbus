@@ -44,20 +44,6 @@ pub use error::*;
 pub mod address;
 pub use address::Address;
 
-#[deprecated(note = "Use `address::TcpAddress` instead")]
-#[doc(hidden)]
-pub use address::TcpAddress;
-#[deprecated(note = "Use `address::TcpAddressFamily` instead")]
-#[doc(hidden)]
-pub use address::TcpAddressFamily;
-#[cfg(any(
-    all(feature = "vsock", not(feature = "tokio")),
-    feature = "tokio-vsock"
-))]
-#[deprecated(note = "Use `address::VsockAddress` instead")]
-#[doc(hidden)]
-pub use address::VsockAddress;
-
 mod guid;
 pub use guid::*;
 

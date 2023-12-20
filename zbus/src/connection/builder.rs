@@ -465,13 +465,13 @@ impl<'a> Builder<'a> {
             Target::VsockStream(stream) => Split::new_boxed(stream),
             Target::Address(address) => match address.connect().await? {
                 #[cfg(any(unix, not(feature = "tokio")))]
-                address::Stream::Unix(stream) => Split::new_boxed(stream),
-                address::Stream::Tcp(stream) => Split::new_boxed(stream),
+                address::transport::Stream::Unix(stream) => Split::new_boxed(stream),
+                address::transport::Stream::Tcp(stream) => Split::new_boxed(stream),
                 #[cfg(any(
                     all(feature = "vsock", not(feature = "tokio")),
                     feature = "tokio-vsock"
                 ))]
-                address::Stream::Vsock(stream) => Split::new_boxed(stream),
+                address::transport::Stream::Vsock(stream) => Split::new_boxed(stream),
             },
             Target::Socket(stream) => stream,
         })
