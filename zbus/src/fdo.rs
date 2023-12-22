@@ -1018,7 +1018,7 @@ mod tests {
             .build(&("so long"))
             .unwrap();
         let e: Error = m.into();
-        let e: fdo::Error = e.try_into().unwrap();
+        let e: fdo::Error = e.into();
         assert_eq!(e, fdo::Error::TimedOut("so long".to_string()),);
         assert_eq!(e.name(), "org.freedesktop.DBus.Error.TimedOut");
         assert_eq!(e.description(), Some("so long"));
