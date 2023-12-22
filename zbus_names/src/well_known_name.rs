@@ -46,7 +46,7 @@ impl_str_basic!(WellKnownName<'_>);
 assert_impl_all!(WellKnownName<'_>: Send, Sync, Unpin);
 
 impl<'name> WellKnownName<'name> {
-    /// A borrowed clone (never allocates, unlike clone).
+    /// This is faster than `Clone::clone` when `self` contains owned data.
     pub fn as_ref(&self) -> WellKnownName<'_> {
         WellKnownName(self.0.as_ref())
     }

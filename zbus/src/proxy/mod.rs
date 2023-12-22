@@ -1324,6 +1324,22 @@ impl<'a> From<crate::blocking::Proxy<'a>> for Proxy<'a> {
     }
 }
 
+/// This trait is implemented by all async proxies, which are generated with the
+/// [`dbus_proxy`](zbus::dbus_proxy) macro.
+pub trait ProxyImpl<'c>
+where
+    Self: Sized,
+{
+    /// Returns a customizable builder for this proxy.
+    fn builder(conn: &Connection) -> Builder<'c, Self>;
+
+    /// Consumes `self`, returning the underlying `zbus::Proxy`.
+    fn into_inner(self) -> Proxy<'c>;
+
+    /// The reference to the underlying `zbus::Proxy`.
+    fn inner(&self) -> &Proxy<'c>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1515,20 +1531,4 @@ mod tests {
 
         Ok(())
     }
-}
-
-/// This trait is implemented by all async proxies, which are generated with the
-/// [`dbus_proxy`](zbus::dbus_proxy) macro.
-pub trait ProxyImpl<'c>
-where
-    Self: Sized,
-{
-    /// Returns a customizable builder for this proxy.
-    fn builder(conn: &Connection) -> Builder<'c, Self>;
-
-    /// Consumes `self`, returning the underlying `zbus::Proxy`.
-    fn into_inner(self) -> Proxy<'c>;
-
-    /// The reference to the underlying `zbus::Proxy`.
-    fn inner(&self) -> &Proxy<'c>;
 }

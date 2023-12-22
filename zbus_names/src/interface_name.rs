@@ -48,7 +48,7 @@ impl_str_basic!(InterfaceName<'_>);
 assert_impl_all!(InterfaceName<'_>: Send, Sync, Unpin);
 
 impl<'name> InterfaceName<'name> {
-    /// A borrowed clone (never allocates, unlike clone).
+    /// This is faster than `Clone::clone` when `self` contains owned data.
     pub fn as_ref(&self) -> InterfaceName<'_> {
         InterfaceName(self.0.as_ref())
     }

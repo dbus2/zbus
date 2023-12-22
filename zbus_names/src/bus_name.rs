@@ -60,7 +60,7 @@ assert_impl_all!(BusName<'_>: Send, Sync, Unpin);
 impl_str_basic!(BusName<'_>);
 
 impl<'name> BusName<'name> {
-    /// A borrowed clone (never allocates, unlike clone).
+    /// A borrowed clone (this never allocates, unlike clone).
     pub fn as_ref(&self) -> BusName<'_> {
         match self {
             BusName::Unique(name) => BusName::Unique(name.as_ref()),

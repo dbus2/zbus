@@ -38,7 +38,7 @@ pub struct ObjectPath<'a>(Str<'a>);
 assert_impl_all!(ObjectPath<'_>: Send, Sync, Unpin);
 
 impl<'a> ObjectPath<'a> {
-    /// A borrowed clone (this never allocates, unlike clone).
+    /// This is faster than `Clone::clone` when `self` contains owned data.
     pub fn as_ref(&self) -> ObjectPath<'_> {
         ObjectPath(self.0.as_ref())
     }

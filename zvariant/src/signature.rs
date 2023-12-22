@@ -38,7 +38,7 @@ impl<'b> Bytes<'b> {
         Self::Owned(bytes.into())
     }
 
-    /// A borrowed clone (this never allocates, unlike clone).
+    /// This is faster than `Clone::clone` when `self` contains owned data.
     fn as_ref(&self) -> Bytes<'_> {
         match &self {
             Bytes::Static(s) => Bytes::Static(s),
@@ -145,7 +145,7 @@ impl<'a> Signature<'a> {
         &self.bytes[self.pos..self.end]
     }
 
-    /// A borrowed clone (this never allocates, unlike clone).
+    /// This is faster than `Clone::clone` when `self` contains owned data.
     pub fn as_ref(&self) -> Signature<'_> {
         Signature {
             bytes: self.bytes.as_ref(),
