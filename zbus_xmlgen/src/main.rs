@@ -134,7 +134,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         Some(path) => {
             let file = OpenOptions::new()
                 .create(true)
-                .write(true)
                 .append(true)
                 .open(path)
                 .expect("Failed to open file");
