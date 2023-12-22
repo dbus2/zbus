@@ -92,7 +92,7 @@ impl<'a> Str<'a> {
         Str(Inner::Static(s))
     }
 
-    /// A borrowed clone (this never allocates, unlike clone).
+    /// This is faster than `Clone::clone` when `self` contains owned data.
     pub fn as_ref(&self) -> Str<'_> {
         match &self.0 {
             Inner::Static(s) => Str(Inner::Static(s)),
