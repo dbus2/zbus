@@ -484,6 +484,22 @@ impl<'a> std::iter::Iterator for OwnerChangedIterator<'a> {
     }
 }
 
+/// This trait is implemented by all blocking proxies, which are generated with the
+/// [`dbus_proxy`](zbus::dbus_proxy) macro.
+pub trait ProxyImpl<'p>
+where
+    Self: Sized,
+{
+    /// Returns a customizable builder for this proxy.
+    fn builder(conn: &Connection) -> Builder<'p, Self>;
+
+    /// Consumes `self`, returning the underlying `zbus::Proxy`.
+    fn into_inner(self) -> Proxy<'p>;
+
+    /// The reference to the underlying `zbus::Proxy`.
+    fn inner(&self) -> &Proxy<'p>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -527,20 +543,4 @@ mod tests {
         // one we subscribed to.
         assert!(signal.args().unwrap().name() == well_known);
     }
-}
-
-/// This trait is implemented by all blocking proxies, which are generated with the
-/// [`dbus_proxy`](zbus::dbus_proxy) macro.
-pub trait ProxyImpl<'p>
-where
-    Self: Sized,
-{
-    /// Returns a customizable builder for this proxy.
-    fn builder(conn: &Connection) -> Builder<'p, Self>;
-
-    /// Consumes `self`, returning the underlying `zbus::Proxy`.
-    fn into_inner(self) -> Proxy<'p>;
-
-    /// The reference to the underlying `zbus::Proxy`.
-    fn inner(&self) -> &Proxy<'p>;
 }
