@@ -50,7 +50,7 @@ assert_impl_all!(ErrorName<'_>: Send, Sync, Unpin);
 impl_str_basic!(ErrorName<'_>);
 
 impl<'name> ErrorName<'name> {
-    /// A borrowed clone (never allocates, unlike clone).
+    /// This is faster than `Clone::clone` when `self` contains owned data.
     pub fn as_ref(&self) -> ErrorName<'_> {
         ErrorName(self.0.as_ref())
     }

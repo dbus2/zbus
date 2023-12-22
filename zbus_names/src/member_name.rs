@@ -46,7 +46,7 @@ assert_impl_all!(MemberName<'_>: Send, Sync, Unpin);
 impl_str_basic!(MemberName<'_>);
 
 impl<'name> MemberName<'name> {
-    /// A borrowed clone (never allocates, unlike clone).
+    /// This is faster than `Clone::clone` when `self` contains owned data.
     pub fn as_ref(&self) -> MemberName<'_> {
         MemberName(self.0.as_ref())
     }

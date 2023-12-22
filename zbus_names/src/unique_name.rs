@@ -45,7 +45,7 @@ assert_impl_all!(UniqueName<'_>: Send, Sync, Unpin);
 impl_str_basic!(UniqueName<'_>);
 
 impl<'name> UniqueName<'name> {
-    /// A borrowed clone (never allocates, unlike clone).
+    /// This is faster than `Clone::clone` when `self` contains owned data.
     pub fn as_ref(&self) -> UniqueName<'_> {
         UniqueName(self.0.as_ref())
     }
