@@ -60,22 +60,23 @@ use std::error::Error;
 
 use zbus::{zvariant::Value, Connection};
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    let connection = Connection::session().await?;
+// Although we use `smol` here, you can use any async runtime of choice.
+smol_macros::main! {
+    async fn main() -> Result<(), Box<dyn Error>> {
+        let connection = Connection::session().await?;
 
-    let m = connection.call_method(
-        Some("org.freedesktop.Notifications"),
-        "/org/freedesktop/Notifications",
-        Some("org.freedesktop.Notifications"),
-        "Notify",
-        &("my-app", 0u32, "dialog-information", "A summary", "Some body",
-          vec![""; 0], HashMap::<&str, &Value>::new(), 5000),
-    ).await?;
-    let reply: u32 = m.body().deserialize().unwrap();
-    dbg!(reply);
-    Ok(())
+        let m = connection.call_method(
+            Some("org.freedesktop.Notifications"),
+            "/org/freedesktop/Notifications",
+            Some("org.freedesktop.Notifications"),
+            "Notify",
+            &("my-app", 0u32, "dialog-information", "A summary", "Some body",
+            vec![""; 0], HashMap::<&str, &Value>::new(), 5000),
+        ).await?;
+        let reply: u32 = m.body().deserialize().unwrap();
+        dbg!(reply);
+        Ok(())
+    }
 }
 ```
 
@@ -116,24 +117,25 @@ trait Notifications {
               expire_timeout: i32) -> zbus::Result<u32>;
 }
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    let connection = Connection::session().await?;
+// Although we use `smol` here, you can use any async runtime of choice.
+smol_macros::main! {
+    async fn main() -> Result<(), Box<dyn Error>> {
+        let connection = Connection::session().await?;
 
-    let proxy = NotificationsProxy::new(&connection).await?;
-    let reply = proxy.notify(
-        "my-app",
-        0,
-        "dialog-information",
-        "A summary", "Some body",
-        &[],
-        HashMap::new(),
-        5000,
-    ).await?;
-    dbg!(reply);
+        let proxy = NotificationsProxy::new(&connection).await?;
+        let reply = proxy.notify(
+            "my-app",
+            0,
+            "dialog-information",
+            "A summary", "Some body",
+            &[],
+            HashMap::new(),
+            5000,
+        ).await?;
+        dbg!(reply);
 
-    Ok(())
+        Ok(())
+    }
 }
 ```
 
@@ -161,7 +163,7 @@ Let's look at this API in action, with an example where we monitor started syste
 
 ```rust,no_run
 # // NOTE: When changing this, please also keep `zbus/examples/watch-systemd-jobs.rs` in sync.
-use async_std::stream::StreamExt;
+use futures_util::stream::StreamExt;
 use zbus::Connection;
 use zbus_macros::dbus_proxy;
 use zvariant::OwnedObjectPath;
@@ -247,58 +249,59 @@ trait Location {
     fn longitude(&self) -> Result<f64>;
 }
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
-async fn main() -> Result<()> {
-    let conn = Connection::system().await?;
-    let manager = ManagerProxy::new(&conn).await?;
-    let mut client = manager.get_client().await?;
-    // Gotta do this, sorry!
-    client.set_desktop_id("org.freedesktop.zbus").await?;
+// Although we use `smol` here, you can use any async runtime of choice.
+smol_macros::main! {
+    async fn main() -> Result<()> {
+        let conn = Connection::system().await?;
+        let manager = ManagerProxy::new(&conn).await?;
+        let mut client = manager.get_client().await?;
+        // Gotta do this, sorry!
+        client.set_desktop_id("org.freedesktop.zbus").await?;
 
-    let props = zbus::fdo::PropertiesProxy::builder(&conn)
-        .destination("org.freedesktop.GeoClue2")?
-        .path(client.inner().path())?
-        .build()
-        .await?;
-    let mut props_changed = props.receive_properties_changed().await?;
-    let mut location_updated = client.receive_location_updated().await?;
+        let props = zbus::fdo::PropertiesProxy::builder(&conn)
+            .destination("org.freedesktop.GeoClue2")?
+            .path(client.inner().path())?
+            .build()
+            .await?;
+        let mut props_changed = props.receive_properties_changed().await?;
+        let mut location_updated = client.receive_location_updated().await?;
 
-    client.start().await?;
+        client.start().await?;
 
-    futures_util::try_join!(
-        async {
-            while let Some(signal) = props_changed.next().await {
-                let args = signal.args()?;
+        futures_util::try_join!(
+            async {
+                while let Some(signal) = props_changed.next().await {
+                    let args = signal.args()?;
 
-                for (name, value) in args.changed_properties().iter() {
-                    println!("{}.{} changed to `{:?}`", args.interface_name(), name, value);
+                    for (name, value) in args.changed_properties().iter() {
+                        println!("{}.{} changed to `{:?}`", args.interface_name(), name, value);
+                    }
                 }
+
+                Ok::<(), zbus::Error>(())
+            },
+            async {
+                while let Some(signal) = location_updated.next().await {
+                    let args = signal.args()?;
+
+                    let location = LocationProxy::builder(&conn)
+                        .path(args.new())?
+                        .build()
+                        .await?;
+                    println!(
+                        "Latitude: {}\nLongitude: {}",
+                        location.latitude().await?,
+                        location.longitude().await?,
+                    );
+                }
+
+                // No need to specify type of Result each time
+                Ok(())
             }
+        )?;
 
-            Ok::<(), zbus::Error>(())
-        },
-        async {
-            while let Some(signal) = location_updated.next().await {
-                let args = signal.args()?;
-
-                let location = LocationProxy::builder(&conn)
-                    .path(args.new())?
-                    .build()
-                    .await?;
-                println!(
-                    "Latitude: {}\nLongitude: {}",
-                    location.latitude().await?,
-                    location.longitude().await?,
-                );
-            }
-
-            // No need to specify type of Result each time
-            Ok(())
-        }
-    )?;
-
-   Ok(())
+    Ok(())
+    }
 }
 ```
 
@@ -342,7 +345,7 @@ trait SystemdManager {
     fn environment(&self) -> Result<Vec<String>>;
 }
 
-#[async_std::main]
+# smol_macros::main! {
 async fn main() -> Result<()> {
     let connection = Connection::system().await?;
 
@@ -355,6 +358,7 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
+# }
 ```
 
 You should get an output similar to this:
@@ -399,7 +403,7 @@ Here is an example:
 # use zbus::{Connection, dbus_proxy, Result};
 # use futures_util::stream::StreamExt;
 #
-# #[async_std::main]
+# smol_macros::main! {
 # async fn main() -> Result<()> {
     #[dbus_proxy(
         interface = "org.freedesktop.systemd1.Manager",
@@ -420,6 +424,7 @@ Here is an example:
     }
 #
 #   Ok(())
+# }
 # }
 ```
 

@@ -1026,9 +1026,9 @@ impl HandshakeCommon {
 #[cfg(unix)]
 #[cfg(test)]
 mod tests {
-    #[cfg(not(feature = "tokio"))]
-    use async_std::io::{Write as AsyncWrite, WriteExt};
     use futures_util::future::join;
+    #[cfg(not(feature = "tokio"))]
+    use futures_util::{AsyncWrite, AsyncWriteExt};
     use ntest::timeout;
     #[cfg(not(feature = "tokio"))]
     use std::os::unix::net::UnixStream;

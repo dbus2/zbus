@@ -844,8 +844,8 @@ impl Connection {
     /// # // https://gitlab.freedesktop.org/zeenix/zbus/-/jobs/34023494
     /// # #[cfg(all(not(feature = "tokio"), not(target_os = "windows")))]
     /// # {
+    /// use async_global_executor::{block_on, spawn};
     /// use zbus::connection::Builder;
-    /// use async_std::task::{block_on, spawn};
     ///
     /// # struct SomeIface;
     /// #
@@ -869,7 +869,7 @@ impl Connection {
     ///            loop {
     ///                conn.executor().tick().await;
     ///            }
-    ///        });
+    ///        }).detach();
     ///     }
     ///
     ///     // All your other async code goes here.

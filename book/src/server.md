@@ -20,8 +20,8 @@ our choice:
 ```rust,no_run
 use zbus::{Connection, Result};
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
+// Although we use `smol` here, you can use any async runtime of choice.
+# smol_macros::main! {
 async fn main() -> Result<()> {
     let connection = Connection::session()
         .await?;
@@ -31,6 +31,7 @@ async fn main() -> Result<()> {
 
     loop {}
 }
+# }
 ```
 
 We can check our service is running and is associated with the service name:
@@ -55,8 +56,8 @@ by replacing the loop above with this code:
 ```rust,no_run
 use futures_util::stream::TryStreamExt;
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-# #[async_std::main]
+// Although we use `smol` here, you can use any async runtime of choice.
+# smol_macros::main! {
 # async fn main() -> zbus::Result<()> {
 #    let connection = zbus::Connection::session()
 #        .await?;
@@ -84,6 +85,7 @@ while let Some(msg) = stream.try_next().await? {
 }
 
 # Ok(())
+# }
 # }
 ```
 
@@ -120,24 +122,25 @@ impl Greeter {
     }
 }
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
-async fn main() -> Result<()> {
-    let connection = Connection::session().await?;
-    // setup the server
-    connection
-        .object_server()
-        .at("/org/zbus/MyGreeter", Greeter)
-        .await?;
-    // before requesting the name
-    connection
-        .request_name("org.zbus.MyGreeter")
-        .await?;
+// Although we use `smol` here, you can use any async runtime of choice.
+smol_macros::main! {
+    async fn main() -> Result<()> {
+        let connection = Connection::session().await?;
+        // setup the server
+        connection
+            .object_server()
+            .at("/org/zbus/MyGreeter", Greeter)
+            .await?;
+        // before requesting the name
+        connection
+            .request_name("org.zbus.MyGreeter")
+            .await?;
 
-    loop {
-        // do something else, wait forever or timeout here:
-        // handling D-Bus messages is done in the background
-        std::future::pending::<()>().await;
+        loop {
+            // do something else, wait forever or timeout here:
+            // handling D-Bus messages is done in the background
+            std::future::pending::<()>().await;
+        }
     }
 }
 ```
@@ -162,7 +165,7 @@ setting up your interfaces and requesting names, and not have to care about this
 #     }
 # }
 #
-# #[async_std::main]
+# smol_macros::main! {
 # async fn main() -> Result<()> {
     let _connection = connection::Builder::session()?
         .name("org.zbus.MyGreeter")?
@@ -174,6 +177,7 @@ setting up your interfaces and requesting names, and not have to care about this
 #         // handling D-Bus messages is done in the background
 #         std::future::pending::<()>().await;
 #     }
+# }
 # }
 ```
 
@@ -255,8 +259,8 @@ impl Greeter {
     async fn greeted_everyone(ctxt: &SignalContext<'_>) -> Result<()>;
 }
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
+// Although we use `smol` here, you can use any async runtime of choice.
+# smol_macros::main! {
 async fn main() -> Result<()> {
     let greeter = Greeter {
         name: "GreeterName".to_string(),
@@ -273,6 +277,7 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
+# }
 ```
 
 This is the introspection result:
@@ -340,7 +345,7 @@ example code:
 #     }
 # }
 #
-# #[async_std::main]
+# smol_macros::main! {
 # async fn main() -> zbus::Result<()> {
 # let connection = zbus::Connection::session().await?;
 # let object_server = connection.object_server();
@@ -350,6 +355,7 @@ let mut iface = iface_ref.get_mut().await;
 iface.name = String::from("👋");
 iface.greeter_name_changed(iface_ref.signal_context()).await?;
 # Ok(())
+# }
 # }
 ```
 

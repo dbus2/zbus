@@ -50,20 +50,21 @@ impl Greeter {
     }
 }
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    let greeter = Greeter { count: 0 };
-    let _conn = connection::Builder::session()?
-        .name("org.zbus.MyGreeter")?
-        .serve_at("/org/zbus/MyGreeter", greeter)?
-        .build()
-        .await?;
+// Although we use `smol` here, you can use any async runtime of choice.
+smol_macros::main! {
+    async fn main() -> Result<(), Box<dyn Error>> {
+        let greeter = Greeter { count: 0 };
+        let _conn = connection::Builder::session()?
+            .name("org.zbus.MyGreeter")?
+            .serve_at("/org/zbus/MyGreeter", greeter)?
+            .build()
+            .await?;
 
-    // Do other things or go to wait forever
-    pending::<()>().await;
+        // Do other things or go to wait forever
+        pending::<()>().await;
 
-    Ok(())
+        Ok(())
+    }
 }
 ```
 
@@ -90,17 +91,18 @@ trait MyGreeter {
     async fn say_hello(&self, name: &str) -> Result<String>;
 }
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
-async fn main() -> Result<()> {
-    let connection = Connection::session().await?;
+// Although we use `smol` here, you can use any async runtime of choice.
+smol_macros::main! {
+    async fn main() -> Result<()> {
+        let connection = Connection::session().await?;
 
-    // `dbus_proxy` macro creates `MyGreeterProxy` based on `Notifications` trait.
-    let proxy = MyGreeterProxy::new(&connection).await?;
-    let reply = proxy.say_hello("Maria").await?;
-    println!("{reply}");
+        // `dbus_proxy` macro creates `MyGreeterProxy` based on `Notifications` trait.
+        let proxy = MyGreeterProxy::new(&connection).await?;
+        let reply = proxy.say_hello("Maria").await?;
+        println!("{reply}");
 
-    Ok(())
+        Ok(())
+    }
 }
 ```
 
