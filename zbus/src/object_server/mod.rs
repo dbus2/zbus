@@ -514,10 +514,6 @@ impl ObjectServer {
         iface_creator: F,
     ) -> Result<bool>
     where
-        // Needs to be hardcoded as 'static instead of 'p like most other
-        // functions, due to https://github.com/rust-lang/rust/issues/63033
-        // (It doesn't matter a whole lot since this is an internal-only API
-        // anyway.)
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
         F: FnOnce() -> Arc<RwLock<dyn Interface + 'static>>,
