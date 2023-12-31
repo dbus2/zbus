@@ -998,12 +998,44 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[cfg(test)]
 mod tests {
-    use crate::{fdo, message::Message, DBusError, Error};
+    use crate::{dbus_interface, fdo, message::Message, DBusError, Error};
     use futures_util::StreamExt;
     use ntest::timeout;
     use test_log::test;
     use tokio::runtime;
     use zbus_names::WellKnownName;
+
+    struct TestObj;
+    #[dbus_interface(name = "org.freedesktop.TestObj")]
+    impl TestObj {
+        #[dbus_interface(property, name = "hello")]
+        fn hello(&self) -> String {
+            "world".into()
+        }
+    }
+
+    #[test]
+    #[timeout(15000)]
+    fn object_manager_initialization() {
+        runtime::Runtime::new()
+            .unwrap()
+            .block_on(test_object_manager_initialization());
+    }
+
+    async fn test_object_manager_initialization() {
+        let obj = TestObj {};
+        let _conn = zbus::ConnectionBuilder::session()
+            .unwrap()
+            .name("org.freedesktop.MyService")
+            .unwrap()
+            .serve_at("/org/freedesktop/MyService/Obj", obj)
+            .unwrap()
+            .serve_at("/org/freedesktop/MyService", fdo::ObjectManager)
+            .unwrap()
+            .build()
+            .await
+            .unwrap();
+    }
 
     #[test]
     fn error_from_zerror() {
