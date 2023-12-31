@@ -1212,7 +1212,7 @@ impl Connection {
     /// Returns a listener, notified on various connection activity.
     ///
     /// This function is meant for the caller to implement idle or timeout on inactivity.
-    pub fn monitor_activity(&self) -> EventListener {
+    pub fn monitor_activity(&self) -> Pin<Box<EventListener>> {
         self.inner.activity_event.listen()
     }
 

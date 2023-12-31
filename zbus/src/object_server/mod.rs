@@ -7,6 +7,7 @@ use std::{
     fmt::Write,
     marker::PhantomData,
     ops::{Deref, DerefMut},
+    pin::Pin,
     sync::Arc,
 };
 use tracing::{debug, instrument, trace};
@@ -809,7 +810,7 @@ pub struct ResponseDispatchNotifier<R> {
 
 impl<R> ResponseDispatchNotifier<R> {
     /// Create a new `NotifyResponse`.
-    pub fn new(response: R) -> (Self, EventListener) {
+    pub fn new(response: R) -> (Self, Pin<Box<EventListener>>) {
         let event = Event::new();
         let listener = event.listen();
         (

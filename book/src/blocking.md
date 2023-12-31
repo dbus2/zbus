@@ -185,13 +185,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         name: "GreeterName".to_string(),
         done: event_listener::Event::new(),
     };
-    let done_listener = greeter.done.listen();
+    let mut done_listener = greeter.done.listen();
     let _handle = connection::Builder::session()?
         .name("org.zbus.MyGreeter")?
         .serve_at("/org/zbus/MyGreeter", greeter)?
         .build()?;
 
-    done_listener.wait();
+    done_listener.as_mut().wait();
 
     Ok(())
 }

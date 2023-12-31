@@ -3,7 +3,7 @@
 use enumflags2::BitFlags;
 use event_listener::EventListener;
 use static_assertions::assert_impl_all;
-use std::{io, ops::Deref};
+use std::{io, ops::Deref, pin::Pin};
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
 use zvariant::ObjectPath;
 
@@ -241,7 +241,7 @@ impl Connection {
     /// Returns a listener, notified on various connection activity.
     ///
     /// This function is meant for the caller to implement idle or timeout on inactivity.
-    pub fn monitor_activity(&self) -> EventListener {
+    pub fn monitor_activity(&self) -> Pin<Box<EventListener>> {
         self.inner.monitor_activity()
     }
 
@@ -313,7 +313,9 @@ mod tests {
         });
 
         let c = Builder::unix_stream(p1).p2p().build().unwrap();
-        let listener = c.monitor_activity();
+
+        let mut listener = c.monitor_activity();
+
         let mut s = MessageIterator::from(&c);
         tx.send(()).unwrap();
         let m = s.next().unwrap().unwrap();
@@ -326,11 +328,15 @@ mod tests {
         assert_eq!(val, "yay");
 
         // there was some activity
-        listener.wait();
+        listener.as_mut().wait();
         // eventually, nothing happens and it will timeout
         loop {
-            let listener = c.monitor_activity();
-            if !listener.wait_timeout(std::time::Duration::from_millis(10)) {
+            let mut listener = c.monitor_activity();
+            if listener
+                .as_mut()
+                .wait_timeout(std::time::Duration::from_millis(10))
+                .is_none()
+            {
                 break;
             }
         }
