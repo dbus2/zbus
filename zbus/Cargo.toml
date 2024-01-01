@@ -3,7 +3,7 @@ name = "zbus"
 version = "4.0.0"
 authors = ["Zeeshan Ali Khan <zeeshanak@gnome.org>"]
 edition = "2021"
-rust-version = "1.67"
+rust-version = "1.75"
 
 description = "API for D-Bus communication"
 repository = "https://github.com/dbus2/zbus/"
