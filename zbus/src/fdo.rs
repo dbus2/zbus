@@ -1089,4 +1089,61 @@ mod tests {
                 dbg!(v)
             });
     }
+
+    #[test]
+    #[timeout(15000)]
+    fn no_object_manager_signals_before_hello() {
+        use zbus::blocking;
+        // We were emitting `InterfacesAdded` signals before `Hello` was called, which is wrong and
+        // results in us getting disconnected by the bus. This test case ensures we don't do that
+        // and also that the signals are eventually emitted.
+
+        // Let's first create an interator to get the signals (it has to be another connection).
+        let conn = blocking::Connection::session().unwrap();
+        let mut iterator = blocking::MessageIterator::for_match_rule(
+            "type='signal',interface='org.freedesktop.DBus.ObjectManager',
+            path='/org/zbus/NoObjectManagerSignalsBeforeHello'",
+            &conn,
+            None,
+        )
+        .unwrap();
+
+        // Now create the service side.
+        struct TestObj;
+        #[super::dbus_interface(name = "org.zbus.TestObj")]
+        impl TestObj {
+            #[dbus_interface(property)]
+            fn test(&self) -> String {
+                "test".into()
+            }
+        }
+        let _conn = blocking::connection::Builder::session()
+            .unwrap()
+            .name("org.zbus.NoObjectManagerSignalsBeforeHello")
+            .unwrap()
+            .serve_at("/org/zbus/NoObjectManagerSignalsBeforeHello/Obj", TestObj)
+            .unwrap()
+            .serve_at(
+                "/org/zbus/NoObjectManagerSignalsBeforeHello",
+                super::ObjectManager,
+            )
+            .unwrap()
+            .build()
+            .unwrap();
+
+        // Let's see if the `InterfacesAdded` signal was emitted.
+        let msg = iterator.next().unwrap().unwrap();
+        let signal = super::InterfacesAdded::from_message(msg).unwrap();
+        assert_eq!(
+            signal.args().unwrap().interfaces_and_properties,
+            vec![(
+                "org.zbus.TestObj",
+                vec![("Test", zvariant::Value::new("test"))]
+                    .into_iter()
+                    .collect()
+            )]
+            .into_iter()
+            .collect()
+        );
+    }
 }
