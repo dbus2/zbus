@@ -57,7 +57,8 @@ impl Introspectable {
         let path = header.path().ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
         let node = root
-            .get_child(path)
+            .get_child(path, false)
+            .0
             .ok_or_else(|| Error::UnknownObject(format!("Unknown object '{path}'")))?;
 
         Ok(node.introspect().await)
@@ -70,7 +71,6 @@ macro_rules! gen_properties_proxy {
         /// Proxy for the `org.freedesktop.DBus.Properties` interface.
         #[dbus_proxy(
             interface = "org.freedesktop.DBus.Properties",
-            assume_defaults = true,
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
         )]
@@ -129,7 +129,8 @@ impl Properties {
         let path = header.path().ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
         let iface = root
-            .get_child(path)
+            .get_child(path, false)
+            .0
             .and_then(|node| node.interface_lock(interface_name.as_ref()))
             .ok_or_else(|| {
                 Error::UnknownInterface(format!("Unknown interface '{interface_name}'"))
@@ -155,7 +156,8 @@ impl Properties {
         let path = header.path().ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
         let iface = root
-            .get_child(path)
+            .get_child(path, false)
+            .0
             .and_then(|node| node.interface_lock(interface_name.as_ref()))
             .ok_or_else(|| {
                 Error::UnknownInterface(format!("Unknown interface '{interface_name}'"))
@@ -193,7 +195,8 @@ impl Properties {
         let path = header.path().ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
         let iface = root
-            .get_child(path)
+            .get_child(path, false)
+            .0
             .and_then(|node| node.interface_lock(interface_name.as_ref()))
             .ok_or_else(|| {
                 Error::UnknownInterface(format!("Unknown interface '{interface_name}'"))
@@ -228,7 +231,6 @@ macro_rules! gen_object_manager_proxy {
         /// objects.
         #[dbus_proxy(
             interface = "org.freedesktop.DBus.ObjectManager",
-            assume_defaults = true,
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
         )]
@@ -295,7 +297,8 @@ impl ObjectManager {
         let path = header.path().ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
         let node = root
-            .get_child(path)
+            .get_child(path, false)
+            .0
             .ok_or_else(|| Error::UnknownObject(format!("Unknown object '{path}'")))?;
 
         node.get_managed_objects().await
@@ -327,7 +330,6 @@ macro_rules! gen_peer_proxy {
         /// Proxy for the `org.freedesktop.DBus.Peer` interface.
         #[dbus_proxy(
             interface = "org.freedesktop.DBus.Peer",
-            assume_defaults = true,
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
         )]
@@ -386,7 +388,6 @@ macro_rules! gen_monitoring_proxy {
             interface = "org.freedesktop.DBus.Monitoring",
             default_service = "org.freedesktop.DBus",
             default_path = "/org/freedesktop/DBus",
-            assume_defaults = true,
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
         )]
@@ -431,7 +432,6 @@ macro_rules! gen_stats_proxy {
             interface = "org.freedesktop.DBus.Debug.Stats",
             default_service = "org.freedesktop.DBus",
             default_path = "/org/freedesktop/DBus",
-            assume_defaults = true,
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
         )]
@@ -696,7 +696,8 @@ macro_rules! gen_dbus_proxy {
     ($gen_async:literal, $gen_blocking:literal) => {
         /// Proxy for the `org.freedesktop.DBus` interface.
         #[dbus_proxy(
-            assume_defaults = true,
+            default_service = "org.freedesktop.DBus",
+            default_path = "/org/freedesktop/DBus",
             interface = "org.freedesktop.DBus",
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
@@ -1092,5 +1093,62 @@ mod tests {
                 let v = changed.get().await.ok();
                 dbg!(v)
             });
+    }
+
+    #[test]
+    #[timeout(15000)]
+    fn no_object_manager_signals_before_hello() {
+        use zbus::blocking;
+        // We were emitting `InterfacesAdded` signals before `Hello` was called, which is wrong and
+        // results in us getting disconnected by the bus. This test case ensures we don't do that
+        // and also that the signals are eventually emitted.
+
+        // Let's first create an interator to get the signals (it has to be another connection).
+        let conn = blocking::Connection::session().unwrap();
+        let mut iterator = blocking::MessageIterator::for_match_rule(
+            "type='signal',interface='org.freedesktop.DBus.ObjectManager',\
+            path='/org/zbus/NoObjectManagerSignalsBeforeHello'",
+            &conn,
+            None,
+        )
+        .unwrap();
+
+        // Now create the service side.
+        struct TestObj;
+        #[super::dbus_interface(name = "org.zbus.TestObj")]
+        impl TestObj {
+            #[dbus_interface(property)]
+            fn test(&self) -> String {
+                "test".into()
+            }
+        }
+        let _conn = blocking::connection::Builder::session()
+            .unwrap()
+            .name("org.zbus.NoObjectManagerSignalsBeforeHello")
+            .unwrap()
+            .serve_at("/org/zbus/NoObjectManagerSignalsBeforeHello/Obj", TestObj)
+            .unwrap()
+            .serve_at(
+                "/org/zbus/NoObjectManagerSignalsBeforeHello",
+                super::ObjectManager,
+            )
+            .unwrap()
+            .build()
+            .unwrap();
+
+        // Let's see if the `InterfacesAdded` signal was emitted.
+        let msg = iterator.next().unwrap().unwrap();
+        let signal = super::InterfacesAdded::from_message(msg).unwrap();
+        assert_eq!(
+            signal.args().unwrap().interfaces_and_properties,
+            vec![(
+                "org.zbus.TestObj",
+                vec![("Test", zvariant::Value::new("test"))]
+                    .into_iter()
+                    .collect()
+            )]
+            .into_iter()
+            .collect()
+        );
     }
 }
