@@ -70,7 +70,6 @@ macro_rules! gen_properties_proxy {
         /// Proxy for the `org.freedesktop.DBus.Properties` interface.
         #[dbus_proxy(
             interface = "org.freedesktop.DBus.Properties",
-            assume_defaults = true,
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
         )]
@@ -228,7 +227,6 @@ macro_rules! gen_object_manager_proxy {
         /// objects.
         #[dbus_proxy(
             interface = "org.freedesktop.DBus.ObjectManager",
-            assume_defaults = true,
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
         )]
@@ -327,7 +325,6 @@ macro_rules! gen_peer_proxy {
         /// Proxy for the `org.freedesktop.DBus.Peer` interface.
         #[dbus_proxy(
             interface = "org.freedesktop.DBus.Peer",
-            assume_defaults = true,
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
         )]
@@ -386,7 +383,6 @@ macro_rules! gen_monitoring_proxy {
             interface = "org.freedesktop.DBus.Monitoring",
             default_service = "org.freedesktop.DBus",
             default_path = "/org/freedesktop/DBus",
-            assume_defaults = true,
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
         )]
@@ -431,7 +427,6 @@ macro_rules! gen_stats_proxy {
             interface = "org.freedesktop.DBus.Debug.Stats",
             default_service = "org.freedesktop.DBus",
             default_path = "/org/freedesktop/DBus",
-            assume_defaults = true,
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
         )]
@@ -696,7 +691,8 @@ macro_rules! gen_dbus_proxy {
     ($gen_async:literal, $gen_blocking:literal) => {
         /// Proxy for the `org.freedesktop.DBus` interface.
         #[dbus_proxy(
-            assume_defaults = true,
+            default_service = "org.freedesktop.DBus",
+            default_path = "/org/freedesktop/DBus",
             interface = "org.freedesktop.DBus",
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
