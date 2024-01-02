@@ -6,23 +6,24 @@ use std::{
     ptr,
 };
 
-use winapi::{
-    shared::{
-        minwindef::{DWORD, FALSE},
-        sddl::ConvertSidToStringSidA,
-        tcpmib::{MIB_TCPTABLE2, MIB_TCP_STATE_ESTAB},
-        winerror::{ERROR_INSUFFICIENT_BUFFER, NO_ERROR},
-        ws2def::INADDR_LOOPBACK,
+use windows_sys::Win32::{
+    Foundation::{
+        CloseHandle, LocalFree, ERROR_INSUFFICIENT_BUFFER, FALSE, HANDLE, NO_ERROR, WAIT_ABANDONED,
+        WAIT_OBJECT_0,
     },
-    um::{
-        handleapi::CloseHandle,
-        iphlpapi::GetTcpTable2,
-        memoryapi::{MapViewOfFile, OpenFileMappingW, FILE_MAP_READ},
-        processthreadsapi::{GetCurrentProcess, OpenProcess, OpenProcessToken},
-        securitybaseapi::{GetTokenInformation, IsValidSid},
-        synchapi::{CreateMutexW, ReleaseMutex, WaitForSingleObject},
-        winbase::{LocalFree, INFINITE, WAIT_ABANDONED, WAIT_OBJECT_0},
-        winnt::{TokenUser, HANDLE, PROCESS_QUERY_LIMITED_INFORMATION, TOKEN_QUERY, TOKEN_USER},
+    NetworkManagement::IpHelper::{GetTcpTable2, MIB_TCPTABLE2, MIB_TCP_STATE_ESTAB},
+    Networking::WinSock::INADDR_LOOPBACK,
+    Security::{
+        Authorization::ConvertSidToStringSidA, GetTokenInformation, IsValidSid, TokenUser,
+        TOKEN_QUERY, TOKEN_USER,
+    },
+    System::{
+        Memory::{MapViewOfFile, OpenFileMappingW, FILE_MAP_READ},
+        Threading::{
+            CreateMutexW, GetCurrentProcess, OpenProcess, OpenProcessToken, ReleaseMutex,
+            WaitForSingleObject, INFINITE, PROCESS_ACCESS_RIGHTS,
+            PROCESS_QUERY_LIMITED_INFORMATION,
+        },
     },
 };
 
@@ -87,14 +88,17 @@ pub struct ProcessHandle(OwnedHandle);
 
 impl ProcessHandle {
     // Open the process associated with the process_id (if None, the current process)
-    pub fn open(process_id: Option<DWORD>, desired_access: DWORD) -> Result<Self, Error> {
+    pub fn open(
+        process_id: Option<u32>,
+        desired_access: PROCESS_ACCESS_RIGHTS,
+    ) -> Result<Self, Error> {
         let process = if let Some(process_id) = process_id {
             unsafe { OpenProcess(desired_access, false.into(), process_id) }
         } else {
             unsafe { GetCurrentProcess() }
         };
 
-        if process.is_null() {
+        if process == 0 {
             Err(Error::last_os_error())
         } else {
             // SAFETY: We have exclusive ownership over the process handle
@@ -113,8 +117,8 @@ pub struct ProcessToken(OwnedHandle);
 
 impl ProcessToken {
     // Open the access token associated with the process_id (if None, the current process)
-    pub fn open(process_id: Option<DWORD>) -> Result<Self, Error> {
-        let mut process_token: HANDLE = ptr::null_mut();
+    pub fn open(process_id: Option<u32>) -> Result<Self, Error> {
+        let mut process_token: HANDLE = HANDLE::default();
         let process = ProcessHandle::open(process_id, PROCESS_QUERY_LIMITED_INFORMATION)?;
 
         if unsafe { OpenProcessToken(process.0.get(), TOKEN_QUERY, &mut process_token) } == 0 {
@@ -157,16 +161,16 @@ impl ProcessToken {
 
         let sid = unsafe { (*(token_info.as_ptr() as *const TOKEN_USER)).User.Sid };
 
-        if unsafe { IsValidSid(sid as *mut _) } == 0 {
+        if unsafe { IsValidSid(sid as *mut _) } == FALSE {
             return Err(Error::new(ErrorKind::Other, "Invalid SID"));
         }
 
-        let mut pstr: *mut i8 = ptr::null_mut();
-        if unsafe { ConvertSidToStringSidA(sid as *mut _, &mut pstr as *mut _) } == 0 {
+        let mut pstr = ptr::null_mut();
+        if unsafe { ConvertSidToStringSidA(sid, &mut pstr) } == 0 {
             return Err(Error::last_os_error());
         }
 
-        let sid = unsafe { CStr::from_ptr(pstr) };
+        let sid = unsafe { CStr::from_ptr(pstr as *const _) };
         let ret = sid
             .to_str()
             .map_err(|_| Error::new(ErrorKind::Other, "Invalid SID"))?
@@ -181,7 +185,7 @@ impl ProcessToken {
 
 // Get the process ID of the local socket address
 // TODO: add ipv6 support
-pub fn socket_addr_get_pid(addr: &SocketAddr) -> Result<DWORD, Error> {
+pub fn socket_addr_get_pid(addr: &SocketAddr) -> Result<u32, Error> {
     let mut len = 4096;
     let mut tcp_table = vec![];
     let res = loop {
@@ -203,7 +207,7 @@ pub fn socket_addr_get_pid(addr: &SocketAddr) -> Result<DWORD, Error> {
         let port = (entry.dwLocalPort & 0xFFFF) as u16;
         let port = u16::from_be(port);
 
-        if entry.dwState == MIB_TCP_STATE_ESTAB
+        if entry.dwState == MIB_TCP_STATE_ESTAB as u32
             && u32::from_be(entry.dwLocalAddr) == INADDR_LOOPBACK
             && u32::from_be(entry.dwRemoteAddr) == INADDR_LOOPBACK
             && port == addr.port()
@@ -217,7 +221,7 @@ pub fn socket_addr_get_pid(addr: &SocketAddr) -> Result<DWORD, Error> {
 
 // Get the process ID of the connected peer
 #[cfg(any(test, not(feature = "tokio")))]
-pub fn tcp_stream_get_peer_pid(stream: &std::net::TcpStream) -> Result<DWORD, Error> {
+pub fn tcp_stream_get_peer_pid(stream: &std::net::TcpStream) -> Result<u32, Error> {
     let peer_addr = stream.peer_addr()?;
 
     socket_addr_get_pid(&peer_addr)
@@ -225,7 +229,7 @@ pub fn tcp_stream_get_peer_pid(stream: &std::net::TcpStream) -> Result<DWORD, Er
 
 #[cfg(any(test, not(feature = "tokio")))]
 fn last_err() -> std::io::Error {
-    use winapi::um::winsock2::WSAGetLastError;
+    use windows_sys::Win32::Networking::WinSock::WSAGetLastError;
 
     let err = unsafe { WSAGetLastError() };
     std::io::Error::from_raw_os_error(err)
@@ -233,34 +237,31 @@ fn last_err() -> std::io::Error {
 
 // Get the process ID of the connected peer
 #[cfg(not(feature = "tokio"))]
-pub fn unix_stream_get_peer_pid(stream: &UnixStream) -> Result<DWORD, Error> {
+pub fn unix_stream_get_peer_pid(stream: &UnixStream) -> Result<u32, Error> {
     use std::os::windows::io::AsRawSocket;
-    use winapi::{
-        shared::ws2def::IOC_VENDOR,
-        um::winsock2::{WSAIoctl, SOCKET_ERROR},
-    };
+    use windows_sys::Win32::Networking::WinSock::{WSAIoctl, IOC_OUT, IOC_VENDOR, SOCKET_ERROR};
 
     macro_rules! _WSAIOR {
         ($x:expr, $y:expr) => {
-            winapi::shared::ws2def::IOC_OUT | $x | $y
+            IOC_OUT | $x | $y
         };
     }
 
     let socket = stream.as_raw_socket();
-    const SIO_AF_UNIX_GETPEERPID: DWORD = _WSAIOR!(IOC_VENDOR, 256);
-    let mut ret = 0 as DWORD;
+    const SIO_AF_UNIX_GETPEERPID: u32 = _WSAIOR!(IOC_VENDOR, 256);
+    let mut ret = 0;
     let mut bytes = 0;
 
     let r = unsafe {
         WSAIoctl(
             socket as _,
             SIO_AF_UNIX_GETPEERPID,
-            0 as *mut _,
+            ptr::null_mut(),
             0,
             &mut ret as *mut _ as *mut _,
-            std::mem::size_of_val(&ret) as DWORD,
+            std::mem::size_of_val(&ret) as u32,
             &mut bytes,
-            0 as *mut _,
+            ptr::null_mut(),
             None,
         )
     };
@@ -281,7 +282,7 @@ fn read_shm(name: &str) -> Result<Vec<u8>, crate::Error> {
 
         let res = unsafe { OpenFileMappingW(FILE_MAP_READ, FALSE, wide_name.as_ptr()) };
 
-        if !res.is_null() {
+        if res != 0 {
             // SAFETY: We have exclusive ownership over the file mapping handle
             unsafe { OwnedHandle::new(res) }
         } else {
@@ -293,11 +294,11 @@ fn read_shm(name: &str) -> Result<Vec<u8>, crate::Error> {
 
     let addr = unsafe { MapViewOfFile(handle.get(), FILE_MAP_READ, 0, 0, 0) };
 
-    if addr.is_null() {
+    if addr.Value.is_null() {
         return Err(crate::Error::Address("MapViewOfFile() failed".to_owned()));
     }
 
-    let data = unsafe { CStr::from_ptr(addr as *const _) };
+    let data = unsafe { CStr::from_ptr(addr.Value as *const _) };
     Ok(data.to_bytes().to_owned())
 }
 

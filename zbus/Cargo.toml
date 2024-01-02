@@ -82,18 +82,10 @@ tokio-vsock = { version = "0.4", optional = true }
 xdg-home = "1.0.0"
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = [
-  "handleapi",
-  "iphlpapi",
-  "memoryapi",
-  "processthreadsapi",
-  "sddl",
-  "securitybaseapi",
-  "synchapi",
-  "tcpmib",
-  "winbase",
-  "winerror",
-  "winsock2",
+windows-sys = { version = "0.52", features = [
+  "Win32_Foundation",
+  "Win32_Security_Authorization",
+  "Win32_System_Memory"
 ] }
 uds_windows = "1.1.0"
 
