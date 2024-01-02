@@ -1,9 +1,12 @@
 //! Blocking connection API.
 
 use enumflags2::BitFlags;
-use event_listener::EventListener;
 use static_assertions::assert_impl_all;
-use std::{io, ops::Deref, pin::Pin};
+use std::{
+    io,
+    ops::Deref,
+    time::{Duration, Instant},
+};
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
 use zvariant::ObjectPath;
 
@@ -238,11 +241,13 @@ impl Connection {
         self.inner
     }
 
-    /// Returns a listener, notified on various connection activity.
+    /// Returns an [`Activity`] instance to wait for various connection activity.
     ///
     /// This function is meant for the caller to implement idle or timeout on inactivity.
-    pub fn monitor_activity(&self) -> Pin<Box<EventListener>> {
-        self.inner.monitor_activity()
+    pub fn monitor_activity(&self) -> Activity {
+        Activity {
+            inner: self.inner.monitor_activity(),
+        }
     }
 
     /// Returns the peer credentials.
@@ -268,6 +273,41 @@ impl Connection {
 impl From<crate::Connection> for Connection {
     fn from(conn: crate::Connection) -> Self {
         Self { inner: conn }
+    }
+}
+
+/// Allows you to wait for activity on the connection.
+///
+/// Use [`Connection::monitor_activity`] to get an instance of this type.
+#[derive(Debug)]
+pub struct Activity {
+    inner: crate::connection::Activity,
+}
+
+assert_impl_all!(Activity: Send, Sync, Unpin);
+
+impl Activity {
+    /// Wait indefinitely for the activity.
+    pub fn wait(mut self) {
+        self.inner.listener.as_mut().wait()
+    }
+
+    /// Wait for the activity for the given amount of time.
+    ///
+    /// Returns `true` if an activity occurred, `false` if it timedout.
+    pub fn wait_timeout(mut self, timeout: Duration) -> bool {
+        self.inner.listener.as_mut().wait_timeout(timeout).is_some()
+    }
+
+    /// Wait for the activity until the given time.
+    ///
+    /// Returns `true` if an activity occurred, `false` if the deadline was reached.
+    pub fn wait_deadline(mut self, deadline: Instant) -> bool {
+        self.inner
+            .listener
+            .as_mut()
+            .wait_deadline(deadline)
+            .is_some()
     }
 }
 
@@ -314,7 +354,7 @@ mod tests {
 
         let c = Builder::unix_stream(p1).p2p().build().unwrap();
 
-        let mut listener = c.monitor_activity();
+        let listener = c.monitor_activity();
 
         let mut s = MessageIterator::from(&c);
         tx.send(()).unwrap();
@@ -328,15 +368,11 @@ mod tests {
         assert_eq!(val, "yay");
 
         // there was some activity
-        listener.as_mut().wait();
+        listener.wait();
         // eventually, nothing happens and it will timeout
         loop {
-            let mut listener = c.monitor_activity();
-            if listener
-                .as_mut()
-                .wait_timeout(std::time::Duration::from_millis(10))
-                .is_none()
-            {
+            let listener = c.monitor_activity();
+            if !listener.wait_timeout(std::time::Duration::from_millis(10)) {
                 break;
             }
         }
