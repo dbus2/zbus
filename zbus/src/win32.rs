@@ -4,6 +4,7 @@ use std::{
     net::SocketAddr,
     os::windows::prelude::OsStrExt,
     ptr,
+    mem,
 };
 
 use windows_sys::Win32::{
@@ -121,7 +122,13 @@ impl ProcessToken {
         let mut process_token: HANDLE = HANDLE::default();
         let process = ProcessHandle::open(process_id, PROCESS_QUERY_LIMITED_INFORMATION)?;
 
-        if unsafe { OpenProcessToken(process.0.get(), TOKEN_QUERY, &mut process_token) } == 0 {
+        if unsafe {
+            OpenProcessToken(
+                process.0.get(),
+                TOKEN_QUERY,
+                ptr::addr_of_mut!(process_token),
+            ) == 0
+        } {
             Err(Error::last_os_error())
         } else {
             // SAFETY: We have exclusive ownership over the process handle
@@ -141,9 +148,9 @@ impl ProcessToken {
                 GetTokenInformation(
                     self.0.get(),
                     TokenUser,
-                    token_info.as_mut_ptr() as *mut _,
+                    token_info.as_mut_ptr().cast(),
                     len,
-                    &mut len,
+                    ptr::addr_of_mut!(len),
                 )
             };
 
@@ -159,24 +166,24 @@ impl ProcessToken {
             return Err(last_error);
         }
 
-        let sid = unsafe { (*(token_info.as_ptr() as *const TOKEN_USER)).User.Sid };
+        let sid = unsafe { (*token_info.as_ptr().cast::<TOKEN_USER>()).User.Sid };
 
-        if unsafe { IsValidSid(sid as *mut _) } == FALSE {
+        if unsafe { IsValidSid(sid.cast()) == FALSE } {
             return Err(Error::new(ErrorKind::Other, "Invalid SID"));
         }
 
         let mut pstr = ptr::null_mut();
-        if unsafe { ConvertSidToStringSidA(sid, &mut pstr) } == 0 {
+        if unsafe { ConvertSidToStringSidA(sid, ptr::addr_of_mut!(pstr)) == 0 } {
             return Err(Error::last_os_error());
         }
 
-        let sid = unsafe { CStr::from_ptr(pstr as *const _) };
+        let sid = unsafe { CStr::from_ptr(pstr.cast()) };
         let ret = sid
             .to_str()
             .map_err(|_| Error::new(ErrorKind::Other, "Invalid SID"))?
             .to_owned();
         unsafe {
-            LocalFree(pstr as *mut _);
+            LocalFree(pstr.cast());
         }
 
         Ok(ret)
@@ -190,8 +197,13 @@ pub fn socket_addr_get_pid(addr: &SocketAddr) -> Result<u32, Error> {
     let mut tcp_table = vec![];
     let res = loop {
         tcp_table.resize(len as usize, 0);
-        let res =
-            unsafe { GetTcpTable2(tcp_table.as_mut_ptr().cast::<MIB_TCPTABLE2>(), &mut len, 0) };
+        let res = unsafe {
+            GetTcpTable2(
+                tcp_table.as_mut_ptr().cast::<MIB_TCPTABLE2>(),
+                ptr::addr_of_mut!(len),
+                0,
+            )
+        };
         if res != ERROR_INSUFFICIENT_BUFFER {
             break res;
         }
@@ -200,7 +212,7 @@ pub fn socket_addr_get_pid(addr: &SocketAddr) -> Result<u32, Error> {
         return Err(Error::last_os_error());
     }
 
-    let tcp_table = tcp_table.as_mut_ptr() as *const MIB_TCPTABLE2;
+    let tcp_table = tcp_table.as_mut_ptr().cast::<MIB_TCPTABLE2>();
     let num_entries = unsafe { (*tcp_table).dwNumEntries };
     for i in 0..num_entries {
         let entry = unsafe { (*tcp_table).table.get_unchecked(i as usize) };
@@ -258,9 +270,9 @@ pub fn unix_stream_get_peer_pid(stream: &UnixStream) -> Result<u32, Error> {
             SIO_AF_UNIX_GETPEERPID,
             ptr::null_mut(),
             0,
-            &mut ret as *mut _ as *mut _,
-            std::mem::size_of_val(&ret) as u32,
-            &mut bytes,
+            ptr::addr_of_mut!(ret).cast(),
+            mem::size_of_val(&ret) as u32,
+            ptr::addr_of_mut!(bytes),
             ptr::null_mut(),
             None,
         )
@@ -298,7 +310,7 @@ fn read_shm(name: &str) -> Result<Vec<u8>, crate::Error> {
         return Err(crate::Error::Address("MapViewOfFile() failed".to_owned()));
     }
 
-    let data = unsafe { CStr::from_ptr(addr.Value as *const _) };
+    let data = unsafe { CStr::from_ptr(addr.Value.cast()) };
     Ok(data.to_bytes().to_owned())
 }
 
