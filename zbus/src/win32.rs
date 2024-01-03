@@ -1,10 +1,10 @@
 use std::{
     ffi::{CStr, OsStr},
     io::{Error, ErrorKind},
+    mem,
     net::SocketAddr,
     os::windows::prelude::OsStrExt,
     ptr,
-    mem,
 };
 
 use windows_sys::Win32::{
