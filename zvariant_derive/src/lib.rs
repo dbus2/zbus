@@ -382,21 +382,23 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// assert_eq!(s.field2.as_str(), "/blah");
 /// ```
 ///
-/// Enums also supported but currently only simple ones w/ an integer representation:
+/// Enums also supported but currently only with unit variants:
 ///
 /// ```
 /// # use zvariant::{OwnedValue, Value};
 /// #
 /// #[derive(Debug, PartialEq, Value, OwnedValue)]
+/// // Default representation is `u32`.
 /// #[repr(u8)]
 /// enum Enum {
-///     Variant1 = 1,
-///     Variant2 = 2,
+///     Variant1 = 0,
+///     Variant2,
 /// }
 ///
 /// let value = Value::from(Enum::Variant1);
 /// let e = Enum::try_from(value).unwrap();
 /// assert_eq!(e, Enum::Variant1);
+/// assert_eq!(e as u8, 0);
 /// let value = OwnedValue::try_from(Enum::Variant2).unwrap();
 /// let e = Enum::try_from(value).unwrap();
 /// assert_eq!(e, Enum::Variant2);

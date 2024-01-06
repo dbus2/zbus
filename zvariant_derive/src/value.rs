@@ -277,18 +277,11 @@ fn impl_enum(
     };
 
     let mut variant_names = vec![];
-    let mut variant_values = vec![];
     for variant in &data.variants {
         // Ensure all variants of the enum are unit type
         match variant.fields {
             Fields::Unit => {
                 variant_names.push(&variant.ident);
-                let value = &variant
-                    .discriminant
-                    .as_ref()
-                    .ok_or_else(|| Error::new(variant.span(), "expected `Name = Value` variants"))?
-                    .1;
-                variant_values.push(value);
             }
             _ => return Err(Error::new(variant.span(), "must be a unit variant")),
         }
@@ -301,13 +294,7 @@ fn impl_enum(
                 impl ::std::convert::From<#name> for #zv::Value<'_> {
                     #[inline]
                     fn from(e: #name) -> Self {
-                        let u: #repr = match e {
-                            #(
-                                #name::#variant_names => #variant_values
-                            ),*
-                        };
-
-                        <#zv::Value as ::std::convert::From<_>>::from(u).into()
+                        <#zv::Value as ::std::convert::From<_>>::from(e as #repr).into()
                     }
                 }
             },
@@ -320,14 +307,8 @@ fn impl_enum(
 
                     #[inline]
                     fn try_from(e: #name) -> #zv::Result<Self> {
-                        let u: #repr = match e {
-                            #(
-                                #name::#variant_names => #variant_values
-                            ),*
-                        };
-
                         <#zv::OwnedValue as ::std::convert::TryFrom<_>>::try_from(
-                            <#zv::Value as ::std::convert::From<_>>::from(u)
+                            <#zv::Value as ::std::convert::From<_>>::from(e as #repr)
                         )
                     }
                 }
