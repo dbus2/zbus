@@ -1402,9 +1402,9 @@ impl From<&Connection> for WeakConnection {
 #[derive(Debug)]
 enum NameStatus {
     // The task waits for name lost signal if owner allows replacement.
-    Owner(Option<Task<()>>),
+    Owner(#[allow(unused)] Option<Task<()>>),
     // The task waits for name acquisition signal.
-    Queued(Task<()>),
+    Queued(#[allow(unused)] Task<()>),
 }
 
 #[cfg(test)]
