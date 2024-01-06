@@ -142,8 +142,8 @@ mod tests {
     use crate::Fd;
     use crate::{
         serialized::{Context, Format},
-        Array, Basic, DeserializeDict, DeserializeValue, Dict, Error, ObjectPath, Result,
-        SerializeDict, SerializeValue, Signature, Str, Structure, Type, Value, BE, LE,
+        Array, Basic, DeserializeDict, DeserializeValue, Dict, Error, ObjectPath, OwnedValue,
+        Result, SerializeDict, SerializeValue, Signature, Str, Structure, Type, Value, BE, LE,
         NATIVE_ENDIAN,
     };
 
@@ -1483,7 +1483,7 @@ mod tests {
         let _: UnitStruct = encoded.deserialize().unwrap().0;
 
         #[repr(u8)]
-        #[derive(Deserialize_repr, Serialize_repr, Type, Debug, PartialEq)]
+        #[derive(Deserialize_repr, Serialize_repr, Type, Value, OwnedValue, Debug, PartialEq)]
         enum Enum {
             Variant1,
             Variant2,
@@ -1496,8 +1496,12 @@ mod tests {
         let decoded: Enum = encoded.deserialize().unwrap().0;
         assert_eq!(decoded, Enum::Variant3);
 
+        assert_eq!(Value::from(Enum::Variant1), Value::U8(0));
+        assert_eq!(Enum::try_from(Value::U8(2)), Ok(Enum::Variant3));
+        assert_eq!(Enum::try_from(Value::U8(4)), Err(Error::IncorrectType));
+
         #[repr(i64)]
-        #[derive(Deserialize_repr, Serialize_repr, Type, Debug, PartialEq)]
+        #[derive(Deserialize_repr, Serialize_repr, Type, Value, OwnedValue, Debug, PartialEq)]
         enum Enum2 {
             Variant1,
             Variant2,
@@ -1510,7 +1514,11 @@ mod tests {
         let decoded: Enum2 = encoded.deserialize().unwrap().0;
         assert_eq!(decoded, Enum2::Variant2);
 
-        #[derive(Deserialize, Serialize, Type, Debug, PartialEq)]
+        assert_eq!(Value::from(Enum2::Variant1), Value::I64(0));
+        assert_eq!(Enum2::try_from(Value::I64(2)), Ok(Enum2::Variant3));
+        assert_eq!(Enum2::try_from(Value::I64(4)), Err(Error::IncorrectType));
+
+        #[derive(Deserialize, Serialize, Type, Value, OwnedValue, Debug, PartialEq)]
         enum NoReprEnum {
             Variant1,
             Variant2,
