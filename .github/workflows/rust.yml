@@ -73,7 +73,8 @@ jobs:
           sed -e s/UID/$UID/ -e s/PATH/path/ CI/dbus-session.conf > /tmp/dbus-session.conf
           sed -e s/UID/$UID/ -e s/PATH/abstract/ CI/dbus-session.conf > /tmp/dbus-session-abstract.conf
           dbus-run-session --config-file /tmp/dbus-session-abstract.conf -- cargo test --verbose -- basic_connection
-          dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --all-features -- --skip fdpass_systemd
+          # All features except tokio.
+          dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --features uuid,url,time,chrono,option-as-array,vsock -- --skip fdpass_systemd
           # check cookie-sha1 auth against dbus-daemon
           sed -i s/EXTERNAL/DBUS_COOKIE_SHA1/g /tmp/dbus-session.conf
           dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose -- basic_connection
@@ -197,6 +198,8 @@ jobs:
           $env:PATH += ";C:\bin"
           Start-Process dbus-daemon.exe --config-file=CI/win32-session.conf
           cargo test
+          # tokio feature
+          cargo test --no-default-features --features tokio
 
           $env:DBUS_SESSION_BUS_ADDRESS = $null
           $env:ZBUS_GDBUS_TEST = "1"

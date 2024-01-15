@@ -77,7 +77,7 @@ tokio = { version = "1.21.2", optional = true, features = [
   "tracing",
 ] }
 tracing = "0.1.37"
-vsock = { version = "0.3.0", optional = true }
+vsock = { version = "0.4.0", optional = true }
 tokio-vsock = { version = "0.4", optional = true }
 xdg-home = "1.0.0"
 
@@ -85,7 +85,7 @@ xdg-home = "1.0.0"
 windows-sys = { version = "0.52", features = [
   "Win32_Foundation",
   "Win32_Security_Authorization",
-  "Win32_System_Memory"
+  "Win32_System_Memory",
 ] }
 uds_windows = "1.1.0"
 
