@@ -25,9 +25,8 @@ pub struct Guid(String);
 assert_impl_all!(Guid: Send, Sync, Unpin);
 
 impl Guid {
-    /// Generate a D-Bus GUID that can be used with e.g. [`Connection::new_unix_server`].
-    ///
-    /// [`Connection::new_unix_server`]: struct.Connection.html#method.new_unix_server
+    /// Generate a D-Bus GUID that can be used with e.g.
+    /// [`connection::Builder::server`](crate::connection::Builder::server).
     pub fn generate() -> Self {
         let r: Vec<u32> = repeat_with(rand::random::<u32>).take(3).collect();
         let r3 = match SystemTime::now().duration_since(UNIX_EPOCH) {
