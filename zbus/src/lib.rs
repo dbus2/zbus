@@ -197,8 +197,6 @@ mod tests {
         collections::HashMap,
         sync::{mpsc::channel, Arc, Condvar, Mutex},
     };
-    #[cfg(unix)]
-    use std::{fs::File, os::unix::io::AsRawFd};
 
     use crate::utils::block_on;
     use enumflags2::BitFlags;
@@ -302,6 +300,7 @@ mod tests {
     #[test]
     #[timeout(15000)]
     fn fdpass_systemd() {
+        use std::{fs::File, os::unix::io::AsRawFd};
         use zvariant::OwnedFd;
 
         let connection = blocking::Connection::system().unwrap();
