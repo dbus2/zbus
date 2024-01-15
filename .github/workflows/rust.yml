@@ -79,7 +79,7 @@ jobs:
           sed -i s/EXTERNAL/DBUS_COOKIE_SHA1/g /tmp/dbus-session.conf
           dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose -- basic_connection
           # Test tokio support.
-          dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --tests -p zbus --no-default-features --features tokio -- --skip fdpass_systemd
+          dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --tests -p zbus --no-default-features --features tokio-vsock -- --skip fdpass_systemd
           dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose --doc --no-default-features connection::Connection::executor
 
   windows_test:
