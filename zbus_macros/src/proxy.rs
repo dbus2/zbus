@@ -559,7 +559,7 @@ fn gen_proxy_method_call(
                 let object_path: #zbus::zvariant::OwnedObjectPath =
                     self.0.call(
                         #method_name,
-                        &(#(#args),*),
+                        &#zbus::zvariant::DynamicTuple((#(#args,)*)),
                     )
                     #wait?;
                 #proxy_path::builder(&self.0.connection())
@@ -574,11 +574,11 @@ fn gen_proxy_method_call(
             // the '()' from the signature that we add and not the actual intended ones.
             let arg = &args[0];
             quote! {
-                &(#arg,)
+                &#zbus::zvariant::DynamicTuple((#arg,))
             }
         } else {
             quote! {
-                &(#(#args),*)
+                &#zbus::zvariant::DynamicTuple((#(#args),*))
             }
         };
 

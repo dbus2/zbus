@@ -19,7 +19,10 @@ mod param {
 }
 
 mod test {
-    use zbus::fdo;
+    use zbus::{
+        fdo,
+        zvariant::{OwnedStructure, Structure},
+    };
 
     #[zbus_macros::dbus_proxy(
         assume_defaults = false,
@@ -33,6 +36,12 @@ mod test {
         /// The generated proxies implement both `zvariant::Type` and `serde::ser::Serialize`
         /// which is useful to pass in a proxy as a param. It serializes it as an `ObjectPath`.
         fn some_method<T>(&self, object_path: &T) -> zbus::Result<()>;
+
+        /// A call accepting an argument that only implements DynamicType and Serialize.
+        fn test_dyn_type(&self, arg: Structure<'_>, arg2: u32) -> zbus::Result<()>;
+
+        /// A call returning an type that only implements DynamicDeserialize
+        fn test_dyn_ret(&self) -> zbus::Result<OwnedStructure>;
 
         #[dbus_proxy(name = "CheckRENAMING")]
         fn check_renaming(&self) -> zbus::Result<Vec<u8>>;
