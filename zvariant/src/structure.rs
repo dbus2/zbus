@@ -1,6 +1,6 @@
 #![allow(unknown_lints)]
 use serde::{
-    de::{DeserializeSeed, Deserializer, SeqAccess, Visitor},
+    de::{DeserializeSeed, Deserializer, Error, SeqAccess, Visitor},
     ser::{Serialize, SerializeTupleStruct, Serializer},
 };
 use static_assertions::assert_impl_all;
@@ -404,4 +404,58 @@ fn create_signature_from_fields(fields: &[Value<'_>]) -> Signature<'static> {
     signature.push(')');
 
     Signature::from_string_unchecked(signature)
+}
+
+/// Owned [`Structure`]
+#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct OwnedStructure(pub Structure<'static>);
+
+/// Use this to deserialize an [`OwnedStructure`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OwnedStructureSeed(Signature<'static>);
+
+impl DynamicType for OwnedStructure {
+    fn dynamic_signature(&self) -> Signature<'_> {
+        self.0.dynamic_signature()
+    }
+}
+
+impl DynamicType for OwnedStructureSeed {
+    fn dynamic_signature(&self) -> Signature<'_> {
+        self.0.clone()
+    }
+}
+
+impl<'de> DynamicDeserialize<'de> for OwnedStructure {
+    type Deserializer = OwnedStructureSeed;
+
+    fn deserializer_for_signature<S>(signature: S) -> zvariant::Result<Self::Deserializer>
+    where
+        S: TryInto<Signature<'de>>,
+        S::Error: Into<zvariant::Error>,
+    {
+        Structure::deserializer_for_signature(signature)
+            .map(|StructureSeed(s)| OwnedStructureSeed(s.to_owned()))
+    }
+}
+
+impl<'de> DeserializeSeed<'de> for OwnedStructureSeed {
+    type Value = OwnedStructure;
+    fn deserialize<D: Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
+        deserializer
+            .deserialize_seq(StructureVisitor { signature: self.0 })
+            .and_then(|s| match s.try_to_owned() {
+                Ok(s) => Ok(OwnedStructure(s)),
+                Err(e) => Err(D::Error::custom(e)),
+            })
+    }
+}
+
+impl Serialize for OwnedStructure {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.0.serialize(serializer)
+    }
 }
