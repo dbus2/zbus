@@ -227,7 +227,7 @@ impl<'a> Proxy<'a> {
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
-        R: serde::de::DeserializeOwned + zvariant::Type,
+        R: for<'d> zvariant::DynamicDeserialize<'d>,
     {
         block_on(self.inner().call(method_name, body))
     }
@@ -251,7 +251,7 @@ impl<'a> Proxy<'a> {
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
-        R: serde::de::DeserializeOwned + zvariant::Type,
+        R: for<'d> zvariant::DynamicDeserialize<'d>,
     {
         block_on(self.inner().call_with_flags(method_name, flags, body))
     }
