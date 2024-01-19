@@ -1,15 +1,14 @@
 #![deny(rust_2018_idioms)]
 
 use std::{
-    env::args,
     error::Error,
     fs::{File, OpenOptions},
     io::{Read, Write},
-    path::Path,
     process::{ChildStdin, Command, Stdio},
     result::Result,
 };
 
+use clap::Parser;
 use zbus::{
     blocking::{connection, fdo::IntrospectableProxy, Connection},
     names::BusName,
@@ -19,15 +18,7 @@ use zbus_xml::{Interface, Node};
 use zbus_xmlgen::GenTrait;
 use zvariant::ObjectPath;
 
-fn usage() {
-    eprintln!(
-        r#"Usage:
-  zbus-xmlgen <interface.xml> [-o|--output <file_path>]
-  zbus-xmlgen --system|--session <service> <object_path> [-o|--output <file_path>]
-  zbus-xmlgen --address <address> <service> <object_path> [-o|--output <file_path>]
-"#
-    );
-}
+mod cli;
 
 enum OutputTarget {
     SingleFile(File),
@@ -36,86 +27,30 @@ enum OutputTarget {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let input_src;
+    let args = cli::Args::parse();
 
-    let proxy = |conn: Connection, service, path| -> IntrospectableProxy<'_> {
-        IntrospectableProxy::builder(&conn)
-            .destination(service)
-            .expect("invalid destination")
-            .path(path)
-            .expect("invalid path")
-            .build()
-            .unwrap()
-    };
-
-    let (node, service, path) = match args().nth(1) {
-        Some(bus) if bus == "--system" || bus == "--session" => {
-            let connection = if bus == "--system" {
-                Connection::system()?
-            } else {
-                Connection::session()?
-            };
-            let service: BusName<'_> = args()
-                .nth(2)
-                .expect("Missing param for service")
-                .try_into()?;
-            let path: ObjectPath<'_> = args()
-                .nth(3)
-                .expect("Missing param for object path")
-                .try_into()?;
-
-            input_src = format!(
-                "Interface '{}' from service '{}' on {} bus",
-                path,
-                service,
-                bus.trim_start_matches("--")
-            );
-
-            let xml = proxy(connection, service.clone(), path.clone()).introspect()?;
-            (
-                Node::from_reader(xml.as_bytes())?,
-                Some(service),
-                Some(path),
-            )
-        }
-        Some(address) if address == "--address" => {
-            let address = args().nth(2).expect("Missing param for address path");
-            let service: BusName<'_> = args()
-                .nth(3)
-                .expect("Missing param for service")
-                .try_into()?;
-            let path: ObjectPath<'_> = args()
-                .nth(4)
-                .expect("Missing param for object path")
-                .try_into()?;
-
-            let connection = connection::Builder::address(&*address)?.build()?;
-
-            input_src = format!("Interface '{path}' from service '{service}'");
-
-            let xml = proxy(connection, service.clone(), path.clone()).introspect()?;
-            (
-                Node::from_reader(xml.as_bytes())?,
-                Some(service),
-                Some(path),
-            )
-        }
-        Some(help) if help == "--help" || help == "-h" => {
-            usage();
-            return Ok(());
-        }
-        Some(path) => {
-            input_src = Path::new(&path)
-                .file_name()
-                .unwrap()
-                .to_string_lossy()
-                .to_string();
+    let DBusInfo(node, service, path, input_src) = match args.command {
+        cli::Command::System {
+            service,
+            object_path,
+        } => DBusInfo::new(Connection::system()?, service, object_path)?,
+        cli::Command::Session {
+            service,
+            object_path,
+        } => DBusInfo::new(Connection::session()?, service, object_path)?,
+        cli::Command::Address {
+            address,
+            service,
+            object_path,
+        } => DBusInfo::new(
+            connection::Builder::address(&*address)?.build()?,
+            service,
+            object_path,
+        )?,
+        cli::Command::File { path } => {
+            let input_src = path.file_name().unwrap().to_string_lossy().to_string();
             let f = File::open(path)?;
-            (Node::from_reader(f)?, None, None)
-        }
-        None => {
-            usage();
-            return Ok(());
+            DBusInfo(Node::from_reader(f)?, None, None, input_src)
         }
     };
 
@@ -125,18 +60,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         .iter()
         .partition(|&i| i.name().starts_with(fdo_iface_prefix));
 
-    let output_arg = args()
-        .position(|arg| arg == "-o" || arg == "--output")
-        .map(|pos| pos + 1)
-        .and_then(|pos| args().nth(pos));
-    let mut output_target = match output_arg.as_deref() {
+    let mut output_target = match args.output.as_deref() {
         Some("-") => OutputTarget::Stdout,
         Some(path) => {
-            let file = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(path)
-                .expect("Failed to open file");
+            let file = OpenOptions::new().create(true).write(true).open(path)?;
             OutputTarget::SingleFile(file)
         }
         _ => OutputTarget::MultipleFiles,
@@ -151,27 +78,62 @@ fn main() -> Result<(), Box<dyn Error>> {
             &input_src,
         )?;
         match output_target {
-            OutputTarget::SingleFile(ref mut file) => {
-                file.write_all(output.as_bytes())?;
-            }
-            OutputTarget::Stdout => println!("{:?}", output),
-            OutputTarget::MultipleFiles => {
-                std::fs::write(
-                    format!(
-                        "{}.rs",
-                        interface
-                            .name()
-                            .split('.')
-                            .last()
-                            .expect("Failed to split name")
-                    ),
-                    output,
-                )?;
-            }
+            OutputTarget::Stdout => println!("{}", output),
+            OutputTarget::SingleFile(ref mut file) => file.write_all(output.as_bytes())?,
+            OutputTarget::MultipleFiles => std::fs::write(
+                format!(
+                    "{}.rs",
+                    interface
+                        .name()
+                        .split('.')
+                        .last()
+                        .expect("Failed to split name")
+                ),
+                output,
+            )?,
         };
     }
 
     Ok(())
+}
+
+struct DBusInfo<'a>(
+    Node<'a>,
+    Option<BusName<'a>>,
+    Option<ObjectPath<'a>>,
+    String,
+);
+
+impl<'a> DBusInfo<'a> {
+    fn new(
+        connection: Connection,
+        service: String,
+        object_path: String,
+    ) -> Result<Self, Box<dyn Error>> {
+        let service: BusName<'_> = service.try_into()?;
+        let path: ObjectPath<'_> = object_path.try_into()?;
+
+        let input_src = format!(
+            "Interface '{}' from service '{}' on system bus",
+            path, service,
+        );
+
+        let xml = IntrospectableProxy::builder(&connection)
+            .destination(service.clone())
+            .expect("invalid destination")
+            .path(path.clone())
+            .expect("invalid path")
+            .build()
+            .unwrap()
+            .introspect()?;
+
+        Ok(DBusInfo(
+            Node::from_reader(xml.as_bytes())?,
+            Some(service),
+            Some(path),
+            input_src,
+        ))
+    }
 }
 
 fn write_interfaces(
