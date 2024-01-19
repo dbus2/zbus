@@ -146,6 +146,9 @@ fn write_interfaces(
     let mut process = match Command::new("rustfmt")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
+        // rustfmt may post warnings about features not being enabled on stable rust
+        // these can be distracting and are irrevelant to the user, so we hide them
+        .stderr(Stdio::null())
         .spawn()
     {
         Err(why) => panic!("couldn't spawn rustfmt: {}", why),
