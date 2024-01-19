@@ -11,7 +11,7 @@ pub struct Args {
     /// Specify the destination for saving the output. If no argument is provided, the parsed
     /// interfaces will be stored in separate files. If a filename is provided, the output will
     /// be saved to that file. Use '-' to print the output to stdout.
-    #[clap(short, long, allow_hyphen_values = true)]
+    #[clap(short, long, allow_hyphen_values = true, global = true)]
     pub output: Option<String>,
 }
 
