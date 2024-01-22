@@ -60,6 +60,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         .iter()
         .partition(|&i| i.name().starts_with(fdo_iface_prefix));
 
+    if !fdo_iface_prefix.is_empty() {
+        eprintln!("Skipping `org.freedesktop.DBus` interfaces, please use https://docs.rs/zbus/latest/zbus/fdo/index.html")
+    }
+
     let mut output_target = match args.output.as_deref() {
         Some("-") => OutputTarget::Stdout,
         Some(path) => {
