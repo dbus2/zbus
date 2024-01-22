@@ -60,6 +60,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         .iter()
         .partition(|&i| i.name().starts_with(fdo_iface_prefix));
 
+    if !fdo_iface_prefix.is_empty() {
+        eprintln!("Skipping `org.freedesktop.DBus` interfaces, please use https://docs.rs/zbus/latest/zbus/fdo/index.html")
+    }
+
     let mut output_target = match args.output.as_deref() {
         Some("-") => OutputTarget::Stdout,
         Some(path) => {
@@ -77,20 +81,22 @@ fn main() -> Result<(), Box<dyn Error>> {
             path.clone(),
             &input_src,
         )?;
+
+        let interface_name = interface.name();
         match output_target {
             OutputTarget::Stdout => println!("{}", output),
-            OutputTarget::SingleFile(ref mut file) => file.write_all(output.as_bytes())?,
-            OutputTarget::MultipleFiles => std::fs::write(
-                format!(
-                    "{}.rs",
-                    interface
-                        .name()
-                        .split('.')
-                        .last()
-                        .expect("Failed to split name")
-                ),
-                output,
-            )?,
+            OutputTarget::SingleFile(ref mut file) => {
+                file.write_all(output.as_bytes())?;
+                println!("Generated code for `{}`", interface_name);
+            }
+            OutputTarget::MultipleFiles => {
+                let filename = interface_name
+                    .split('.')
+                    .last()
+                    .expect("Failed to split name");
+                std::fs::write(format!("{}.rs", &filename), output)?;
+                println!("Generated code for `{}` in {}.rs", interface_name, filename);
+            }
         };
     }
 
