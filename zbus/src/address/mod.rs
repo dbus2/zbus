@@ -11,7 +11,7 @@
 
 pub mod transport;
 
-use crate::{Error, Result};
+use crate::{Error, Guid, Result};
 #[cfg(all(unix, not(target_os = "macos")))]
 use nix::unistd::Uid;
 use std::{collections::HashMap, env, str::FromStr};
@@ -25,13 +25,24 @@ pub use self::transport::Transport;
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Address {
+    guid: Option<Guid>,
     transport: Transport,
 }
 
 impl Address {
     /// Create a new `Address` from a `Transport`.
     pub fn new(transport: Transport) -> Self {
-        Self { transport }
+        Self {
+            transport,
+            guid: None,
+        }
+    }
+
+    /// Set the GUID for this address.
+    pub fn set_guid(mut self, guid: Guid) -> Self {
+        self.guid = Some(guid);
+
+        self
     }
 
     /// The transport details for this address.
@@ -93,11 +104,22 @@ impl Address {
             }
         }
     }
+
+    /// The GUID for this address, if known.
+    pub fn guid(&self) -> Option<&Guid> {
+        self.guid.as_ref()
+    }
 }
 
 impl Display for Address {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.transport.fmt(f)
+        self.transport.fmt(f)?;
+
+        if let Some(guid) = &self.guid {
+            write!(f, ",guid={}", guid)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -130,7 +152,10 @@ impl FromStr for Address {
             }
         }
 
-        Transport::from_options(transport, options).map(Self::from)
+        Ok(Self {
+            guid: options.remove("guid").map(Guid::from_str).transpose()?,
+            transport: Transport::from_options(transport, options)?,
+        })
     }
 }
 
@@ -213,9 +238,13 @@ mod tests {
             Address::from_str("unix:abstract=/tmp/dbus-foo").unwrap(),
             Transport::Unix(Unix::new(UnixPath::File("\0/tmp/dbus-foo".into()))).into(),
         );
+        let guid = crate::Guid::generate();
         assert_eq!(
-            Address::from_str("unix:path=/tmp/dbus-foo,guid=123").unwrap(),
-            Transport::Unix(Unix::new(UnixPath::File("/tmp/dbus-foo".into()))).into(),
+            Address::from_str(&format!("unix:path=/tmp/dbus-foo,guid={guid}")).unwrap(),
+            Address::from(Transport::Unix(Unix::new(UnixPath::File(
+                "/tmp/dbus-foo".into()
+            ))))
+            .set_guid(guid.clone()),
         );
         assert_eq!(
             Address::from_str("tcp:host=localhost,port=4142").unwrap(),
@@ -274,8 +303,8 @@ mod tests {
 
         #[cfg(all(feature = "vsock", not(feature = "tokio")))]
         assert_eq!(
-            Address::from_str("vsock:cid=98,port=2934,guid=123").unwrap(),
-            Transport::Vsock(super::transport::Vsock::new(98, 2934)).into(),
+            Address::from_str(&format!("vsock:cid=98,port=2934,guid={guid}")).unwrap(),
+            Address::from(Transport::Vsock(super::transport::Vsock::new(98, 2934))).set_guid(guid),
         );
         assert_eq!(
             Address::from_str("unix:dir=/some/dir").unwrap(),
@@ -365,10 +394,15 @@ mod tests {
         );
 
         #[cfg(all(feature = "vsock", not(feature = "tokio")))]
-        assert_eq!(
-            Address::from(Transport::Vsock(super::transport::Vsock::new(98, 2934))).to_string(),
-            "vsock:cid=98,port=2934", // no support for guid= yet..
-        );
+        {
+            let guid = crate::Guid::generate();
+            assert_eq!(
+                Address::from(Transport::Vsock(super::transport::Vsock::new(98, 2934)))
+                    .set_guid(guid.clone())
+                    .to_string(),
+                format!("vsock:cid=98,port=2934,guid={guid}"),
+            );
+        }
     }
 
     #[test]
