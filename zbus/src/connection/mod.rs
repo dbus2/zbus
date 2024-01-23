@@ -824,8 +824,8 @@ impl Connection {
     }
 
     /// The server's GUID.
-    pub fn server_guid(&self) -> &str {
-        self.inner.server_guid.as_str()
+    pub fn server_guid(&self) -> &Guid {
+        &self.inner.server_guid
     }
 
     /// The underlying executor.
