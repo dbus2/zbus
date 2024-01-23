@@ -61,6 +61,7 @@ type Interfaces<'a> =
 pub struct Builder<'a> {
     target: Option<Target>,
     max_queued: Option<usize>,
+    // This is only set for server case.
     guid: Option<Guid<'a>>,
     p2p: bool,
     internal_executor: bool,
@@ -345,8 +346,14 @@ impl<'a> Builder<'a> {
         let mut stream = self.stream_for_target().await?;
         let mut auth = match self.guid {
             None => {
+                let guid = match self.target {
+                    Some(Target::Address(ref addr)) => {
+                        addr.guid().map(|guid| guid.to_owned().into())
+                    }
+                    _ => None,
+                };
                 // SASL Handshake
-                Authenticated::client(stream, self.auth_mechanisms).await?
+                Authenticated::client(stream, guid, self.auth_mechanisms).await?
             }
             Some(guid) => {
                 if !self.p2p {

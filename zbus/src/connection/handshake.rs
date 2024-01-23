@@ -65,9 +65,12 @@ impl Authenticated {
     /// Create a client-side `Authenticated` for the given `socket`.
     pub async fn client(
         socket: BoxedSplit,
+        server_guid: Option<OwnedGuid>,
         mechanisms: Option<VecDeque<AuthMechanism>>,
     ) -> Result<Self> {
-        ClientHandshake::new(socket, mechanisms).perform().await
+        ClientHandshake::new(socket, mechanisms, server_guid)
+            .perform()
+            .await
     }
 
     /// Create a server-side `Authenticated` for the given `socket`.
@@ -162,7 +165,11 @@ pub trait Handshake {
 
 impl ClientHandshake {
     /// Start a handshake on this client socket
-    pub fn new(socket: BoxedSplit, mechanisms: Option<VecDeque<AuthMechanism>>) -> ClientHandshake {
+    pub fn new(
+        socket: BoxedSplit,
+        mechanisms: Option<VecDeque<AuthMechanism>>,
+        server_guid: Option<OwnedGuid>,
+    ) -> ClientHandshake {
         let mechanisms = mechanisms.unwrap_or_else(|| {
             let mut mechanisms = VecDeque::new();
             mechanisms.push_back(AuthMechanism::External);
@@ -174,7 +181,7 @@ impl ClientHandshake {
         ClientHandshake {
             common: HandshakeCommon::new(socket, mechanisms),
             step: ClientHandshakeStep::Init,
-            server_guid: None,
+            server_guid,
         }
     }
 
@@ -455,7 +462,15 @@ impl Handshake for ClientHandshake {
                         }
                         (WaitingForOK, Command::Ok(guid)) => {
                             trace!("Received OK from server");
-                            self.server_guid = Some(guid.into());
+                            match self.server_guid {
+                                Some(server_guid) if server_guid != guid => {
+                                    return Err(Error::Handshake(format!(
+                                        "Server GUID mismatch: expected {server_guid}, got {guid}",
+                                    )));
+                                }
+                                Some(_) => (),
+                                None => self.server_guid = Some(guid),
+                            }
                             if self.common.socket.read_mut().can_pass_unix_fd() {
                                 (WaitingForAgreeUnixFD, Command::NegotiateUnixFD)
                             } else {
@@ -495,7 +510,7 @@ impl Handshake for ClientHandshake {
                     return Ok(Authenticated {
                         socket_write: write,
                         socket_read: Some(read),
-                        server_guid: self.server_guid.unwrap().into(),
+                        server_guid: self.server_guid.unwrap(),
                         #[cfg(unix)]
                         cap_unix_fd: self.common.cap_unix_fd,
                         already_received_bytes: Some(self.common.recv_buffer),
@@ -1055,10 +1070,11 @@ mod tests {
     fn handshake() {
         let (p0, p1) = create_async_socket_pair();
 
-        let client = ClientHandshake::new(Split::new_boxed(p0), None);
+        let guid = OwnedGuid::from(Guid::generate());
+        let client = ClientHandshake::new(Split::new_boxed(p0), None, Some(guid.clone()));
         let server = ServerHandshake::new(
             Split::new_boxed(p1),
-            Guid::generate().into(),
+            guid,
             Some(Uid::effective().into()),
             None,
             None,
