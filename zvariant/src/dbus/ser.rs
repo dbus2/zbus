@@ -135,24 +135,19 @@ where
                 &"D-Bus string type must not contain interior null bytes",
             ));
         }
-        let c = self.0.sig_parser.next_char()?;
-        if c == VARIANT_SIGNATURE_CHAR {
-            self.0.value_sign = Some(signature_string!(v));
-        }
 
-        match c {
-            ObjectPath::SIGNATURE_CHAR | <&str>::SIGNATURE_CHAR => {
-                self.0.add_padding(<&str>::alignment(Format::DBus))?;
-                self.0
-                    .write_u32(self.0.ctxt.endian(), usize_to_u32(v.len()))
-                    .map_err(|e| Error::InputOutput(e.into()))?;
+        match self.0.sig_parser.next_char()? {
+            ObjectPath::SIGNATURE_CHAR | str::SIGNATURE_CHAR => {
+                self.0.write_string(v)
             }
-            Signature::SIGNATURE_CHAR | VARIANT_SIGNATURE_CHAR => {
-                self.0
-                    .write_u8(self.0.ctxt.endian(), usize_to_u8(v.len()))
-                    .map_err(|e| Error::InputOutput(e.into()))?;
+            Signature::SIGNATURE_CHAR => {
+                self.0.write_signature(v)
             }
-            _ => {
+            VARIANT_SIGNATURE_CHAR => {
+                self.0.value_sign = Some(signature_string!(v));
+                self.0.write_signature(v)
+            }
+            c => {
                 let expected = format!(
                     "`{}`, `{}`, `{}` or `{}`",
                     <&str>::SIGNATURE_STR,
@@ -160,22 +155,12 @@ where
                     ObjectPath::SIGNATURE_STR,
                     VARIANT_SIGNATURE_CHAR,
                 );
-                return Err(serde::de::Error::invalid_type(
+                Err(serde::de::Error::invalid_type(
                     serde::de::Unexpected::Char(c),
                     &expected.as_str(),
-                ));
+                ))
             }
         }
-
-        self.0.sig_parser.skip_char()?;
-        self.0
-            .write_all(v.as_bytes())
-            .map_err(|e| Error::InputOutput(e.into()))?;
-        self.0
-            .write_all(&b"\0"[..])
-            .map_err(|e| Error::InputOutput(e.into()))?;
-
-        Ok(())
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<()> {
@@ -229,10 +214,10 @@ where
         self,
         _name: &'static str,
         variant_index: u32,
-        variant: &'static str,
+        variant_name: &'static str,
     ) -> Result<()> {
-        if self.0.sig_parser.next_char()? == <&str>::SIGNATURE_CHAR {
-            variant.serialize(self)
+        if self.0.sig_parser.next_char()? == str::SIGNATURE_CHAR {
+            variant_name.serialize(self)
         } else {
             variant_index.serialize(self)
         }
@@ -251,13 +236,14 @@ where
         self,
         _name: &'static str,
         variant_index: u32,
-        _variant: &'static str,
+        variant_name: &'static str,
         value: &T,
     ) -> Result<()>
     where
         T: ?Sized + Serialize,
     {
-        self.0.prep_serialize_enum_variant(variant_index)?;
+        self.0.prep_serialize_enum_variant(variant_index, variant_name)?;
+
         value.serialize(&mut *self)?;
         // Skip the `)`.
         self.0.sig_parser.skip_char()?;
@@ -309,10 +295,10 @@ where
         self,
         _name: &'static str,
         variant_index: u32,
-        _variant: &'static str,
+        variant_name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleVariant> {
-        self.0.prep_serialize_enum_variant(variant_index)?;
+        self.0.prep_serialize_enum_variant(variant_index, variant_name)?;
 
         StructSerializer::enum_variant(self).map(StructSeqSerializer::Struct)
     }
@@ -339,10 +325,10 @@ where
         self,
         _name: &'static str,
         variant_index: u32,
-        _variant: &'static str,
+        variant_name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStructVariant> {
-        self.0.prep_serialize_enum_variant(variant_index)?;
+        self.0.prep_serialize_enum_variant(variant_index, variant_name)?;
 
         StructSerializer::enum_variant(self).map(StructSeqSerializer::Struct)
     }
