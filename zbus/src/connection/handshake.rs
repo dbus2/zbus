@@ -147,6 +147,7 @@ enum Command {
 #[derive(Debug)]
 pub struct ClientHandshake {
     common: HandshakeCommon,
+    server_guid: Option<OwnedGuid>,
     step: ClientHandshakeStep,
 }
 
@@ -171,8 +172,9 @@ impl ClientHandshake {
         });
 
         ClientHandshake {
-            common: HandshakeCommon::new(socket, mechanisms, None),
+            common: HandshakeCommon::new(socket, mechanisms),
             step: ClientHandshakeStep::Init,
+            server_guid: None,
         }
     }
 
@@ -453,7 +455,7 @@ impl Handshake for ClientHandshake {
                         }
                         (WaitingForOK, Command::Ok(guid)) => {
                             trace!("Received OK from server");
-                            self.common.server_guid = Some(guid);
+                            self.server_guid = Some(guid.into());
                             if self.common.socket.read_mut().can_pass_unix_fd() {
                                 (WaitingForAgreeUnixFD, Command::NegotiateUnixFD)
                             } else {
@@ -493,7 +495,7 @@ impl Handshake for ClientHandshake {
                     return Ok(Authenticated {
                         socket_write: write,
                         socket_read: Some(read),
-                        server_guid: self.common.server_guid.unwrap(),
+                        server_guid: self.server_guid.unwrap().into(),
                         #[cfg(unix)]
                         cap_unix_fd: self.common.cap_unix_fd,
                         already_received_bytes: Some(self.common.recv_buffer),
@@ -539,6 +541,7 @@ enum ServerHandshakeStep {
 pub struct ServerHandshake<'s> {
     common: HandshakeCommon,
     step: ServerHandshakeStep,
+    guid: OwnedGuid,
     #[cfg(unix)]
     client_uid: Option<u32>,
     #[cfg(windows)]
@@ -568,7 +571,7 @@ impl<'s> ServerHandshake<'s> {
         };
 
         Ok(ServerHandshake {
-            common: HandshakeCommon::new(socket, mechanisms, Some(guid)),
+            common: HandshakeCommon::new(socket, mechanisms),
             step: ServerHandshakeStep::WaitingForNull,
             #[cfg(unix)]
             client_uid,
@@ -576,11 +579,13 @@ impl<'s> ServerHandshake<'s> {
             client_sid,
             cookie_id,
             cookie_context,
+            guid,
         })
     }
 
     async fn auth_ok(&mut self) -> Result<()> {
-        let cmd = Command::Ok(self.guid().clone());
+        let guid = self.guid.clone();
+        let cmd = Command::Ok(guid);
         trace!("Sending authentication OK");
         self.common.write_command(cmd).await?;
         self.step = ServerHandshakeStep::WaitingForBegin;
@@ -677,14 +682,6 @@ impl<'s> ServerHandshake<'s> {
         self.step = ServerHandshakeStep::WaitingForAuth;
 
         Ok(())
-    }
-
-    fn guid(&self) -> &OwnedGuid {
-        // SAFETY: We know that the server GUID is set because we set it in the constructor.
-        self.common
-            .server_guid
-            .as_ref()
-            .expect("Server GUID not set")
     }
 }
 
@@ -796,9 +793,7 @@ impl Handshake for ServerHandshake<'_> {
                     return Ok(Authenticated {
                         socket_write: write,
                         socket_read: Some(read),
-                        // SAFETY: We know that the server GUID is set because we set it in the
-                        // constructor.
-                        server_guid: self.common.server_guid.expect("Server GUID not set"),
+                        server_guid: self.guid,
                         #[cfg(unix)]
                         cap_unix_fd: self.common.cap_unix_fd,
                         already_received_bytes: Some(self.common.recv_buffer),
@@ -931,7 +926,6 @@ impl FromStr for Command {
 pub struct HandshakeCommon {
     socket: BoxedSplit,
     recv_buffer: Vec<u8>,
-    server_guid: Option<OwnedGuid>,
     cap_unix_fd: bool,
     // the current AUTH mechanism is front, ordered by priority
     mechanisms: VecDeque<AuthMechanism>,
@@ -939,15 +933,10 @@ pub struct HandshakeCommon {
 
 impl HandshakeCommon {
     /// Start a handshake on this client socket
-    pub fn new(
-        socket: BoxedSplit,
-        mechanisms: VecDeque<AuthMechanism>,
-        server_guid: Option<OwnedGuid>,
-    ) -> Self {
+    pub fn new(socket: BoxedSplit, mechanisms: VecDeque<AuthMechanism>) -> Self {
         Self {
             socket,
             recv_buffer: Vec::new(),
-            server_guid,
             cap_unix_fd: false,
             mechanisms,
         }
