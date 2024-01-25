@@ -61,7 +61,7 @@ type Interfaces<'a> =
 pub struct Builder<'a> {
     target: Option<Target>,
     max_queued: Option<usize>,
-    guid: Option<&'a Guid>,
+    guid: Option<Guid<'a>>,
     p2p: bool,
     internal_executor: bool,
     #[derivative(Debug = "ignore")]
@@ -212,10 +212,14 @@ impl<'a> Builder<'a> {
     ///
     /// The to-be-created connection will wait for incoming client authentication handshake and
     /// negotiation messages, for peer-to-peer communications after successful creation.
-    pub fn server(mut self, guid: &'a Guid) -> Self {
-        self.guid = Some(guid);
+    pub fn server<G>(mut self, guid: G) -> Result<Self>
+    where
+        G: TryInto<Guid<'a>>,
+        G::Error: Into<Error>,
+    {
+        self.guid = Some(guid.try_into().map_err(Into::into)?);
 
-        self
+        Ok(self)
     }
 
     /// Set the capacity of the main (unfiltered) queue.
@@ -357,7 +361,7 @@ impl<'a> Builder<'a> {
 
                 Authenticated::server(
                     stream,
-                    guid.clone(),
+                    guid.to_owned().into(),
                     #[cfg(unix)]
                     client_uid,
                     #[cfg(windows)]

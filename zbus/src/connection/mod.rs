@@ -29,7 +29,7 @@ use crate::{
     fdo::{self, ConnectionCredentials, RequestNameFlags, RequestNameReply},
     message::{Flags, Message, Type},
     proxy::CacheProperties,
-    DBusError, Error, Executor, Guid, MatchRule, MessageStream, ObjectServer, OwnedMatchRule,
+    DBusError, Error, Executor, MatchRule, MessageStream, ObjectServer, OwnedGuid, OwnedMatchRule,
     Result, Task,
 };
 
@@ -51,7 +51,7 @@ const DEFAULT_MAX_METHOD_RETURN_QUEUED: usize = 8;
 /// Inner state shared by Connection and WeakConnection
 #[derive(Debug)]
 pub(crate) struct ConnectionInner {
-    server_guid: Guid,
+    server_guid: OwnedGuid,
     #[cfg(unix)]
     cap_unix_fd: bool,
     bus_conn: bool,
@@ -824,7 +824,7 @@ impl Connection {
     }
 
     /// The server's GUID.
-    pub fn server_guid(&self) -> &Guid {
+    pub fn server_guid(&self) -> &OwnedGuid {
         &self.inner.server_guid
     }
 
@@ -1330,7 +1330,7 @@ mod tests {
     use test_log::test;
     use zvariant::{Endian, NATIVE_ENDIAN};
 
-    use crate::{fdo::DBusProxy, AuthMechanism};
+    use crate::{fdo::DBusProxy, AuthMechanism, Guid};
 
     use super::*;
 
@@ -1447,7 +1447,8 @@ mod tests {
 
             (
                 Builder::tcp_stream(p0)
-                    .server(&guid)
+                    .server(guid)
+                    .unwrap()
                     .p2p()
                     .auth_mechanisms(&[AuthMechanism::Anonymous]),
                 Builder::tcp_stream(p1).p2p(),
@@ -1463,7 +1464,8 @@ mod tests {
 
             (
                 Builder::tcp_stream(p0)
-                    .server(&guid)
+                    .server(guid)
+                    .unwrap()
                     .p2p()
                     .auth_mechanisms(&[AuthMechanism::Anonymous]),
                 Builder::tcp_stream(p1).p2p(),
@@ -1503,7 +1505,7 @@ mod tests {
 
         futures_util::try_join!(
             Builder::unix_stream(p1).p2p().build(),
-            Builder::unix_stream(p0).server(&guid).p2p().build(),
+            Builder::unix_stream(p0).server(guid).unwrap().p2p().build(),
         )
     }
 
@@ -1541,7 +1543,8 @@ mod tests {
 
         futures_util::try_join!(
             Builder::vsock_stream(server)
-                .server(&guid)
+                .server(guid)
+                .unwrap()
                 .p2p()
                 .auth_mechanisms(&[AuthMechanism::Anonymous])
                 .build(),
@@ -1559,7 +1562,8 @@ mod tests {
 
         futures_util::try_join!(
             Builder::vsock_stream(server)
-                .server(&guid)
+                .server(guid)
+                .unwrap()
                 .p2p()
                 .auth_mechanisms(&[AuthMechanism::Anonymous])
                 .build(),
@@ -1693,7 +1697,8 @@ mod tests {
 
         let (p0, p1) = UnixStream::pair().unwrap();
         let mut server_builder = Builder::unix_stream(p0)
-            .server(&guid)
+            .server(guid)
+            .unwrap()
             .p2p()
             .auth_mechanisms(&[AuthMechanism::Cookie])
             .cookie_context(cookie_context)

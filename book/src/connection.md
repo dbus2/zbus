@@ -59,7 +59,7 @@ let (client_conn, server_conn) = futures_util::try_join!(
     // Client
     Builder::unix_stream(p0).p2p().build(),
     // Server
-    Builder::unix_stream(p1).server(&guid).p2p().build(),
+    Builder::unix_stream(p1).server(guid)?.p2p().build(),
 )?;
 # }
 #

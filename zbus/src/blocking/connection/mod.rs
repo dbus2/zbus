@@ -339,7 +339,8 @@ mod tests {
         let (tx, rx) = std::sync::mpsc::channel();
         let server_thread = thread::spawn(move || {
             let c = Builder::unix_stream(p0)
-                .server(&guid)
+                .server(guid)
+                .unwrap()
                 .p2p()
                 .build()
                 .unwrap();

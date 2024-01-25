@@ -109,8 +109,12 @@ impl<'a> Builder<'a> {
     ///
     /// The to-be-created connection will wait for incoming client authentication handshake and
     /// negotiation messages, for peer-to-peer communications after successful creation.
-    pub fn server(self, guid: &'a Guid) -> Self {
-        Self(self.0.server(guid))
+    pub fn server<G>(self, guid: G) -> Result<Self>
+    where
+        G: TryInto<Guid<'a>>,
+        G::Error: Into<Error>,
+    {
+        self.0.server(guid).map(Self)
     }
 
     /// Set the capacity of the main (unfiltered) queue.

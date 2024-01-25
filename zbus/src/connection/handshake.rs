@@ -17,7 +17,7 @@ use xdg_home::home_dir;
 
 #[cfg(windows)]
 use crate::win32;
-use crate::{file::FileLines, guid::Guid, Error, Result};
+use crate::{file::FileLines, guid::Guid, Error, OwnedGuid, Result};
 
 use super::socket::{BoxedSplit, ReadHalf, WriteHalf};
 
@@ -52,7 +52,7 @@ pub enum AuthMechanism {
 pub struct Authenticated {
     pub(crate) socket_write: Box<dyn WriteHalf>,
     /// The server Guid
-    pub(crate) server_guid: Guid,
+    pub(crate) server_guid: OwnedGuid,
     /// Whether file descriptor passing has been accepted by both sides
     #[cfg(unix)]
     pub(crate) cap_unix_fd: bool,
@@ -75,7 +75,7 @@ impl Authenticated {
     /// The function takes `client_uid` on Unix only. On Windows, it takes `client_sid` instead.
     pub async fn server(
         socket: BoxedSplit,
-        guid: Guid,
+        guid: OwnedGuid,
         #[cfg(unix)] client_uid: Option<u32>,
         #[cfg(windows)] client_sid: Option<String>,
         auth_mechanisms: Option<VecDeque<AuthMechanism>>,
@@ -127,7 +127,7 @@ enum Command {
     Error(String),
     NegotiateUnixFD,
     Rejected(Vec<AuthMechanism>),
-    Ok(Guid),
+    Ok(OwnedGuid),
     AgreeUnixFD,
 }
 
@@ -550,7 +550,7 @@ pub struct ServerHandshake<'s> {
 impl<'s> ServerHandshake<'s> {
     pub fn new(
         socket: BoxedSplit,
-        guid: Guid,
+        guid: OwnedGuid,
         #[cfg(unix)] client_uid: Option<u32>,
         #[cfg(windows)] client_sid: Option<String>,
         mechanisms: Option<VecDeque<AuthMechanism>>,
@@ -679,7 +679,7 @@ impl<'s> ServerHandshake<'s> {
         Ok(())
     }
 
-    fn guid(&self) -> &Guid {
+    fn guid(&self) -> &OwnedGuid {
         // SAFETY: We know that the server GUID is set because we set it in the constructor.
         self.common
             .server_guid
@@ -917,7 +917,7 @@ impl FromStr for Command {
                 let guid = words
                     .next()
                     .ok_or_else(|| Error::Handshake("Missing OK server GUID!".into()))?;
-                Command::Ok(guid.parse()?)
+                Command::Ok(Guid::from_str(guid)?.into())
             }
             Some("AGREE_UNIX_FD") => Command::AgreeUnixFD,
             _ => return Err(Error::Handshake(format!("Unknown command: {s}"))),
@@ -931,7 +931,7 @@ impl FromStr for Command {
 pub struct HandshakeCommon {
     socket: BoxedSplit,
     recv_buffer: Vec<u8>,
-    server_guid: Option<Guid>,
+    server_guid: Option<OwnedGuid>,
     cap_unix_fd: bool,
     // the current AUTH mechanism is front, ordered by priority
     mechanisms: VecDeque<AuthMechanism>,
@@ -942,7 +942,7 @@ impl HandshakeCommon {
     pub fn new(
         socket: BoxedSplit,
         mechanisms: VecDeque<AuthMechanism>,
-        server_guid: Option<Guid>,
+        server_guid: Option<OwnedGuid>,
     ) -> Self {
         Self {
             socket,
@@ -1069,7 +1069,7 @@ mod tests {
         let client = ClientHandshake::new(Split::new_boxed(p0), None);
         let server = ServerHandshake::new(
             Split::new_boxed(p1),
-            Guid::generate(),
+            Guid::generate().into(),
             Some(Uid::effective().into()),
             None,
             None,
@@ -1093,7 +1093,7 @@ mod tests {
         let (mut p0, p1) = create_async_socket_pair();
         let server = ServerHandshake::new(
             Split::new_boxed(p1),
-            Guid::generate(),
+            Guid::generate().into(),
             Some(Uid::effective().into()),
             None,
             None,
@@ -1122,7 +1122,7 @@ mod tests {
         let (mut p0, p1) = create_async_socket_pair();
         let server = ServerHandshake::new(
             Split::new_boxed(p1),
-            Guid::generate(),
+            Guid::generate().into(),
             Some(Uid::effective().into()),
             None,
             None,
@@ -1149,7 +1149,7 @@ mod tests {
         let (mut p0, p1) = create_async_socket_pair();
         let server = ServerHandshake::new(
             Split::new_boxed(p1),
-            Guid::generate(),
+            Guid::generate().into(),
             Some(Uid::effective().into()),
             None,
             None,
@@ -1167,7 +1167,7 @@ mod tests {
         let (mut p0, p1) = create_async_socket_pair();
         let server = ServerHandshake::new(
             Split::new_boxed(p1),
-            Guid::generate(),
+            Guid::generate().into(),
             Some(Uid::effective().into()),
             Some(vec![AuthMechanism::Anonymous].into()),
             None,
@@ -1185,7 +1185,7 @@ mod tests {
         let (mut p0, p1) = create_async_socket_pair();
         let server = ServerHandshake::new(
             Split::new_boxed(p1),
-            Guid::generate(),
+            Guid::generate().into(),
             Some(Uid::effective().into()),
             Some(vec![AuthMechanism::Anonymous].into()),
             None,
