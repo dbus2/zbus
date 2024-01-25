@@ -72,7 +72,7 @@ let (client_conn, server_conn) = futures_util::try_join!(
 [PID1]: https://www.freedesktop.org/wiki/Software/systemd/dbus/
 [`futures::stream::Stream`]: https://docs.rs/futures/latest/futures/stream/trait.Stream.html
 [`MessageStream`]: https://docs.rs/zbus/latest/zbus/struct.MessageStream.html
-[`Builder::address`]: https://docs.rs/zbus/latest/zbus/connection/struct.ConnectionBuilder.html#method.address
+[`connection::Builder::address`]: https://docs.rs/zbus/latest/zbus/connection/struct.ConnectionBuilder.html#method.address
 [dspec]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
 
 [^bus-less] Unless you implemented them, none of the bus methods will exist.
