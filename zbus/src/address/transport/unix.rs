@@ -30,10 +30,13 @@ impl Unix {
         let tmpdir = opts.get("tmpdir");
         let path = match (path, abs, dir, tmpdir) {
             (Some(p), None, None, None) => UnixPath::File(OsString::from(p)),
-            (None, Some(p), None, None) => {
-                let mut s = OsString::from("\0");
-                s.push(p);
-                UnixPath::File(s)
+            #[cfg(target_os = "linux")]
+            (None, Some(p), None, None) => UnixPath::Abstract(p.as_bytes().to_owned()),
+            #[cfg(not(target_os = "linux"))]
+            (None, Some(_), None, None) => {
+                return Err(crate::Error::Address(
+                    "abstract sockets currently Linux-only".to_owned(),
+                ));
             }
             (None, None, Some(p), None) => UnixPath::Dir(OsString::from(p)),
             (None, None, None, Some(p)) => UnixPath::TmpDir(OsString::from(p)),
@@ -52,6 +55,9 @@ impl Unix {
 pub enum UnixPath {
     /// A path to a unix domain socket on the filesystem.
     File(OsString),
+    /// A abstract unix domain socket name.
+    #[cfg(target_os = "linux")]
+    Abstract(Vec<u8>),
     /// A listenable address using the specified path, in which a socket file with a random file
     /// name starting with 'dbus-' will be created by the server. See [UNIX domain socket address]
     /// reference documentation.

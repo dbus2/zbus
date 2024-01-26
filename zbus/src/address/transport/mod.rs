@@ -9,16 +9,14 @@ use crate::{Error, Result};
 use async_io::Async;
 #[cfg(not(feature = "tokio"))]
 use std::net::TcpStream;
-#[cfg(all(unix, not(feature = "tokio")))]
-use std::os::unix::net::UnixStream;
+#[cfg(unix)]
+use std::os::unix::net::{SocketAddr, UnixStream};
 use std::{collections::HashMap, ffi::OsStr};
 #[cfg(feature = "tokio")]
 use tokio::net::TcpStream;
-#[cfg(all(unix, feature = "tokio"))]
-use tokio::net::UnixStream;
 #[cfg(feature = "tokio-vsock")]
 use tokio_vsock::VsockStream;
-#[cfg(all(windows, not(feature = "tokio")))]
+#[cfg(windows)]
 use uds_windows::UnixStream;
 #[cfg(all(feature = "vsock", not(feature = "tokio")))]
 use vsock::VsockStream;
@@ -47,6 +45,8 @@ pub use launchd::Launchd;
 #[path = "vsock.rs"]
 // Gotta rename to avoid name conflict with the `vsock` crate.
 mod vsock_transport;
+#[cfg(target_os = "linux")]
+use std::os::linux::net::SocketAddrExt;
 #[cfg(any(
     all(feature = "vsock", not(feature = "tokio")),
     feature = "tokio-vsock"
@@ -83,54 +83,57 @@ impl Transport {
     #[cfg_attr(any(target_os = "macos", windows), async_recursion::async_recursion)]
     pub(super) async fn connect(self) -> Result<Stream> {
         match self {
-            Transport::Unix(unix) => match unix.take_path() {
-                UnixPath::File(path) => {
-                    #[cfg(not(feature = "tokio"))]
-                    {
-                        #[cfg(windows)]
-                        {
-                            let stream = crate::Task::spawn_blocking(
-                                move || UnixStream::connect(path),
-                                "unix stream connection",
-                            )
-                            .await?;
-                            Async::new(stream)
-                                .map(Stream::Unix)
-                                .map_err(|e| Error::InputOutput(e.into()))
-                        }
-
-                        #[cfg(not(windows))]
-                        {
-                            Async::<UnixStream>::connect(path)
-                                .await
-                                .map(Stream::Unix)
-                                .map_err(|e| Error::InputOutput(e.into()))
-                        }
+            Transport::Unix(unix) => {
+                // This is a `path` in case of Windows until uds_windows provides the needed API:
+                // https://github.com/haraldh/rust_uds_windows/issues/14
+                let addr = match unix.take_path() {
+                    #[cfg(unix)]
+                    UnixPath::File(path) => SocketAddr::from_pathname(path)?,
+                    #[cfg(windows)]
+                    UnixPath::File(path) => path,
+                    #[cfg(target_os = "linux")]
+                    UnixPath::Abstract(name) => SocketAddr::from_abstract_name(name)?,
+                    UnixPath::Dir(_) | UnixPath::TmpDir(_) => {
+                        // you can't connect to a unix:dir
+                        return Err(Error::Unsupported);
                     }
-
-                    #[cfg(feature = "tokio")]
-                    {
+                };
+                let stream = crate::Task::spawn_blocking(
+                    move || -> Result<_> {
                         #[cfg(unix)]
-                        {
-                            UnixStream::connect(path)
-                                .await
-                                .map(Stream::Unix)
-                                .map_err(|e| Error::InputOutput(e.into()))
-                        }
+                        let stream = UnixStream::connect_addr(&addr)?;
+                        #[cfg(windows)]
+                        let stream = UnixStream::connect(addr)?;
+                        stream.set_nonblocking(true)?;
 
-                        #[cfg(not(unix))]
-                        {
-                            let _ = path;
-                            Err(Error::Unsupported)
-                        }
+                        Ok(stream)
+                    },
+                    "unix stream connection",
+                )
+                .await?;
+                #[cfg(not(feature = "tokio"))]
+                {
+                    Async::new(stream)
+                        .map(Stream::Unix)
+                        .map_err(|e| Error::InputOutput(e.into()))
+                }
+
+                #[cfg(feature = "tokio")]
+                {
+                    #[cfg(unix)]
+                    {
+                        tokio::net::UnixStream::from_std(stream)
+                            .map(Stream::Unix)
+                            .map_err(|e| Error::InputOutput(e.into()))
+                    }
+
+                    #[cfg(not(unix))]
+                    {
+                        let _ = path;
+                        Err(Error::Unsupported)
                     }
                 }
-                UnixPath::Dir(_) | UnixPath::TmpDir(_) => {
-                    // you can't connect to a unix:dir
-                    Err(Error::Unsupported)
-                }
-            },
-
+            }
             #[cfg(all(feature = "vsock", not(feature = "tokio")))]
             Transport::Vsock(addr) => {
                 let stream = VsockStream::connect_with_cid_port(addr.cid(), addr.port())?;
@@ -239,7 +242,7 @@ pub(crate) enum Stream {
 #[derive(Debug)]
 pub(crate) enum Stream {
     #[cfg(unix)]
-    Unix(UnixStream),
+    Unix(tokio::net::UnixStream),
     Tcp(TcpStream),
     #[cfg(feature = "tokio-vsock")]
     Vsock(VsockStream),
@@ -327,21 +330,12 @@ pub(super) fn encode_percents(f: &mut Formatter<'_>, mut value: &[u8]) -> std::f
 
 impl Display for Transport {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        fn fmt_unix_path(
-            f: &mut Formatter<'_>,
-            path: &OsStr,
-            _is_abstract: bool,
-        ) -> std::fmt::Result {
+        fn fmt_unix_path(f: &mut Formatter<'_>, path: &OsStr) -> std::fmt::Result {
             #[cfg(unix)]
             {
                 use std::os::unix::ffi::OsStrExt;
 
-                let bytes = if _is_abstract {
-                    &path.as_bytes()[1..]
-                } else {
-                    path.as_bytes()
-                };
-                encode_percents(f, bytes)?;
+                encode_percents(f, path.as_bytes())?;
             }
 
             #[cfg(windows)]
@@ -378,32 +372,21 @@ impl Display for Transport {
 
             Self::Unix(unix) => match unix.path() {
                 UnixPath::File(path) => {
-                    let is_abstract = {
-                        #[cfg(unix)]
-                        {
-                            use std::os::unix::ffi::OsStrExt;
-
-                            path.as_bytes().first() == Some(&b'\0')
-                        }
-                        #[cfg(not(unix))]
-                        false
-                    };
-
-                    if is_abstract {
-                        f.write_str("unix:abstract=")?;
-                    } else {
-                        f.write_str("unix:path=")?;
-                    }
-
-                    fmt_unix_path(f, path, is_abstract)?;
+                    f.write_str("unix:path=")?;
+                    fmt_unix_path(f, path)?;
+                }
+                #[cfg(target_os = "linux")]
+                UnixPath::Abstract(name) => {
+                    f.write_str("unix:abstract=")?;
+                    encode_percents(f, name)?;
                 }
                 UnixPath::Dir(path) => {
                     f.write_str("unix:dir=")?;
-                    fmt_unix_path(f, path, false)?;
+                    fmt_unix_path(f, path)?;
                 }
                 UnixPath::TmpDir(path) => {
                     f.write_str("unix:tmpdir=")?;
-                    fmt_unix_path(f, path, false)?;
+                    fmt_unix_path(f, path)?;
                 }
             },
 

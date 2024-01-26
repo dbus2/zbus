@@ -231,6 +231,7 @@ mod tests {
             Error::Address(e) => assert_eq!(e, "unix: address is invalid"),
             _ => panic!(),
         }
+        #[cfg(target_os = "linux")]
         match Address::from_str("unix:path=/tmp,abstract=foo").unwrap_err() {
             Error::Address(e) => {
                 assert_eq!(e, "unix: address is invalid")
@@ -241,9 +242,10 @@ mod tests {
             Address::from_str("unix:path=/tmp/dbus-foo").unwrap(),
             Transport::Unix(Unix::new(UnixPath::File("/tmp/dbus-foo".into()))).into(),
         );
+        #[cfg(target_os = "linux")]
         assert_eq!(
             Address::from_str("unix:abstract=/tmp/dbus-foo").unwrap(),
-            Transport::Unix(Unix::new(UnixPath::File("\0/tmp/dbus-foo".into()))).into(),
+            Transport::Unix(Unix::new(UnixPath::Abstract("/tmp/dbus-foo".into()))).into(),
         );
         let guid = crate::Guid::generate();
         assert_eq!(
@@ -350,10 +352,10 @@ mod tests {
             "unix:tmpdir=/tmp/dbus-foo"
         );
         // FIXME: figure out how to handle abstract on Windows
-        #[cfg(unix)]
+        #[cfg(target_os = "linux")]
         assert_eq!(
-            Address::from(Transport::Unix(Unix::new(UnixPath::File(
-                "\0/tmp/dbus-foo".into()
+            Address::from(Transport::Unix(Unix::new(UnixPath::Abstract(
+                "/tmp/dbus-foo".into()
             ))))
             .to_string(),
             "unix:abstract=/tmp/dbus-foo"
