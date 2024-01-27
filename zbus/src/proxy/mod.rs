@@ -4,7 +4,6 @@ use enumflags2::{bitflags, BitFlags};
 use event_listener::{Event, EventListener};
 use futures_core::{ready, stream};
 use futures_util::{future::Either, stream::Map};
-use once_cell::sync::OnceCell;
 use ordered_stream::{join as join_streams, FromFuture, Join, OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 use std::{
@@ -12,7 +11,7 @@ use std::{
     future::Future,
     ops::Deref,
     pin::Pin,
-    sync::{Arc, RwLock, RwLockReadGuard},
+    sync::{Arc, OnceLock, RwLock, RwLockReadGuard},
     task::{Context, Poll},
 };
 use tracing::{debug, info_span, instrument, trace, Instrument};
@@ -80,7 +79,7 @@ assert_impl_all!(Proxy<'_>: Send, Sync, Unpin);
 pub(crate) struct ProxyInnerStatic {
     #[derivative(Debug = "ignore")]
     pub(crate) conn: Connection,
-    dest_owner_change_match_rule: OnceCell<OwnedMatchRule>,
+    dest_owner_change_match_rule: OnceLock<OwnedMatchRule>,
 }
 
 #[derive(Debug)]
@@ -91,7 +90,7 @@ pub(crate) struct ProxyInner<'a> {
     pub(crate) interface: InterfaceName<'a>,
 
     /// Cache of property values.
-    property_cache: Option<OnceCell<(Arc<PropertiesCache>, Task<()>)>>,
+    property_cache: Option<OnceLock<(Arc<PropertiesCache>, Task<()>)>>,
     /// Set of properties which do not get cached, by name.
     /// This overrides proxy-level caching behavior.
     uncached_properties: HashSet<Str<'a>>,
@@ -489,13 +488,13 @@ impl<'a> ProxyInner<'a> {
         uncached_properties: HashSet<Str<'a>>,
     ) -> Self {
         let property_cache = match cache {
-            CacheProperties::Yes | CacheProperties::Lazily => Some(OnceCell::new()),
+            CacheProperties::Yes | CacheProperties::Lazily => Some(OnceLock::new()),
             CacheProperties::No => None,
         };
         Self {
             inner_without_borrows: ProxyInnerStatic {
                 conn,
-                dest_owner_change_match_rule: OnceCell::new(),
+                dest_owner_change_match_rule: OnceLock::new(),
             },
             destination,
             path,
@@ -730,7 +729,7 @@ impl<'a> Proxy<'a> {
             .inner
             .property_cache
             .as_ref()
-            .and_then(OnceCell::get)
+            .and_then(OnceLock::get)
             .map(|c| c.0.values.read().expect("lock poisoned"))
         {
             // ensure that the property is in the cache.

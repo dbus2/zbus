@@ -2,7 +2,6 @@
 use async_broadcast::{broadcast, InactiveReceiver, Receiver, Sender as Broadcaster};
 use enumflags2::BitFlags;
 use event_listener::{Event, EventListener};
-use once_cell::sync::OnceCell;
 use ordered_stream::{OrderedFuture, OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 #[cfg(unix)]
@@ -13,7 +12,7 @@ use std::{
     num::NonZeroU32,
     ops::Deref,
     pin::Pin,
-    sync::{Arc, Weak},
+    sync::{Arc, OnceLock, Weak},
     task::{Context, Poll},
 };
 use tracing::{debug, info_span, instrument, trace, trace_span, warn, Instrument};
@@ -55,7 +54,7 @@ pub(crate) struct ConnectionInner {
     #[cfg(unix)]
     cap_unix_fd: bool,
     bus_conn: bool,
-    unique_name: OnceCell<OwnedUniqueName>,
+    unique_name: OnceLock<OwnedUniqueName>,
     registered_names: Mutex<HashMap<WellKnownName<'static>, NameStatus>>,
 
     activity_event: Arc<Event>,
@@ -66,7 +65,7 @@ pub(crate) struct ConnectionInner {
 
     // Socket reader task
     #[allow(unused)]
-    socket_reader_task: OnceCell<Task<()>>,
+    socket_reader_task: OnceLock<Task<()>>,
 
     pub(crate) msg_receiver: InactiveReceiver<Result<Message>>,
     pub(crate) method_return_receiver: InactiveReceiver<Result<Message>>,
@@ -74,8 +73,8 @@ pub(crate) struct ConnectionInner {
 
     subscriptions: Mutex<Subscriptions>,
 
-    object_server: OnceCell<blocking::ObjectServer>,
-    object_server_dispatch_task: OnceCell<Task<()>>,
+    object_server: OnceLock<blocking::ObjectServer>,
+    object_server_dispatch_task: OnceLock<Task<()>>,
 }
 
 type Subscriptions = HashMap<OwnedMatchRule, (u64, InactiveReceiver<Result<Message>>)>;
@@ -1183,12 +1182,12 @@ impl Connection {
                 #[cfg(unix)]
                 cap_unix_fd,
                 bus_conn: bus_connection,
-                unique_name: OnceCell::new(),
+                unique_name: OnceLock::new(),
                 subscriptions,
-                object_server: OnceCell::new(),
-                object_server_dispatch_task: OnceCell::new(),
+                object_server: OnceLock::new(),
+                object_server_dispatch_task: OnceLock::new(),
                 executor,
-                socket_reader_task: OnceCell::new(),
+                socket_reader_task: OnceLock::new(),
                 msg_senders,
                 msg_receiver,
                 method_return_receiver,
