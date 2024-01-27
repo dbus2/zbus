@@ -86,6 +86,9 @@ pub use error::*;
 mod r#type;
 pub use r#type::*;
 
+mod tuple;
+pub use tuple::*;
+
 mod from_value;
 
 mod into_value;

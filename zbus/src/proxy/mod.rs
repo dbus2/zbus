@@ -840,7 +840,7 @@ impl<'a> Proxy<'a> {
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
-        R: serde::de::DeserializeOwned + zvariant::Type,
+        R: for<'d> zvariant::DynamicDeserialize<'d>,
     {
         let reply = self.call_method(method_name, body).await?;
 
@@ -866,7 +866,7 @@ impl<'a> Proxy<'a> {
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
-        R: serde::de::DeserializeOwned + zvariant::Type,
+        R: for<'d> zvariant::DynamicDeserialize<'d>,
     {
         let flags = flags.iter().map(Flags::from).collect::<BitFlags<_>>();
         match self
