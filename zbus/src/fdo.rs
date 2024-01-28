@@ -17,8 +17,8 @@ use zvariant::{
 };
 
 use crate::{
-    dbus_interface, dbus_proxy, message::Header, object_server::SignalContext, DBusError, Guid,
-    ObjectServer,
+    dbus_interface, dbus_proxy, message::Header, object_server::SignalContext, DBusError,
+    ObjectServer, OwnedGuid,
 };
 
 #[rustfmt::skip]
@@ -731,7 +731,7 @@ macro_rules! gen_dbus_proxy {
             fn get_connection_unix_user(&self, bus_name: BusName<'_>) -> Result<u32>;
 
             /// Gets the unique ID of the bus.
-            fn get_id(&self) -> Result<Guid>;
+            fn get_id(&self) -> Result<OwnedGuid>;
 
             /// Returns the unique connection name of the primary owner of the name given.
             fn get_name_owner(&self, name: BusName<'_>) -> Result<OwnedUniqueName>;

@@ -44,20 +44,6 @@ pub use error::*;
 pub mod address;
 pub use address::Address;
 
-#[deprecated(note = "Use `address::TcpAddress` instead")]
-#[doc(hidden)]
-pub use address::TcpAddress;
-#[deprecated(note = "Use `address::TcpAddressFamily` instead")]
-#[doc(hidden)]
-pub use address::TcpAddressFamily;
-#[cfg(any(
-    all(feature = "vsock", not(feature = "tokio")),
-    feature = "tokio-vsock"
-))]
-#[deprecated(note = "Use `address::VsockAddress` instead")]
-#[doc(hidden)]
-pub use address::VsockAddress;
-
 mod guid;
 pub use guid::*;
 
@@ -197,8 +183,6 @@ mod tests {
         collections::HashMap,
         sync::{mpsc::channel, Arc, Condvar, Mutex},
     };
-    #[cfg(unix)]
-    use std::{fs::File, os::unix::io::AsRawFd};
 
     use crate::utils::block_on;
     use enumflags2::BitFlags;
@@ -302,6 +286,7 @@ mod tests {
     #[test]
     #[timeout(15000)]
     fn fdpass_systemd() {
+        use std::{fs::File, os::unix::io::AsRawFd};
         use zvariant::OwnedFd;
 
         let connection = blocking::Connection::system().unwrap();
@@ -953,7 +938,7 @@ mod tests {
         let guid = crate::Guid::generate();
         let (p0, p1) = UnixStream::pair().unwrap();
 
-        let server = Builder::unix_stream(p0).server(&guid).p2p().build();
+        let server = Builder::unix_stream(p0).server(guid).unwrap().p2p().build();
         let client = Builder::unix_stream(p1).p2p().build();
         let (client, server) = try_join!(client, server).unwrap();
         let mut stream = MessageStream::from(client);

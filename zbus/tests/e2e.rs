@@ -935,7 +935,10 @@ async fn iface_and_proxy_(p2p: bool) {
             let (p0, p1) = UnixStream::pair().unwrap();
 
             (
-                connection::Builder::unix_stream(p0).server(&guid).p2p(),
+                connection::Builder::unix_stream(p0)
+                    .server(guid)
+                    .unwrap()
+                    .p2p(),
                 connection::Builder::unix_stream(p1).p2p(),
             )
         }
@@ -950,7 +953,10 @@ async fn iface_and_proxy_(p2p: bool) {
                 let p0 = listener.incoming().next().unwrap().unwrap();
 
                 (
-                    connection::Builder::tcp_stream(p0).server(&guid).p2p(),
+                    connection::Builder::tcp_stream(p0)
+                        .server(guid)
+                        .unwrap()
+                        .p2p(),
                     connection::Builder::tcp_stream(p1).p2p(),
                 )
             }
@@ -963,7 +969,10 @@ async fn iface_and_proxy_(p2p: bool) {
                 let p0 = listener.accept().await.unwrap().0;
 
                 (
-                    connection::Builder::tcp_stream(p0).server(&guid).p2p(),
+                    connection::Builder::tcp_stream(p0)
+                        .server(guid)
+                        .unwrap()
+                        .p2p(),
                     connection::Builder::tcp_stream(p1).p2p(),
                 )
             }

@@ -17,7 +17,7 @@ use xdg_home::home_dir;
 
 #[cfg(windows)]
 use crate::win32;
-use crate::{file::FileLines, guid::Guid, Error, Result};
+use crate::{file::FileLines, guid::Guid, Error, OwnedGuid, Result};
 
 use super::socket::{BoxedSplit, ReadHalf, WriteHalf};
 
@@ -52,7 +52,7 @@ pub enum AuthMechanism {
 pub struct Authenticated {
     pub(crate) socket_write: Box<dyn WriteHalf>,
     /// The server Guid
-    pub(crate) server_guid: Guid,
+    pub(crate) server_guid: OwnedGuid,
     /// Whether file descriptor passing has been accepted by both sides
     #[cfg(unix)]
     pub(crate) cap_unix_fd: bool,
@@ -65,9 +65,12 @@ impl Authenticated {
     /// Create a client-side `Authenticated` for the given `socket`.
     pub async fn client(
         socket: BoxedSplit,
+        server_guid: Option<OwnedGuid>,
         mechanisms: Option<VecDeque<AuthMechanism>>,
     ) -> Result<Self> {
-        ClientHandshake::new(socket, mechanisms).perform().await
+        ClientHandshake::new(socket, mechanisms, server_guid)
+            .perform()
+            .await
     }
 
     /// Create a server-side `Authenticated` for the given `socket`.
@@ -75,7 +78,7 @@ impl Authenticated {
     /// The function takes `client_uid` on Unix only. On Windows, it takes `client_sid` instead.
     pub async fn server(
         socket: BoxedSplit,
-        guid: Guid,
+        guid: OwnedGuid,
         #[cfg(unix)] client_uid: Option<u32>,
         #[cfg(windows)] client_sid: Option<String>,
         auth_mechanisms: Option<VecDeque<AuthMechanism>>,
@@ -127,7 +130,7 @@ enum Command {
     Error(String),
     NegotiateUnixFD,
     Rejected(Vec<AuthMechanism>),
-    Ok(Guid),
+    Ok(OwnedGuid),
     AgreeUnixFD,
 }
 
@@ -147,6 +150,7 @@ enum Command {
 #[derive(Debug)]
 pub struct ClientHandshake {
     common: HandshakeCommon,
+    server_guid: Option<OwnedGuid>,
     step: ClientHandshakeStep,
 }
 
@@ -161,7 +165,11 @@ pub trait Handshake {
 
 impl ClientHandshake {
     /// Start a handshake on this client socket
-    pub fn new(socket: BoxedSplit, mechanisms: Option<VecDeque<AuthMechanism>>) -> ClientHandshake {
+    pub fn new(
+        socket: BoxedSplit,
+        mechanisms: Option<VecDeque<AuthMechanism>>,
+        server_guid: Option<OwnedGuid>,
+    ) -> ClientHandshake {
         let mechanisms = mechanisms.unwrap_or_else(|| {
             let mut mechanisms = VecDeque::new();
             mechanisms.push_back(AuthMechanism::External);
@@ -171,8 +179,9 @@ impl ClientHandshake {
         });
 
         ClientHandshake {
-            common: HandshakeCommon::new(socket, mechanisms, None),
+            common: HandshakeCommon::new(socket, mechanisms),
             step: ClientHandshakeStep::Init,
+            server_guid,
         }
     }
 
@@ -453,7 +462,15 @@ impl Handshake for ClientHandshake {
                         }
                         (WaitingForOK, Command::Ok(guid)) => {
                             trace!("Received OK from server");
-                            self.common.server_guid = Some(guid);
+                            match self.server_guid {
+                                Some(server_guid) if server_guid != guid => {
+                                    return Err(Error::Handshake(format!(
+                                        "Server GUID mismatch: expected {server_guid}, got {guid}",
+                                    )));
+                                }
+                                Some(_) => (),
+                                None => self.server_guid = Some(guid),
+                            }
                             if self.common.socket.read_mut().can_pass_unix_fd() {
                                 (WaitingForAgreeUnixFD, Command::NegotiateUnixFD)
                             } else {
@@ -493,7 +510,7 @@ impl Handshake for ClientHandshake {
                     return Ok(Authenticated {
                         socket_write: write,
                         socket_read: Some(read),
-                        server_guid: self.common.server_guid.unwrap(),
+                        server_guid: self.server_guid.unwrap(),
                         #[cfg(unix)]
                         cap_unix_fd: self.common.cap_unix_fd,
                         already_received_bytes: Some(self.common.recv_buffer),
@@ -539,6 +556,7 @@ enum ServerHandshakeStep {
 pub struct ServerHandshake<'s> {
     common: HandshakeCommon,
     step: ServerHandshakeStep,
+    guid: OwnedGuid,
     #[cfg(unix)]
     client_uid: Option<u32>,
     #[cfg(windows)]
@@ -550,7 +568,7 @@ pub struct ServerHandshake<'s> {
 impl<'s> ServerHandshake<'s> {
     pub fn new(
         socket: BoxedSplit,
-        guid: Guid,
+        guid: OwnedGuid,
         #[cfg(unix)] client_uid: Option<u32>,
         #[cfg(windows)] client_sid: Option<String>,
         mechanisms: Option<VecDeque<AuthMechanism>>,
@@ -568,7 +586,7 @@ impl<'s> ServerHandshake<'s> {
         };
 
         Ok(ServerHandshake {
-            common: HandshakeCommon::new(socket, mechanisms, Some(guid)),
+            common: HandshakeCommon::new(socket, mechanisms),
             step: ServerHandshakeStep::WaitingForNull,
             #[cfg(unix)]
             client_uid,
@@ -576,11 +594,13 @@ impl<'s> ServerHandshake<'s> {
             client_sid,
             cookie_id,
             cookie_context,
+            guid,
         })
     }
 
     async fn auth_ok(&mut self) -> Result<()> {
-        let cmd = Command::Ok(self.guid().clone());
+        let guid = self.guid.clone();
+        let cmd = Command::Ok(guid);
         trace!("Sending authentication OK");
         self.common.write_command(cmd).await?;
         self.step = ServerHandshakeStep::WaitingForBegin;
@@ -677,14 +697,6 @@ impl<'s> ServerHandshake<'s> {
         self.step = ServerHandshakeStep::WaitingForAuth;
 
         Ok(())
-    }
-
-    fn guid(&self) -> &Guid {
-        // SAFETY: We know that the server GUID is set because we set it in the constructor.
-        self.common
-            .server_guid
-            .as_ref()
-            .expect("Server GUID not set")
     }
 }
 
@@ -796,9 +808,7 @@ impl Handshake for ServerHandshake<'_> {
                     return Ok(Authenticated {
                         socket_write: write,
                         socket_read: Some(read),
-                        // SAFETY: We know that the server GUID is set because we set it in the
-                        // constructor.
-                        server_guid: self.common.server_guid.expect("Server GUID not set"),
+                        server_guid: self.guid,
                         #[cfg(unix)]
                         cap_unix_fd: self.common.cap_unix_fd,
                         already_received_bytes: Some(self.common.recv_buffer),
@@ -917,7 +927,7 @@ impl FromStr for Command {
                 let guid = words
                     .next()
                     .ok_or_else(|| Error::Handshake("Missing OK server GUID!".into()))?;
-                Command::Ok(guid.parse()?)
+                Command::Ok(Guid::from_str(guid)?.into())
             }
             Some("AGREE_UNIX_FD") => Command::AgreeUnixFD,
             _ => return Err(Error::Handshake(format!("Unknown command: {s}"))),
@@ -931,7 +941,6 @@ impl FromStr for Command {
 pub struct HandshakeCommon {
     socket: BoxedSplit,
     recv_buffer: Vec<u8>,
-    server_guid: Option<Guid>,
     cap_unix_fd: bool,
     // the current AUTH mechanism is front, ordered by priority
     mechanisms: VecDeque<AuthMechanism>,
@@ -939,15 +948,10 @@ pub struct HandshakeCommon {
 
 impl HandshakeCommon {
     /// Start a handshake on this client socket
-    pub fn new(
-        socket: BoxedSplit,
-        mechanisms: VecDeque<AuthMechanism>,
-        server_guid: Option<Guid>,
-    ) -> Self {
+    pub fn new(socket: BoxedSplit, mechanisms: VecDeque<AuthMechanism>) -> Self {
         Self {
             socket,
             recv_buffer: Vec::new(),
-            server_guid,
             cap_unix_fd: false,
             mechanisms,
         }
@@ -1066,10 +1070,11 @@ mod tests {
     fn handshake() {
         let (p0, p1) = create_async_socket_pair();
 
-        let client = ClientHandshake::new(Split::new_boxed(p0), None);
+        let guid = OwnedGuid::from(Guid::generate());
+        let client = ClientHandshake::new(Split::new_boxed(p0), None, Some(guid.clone()));
         let server = ServerHandshake::new(
             Split::new_boxed(p1),
-            Guid::generate(),
+            guid,
             Some(Uid::effective().into()),
             None,
             None,
@@ -1093,7 +1098,7 @@ mod tests {
         let (mut p0, p1) = create_async_socket_pair();
         let server = ServerHandshake::new(
             Split::new_boxed(p1),
-            Guid::generate(),
+            Guid::generate().into(),
             Some(Uid::effective().into()),
             None,
             None,
@@ -1122,7 +1127,7 @@ mod tests {
         let (mut p0, p1) = create_async_socket_pair();
         let server = ServerHandshake::new(
             Split::new_boxed(p1),
-            Guid::generate(),
+            Guid::generate().into(),
             Some(Uid::effective().into()),
             None,
             None,
@@ -1149,7 +1154,7 @@ mod tests {
         let (mut p0, p1) = create_async_socket_pair();
         let server = ServerHandshake::new(
             Split::new_boxed(p1),
-            Guid::generate(),
+            Guid::generate().into(),
             Some(Uid::effective().into()),
             None,
             None,
@@ -1167,7 +1172,7 @@ mod tests {
         let (mut p0, p1) = create_async_socket_pair();
         let server = ServerHandshake::new(
             Split::new_boxed(p1),
-            Guid::generate(),
+            Guid::generate().into(),
             Some(Uid::effective().into()),
             Some(vec![AuthMechanism::Anonymous].into()),
             None,
@@ -1185,7 +1190,7 @@ mod tests {
         let (mut p0, p1) = create_async_socket_pair();
         let server = ServerHandshake::new(
             Split::new_boxed(p1),
-            Guid::generate(),
+            Guid::generate().into(),
             Some(Uid::effective().into()),
             Some(vec![AuthMechanism::Anonymous].into()),
             None,

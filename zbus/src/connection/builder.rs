@@ -61,7 +61,8 @@ type Interfaces<'a> =
 pub struct Builder<'a> {
     target: Option<Target>,
     max_queued: Option<usize>,
-    guid: Option<&'a Guid>,
+    // This is only set for server case.
+    guid: Option<Guid<'a>>,
     p2p: bool,
     internal_executor: bool,
     #[derivative(Debug = "ignore")]
@@ -212,10 +213,14 @@ impl<'a> Builder<'a> {
     ///
     /// The to-be-created connection will wait for incoming client authentication handshake and
     /// negotiation messages, for peer-to-peer communications after successful creation.
-    pub fn server(mut self, guid: &'a Guid) -> Self {
-        self.guid = Some(guid);
+    pub fn server<G>(mut self, guid: G) -> Result<Self>
+    where
+        G: TryInto<Guid<'a>>,
+        G::Error: Into<Error>,
+    {
+        self.guid = Some(guid.try_into().map_err(Into::into)?);
 
-        self
+        Ok(self)
     }
 
     /// Set the capacity of the main (unfiltered) queue.
@@ -341,8 +346,14 @@ impl<'a> Builder<'a> {
         let mut stream = self.stream_for_target().await?;
         let mut auth = match self.guid {
             None => {
+                let guid = match self.target {
+                    Some(Target::Address(ref addr)) => {
+                        addr.guid().map(|guid| guid.to_owned().into())
+                    }
+                    _ => None,
+                };
                 // SASL Handshake
-                Authenticated::client(stream, self.auth_mechanisms).await?
+                Authenticated::client(stream, guid, self.auth_mechanisms).await?
             }
             Some(guid) => {
                 if !self.p2p {
@@ -357,7 +368,7 @@ impl<'a> Builder<'a> {
 
                 Authenticated::server(
                     stream,
-                    guid.clone(),
+                    guid.to_owned().into(),
                     #[cfg(unix)]
                     client_uid,
                     #[cfg(windows)]
@@ -465,13 +476,13 @@ impl<'a> Builder<'a> {
             Target::VsockStream(stream) => Split::new_boxed(stream),
             Target::Address(address) => match address.connect().await? {
                 #[cfg(any(unix, not(feature = "tokio")))]
-                address::Stream::Unix(stream) => Split::new_boxed(stream),
-                address::Stream::Tcp(stream) => Split::new_boxed(stream),
+                address::transport::Stream::Unix(stream) => Split::new_boxed(stream),
+                address::transport::Stream::Tcp(stream) => Split::new_boxed(stream),
                 #[cfg(any(
                     all(feature = "vsock", not(feature = "tokio")),
                     feature = "tokio-vsock"
                 ))]
-                address::Stream::Vsock(stream) => Split::new_boxed(stream),
+                address::transport::Stream::Vsock(stream) => Split::new_boxed(stream),
             },
             Target::Socket(stream) => stream,
         })
