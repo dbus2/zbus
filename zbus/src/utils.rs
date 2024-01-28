@@ -37,13 +37,14 @@ pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
 #[cfg(feature = "tokio")]
 #[doc(hidden)]
 pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
-    static TOKIO_RT: once_cell::sync::Lazy<tokio::runtime::Runtime> =
-        once_cell::sync::Lazy::new(|| {
-            tokio::runtime::Builder::new_current_thread()
-                .enable_io()
-                .enable_time()
-                .build()
-                .expect("launch of single-threaded tokio runtime")
-        });
-    TOKIO_RT.block_on(future)
+    use std::sync::OnceLock;
+    static TOKIO_RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+    let runtime = TOKIO_RT.get_or_init(|| {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_io()
+            .enable_time()
+            .build()
+            .expect("launch of single-threaded tokio runtime")
+    });
+    runtime.block_on(future)
 }
