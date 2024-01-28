@@ -67,7 +67,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut output_target = match args.output.as_deref() {
         Some("-") => OutputTarget::Stdout,
         Some(path) => {
-            let file = OpenOptions::new().create(true).write(true).open(path)?;
+            let file = OpenOptions::new()
+                .create(true)
+                .truncate(true)
+                .write(true)
+                .open(path)?;
             OutputTarget::SingleFile(file)
         }
         _ => OutputTarget::MultipleFiles,
