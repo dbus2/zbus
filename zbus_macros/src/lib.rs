@@ -345,12 +345,12 @@ pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// This macro makes it easy to implement the [`zbus::DBusError`] trait for your custom error type
 /// (currently only enums are supported).
 ///
-/// If a special variant marked with the `dbus_error` attribute is present, `From<zbus::Error>` is
+/// If a special variant marked with the `zbus` attribute is present, `From<zbus::Error>` is
 /// also implemented for your type. This variant can only have a single unnamed field of type
 /// [`zbus::Error`]. This implementation makes it possible for you to declare proxy methods to
 /// directly return this type, rather than [`zbus::Error`].
 ///
-/// Each variant (except for the special `dbus_error` one) can optionally have a (named or unnamed)
+/// Each variant (except for the special `zbus` one) can optionally have a (named or unnamed)
 /// `String` field (which is used as the human-readable error description).
 ///
 /// # Example
@@ -359,9 +359,9 @@ pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// use zbus_macros::DBusError;
 ///
 /// #[derive(DBusError, Debug)]
-/// #[dbus_error(prefix = "org.myservice.App")]
+/// #[zbus(prefix = "org.myservice.App")]
 /// enum Error {
-///     #[dbus_error(zbus_error)]
+///     #[zbus(error)]
 ///     ZBus(zbus::Error),
 ///     FileNotFound(String),
 ///     OutOfMemory,
@@ -372,7 +372,7 @@ pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// [`zbus::Error`]: https://docs.rs/zbus/latest/zbus/enum.Error.html
 /// [`zvariant::Type`]: https://docs.rs/zvariant/latest/zvariant/trait.Type.html
 /// [`serde::Serialize`]: https://docs.rs/serde/1.0.132/serde/trait.Serialize.html
-#[proc_macro_derive(DBusError, attributes(dbus_error))]
+#[proc_macro_derive(DBusError, attributes(zbus))]
 pub fn derive_dbus_error(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     error::expand_derive(input)

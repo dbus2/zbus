@@ -189,10 +189,10 @@ impl MyIfaceImpl {
 
 /// Custom D-Bus error type.
 #[derive(Debug, DBusError)]
-#[dbus_error(prefix = "org.freedesktop.MyIface.Error")]
+#[zbus(prefix = "org.freedesktop.MyIface.Error")]
 enum MyIfaceError {
     SomethingWentWrong(String),
-    #[dbus_error(zbus_error)]
+    #[zbus(error)]
     ZBus(zbus::Error),
 }
 

@@ -823,11 +823,11 @@ assert_impl_all!(DBusProxy<'_>: Send, Sync, Unpin);
 
 /// Errors from <https://gitlab.freedesktop.org/dbus/dbus/-/blob/master/dbus/dbus-protocol.h>
 #[derive(Clone, Debug, DBusError, PartialEq)]
-#[dbus_error(prefix = "org.freedesktop.DBus.Error", impl_display = true)]
+#[zbus(prefix = "org.freedesktop.DBus.Error", impl_display = true)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum Error {
     /// Unknown or fall-through ZBus error.
-    #[dbus_error(zbus_error)]
+    #[zbus(error)]
     ZBus(zbus::Error),
 
     /// A generic error; "something went wrong" - see the error message for more.
@@ -913,51 +913,51 @@ pub enum Error {
     MatchRuleInvalid(String),
 
     /// While starting a new process, the exec() call failed.
-    #[dbus_error(name = "Spawn.ExecFailed")]
+    #[zbus(name = "Spawn.ExecFailed")]
     SpawnExecFailed(String),
 
     /// While starting a new process, the fork() call failed.
-    #[dbus_error(name = "Spawn.ForkFailed")]
+    #[zbus(name = "Spawn.ForkFailed")]
     SpawnForkFailed(String),
 
     /// While starting a new process, the child exited with a status code.
-    #[dbus_error(name = "Spawn.ChildExited")]
+    #[zbus(name = "Spawn.ChildExited")]
     SpawnChildExited(String),
 
     /// While starting a new process, the child exited on a signal.
-    #[dbus_error(name = "Spawn.ChildSignaled")]
+    #[zbus(name = "Spawn.ChildSignaled")]
     SpawnChildSignaled(String),
 
     /// While starting a new process, something went wrong.
-    #[dbus_error(name = "Spawn.Failed")]
+    #[zbus(name = "Spawn.Failed")]
     SpawnFailed(String),
 
     /// We failed to setup the environment correctly.
-    #[dbus_error(name = "Spawn.FailedToSetup")]
+    #[zbus(name = "Spawn.FailedToSetup")]
     SpawnFailedToSetup(String),
 
     /// We failed to setup the config parser correctly.
-    #[dbus_error(name = "Spawn.ConfigInvalid")]
+    #[zbus(name = "Spawn.ConfigInvalid")]
     SpawnConfigInvalid(String),
 
     /// Bus name was not valid.
-    #[dbus_error(name = "Spawn.ServiceNotValid")]
+    #[zbus(name = "Spawn.ServiceNotValid")]
     SpawnServiceNotValid(String),
 
     /// Service file not found in system-services directory.
-    #[dbus_error(name = "Spawn.ServiceNotFound")]
+    #[zbus(name = "Spawn.ServiceNotFound")]
     SpawnServiceNotFound(String),
 
     /// Permissions are incorrect on the setuid helper.
-    #[dbus_error(name = "Spawn.PermissionsInvalid")]
+    #[zbus(name = "Spawn.PermissionsInvalid")]
     SpawnPermissionsInvalid(String),
 
     /// Service file invalid (Name, User or Exec missing).
-    #[dbus_error(name = "Spawn.FileInvalid")]
+    #[zbus(name = "Spawn.FileInvalid")]
     SpawnFileInvalid(String),
 
     /// There was not enough memory to complete the operation.
-    #[dbus_error(name = "Spawn.NoMemory")]
+    #[zbus(name = "Spawn.NoMemory")]
     SpawnNoMemory(String),
 
     /// Tried to get a UNIX process ID and it wasn't available.

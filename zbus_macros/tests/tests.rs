@@ -110,12 +110,12 @@ fn test_proxy() {
 #[test]
 fn test_derive_error() {
     #[derive(Debug, DBusError)]
-    #[dbus_error(prefix = "org.freedesktop.zbus")]
+    #[zbus(prefix = "org.freedesktop.zbus")]
     enum Test {
-        #[dbus_error(zbus_error)]
+        #[zbus(error)]
         ZBus(zbus::Error),
         SomeExcuse,
-        #[dbus_error(name = "I.Am.Sorry.Dave")]
+        #[zbus(name = "I.Am.Sorry.Dave")]
         IAmSorryDave(String),
         LetItBe {
             desc: String,
