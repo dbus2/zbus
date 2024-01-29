@@ -26,13 +26,13 @@ A simple service that politely greets whoever calls its `SayHello` method:
 
 ```rust,no_run
 use std::{error::Error, future::pending};
-use zbus::{connection, dbus_interface};
+use zbus::{connection, interface};
 
 struct Greeter {
     count: u64
 }
 
-#[dbus_interface(name = "org.zbus.MyGreeter1")]
+#[interface(name = "org.zbus.MyGreeter1")]
 impl Greeter {
     // Can be `async` as well.
     fn say_hello(&mut self, name: &str) -> String {
@@ -70,9 +70,9 @@ s "Hello Maria! I have been called 1 times."
 Now let's write the client-side code for `MyGreeter` service:
 
 ```rust,no_run
-use zbus::{Connection, Result, dbus_proxy};
+use zbus::{Connection, Result, proxy};
 
-#[dbus_proxy(
+#[proxy(
     interface = "org.zbus.MyGreeter1",
     default_service = "org.zbus.MyGreeter",
     default_path = "/org/zbus/MyGreeter"
@@ -86,7 +86,7 @@ trait MyGreeter {
 async fn main() -> Result<()> {
     let connection = Connection::session().await?;
 
-    // `dbus_proxy` macro creates `MyGreaterProxy` based on `Notifications` trait.
+    // `proxy` macro creates `MyGreaterProxy` based on `Notifications` trait.
     let proxy = MyGreeterProxy::new(&connection).await?;
     let reply = proxy.say_hello("Maria").await?;
     println!("{reply}");

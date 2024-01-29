@@ -46,13 +46,13 @@ mod utils;
 /// * `blocking_name` - Specify the exact name of the blocking proxy type.
 ///
 /// * `assume_defaults` - whether to auto-generate values for `default_path` and `default_service`
-///   if none are specified (default: `false`). `dbus_proxy` generates a warning if neither this
+///   if none are specified (default: `false`). `proxy` generates a warning if neither this
 ///   attribute nor one of the default values are specified. Please make sure to explicitly set
 ///   either this attribute or the default values, according to your needs.
 ///
 /// Each trait method will be expanded to call to the associated D-Bus remote interface.
 ///
-/// Trait methods accept `dbus_proxy` attributes:
+/// Trait methods accept `proxy` attributes:
 ///
 /// * `name` - override the D-Bus name (pascal case form by default)
 ///
@@ -108,12 +108,12 @@ mod utils;
 ///
 /// ```no_run
 /// # use std::error::Error;
-/// use zbus_macros::dbus_proxy;
+/// use zbus_macros::proxy;
 /// use zbus::{blocking::Connection, Result, fdo, zvariant::Value};
 /// use futures_util::stream::StreamExt;
 /// use async_io::block_on;
 ///
-/// #[dbus_proxy(
+/// #[proxy(
 ///     interface = "org.test.SomeIface",
 ///     default_service = "org.test.SomeService",
 ///     default_path = "/org/test/SomeObject"
@@ -121,16 +121,16 @@ mod utils;
 /// trait SomeIface {
 ///     fn do_this(&self, with: &str, some: u32, arg: &Value<'_>) -> Result<bool>;
 ///
-///     #[dbus_proxy(property)]
+///     #[zbus(property)]
 ///     fn a_property(&self) -> fdo::Result<String>;
 ///
-///     #[dbus_proxy(property)]
+///     #[zbus(property)]
 ///     fn set_a_property(&self, a_property: &str) -> fdo::Result<()>;
 ///
-///     #[dbus_proxy(signal)]
+///     #[zbus(signal)]
 ///     fn some_signal(&self, arg1: &str, arg2: u32) -> fdo::Result<()>;
 ///
-///     #[dbus_proxy(object = "SomeOtherIface", blocking_object = "SomeOtherInterfaceBlock")]
+///     #[zbus(object = "SomeOtherIface", blocking_object = "SomeOtherInterfaceBlock")]
 ///     // The method will return a `SomeOtherIfaceProxy` or `SomeOtherIfaceProxyBlock`, depending
 ///     // on whether it is called on `SomeIfaceProxy` or `SomeIfaceProxyBlocking`, respectively.
 ///     //
@@ -140,7 +140,7 @@ mod utils;
 ///     fn some_method(&self, arg1: &str);
 /// }
 ///
-/// #[dbus_proxy(
+/// #[proxy(
 ///     interface = "org.test.SomeOtherIface",
 ///     default_service = "org.test.SomeOtherService",
 ///     blocking_name = "SomeOtherInterfaceBlock",
@@ -191,10 +191,20 @@ mod utils;
 /// [`ObjectPath`]: https://docs.rs/zvariant/latest/zvariant/struct.ObjectPath.html
 /// [dbus_emits_changed_signal]: https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format
 #[proc_macro_attribute]
+pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let args = parse_macro_input!(attr as AttributeArgs);
+    let input = parse_macro_input!(item as ItemTrait);
+    proxy::expand::<proxy::ImplAttributes, proxy::MethodAttributes>(args, input)
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
+}
+
+#[deprecated = "Use `#[proxy(...)]` proc macro with `#[zbus(...)]` item attributes instead."]
+#[proc_macro_attribute]
 pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as AttributeArgs);
     let input = parse_macro_input!(item as ItemTrait);
-    proxy::expand(args, input)
+    proxy::expand::<proxy::old::ImplAttributes, proxy::old::MethodAttributes>(args, input)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
 }
@@ -205,7 +215,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// properties or signal depending on the item attributes. It will implement the [`Interface`] trait
 /// `for T` on your behalf, to handle the message dispatching and introspection support.
 ///
-/// The methods accepts the `dbus_interface` attributes:
+/// The methods accepts the `interface` attributes:
 ///
 /// * `name` - override the D-Bus name (pascal case form of the method by default)
 ///
@@ -265,14 +275,14 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// ```
 /// # use std::error::Error;
-/// use zbus_macros::dbus_interface;
+/// use zbus_macros::interface;
 /// use zbus::{ObjectServer, object_server::SignalContext, message::Header};
 ///
 /// struct Example {
 ///     _some_data: String,
 /// }
 ///
-/// #[dbus_interface(name = "org.myservice.Example")]
+/// #[interface(name = "org.myservice.Example")]
 /// impl Example {
 ///     // "Quit" method. A method may throw errors.
 ///     async fn quit(
@@ -296,7 +306,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     // "TheAnswer" property (note: the "name" attribute), with its associated getter.
 ///     // A `the_answer_changed` method has also been generated to emit the
 ///     // "PropertiesChanged" signal for this property.
-///     #[dbus_interface(property, name = "TheAnswer")]
+///     #[zbus(property, name = "TheAnswer")]
 ///     fn answer(&self) -> u32 {
 ///         2 * 3 * 7
 ///     }
@@ -304,16 +314,16 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     // "IFail" property with its associated getter.
 ///     // An `i_fail_changed` method has also been generated to emit the
 ///     // "PropertiesChanged" signal for this property.
-///     #[dbus_interface(property)]
+///     #[zbus(property)]
 ///     fn i_fail(&self) -> zbus::fdo::Result<i32> {
 ///         Err(zbus::fdo::Error::UnknownProperty("IFail".into()))
 ///     }
 ///
 ///     // "Bye" signal (note: no implementation body).
-///     #[dbus_interface(signal)]
+///     #[zbus(signal)]
 ///     async fn bye(signal_ctxt: &SignalContext<'_>, message: &str) -> zbus::Result<()>;
 ///
-///     #[dbus_interface(out_args("answer", "question"))]
+///     #[zbus(out_args("answer", "question"))]
 ///     fn meaning_of_life(&self) -> zbus::fdo::Result<(i32, String)> {
 ///         Ok((42, String::from("Meaning of life")))
 ///     }
@@ -332,10 +342,20 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// [`Interface`]: https://docs.rs/zbus/latest/zbus/object_server/trait.Interface.html
 /// [dbus_emits_changed_signal]: https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format
 #[proc_macro_attribute]
-pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(attr as AttributeArgs);
+pub fn interface(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let args = parse_macro_input!(attr);
     let input = syn::parse_macro_input!(item as ItemImpl);
-    iface::expand(args, input)
+    iface::expand::<iface::TraitAttributes, iface::MethodAttributes>(args, input)
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
+}
+
+#[deprecated = "Use `#[interface(...)]` proc macro with `#[zbus(...)]` item attributes instead."]
+#[proc_macro_attribute]
+pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let args = parse_macro_input!(attr);
+    let input = syn::parse_macro_input!(item as ItemImpl);
+    iface::expand::<iface::old::TraitAttributes, iface::old::MethodAttributes>(args, input)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
 }

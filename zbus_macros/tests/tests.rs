@@ -4,16 +4,16 @@ use futures_util::{
 };
 use std::future::ready;
 use zbus::{block_on, fdo, object_server::SignalContext, proxy::CacheProperties};
-use zbus_macros::{dbus_interface, dbus_proxy, DBusError};
+use zbus_macros::{interface, proxy, DBusError};
 
 mod param {
-    #[zbus_macros::dbus_proxy(
+    #[zbus_macros::proxy(
         interface = "org.freedesktop.zbus_macros.ProxyParam",
         default_service = "org.freedesktop.zbus_macros",
         default_path = "/org/freedesktop/zbus_macros/test"
     )]
     trait ProxyParam {
-        #[dbus_proxy(object = "super::test::Test")]
+        #[zbus(object = "super::test::Test")]
         fn some_method<T>(&self, test: &T);
     }
 }
@@ -24,7 +24,7 @@ mod test {
         zvariant::{OwnedStructure, Structure},
     };
 
-    #[zbus_macros::dbus_proxy(
+    #[zbus_macros::proxy(
         assume_defaults = false,
         interface = "org.freedesktop.zbus_macros.Test",
         default_service = "org.freedesktop.zbus_macros"
@@ -43,22 +43,22 @@ mod test {
         /// A call returning an type that only implements DynamicDeserialize
         fn test_dyn_ret(&self) -> zbus::Result<OwnedStructure>;
 
-        #[dbus_proxy(name = "CheckRENAMING")]
+        #[zbus(name = "CheckRENAMING")]
         fn check_renaming(&self) -> zbus::Result<Vec<u8>>;
 
-        #[dbus_proxy(property)]
+        #[zbus(property)]
         fn property(&self) -> fdo::Result<Vec<String>>;
 
-        #[dbus_proxy(property(emits_changed_signal = "const"))]
+        #[zbus(property(emits_changed_signal = "const"))]
         fn a_const_property(&self) -> fdo::Result<Vec<String>>;
 
-        #[dbus_proxy(property(emits_changed_signal = "false"))]
+        #[zbus(property(emits_changed_signal = "false"))]
         fn a_live_property(&self) -> fdo::Result<Vec<String>>;
 
-        #[dbus_proxy(property)]
+        #[zbus(property)]
         fn set_property(&self, val: u16) -> fdo::Result<()>;
 
-        #[dbus_proxy(signal)]
+        #[zbus(signal)]
         fn a_signal<T>(&self, arg: u8, other: T) -> fdo::Result<()>
         where
             T: AsRef<str>;
@@ -139,7 +139,7 @@ fn test_interface() {
     #[derive(Serialize, Deserialize, Type, Value)]
     struct MyCustomPropertyType(u32);
 
-    #[dbus_interface(name = "org.freedesktop.zbus.Test")]
+    #[interface(name = "org.freedesktop.zbus.Test")]
     impl<T: 'static> Test<T>
     where
         T: serde::ser::Serialize + zbus::zvariant::Type + Send + Sync,
@@ -168,34 +168,34 @@ fn test_interface() {
             unimplemented!()
         }
 
-        #[dbus_interface(property)]
+        #[zbus(property)]
         fn my_custom_property(&self) -> MyCustomPropertyType {
             unimplemented!()
         }
 
         // Also tests that mut argument bindings work for properties
-        #[dbus_interface(property)]
+        #[zbus(property)]
         fn set_my_custom_property(&self, mut _value: MyCustomPropertyType) {
             _value = MyCustomPropertyType(42);
         }
 
         // Test that the emits_changed_signal property results in the correct annotation
-        #[dbus_interface(property(emits_changed_signal = "false"))]
+        #[zbus(property(emits_changed_signal = "false"))]
         fn my_custom_property_emits_false(&self) -> MyCustomPropertyType {
             unimplemented!()
         }
 
-        #[dbus_interface(property(emits_changed_signal = "invalidates"))]
+        #[zbus(property(emits_changed_signal = "invalidates"))]
         fn my_custom_property_emits_invalidates(&self) -> MyCustomPropertyType {
             unimplemented!()
         }
 
-        #[dbus_interface(property(emits_changed_signal = "const"))]
+        #[zbus(property(emits_changed_signal = "const"))]
         fn my_custom_property_emits_const(&self) -> MyCustomPropertyType {
             unimplemented!()
         }
 
-        #[dbus_interface(name = "CheckVEC")]
+        #[zbus(name = "CheckVEC")]
         fn check_vec(&self) -> Vec<u8> {
             unimplemented!()
         }
@@ -203,18 +203,18 @@ fn test_interface() {
         /// Testing my_prop documentation is reflected in XML.
         ///
         /// And that too.
-        #[dbus_interface(property)]
+        #[zbus(property)]
         fn my_prop(&self) -> u16 {
             unimplemented!()
         }
 
-        #[dbus_interface(property)]
+        #[zbus(property)]
         fn set_my_prop(&mut self, _val: u16) {
             unimplemented!()
         }
 
         /// Emit a signal.
-        #[dbus_interface(signal)]
+        #[zbus(signal)]
         async fn signal(ctxt: &SignalContext<'_>, arg: u8, other: &str) -> zbus::Result<()>;
     }
 
@@ -293,16 +293,16 @@ mod signal_from_message {
     use super::*;
     use zbus::message::Message;
 
-    #[dbus_proxy(
+    #[proxy(
         interface = "org.freedesktop.zbus_macros.Test",
         default_service = "org.freedesktop.zbus_macros",
         default_path = "/org/freedesktop/zbus_macros/test"
     )]
     trait Test {
-        #[dbus_proxy(signal)]
+        #[zbus(signal)]
         fn signal_u8(&self, arg: u8) -> fdo::Result<()>;
 
-        #[dbus_proxy(signal)]
+        #[zbus(signal)]
         fn signal_string(&self, arg: String) -> fdo::Result<()>;
     }
 

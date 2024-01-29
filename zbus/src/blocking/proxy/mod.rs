@@ -47,14 +47,14 @@ pub use builder::Builder;
 ///
 /// # Note
 ///
-/// It is recommended to use the [`dbus_proxy`] macro, which provides a more convenient and
+/// It is recommended to use the [`proxy`] macro, which provides a more convenient and
 /// type-safe *façade* `Proxy` derived from a Rust trait.
 ///
 /// ## Current limitations:
 ///
 /// At the moment, `Proxy` doesn't prevent [auto-launching][al].
 ///
-/// [`dbus_proxy`]: attr.dbus_proxy.html
+/// [`proxy`]: attr.proxy.html
 /// [al]: https://github.com/dbus2/zbus/issues/54
 #[derive(derivative::Derivative)]
 #[derivative(Clone, Debug)]

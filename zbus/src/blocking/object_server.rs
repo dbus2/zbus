@@ -41,13 +41,13 @@ where
     /// ```no_run
     /// # use std::error::Error;
     /// # use async_io::block_on;
-    /// # use zbus::{blocking::Connection, dbus_interface};
+    /// # use zbus::{blocking::Connection, interface};
     ///
     /// struct MyIface(u32);
     ///
-    /// #[dbus_interface(name = "org.myiface.MyIface")]
+    /// #[interface(name = "org.myiface.MyIface")]
     /// impl MyIface {
-    ///    #[dbus_interface(property)]
+    ///    #[zbus(property)]
     ///    fn count(&self) -> u32 {
     ///        self.0
     ///    }
@@ -84,7 +84,7 @@ where
 ///
 /// ```no_run
 /// # use std::error::Error;
-/// use zbus::{blocking::Connection, dbus_interface};
+/// use zbus::{blocking::Connection, interface};
 /// use event_listener::Event;
 ///
 /// struct Example {
@@ -99,14 +99,14 @@ where
 ///     }
 /// }
 ///
-/// #[dbus_interface(name = "org.myiface.Example")]
+/// #[interface(name = "org.myiface.Example")]
 /// impl Example {
 ///     // This will be the "Quit" D-Bus method.
 ///     fn quit(&mut self) {
 ///         self.quit_event.notify(1);
 ///     }
 ///
-///     // See `dbus_interface` documentation to learn
+///     // See `interface` documentation to learn
 ///     // how to expose properties & signals as well.
 /// }
 ///
@@ -189,13 +189,13 @@ impl ObjectServer {
     /// # use zbus::{
     /// #    SignalContext,
     /// #    blocking::Connection,
-    /// #    dbus_interface,
+    /// #    interface,
     /// # };
     /// #
     /// struct MyIface;
-    /// #[dbus_interface(name = "org.myiface.MyIface")]
+    /// #[interface(name = "org.myiface.MyIface")]
     /// impl MyIface {
-    ///     #[dbus_interface(signal)]
+    ///     #[zbus(signal)]
     ///     async fn emit_signal(ctxt: &SignalContext<'_>) -> zbus::Result<()>;
     /// }
     ///

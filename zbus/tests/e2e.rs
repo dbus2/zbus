@@ -22,9 +22,10 @@ use zbus::{
 use zvariant::{DeserializeDict, Optional, OwnedValue, SerializeDict, Str, Type, Value};
 
 use zbus::{
-    connection, dbus_interface, dbus_proxy,
+    connection, interface,
     message::Header,
     object_server::{InterfaceRef, SignalContext},
+    proxy,
     proxy::CacheProperties,
     Connection, ObjectServer,
 };
@@ -51,7 +52,7 @@ pub struct RefType<'a> {
     field1: Str<'a>,
 }
 
-#[dbus_proxy(assume_defaults = true, gen_blocking = true)]
+#[proxy(assume_defaults = true, gen_blocking = true)]
 trait MyIface {
     fn ping(&self) -> zbus::Result<u32>;
 
@@ -79,79 +80,79 @@ trait MyIface {
     // Optional params and return values.
     fn optional_args(&self, key: Option<&str>) -> zbus::Result<Option<String>>;
 
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn count(&self) -> zbus::Result<u32>;
 
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn set_count(&self, count: u32) -> zbus::Result<()>;
 
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn hash_map(&self) -> zbus::Result<HashMap<String, String>>;
 
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn address_data(&self) -> zbus::Result<IP4Adress>;
 
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn set_address_data(&self, addr: IP4Adress) -> zbus::Result<()>;
 
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn address_data2(&self) -> zbus::Result<IP4Adress>;
 
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn str_prop(&self) -> zbus::Result<String>;
 
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn set_str_prop(&self, str_prop: &str) -> zbus::Result<()>;
 
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn ref_type(&self) -> zbus::Result<RefType<'_>>;
 
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn set_ref_type(&self, ref_type: RefType<'_>) -> zbus::Result<()>;
 
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn fail_property(&self) -> zbus::Result<u32>;
 
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn optional_property(&self) -> zbus::Result<Optional<u32>>;
 
-    #[dbus_proxy(no_reply)]
+    #[zbus(no_reply)]
     fn test_no_reply(&self) -> zbus::Result<()>;
 
-    #[dbus_proxy(no_autostart)]
+    #[zbus(no_autostart)]
     fn test_no_autostart(&self) -> zbus::Result<()>;
 
-    #[dbus_proxy(allow_interactive_auth)]
+    #[zbus(allow_interactive_auth)]
     fn test_interactive_auth(&self) -> zbus::Result<()>;
 
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn emits_changed_default(&self) -> zbus::Result<u32>;
 
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn set_emits_changed_default(&self, count: u32) -> zbus::Result<()>;
 
-    #[dbus_proxy(property(emits_changed_signal = "true"))]
+    #[zbus(property(emits_changed_signal = "true"))]
     fn emits_changed_true(&self) -> zbus::Result<u32>;
 
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn set_emits_changed_true(&self, count: u32) -> zbus::Result<()>;
 
-    #[dbus_proxy(property(emits_changed_signal = "invalidates"))]
+    #[zbus(property(emits_changed_signal = "invalidates"))]
     fn emits_changed_invalidates(&self) -> zbus::Result<u32>;
 
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn set_emits_changed_invalidates(&self, count: u32) -> zbus::Result<()>;
 
-    #[dbus_proxy(property(emits_changed_signal = "const"))]
+    #[zbus(property(emits_changed_signal = "const"))]
     fn emits_changed_const(&self) -> zbus::Result<u32>;
 
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn set_emits_changed_const(&self, count: u32) -> zbus::Result<()>;
 
-    #[dbus_proxy(property(emits_changed_signal = "false"))]
+    #[zbus(property(emits_changed_signal = "false"))]
     fn emits_changed_false(&self) -> zbus::Result<u32>;
 
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn set_emits_changed_false(&self, count: u32) -> zbus::Result<()>;
 }
 
@@ -196,7 +197,7 @@ enum MyIfaceError {
     ZBus(zbus::Error),
 }
 
-#[dbus_interface(interface = "org.freedesktop.MyIface")]
+#[interface(interface = "org.freedesktop.MyIface")]
 impl MyIfaceImpl {
     #[instrument]
     async fn ping(&mut self, #[zbus(signal_context)] ctxt: SignalContext<'_>) -> u32 {
@@ -261,7 +262,7 @@ impl MyIfaceImpl {
     }
 
     #[instrument]
-    #[dbus_interface(out_args("foo", "bar"))]
+    #[zbus(out_args("foo", "bar"))]
     fn test_multi_ret(&self) -> zbus::fdo::Result<(i32, String)> {
         debug!("`TestMultiRet` called.");
         Ok((42, String::from("Meaning of life")))
@@ -290,7 +291,7 @@ impl MyIfaceImpl {
         Ok(response)
     }
 
-    #[dbus_interface(signal)]
+    #[zbus(signal)]
     async fn test_response_notified(ctxt: SignalContext<'_>) -> zbus::Result<()>;
 
     #[instrument]
@@ -342,7 +343,7 @@ impl MyIfaceImpl {
     }
 
     #[instrument]
-    #[dbus_interface(property)]
+    #[zbus(property)]
     fn set_count(&mut self, val: u32) -> zbus::fdo::Result<()> {
         debug!("`Count` setter called.");
         if val == 42 {
@@ -353,21 +354,21 @@ impl MyIfaceImpl {
     }
 
     #[instrument]
-    #[dbus_interface(property)]
+    #[zbus(property)]
     fn count(&self) -> u32 {
         debug!("`Count` getter called.");
         self.count
     }
 
     #[instrument]
-    #[dbus_interface(property)]
+    #[zbus(property)]
     async fn hash_map(&self) -> HashMap<String, String> {
         debug!("`HashMap` getter called.");
         self.test_hashmap_return().await.unwrap()
     }
 
     #[instrument]
-    #[dbus_interface(property)]
+    #[zbus(property)]
     async fn fail_property(&self) -> zbus::fdo::Result<u32> {
         Err(zbus::fdo::Error::UnknownProperty(
             "FailProperty".to_string(),
@@ -375,14 +376,14 @@ impl MyIfaceImpl {
     }
 
     #[instrument]
-    #[dbus_interface(property)]
+    #[zbus(property)]
     fn optional_property(&self) -> Optional<u32> {
         debug!("`OptionalAsProp` getter called.");
         Some(42).into()
     }
 
     #[instrument]
-    #[dbus_interface(property)]
+    #[zbus(property)]
     fn address_data(&self) -> IP4Adress {
         debug!("`AddressData` getter called.");
         IP4Adress {
@@ -392,7 +393,7 @@ impl MyIfaceImpl {
     }
 
     #[instrument]
-    #[dbus_interface(property)]
+    #[zbus(property)]
     fn set_address_data(&self, addr: IP4Adress) {
         debug!("`AddressData` setter called with {:?}", addr);
     }
@@ -400,7 +401,7 @@ impl MyIfaceImpl {
     // On the bus, this should return the same value as address_data above. We want to test if
     // this works both ways.
     #[instrument]
-    #[dbus_interface(property)]
+    #[zbus(property)]
     fn address_data2(&self) -> HashMap<String, OwnedValue> {
         debug!("`AddressData2` getter called.");
         let mut map = HashMap::new();
@@ -414,19 +415,19 @@ impl MyIfaceImpl {
     }
 
     #[instrument]
-    #[dbus_interface(property)]
+    #[zbus(property)]
     fn str_prop(&self) -> String {
         "Hello".to_string()
     }
 
     #[instrument]
-    #[dbus_interface(property)]
+    #[zbus(property)]
     fn set_str_prop(&self, str_prop: &str) {
         debug!("`SetStrRef` called with {:?}", str_prop);
     }
 
     #[instrument]
-    #[dbus_interface(property)]
+    #[zbus(property)]
     fn ref_prop(&self) -> RefType<'_> {
         RefType {
             field1: "Hello".into(),
@@ -434,7 +435,7 @@ impl MyIfaceImpl {
     }
 
     #[instrument]
-    #[dbus_interface(property)]
+    #[zbus(property)]
     fn set_ref_prop(&self, ref_type: RefType<'_>) {
         debug!("`SetRefType` called with {:?}", ref_type);
     }
@@ -469,18 +470,18 @@ impl MyIfaceImpl {
             .contains(zbus::message::Flags::AllowInteractiveAuth));
     }
 
-    #[dbus_interface(signal)]
+    #[zbus(signal)]
     async fn alert_count(ctxt: &SignalContext<'_>, val: u32) -> zbus::Result<()>;
 
     #[instrument]
-    #[dbus_interface(property)]
+    #[zbus(property)]
     fn emits_changed_default(&self) -> u32 {
         debug!("`EmitsChangedDefault` getter called.");
         self.emits_changed_default
     }
 
     #[instrument]
-    #[dbus_interface(property)]
+    #[zbus(property)]
     fn set_emits_changed_default(&mut self, val: u32) -> zbus::fdo::Result<()> {
         debug!("`EmitsChangedDefault` setter called.");
         self.emits_changed_default = val;
@@ -488,14 +489,14 @@ impl MyIfaceImpl {
     }
 
     #[instrument]
-    #[dbus_interface(property(emits_changed_signal = "true"))]
+    #[zbus(property(emits_changed_signal = "true"))]
     fn emits_changed_true(&self) -> u32 {
         debug!("`EmitsChangedTrue` getter called.");
         self.emits_changed_true
     }
 
     #[instrument]
-    #[dbus_interface(property)]
+    #[zbus(property)]
     fn set_emits_changed_true(&mut self, val: u32) -> zbus::fdo::Result<()> {
         debug!("`EmitsChangedTrue` setter called.");
         self.emits_changed_true = val;
@@ -503,14 +504,14 @@ impl MyIfaceImpl {
     }
 
     #[instrument]
-    #[dbus_interface(property(emits_changed_signal = "invalidates"))]
+    #[zbus(property(emits_changed_signal = "invalidates"))]
     fn emits_changed_invalidates(&self) -> u32 {
         debug!("`EmitsChangedInvalidates` getter called.");
         self.emits_changed_invalidates
     }
 
     #[instrument]
-    #[dbus_interface(property)]
+    #[zbus(property)]
     fn set_emits_changed_invalidates(&mut self, val: u32) -> zbus::fdo::Result<()> {
         debug!("`EmitsChangedInvalidates` setter called.");
         self.emits_changed_invalidates = val;
@@ -518,14 +519,14 @@ impl MyIfaceImpl {
     }
 
     #[instrument]
-    #[dbus_interface(property(emits_changed_signal = "const"))]
+    #[zbus(property(emits_changed_signal = "const"))]
     fn emits_changed_const(&self) -> u32 {
         debug!("`EmitsChangedConst` getter called.");
         self.emits_changed_const
     }
 
     #[instrument]
-    #[dbus_interface(property)]
+    #[zbus(property)]
     fn set_emits_changed_const(&mut self, val: u32) -> zbus::fdo::Result<()> {
         debug!("`EmitsChangedConst` setter called.");
         self.emits_changed_const = val;
@@ -533,14 +534,14 @@ impl MyIfaceImpl {
     }
 
     #[instrument]
-    #[dbus_interface(property(emits_changed_signal = "false"))]
+    #[zbus(property(emits_changed_signal = "false"))]
     fn emits_changed_false(&self) -> u32 {
         debug!("`EmitsChangedFalse` getter called.");
         self.emits_changed_false
     }
 
     #[instrument]
-    #[dbus_interface(property)]
+    #[zbus(property)]
     fn set_emits_changed_false(&mut self, val: u32) -> zbus::fdo::Result<()> {
         debug!("`EmitsChangedFalse` setter called.");
         self.emits_changed_false = val;

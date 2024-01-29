@@ -17,15 +17,15 @@ use zvariant::{
 };
 
 use crate::{
-    dbus_interface, dbus_proxy, message::Header, object_server::SignalContext, DBusError,
-    ObjectServer, OwnedGuid,
+    interface, message::Header, object_server::SignalContext, proxy, DBusError, ObjectServer,
+    OwnedGuid,
 };
 
 #[rustfmt::skip]
 macro_rules! gen_introspectable_proxy {
     ($gen_async:literal, $gen_blocking:literal) => {
         /// Proxy for the `org.freedesktop.DBus.Introspectable` interface.
-        #[dbus_proxy(
+        #[proxy(
             interface = "org.freedesktop.DBus.Introspectable",
             default_path = "/",
             gen_async = $gen_async,
@@ -47,7 +47,7 @@ assert_impl_all!(IntrospectableProxy<'_>: Send, Sync, Unpin);
 /// [ObjectServer](crate::ObjectServer).
 pub(crate) struct Introspectable;
 
-#[dbus_interface(name = "org.freedesktop.DBus.Introspectable")]
+#[interface(name = "org.freedesktop.DBus.Introspectable")]
 impl Introspectable {
     async fn introspect(
         &self,
@@ -69,7 +69,7 @@ impl Introspectable {
 macro_rules! gen_properties_proxy {
     ($gen_async:literal, $gen_blocking:literal) => {
         /// Proxy for the `org.freedesktop.DBus.Properties` interface.
-        #[dbus_proxy(
+        #[proxy(
             interface = "org.freedesktop.DBus.Properties",
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
@@ -96,7 +96,7 @@ macro_rules! gen_properties_proxy {
                 interface_name: Optional<InterfaceName<'_>>,
             ) -> Result<HashMap<String, OwnedValue>>;
 
-            #[dbus_proxy(signal)]
+            #[zbus(signal)]
             async fn properties_changed(
                 &self,
                 interface_name: InterfaceName<'_>,
@@ -117,7 +117,7 @@ pub struct Properties;
 
 assert_impl_all!(Properties: Send, Sync, Unpin);
 
-#[dbus_interface(name = "org.freedesktop.DBus.Properties")]
+#[interface(name = "org.freedesktop.DBus.Properties")]
 impl Properties {
     async fn get(
         &self,
@@ -207,7 +207,7 @@ impl Properties {
     }
 
     /// Emits the `org.freedesktop.DBus.Properties.PropertiesChanged` signal.
-    #[dbus_interface(signal)]
+    #[zbus(signal)]
     #[rustfmt::skip]
     pub async fn properties_changed(
         ctxt: &SignalContext<'_>,
@@ -229,7 +229,7 @@ macro_rules! gen_object_manager_proxy {
         /// **NB:** Changes to properties on existing interfaces are not reported using this interface.
         /// Please use [`PropertiesProxy::receive_properties_changed`] to monitor changes to properties on
         /// objects.
-        #[dbus_proxy(
+        #[proxy(
             interface = "org.freedesktop.DBus.ObjectManager",
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
@@ -248,7 +248,7 @@ macro_rules! gen_object_manager_proxy {
             /// This signal is emitted when either a new object is added or when an existing object gains
             /// one or more interfaces. The `interfaces_and_properties` argument contains a map with the
             /// interfaces and properties (if any) that have been added to the given object path.
-            #[dbus_proxy(signal)]
+            #[zbus(signal)]
             fn interfaces_added(
                 &self,
                 object_path: ObjectPath<'_>,
@@ -257,7 +257,7 @@ macro_rules! gen_object_manager_proxy {
 
             /// This signal is emitted whenever an object is removed or it loses one or more interfaces.
             /// The `interfaces` parameters contains a list of the interfaces that were removed.
-            #[dbus_proxy(signal)]
+            #[zbus(signal)]
             fn interfaces_removed(
                 &self,
                 object_path: ObjectPath<'_>,
@@ -287,7 +287,7 @@ assert_impl_all!(ObjectManagerProxy<'_>: Send, Sync, Unpin);
 #[derive(Debug, Clone)]
 pub struct ObjectManager;
 
-#[dbus_interface(name = "org.freedesktop.DBus.ObjectManager")]
+#[interface(name = "org.freedesktop.DBus.ObjectManager")]
 impl ObjectManager {
     async fn get_managed_objects(
         &self,
@@ -307,7 +307,7 @@ impl ObjectManager {
     /// This signal is emitted when either a new object is added or when an existing object gains
     /// one or more interfaces. The `interfaces_and_properties` argument contains a map with the
     /// interfaces and properties (if any) that have been added to the given object path.
-    #[dbus_interface(signal)]
+    #[zbus(signal)]
     pub async fn interfaces_added(
         ctxt: &SignalContext<'_>,
         object_path: &ObjectPath<'_>,
@@ -316,7 +316,7 @@ impl ObjectManager {
 
     /// This signal is emitted whenever an object is removed or it loses one or more interfaces.
     /// The `interfaces` parameters contains a list of the interfaces that were removed.
-    #[dbus_interface(signal)]
+    #[zbus(signal)]
     pub async fn interfaces_removed(
         ctxt: &SignalContext<'_>,
         object_path: &ObjectPath<'_>,
@@ -328,7 +328,7 @@ impl ObjectManager {
 macro_rules! gen_peer_proxy {
     ($gen_async:literal, $gen_blocking:literal) => {
         /// Proxy for the `org.freedesktop.DBus.Peer` interface.
-        #[dbus_proxy(
+        #[proxy(
             interface = "org.freedesktop.DBus.Peer",
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
@@ -356,7 +356,7 @@ pub(crate) struct Peer;
 /// Server-side implementation for the `org.freedesktop.DBus.Peer` interface.
 /// This interface is implemented automatically for any object registered to the
 /// [ObjectServer](crate::ObjectServer).
-#[dbus_interface(name = "org.freedesktop.DBus.Peer")]
+#[interface(name = "org.freedesktop.DBus.Peer")]
 impl Peer {
     fn ping(&self) {}
 
@@ -384,7 +384,7 @@ impl Peer {
 macro_rules! gen_monitoring_proxy {
     ($gen_async:literal, $gen_blocking:literal) => {
         /// Proxy for the `org.freedesktop.DBus.Monitoring` interface.
-        #[dbus_proxy(
+        #[proxy(
             interface = "org.freedesktop.DBus.Monitoring",
             default_service = "org.freedesktop.DBus",
             default_path = "/org/freedesktop/DBus",
@@ -428,7 +428,7 @@ assert_impl_all!(MonitoringProxy<'_>: Send, Sync, Unpin);
 macro_rules! gen_stats_proxy {
     ($gen_async:literal, $gen_blocking:literal) => {
         /// Proxy for the `org.freedesktop.DBus.Debug.Stats` interface.
-        #[dbus_proxy(
+        #[proxy(
             interface = "org.freedesktop.DBus.Debug.Stats",
             default_service = "org.freedesktop.DBus",
             default_path = "/org/freedesktop/DBus",
@@ -695,7 +695,7 @@ impl ConnectionCredentials {
 macro_rules! gen_dbus_proxy {
     ($gen_async:literal, $gen_blocking:literal) => {
         /// Proxy for the `org.freedesktop.DBus` interface.
-        #[dbus_proxy(
+        #[proxy(
             default_service = "org.freedesktop.DBus",
             default_path = "/org/freedesktop/DBus",
             interface = "org.freedesktop.DBus",
@@ -704,7 +704,7 @@ macro_rules! gen_dbus_proxy {
         )]
         trait DBus {
             /// Adds a match rule to match messages going through the message bus
-            #[dbus_proxy(name = "AddMatch")]
+            #[zbus(name = "AddMatch")]
             fn add_match_rule(&self, rule: crate::MatchRule<'_>) -> Result<()>;
 
             /// Returns auditing data used by Solaris ADT, in an unspecified binary format.
@@ -717,14 +717,14 @@ macro_rules! gen_dbus_proxy {
             ) -> Result<ConnectionCredentials>;
 
             /// Returns the security context used by SELinux, in an unspecified format.
-            #[dbus_proxy(name = "GetConnectionSELinuxSecurityContext")]
+            #[zbus(name = "GetConnectionSELinuxSecurityContext")]
             fn get_connection_selinux_security_context(
                 &self,
                 bus_name: BusName<'_>,
             ) -> Result<Vec<u8>>;
 
             /// Returns the Unix process ID of the process connected to the server.
-            #[dbus_proxy(name = "GetConnectionUnixProcessID")]
+            #[zbus(name = "GetConnectionUnixProcessID")]
             fn get_connection_unix_process_id(&self, bus_name: BusName<'_>) -> Result<u32>;
 
             /// Returns the Unix user ID of the process connected to the server.
@@ -758,7 +758,7 @@ macro_rules! gen_dbus_proxy {
             fn reload_config(&self) -> Result<()>;
 
             /// Removes the first rule that matches.
-            #[dbus_proxy(name = "RemoveMatch")]
+            #[zbus(name = "RemoveMatch")]
             fn remove_match_rule(&self, rule: crate::MatchRule<'_>) -> Result<()>;
 
             /// Ask the message bus to assign the given name to the method caller.
@@ -779,7 +779,7 @@ macro_rules! gen_dbus_proxy {
             /// This signal indicates that the owner of a name has
             /// changed. It's also the signal to use to detect the appearance
             /// of new names on the bus.
-            #[dbus_proxy(signal)]
+            #[zbus(signal)]
             fn name_owner_changed(
                 &self,
                 name: BusName<'_>,
@@ -788,16 +788,16 @@ macro_rules! gen_dbus_proxy {
             );
 
             /// This signal is sent to a specific application when it loses ownership of a name.
-            #[dbus_proxy(signal)]
+            #[zbus(signal)]
             fn name_lost(&self, name: BusName<'_>);
 
             /// This signal is sent to a specific application when it gains ownership of a name.
-            #[dbus_proxy(signal)]
+            #[zbus(signal)]
             fn name_acquired(&self, name: BusName<'_>);
 
             /// This property lists abstract “features” provided by the message bus, and can be used by
             /// clients to detect the capabilities of the message bus with which they are communicating.
-            #[dbus_proxy(property)]
+            #[zbus(property)]
             fn features(&self) -> Result<Vec<String>>;
 
             /// This property lists interfaces provided by the `/org/freedesktop/DBus` object, and can be
@@ -812,7 +812,7 @@ macro_rules! gen_dbus_proxy {
             /// `org.freedesktop.DBus` was successful. The standard `org.freedesktop.DBus.Peer` and
             /// `org.freedesktop.DBus.Introspectable` interfaces are not included in the value of this
             /// property either, because they do not indicate features of the message bus implementation.
-            #[dbus_proxy(property)]
+            #[zbus(property)]
             fn interfaces(&self) -> Result<Vec<OwnedInterfaceName>>;
         }
     };
@@ -1115,9 +1115,9 @@ mod tests {
 
         // Now create the service side.
         struct TestObj;
-        #[super::dbus_interface(name = "org.zbus.TestObj")]
+        #[super::interface(name = "org.zbus.TestObj")]
         impl TestObj {
-            #[dbus_interface(property)]
+            #[zbus(property)]
             fn test(&self) -> String {
                 "test".into()
             }

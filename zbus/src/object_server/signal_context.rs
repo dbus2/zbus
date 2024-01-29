@@ -6,7 +6,7 @@ use crate::{zvariant::ObjectPath, Connection, Error, Result};
 ///
 /// For signal emission using the high-level API, you'll need instances of this type.
 ///
-/// See [`crate::InterfaceRef::signal_context`] and [`crate::dbus_interface`]
+/// See [`crate::InterfaceRef::signal_context`] and [`crate::interface`]
 /// documentation for details and examples of this type in use.
 #[derive(Clone, Debug)]
 pub struct SignalContext<'s> {
