@@ -21,10 +21,11 @@ use uds_windows::UnixStream;
 #[cfg(all(feature = "vsock", not(feature = "tokio")))]
 use vsock::VsockStream;
 
+use dbus_addr::{DBusAddr, ToDBusAddrs};
+
 use zvariant::{ObjectPath, Str};
 
 use crate::{
-    address::{self, Address},
     async_lock::RwLock,
     names::{InterfaceName, UniqueName, WellKnownName},
     object_server::Interface,
@@ -32,6 +33,7 @@ use crate::{
 };
 
 use super::{
+    connect::connect_addr,
     handshake::{AuthMechanism, Authenticated},
     socket::{BoxedSplit, ReadHalf, Socket, Split, WriteHalf},
 };
@@ -47,7 +49,7 @@ enum Target {
         feature = "tokio-vsock"
     ))]
     VsockStream(VsockStream),
-    Address(Address),
+    Address(Vec<DBusAddr<'static>>),
     Socket(Split<Box<dyn ReadHalf>, Box<dyn WriteHalf>>),
 }
 
@@ -79,12 +81,12 @@ assert_impl_all!(Builder<'_>: Send, Sync, Unpin);
 impl<'a> Builder<'a> {
     /// Create a builder for the session/user message bus connection.
     pub fn session() -> Result<Self> {
-        Ok(Self::new(Target::Address(Address::session()?)))
+        Self::address(&dbus_addr::session()?)
     }
 
     /// Create a builder for the system-wide message bus connection.
     pub fn system() -> Result<Self> {
-        Ok(Self::new(Target::Address(Address::system()?)))
+        Self::address(&dbus_addr::system()?)
     }
 
     /// Create a builder for connection that will use the given [D-Bus bus address].
@@ -118,14 +120,17 @@ impl<'a> Builder<'a> {
     /// current session using `ibus address` command.
     ///
     /// [D-Bus bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
-    pub fn address<A>(address: A) -> Result<Self>
+    pub fn address<'t, A>(address: &'t A) -> Result<Self>
     where
-        A: TryInto<Address>,
-        A::Error: Into<Error>,
+        A: ToDBusAddrs<'t> + ?Sized,
     {
-        Ok(Self::new(Target::Address(
-            address.try_into().map_err(Into::into)?,
-        )))
+        let addr = address
+            .to_dbus_addrs()
+            .filter_map(std::result::Result::ok)
+            .map(|a| a.to_owned())
+            .collect();
+
+        Ok(Builder::new(Target::Address(addr)))
     }
 
     /// Create a builder for connection that will use the given unix stream.
@@ -469,18 +474,7 @@ impl<'a> Builder<'a> {
             #[cfg(feature = "tokio-vsock")]
             Target::VsockStream(stream) => stream.into(),
             Target::Address(address) => {
-                let guid = address.guid().map(|g| g.to_owned().into());
-                let split = match address.connect().await? {
-                    #[cfg(any(unix, not(feature = "tokio")))]
-                    address::transport::Stream::Unix(stream) => stream.into(),
-                    address::transport::Stream::Tcp(stream) => stream.into(),
-                    #[cfg(any(
-                        all(feature = "vsock", not(feature = "tokio")),
-                        feature = "tokio-vsock"
-                    ))]
-                    address::transport::Stream::Vsock(stream) => stream.into(),
-                };
-                return Ok((split, guid));
+                return connect_addr(&address).await;
             }
             Target::Socket(stream) => stream,
         };

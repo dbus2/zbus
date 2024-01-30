@@ -10,10 +10,11 @@ use tokio::net::UnixStream;
 #[cfg(windows)]
 use uds_windows::UnixStream;
 
+use dbus_addr::ToDBusAddrs;
+
 use zvariant::{ObjectPath, Str};
 
 use crate::{
-    address::Address,
     blocking::Connection,
     names::{UniqueName, WellKnownName},
     object_server::Interface,
@@ -42,10 +43,9 @@ impl<'a> Builder<'a> {
     /// Create a builder for connection that will use the given [D-Bus bus address].
     ///
     /// [D-Bus bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
-    pub fn address<A>(address: A) -> Result<Self>
+    pub fn address<'t, A>(address: &'t A) -> Result<Self>
     where
-        A: TryInto<Address>,
-        A::Error: Into<Error>,
+        A: ToDBusAddrs<'t> + ?Sized,
     {
         crate::connection::Builder::address(address).map(Self)
     }
