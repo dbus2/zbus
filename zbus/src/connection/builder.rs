@@ -28,7 +28,7 @@ use crate::{
     async_lock::RwLock,
     names::{InterfaceName, UniqueName, WellKnownName},
     object_server::Interface,
-    Connection, Error, Executor, Guid, Result,
+    Connection, Error, Executor, Guid, OwnedGuid, Result,
 };
 
 use super::{
@@ -343,17 +343,11 @@ impl<'a> Builder<'a> {
     }
 
     async fn build_(mut self, executor: Executor<'static>) -> Result<Connection> {
-        let mut stream = self.stream_for_target().await?;
+        let (mut stream, server_guid) = self.target_connect().await?;
         let mut auth = match self.guid {
             None => {
-                let guid = match self.target {
-                    Some(Target::Address(ref addr)) => {
-                        addr.guid().map(|guid| guid.to_owned().into())
-                    }
-                    _ => None,
-                };
                 // SASL Handshake
-                Authenticated::client(stream, guid, self.auth_mechanisms).await?
+                Authenticated::client(stream, server_guid, self.auth_mechanisms).await?
             }
             Some(guid) => {
                 if !self.p2p {
@@ -456,10 +450,10 @@ impl<'a> Builder<'a> {
         }
     }
 
-    async fn stream_for_target(&mut self) -> Result<BoxedSplit> {
+    async fn target_connect(&mut self) -> Result<(BoxedSplit, Option<OwnedGuid>)> {
         // SAFETY: `self.target` is always `Some` from the beginning and this method is only called
         // once.
-        Ok(match self.target.take().unwrap() {
+        let split = match self.target.take().unwrap() {
             #[cfg(not(feature = "tokio"))]
             Target::UnixStream(stream) => Async::new(stream)?.into(),
             #[cfg(all(unix, feature = "tokio"))]
@@ -474,18 +468,24 @@ impl<'a> Builder<'a> {
             Target::VsockStream(stream) => Async::new(stream)?.into(),
             #[cfg(feature = "tokio-vsock")]
             Target::VsockStream(stream) => stream.into(),
-            Target::Address(address) => match address.connect().await? {
-                #[cfg(any(unix, not(feature = "tokio")))]
-                address::transport::Stream::Unix(stream) => stream.into(),
-                address::transport::Stream::Tcp(stream) => stream.into(),
-                #[cfg(any(
-                    all(feature = "vsock", not(feature = "tokio")),
-                    feature = "tokio-vsock"
-                ))]
-                address::transport::Stream::Vsock(stream) => stream.into(),
-            },
+            Target::Address(address) => {
+                let guid = address.guid().map(|g| g.to_owned().into());
+                let split = match address.connect().await? {
+                    #[cfg(any(unix, not(feature = "tokio")))]
+                    address::transport::Stream::Unix(stream) => stream.into(),
+                    address::transport::Stream::Tcp(stream) => stream.into(),
+                    #[cfg(any(
+                        all(feature = "vsock", not(feature = "tokio")),
+                        feature = "tokio-vsock"
+                    ))]
+                    address::transport::Stream::Vsock(stream) => stream.into(),
+                };
+                return Ok((split, guid));
+            }
             Target::Socket(stream) => stream,
-        })
+        };
+
+        Ok((split, None))
     }
 }
 
