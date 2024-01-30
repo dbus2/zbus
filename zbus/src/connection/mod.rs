@@ -43,6 +43,8 @@ use socket_reader::SocketReader;
 pub(crate) mod handshake;
 use handshake::Authenticated;
 
+mod connect;
+
 const DEFAULT_MAX_QUEUED: usize = 64;
 const DEFAULT_MAX_METHOD_RETURN_QUEUED: usize = 8;
 
