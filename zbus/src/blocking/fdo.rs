@@ -12,12 +12,11 @@ use zbus_names::{
 use zvariant::{ObjectPath, Optional, OwnedValue, Value};
 
 use crate::{
-    dbus_proxy,
     fdo::{
         ConnectionCredentials, ManagedObjects, ReleaseNameReply, RequestNameFlags,
         RequestNameReply, Result,
     },
-    OwnedGuid,
+    proxy, OwnedGuid,
 };
 
 gen_introspectable_proxy!(false, true);

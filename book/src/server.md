@@ -99,7 +99,7 @@ need, but it is also easy to get it wrong. Fortunately, zbus has a simpler solut
 
 ## Using the `ObjectServer`
 
-One can write an `impl` block with a set of methods and let the `dbus_interface` procedural macro
+One can write an `impl` block with a set of methods and let the `interface` procedural macro
 write the D-Bus message handling details. It will dispatch the incoming method calls to their
 respective handlers, as well as replying to introspection requests.
 
@@ -108,12 +108,12 @@ respective handlers, as well as replying to introspection requests.
 Let see how to use it for `MyGreeter` interface:
 
 ```rust,no_run
-# use zbus::{Connection, dbus_interface, Result};
+# use zbus::{Connection, interface, Result};
 #
 
 struct Greeter;
 
-#[dbus_interface(name = "org.zbus.MyGreeter1")]
+#[interface(name = "org.zbus.MyGreeter1")]
 impl Greeter {
     async fn say_hello(&self, name: &str) -> String {
         format!("Hello {}!", name)
@@ -150,12 +150,12 @@ after taking their name. This is why it's typically better to make use of `conne
 setting up your interfaces and requesting names, and not have to care about this:
 
 ```rust,no_run
-# use zbus::{connection, dbus_interface, Result};
+# use zbus::{connection, interface, Result};
 #
 #
 # struct Greeter;
 #
-# #[dbus_interface(name = "org.zbus.MyGreeter1")]
+# #[interface(name = "org.zbus.MyGreeter1")]
 # impl Greeter {
 #     async fn say_hello(&self, name: &str) -> String {
 #         format!("Hello {}!", name)
@@ -207,7 +207,7 @@ synchronize with the interface handlers from outside, thanks to the `event_liste
 (this is just one of the many ways).
 
 ```rust,no_run
-# use zbus::{object_server::SignalContext, connection::Builder, dbus_interface, fdo, Result};
+# use zbus::{object_server::SignalContext, connection::Builder, interface, fdo, Result};
 #
 use event_listener::Event;
 
@@ -216,7 +216,7 @@ struct Greeter {
     done: Event,
 }
 
-#[dbus_interface(name = "org.zbus.MyGreeter1")]
+#[interface(name = "org.zbus.MyGreeter1")]
 impl Greeter {
     async fn say_hello(&self, name: &str) -> String {
         format!("Hello {}!", name)
@@ -235,7 +235,7 @@ impl Greeter {
     }
 
     /// A "GreeterName" property.
-    #[dbus_interface(property)]
+    #[zbus(property)]
     async fn greeter_name(&self) -> &str {
         &self.name
     }
@@ -245,13 +245,13 @@ impl Greeter {
     /// Additionally, a `greeter_name_changed` method has been generated for you if you need to
     /// notify listeners that "GreeterName" was updated. It will be automatically called when
     /// using this setter.
-    #[dbus_interface(property)]
+    #[zbus(property)]
     async fn set_greeter_name(&mut self, name: String) {
         self.name = name;
     }
 
     /// A signal; the implementation is provided by the macro.
-    #[dbus_interface(signal)]
+    #[zbus(signal)]
     async fn greeted_everyone(ctxt: &SignalContext<'_>) -> Result<()>;
 }
 
@@ -307,34 +307,34 @@ you'll want to use `zbus::fdo::Error::UnknownProperty` variant.
 
 As you might have noticed in the previous example, the signal methods don't take a `&self` argument
 but a `SignalContext` reference. This allows to emit signals whether from inside or outside of the
-`dbus_interface` methods' context. To make things simpler, `dbus_interface` methods can receive a
+`interface` methods' context. To make things simpler, `interface` methods can receive a
 `SignalContext` passed to them using the special `zbus(signal_context)` attribute, as demonstrated
 in the previous example.
 
-Please refer to [`dbus_interface` documentation][didoc] for more examples and list of other special
+Please refer to [`interface` documentation][didoc] for more examples and list of other special
 attributes you can make use of.
 
 ### Notifying property changes
 
-For each property declared through the `dbus_interface` macro, a `<property_name>_changed` method is
+For each property declared through the `interface` macro, a `<property_name>_changed` method is
 generated that emits the necessary property change signal. Here is how to use it with the previous
 example code:
 
 ```rust,no_run
-# use zbus::dbus_interface;
+# use zbus::interface;
 #
 # struct Greeter {
 #     name: String
 # }
 #
-# #[dbus_interface(name = "org.zbus.MyGreeter1")]
+# #[interface(name = "org.zbus.MyGreeter1")]
 # impl Greeter {
-#     #[dbus_interface(property)]
+#     #[zbus(property)]
 #     async fn greeter_name(&self) -> &str {
 #         &self.name
 #     }
 #
-#     #[dbus_interface(property)]
+#     #[zbus(property)]
 #     async fn set_greeter_name(&mut self, name: String) {
 #         self.name = name;
 #     }
@@ -354,4 +354,4 @@ iface.greeter_name_changed(iface_ref.signal_context()).await?;
 ```
 
 [D-Bus concepts]: concepts.html#bus-name--service-name
-[didoc]: https://docs.rs/zbus/latest/zbus/attr.dbus_interface.html
+[didoc]: https://docs.rs/zbus/latest/zbus/attr.interface.html

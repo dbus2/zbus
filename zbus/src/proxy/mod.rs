@@ -60,11 +60,11 @@ pub use builder::{Builder, CacheProperties, ProxyDefault};
 ///
 /// # Note
 ///
-/// It is recommended to use the [`dbus_proxy`] macro, which provides a more convenient and
+/// It is recommended to use the [`proxy`] macro, which provides a more convenient and
 /// type-safe *façade* `Proxy` derived from a Rust trait.
 ///
 /// [`futures` crate]: https://crates.io/crates/futures
-/// [`dbus_proxy`]: attr.dbus_proxy.html
+/// [`proxy`]: attr.proxy.html
 #[derive(Clone, Debug)]
 pub struct Proxy<'a> {
     pub(crate) inner: Arc<ProxyInner<'a>>,
@@ -1343,8 +1343,7 @@ where
 mod tests {
     use super::*;
     use crate::{
-        connection, dbus_interface, dbus_proxy, object_server::SignalContext, utils::block_on,
-        AsyncDrop,
+        connection, interface, object_server::SignalContext, proxy, utils::block_on, AsyncDrop,
     };
     use futures_util::StreamExt;
     use ntest::timeout;
@@ -1432,22 +1431,22 @@ mod tests {
     /// signal listener is created against another signal. Previously, this second
     /// call to add the match rule never resolved and resulted in a deadlock.
     async fn test_signal_stream_deadlock() -> Result<()> {
-        #[dbus_proxy(
+        #[proxy(
             gen_blocking = false,
             default_path = "/org/zbus/Test",
             default_service = "org.zbus.Test.MR501",
             interface = "org.zbus.Test"
         )]
         trait Test {
-            #[dbus_proxy(signal)]
+            #[zbus(signal)]
             fn my_signal(&self, msg: &str) -> Result<()>;
         }
 
         struct TestIface;
 
-        #[dbus_interface(name = "org.zbus.Test")]
+        #[interface(name = "org.zbus.Test")]
         impl TestIface {
-            #[dbus_interface(signal)]
+            #[zbus(signal)]
             async fn my_signal(context: &SignalContext<'_>, msg: &'static str) -> Result<()>;
         }
 

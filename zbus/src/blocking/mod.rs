@@ -9,7 +9,7 @@
 //!
 //! Since methods provided by these types run their own little runtime (`block_on`), you must not
 //! use them in async contexts because of the infamous [async sandwich footgun][asf]. This is
-//! an especially important fact to keep in mind for [`crate::dbus_interface`]. While
+//! an especially important fact to keep in mind for [`crate::interface`]. While
 //! `dbus_interface` allows non-async methods for convenience, these methods are called from an
 //! async context. The [`blocking` crate] provides an easy way around this problem though.
 //!

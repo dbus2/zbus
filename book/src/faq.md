@@ -12,7 +12,7 @@ the `signature` attribute. Here is a simple example:
 
 ```rust,noplayground
 use zbus::{
-    dbus_proxy, dbus_interface, fdo::Result,
+    proxy, interface, fdo::Result,
     zvariant::{DeserializeDict, SerializeDict, Type},
 };
 
@@ -26,7 +26,7 @@ pub struct Dictionary {
     optional_field: Option<String>,
 }
 
-#[dbus_proxy(
+#[proxy(
     interface = "org.zbus.DictionaryGiver",
     default_path = "/org/zbus/DictionaryGiver",
     default_service = "org.zbus.DictionaryGiver",
@@ -37,7 +37,7 @@ trait DictionaryGiver {
 
 struct DictionaryGiverInterface;
 
-#[dbus_interface(interface = "org.zbus.DictionaryGiver")]
+#[interface(interface = "org.zbus.DictionaryGiver")]
 impl DictionaryGiverInterface {
     fn give_me(&self) -> Result<Dictionary> {
         Ok(Dictionary {
@@ -73,7 +73,7 @@ see [the corresponding tokio issue on GitHub][tctiog].
 
 There are typically two reasons this can happen with zbus:
 
-### 1. A `dbus_interface` method that takes a `&mut self` argument is taking too long
+### 1. A `interface` method that takes a `&mut self` argument is taking too long
 
 Simply put, this is because of one of the primary rules of Rust: while a mutable reference to a
 resource exists, no other references to that same resource can exist at the same time. This means
@@ -98,7 +98,7 @@ update accordingly.
 
 However, you can disabling caching for specific properties:
 
-- Add the `#[dbus_proxy(property(emits_changed_signal = "false"))]` annotation to the property
+- Add the `#[zbus(property(emits_changed_signal = "false"))]` annotation to the property
 for which you desire to disable caching on.
 
 - Use `proxy::Builder` to build your proxy instance and use `proxy::Builder::uncached_properties` method
@@ -108,7 +108,7 @@ to list all properties you wish to disable caching for.
 method.
 
 For more information about all the possible values for `emits_changed_signal` refer
- to [`dbus_proxy`](https://docs.rs/zbus/latest/zbus/attr.dbus_proxy.html) documentation.
+ to [`proxy`](https://docs.rs/zbus/latest/zbus/attr.proxy.html) documentation.
 
 ## How do I use `Option<T>`` with zbus?
 
@@ -137,7 +137,7 @@ all types. However, it does come with some caveats and limitations:
     nullable type, this can be confusing for users of generic tools like [`d-feet`]. It is therefore
     highly recommended that service authors document each use of `Option<T>` in their D-Bus
     interface documentation.
-  2. Currently it is not possible to use `Option<T>` for `dbus_interface` and `dbus_proxy` property
+  2. Currently it is not possible to use `Option<T>` for `interface` and `proxy` property
     methods.
   3. Both the sender and receiver must agree on use of this encoding. If the sender sends `T`, the
     receiver will not be able to decode it successfully as `Option<T>` and vice versa.

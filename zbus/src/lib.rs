@@ -158,7 +158,9 @@ pub use connection::Socket;
 
 pub mod blocking;
 
-pub use zbus_macros::{dbus_interface, dbus_proxy, DBusError};
+pub use zbus_macros::{interface, proxy, DBusError};
+// Old names used for backwards compatibility
+pub use zbus_macros::{dbus_interface, dbus_proxy};
 
 // Required for the macros to function within this crate.
 extern crate self as zbus;
@@ -566,14 +568,14 @@ mod tests {
     fn issue104() {
         // Tests the fix for https://github.com/dbus2/zbus/issues/104
         //
-        // The issue is caused by `dbus_proxy` macro adding `()` around the return value of methods
+        // The issue is caused by `proxy` macro adding `()` around the return value of methods
         // with multiple out arguments, ending up with double parenthesis around the signature of
         // the return type and zbus only removing the outer `()` only and then it not matching the
         // signature we receive on the reply message.
         use zvariant::{ObjectPath, Value};
 
         struct Secret;
-        #[super::dbus_interface(name = "org.freedesktop.Secret.Service")]
+        #[super::interface(name = "org.freedesktop.Secret.Service")]
         impl Secret {
             fn open_session(
                 &self,
@@ -600,7 +602,7 @@ mod tests {
 
         {
             let conn = blocking::Connection::session().unwrap();
-            #[super::dbus_proxy(
+            #[super::proxy(
                 interface = "org.freedesktop.Secret.Service",
                 assume_defaults = true,
                 gen_async = false
@@ -633,16 +635,16 @@ mod tests {
     #[test]
     #[ignore]
     fn issue_121() {
-        use crate::dbus_proxy;
+        use crate::proxy;
 
-        #[dbus_proxy(interface = "org.freedesktop.IBus", assume_defaults = true)]
+        #[proxy(interface = "org.freedesktop.IBus", assume_defaults = true)]
         trait IBus {
             /// CurrentInputContext property
-            #[dbus_proxy(property)]
+            #[zbus(property)]
             fn current_input_context(&self) -> zbus::Result<OwnedObjectPath>;
 
             /// Engines property
-            #[dbus_proxy(property)]
+            #[zbus(property)]
             fn engines(&self) -> zbus::Result<Vec<zvariant::OwnedValue>>;
         }
     }
@@ -700,7 +702,7 @@ mod tests {
     #[test]
     #[ignore]
     fn issue_81() {
-        use zbus::dbus_proxy;
+        use zbus::proxy;
         use zvariant::{OwnedValue, Type};
 
         #[derive(
@@ -711,12 +713,12 @@ mod tests {
             path: OwnedObjectPath,
         }
 
-        #[dbus_proxy(assume_defaults = true)]
+        #[proxy(assume_defaults = true)]
         trait Session {
-            #[dbus_proxy(property)]
+            #[zbus(property)]
             fn sessions_tuple(&self) -> zbus::Result<(String, String)>;
 
-            #[dbus_proxy(property)]
+            #[zbus(property)]
             fn sessions_struct(&self) -> zbus::Result<DbusPath>;
         }
     }
@@ -731,13 +733,13 @@ mod tests {
         let (tx, rx) = channel();
         let child = std::thread::spawn(move || {
             let conn = blocking::Connection::session().unwrap();
-            #[super::dbus_proxy(
+            #[super::proxy(
                 interface = "org.freedesktop.zbus.ComeAndGo",
                 default_service = "org.freedesktop.zbus.ComeAndGo",
                 default_path = "/org/freedesktop/zbus/ComeAndGo"
             )]
             trait ComeAndGo {
-                #[dbus_proxy(signal)]
+                #[zbus(signal)]
                 fn the_signal(&self) -> zbus::Result<()>;
             }
 
@@ -753,9 +755,9 @@ mod tests {
         });
 
         struct ComeAndGo;
-        #[super::dbus_interface(name = "org.freedesktop.zbus.ComeAndGo")]
+        #[super::interface(name = "org.freedesktop.zbus.ComeAndGo")]
         impl ComeAndGo {
-            #[dbus_interface(signal)]
+            #[zbus(signal)]
             async fn the_signal(signal_ctxt: &SignalContext<'_>) -> zbus::Result<()>;
         }
 
@@ -798,13 +800,13 @@ mod tests {
         // and without caching.
         #[derive(Default)]
         struct ServiceUncachedPropertyTest(bool);
-        #[crate::dbus_interface(name = "org.freedesktop.zbus.UncachedPropertyTest")]
+        #[crate::interface(name = "org.freedesktop.zbus.UncachedPropertyTest")]
         impl ServiceUncachedPropertyTest {
-            #[dbus_interface(property)]
+            #[zbus(property)]
             fn cached_prop(&self) -> bool {
                 self.0
             }
-            #[dbus_interface(property)]
+            #[zbus(property)]
             fn uncached_prop(&self) -> bool {
                 self.0
             }
@@ -814,16 +816,16 @@ mod tests {
             }
         }
 
-        #[crate::dbus_proxy(
+        #[crate::proxy(
             interface = "org.freedesktop.zbus.UncachedPropertyTest",
             default_service = "org.freedesktop.zbus.UncachedPropertyTest",
             default_path = "/org/freedesktop/zbus/UncachedPropertyTest"
         )]
         trait UncachedPropertyTest {
-            #[dbus_proxy(property)]
+            #[zbus(property)]
             fn cached_prop(&self) -> zbus::Result<bool>;
 
-            #[dbus_proxy(property(emits_changed_signal = "false"))]
+            #[zbus(property(emits_changed_signal = "false"))]
             fn uncached_prop(&self) -> zbus::Result<bool>;
 
             fn set_inner_to_true(&self) -> zbus::Result<()>;
@@ -963,9 +965,9 @@ mod tests {
 
         struct Station(u64);
 
-        #[zbus::dbus_interface(name = "net.connman.iwd.Station")]
+        #[zbus::interface(name = "net.connman.iwd.Station")]
         impl Station {
-            #[dbus_interface(property)]
+            #[zbus(property)]
             fn connected_network(&self) -> OwnedObjectPath {
                 format!("/net/connman/iwd/0/33/Network/{}", self.0)
                     .try_into()
@@ -973,12 +975,12 @@ mod tests {
             }
         }
 
-        #[zbus::dbus_proxy(
+        #[zbus::proxy(
             interface = "net.connman.iwd.Station",
             default_service = "net.connman.iwd"
         )]
         trait Station {
-            #[dbus_proxy(property)]
+            #[zbus(property)]
             fn connected_network(&self) -> zbus::Result<OwnedObjectPath>;
         }
         let connection = Builder::session()
@@ -1046,14 +1048,14 @@ mod tests {
     #[test]
     #[ignore]
     fn issue_466() {
-        #[crate::dbus_proxy(interface = "org.Some.Thing1", assume_defaults = true)]
+        #[crate::proxy(interface = "org.Some.Thing1", assume_defaults = true)]
         trait MyGreeter {
             fn foo(
                 &self,
                 arg: &(u32, zbus::zvariant::Value<'_>),
             ) -> zbus::Result<(u32, zbus::zvariant::OwnedValue)>;
 
-            #[dbus_proxy(property)]
+            #[zbus(property)]
             fn bar(&self) -> zbus::Result<(u32, zbus::zvariant::OwnedValue)>;
         }
     }

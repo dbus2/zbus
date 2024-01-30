@@ -90,7 +90,7 @@ pub(crate) type MsgBroadcaster = Broadcaster<Result<Message>>;
 ///
 /// For higher-level message handling (typed functions, introspection, documentation reasons etc),
 /// it is recommended to wrap the low-level D-Bus messages into Rust functions with the
-/// [`dbus_proxy`] and [`dbus_interface`] macros instead of doing it directly on a `Connection`.
+/// [`proxy`] and [`interface`] macros instead of doing it directly on a `Connection`.
 ///
 /// Typically, a connection is made to the session bus with [`Connection::session`], or to the
 /// system bus with [`Connection::system`]. Then the connection is used with [`crate::Proxy`]
@@ -113,8 +113,8 @@ pub(crate) type MsgBroadcaster = Broadcaster<Result<Message>>;
 ///
 /// [method calls]: struct.Connection.html#method.call_method
 /// [signals]: struct.Connection.html#method.emit_signal
-/// [`dbus_proxy`]: attr.dbus_proxy.html
-/// [`dbus_interface`]: attr.dbus_interface.html
+/// [`proxy`]: attr.proxy.html
+/// [`interface`]: attr.interface.html
 /// [`Clone`]: https://doc.rust-lang.org/std/clone/trait.Clone.html
 /// [`set_max_queued`]: struct.Connection.html#method.set_max_queued
 ///
@@ -848,7 +848,7 @@ impl Connection {
     ///
     /// # struct SomeIface;
     /// #
-    /// # #[zbus::dbus_interface]
+    /// # #[zbus::interface]
     /// # impl SomeIface {
     /// # }
     /// #
@@ -1604,7 +1604,7 @@ mod tests {
         #[derive(Default)]
         struct MyInterface {}
 
-        #[crate::dbus_interface(name = "dev.peelz.FooBar.Baz")]
+        #[crate::interface(name = "dev.peelz.FooBar.Baz")]
         impl MyInterface {
             fn do_thing(&self) {}
         }

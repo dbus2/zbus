@@ -6,11 +6,45 @@ use syn::{
     self, fold::Fold, parse_quote, parse_str, spanned::Spanned, AttributeArgs, Error, FnArg, Ident,
     ItemTrait, Path, ReturnType, TraitItemMethod,
 };
-use zvariant_utils::{case, def_attrs};
+use zvariant_utils::{case, def_attrs, macros::AttrParse, old_new};
 
-// FIXME: The list name should once be "zbus" instead of "dbus_proxy" (like in serde).
+pub mod old {
+    use super::def_attrs;
+    def_attrs! {
+        crate dbus_proxy;
+
+        pub ImplAttributes("impl block") {
+            interface str,
+            name str,
+            assume_defaults bool,
+            default_path str,
+            default_service str,
+            async_name str,
+            blocking_name str,
+            gen_async bool,
+            gen_blocking bool
+        };
+
+        pub MethodAttributes("method") {
+            name str,
+            property {
+                pub PropertyAttributes("property") {
+                    emits_changed_signal str
+                }
+            },
+            signal none,
+            object str,
+            async_object str,
+            blocking_object str,
+            no_reply none,
+            no_autostart none,
+            allow_interactive_auth none
+        };
+    }
+}
+
 def_attrs! {
-    crate dbus_proxy;
+    crate zbus;
 
     pub ImplAttributes("impl block") {
         interface str,
@@ -41,6 +75,9 @@ def_attrs! {
     };
 }
 
+old_new!(ImplAttrs, old::ImplAttributes, ImplAttributes);
+old_new!(MethodAttrs, old::MethodAttributes, MethodAttributes);
+
 struct AsyncOpts {
     blocking: bool,
     usage: TokenStream,
@@ -62,8 +99,11 @@ impl AsyncOpts {
     }
 }
 
-pub fn expand(args: AttributeArgs, input: ItemTrait) -> Result<TokenStream, Error> {
-    let ImplAttributes {
+pub fn expand<I: AttrParse + Into<ImplAttrs>, M: AttrParse + Into<MethodAttrs>>(
+    args: AttributeArgs,
+    input: ItemTrait,
+) -> Result<TokenStream, Error> {
+    let (
         interface,
         name,
         assume_defaults,
@@ -73,7 +113,30 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> Result<TokenStream, Erro
         blocking_name,
         gen_async,
         gen_blocking,
-    } = ImplAttributes::parse_nested_metas(&args)?;
+    ) = match I::parse_nested_metas(&args)?.into() {
+        ImplAttrs::Old(old) => (
+            old.interface,
+            old.name,
+            old.assume_defaults,
+            old.default_path,
+            old.default_service,
+            old.async_name,
+            old.blocking_name,
+            old.gen_async,
+            old.gen_blocking,
+        ),
+        ImplAttrs::New(new) => (
+            new.interface,
+            new.name,
+            new.assume_defaults,
+            new.default_path,
+            new.default_service,
+            new.async_name,
+            new.blocking_name,
+            new.gen_async,
+            new.gen_blocking,
+        ),
+    };
 
     let iface_name = match (interface, name) {
         (Some(name), None) | (None, Some(name)) => Ok(Some(name)),
@@ -109,7 +172,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> Result<TokenStream, Erro
                 format!("{}Proxy", input.ident)
             }
         });
-        create_proxy(
+        create_proxy::<M>(
             &input,
             iface_name.as_deref(),
             assume_defaults,
@@ -126,7 +189,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> Result<TokenStream, Erro
     };
     let async_proxy = if gen_async {
         let proxy_name = async_name.unwrap_or_else(|| format!("{}Proxy", input.ident));
-        create_proxy(
+        create_proxy::<M>(
             &input,
             iface_name.as_deref(),
             assume_defaults,
@@ -148,7 +211,7 @@ pub fn expand(args: AttributeArgs, input: ItemTrait) -> Result<TokenStream, Erro
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn create_proxy(
+pub fn create_proxy<M: AttrParse + Into<MethodAttrs>>(
     input: &ItemTrait,
     iface_name: Option<&str>,
     assume_defaults: Option<bool>,
@@ -163,7 +226,7 @@ pub fn create_proxy(
     let other_attrs: Vec<_> = input
         .attrs
         .iter()
-        .filter(|a| !a.path.is_ident("dbus_proxy"))
+        .filter(|a| !a.path.is_ident("zbus") && !a.path.is_ident("dbus_proxy"))
         .collect();
     let proxy_name = Ident::new(proxy_name, Span::call_site());
     let ident = input.ident.to_string();
@@ -193,15 +256,26 @@ pub fn create_proxy(
 
     for i in input.items.iter() {
         if let syn::TraitItem::Method(m) = i {
-            let mut attrs = MethodAttributes::parse(&m.attrs)?;
+            let (mut name, signal, property) = match <M>::parse(&m.attrs)?.into() {
+                MethodAttrs::Old(old) => (
+                    old.name,
+                    old.signal,
+                    old.property.map(|property| property.emits_changed_signal),
+                ),
+                MethodAttrs::New(new) => (
+                    new.name,
+                    new.signal,
+                    new.property.map(|property| property.emits_changed_signal),
+                ),
+            };
 
             let method_name = m.sig.ident.to_string();
 
-            let is_property = attrs.property.is_some();
-            let is_signal = attrs.signal;
+            let is_signal = signal;
+            let is_property = property.is_some();
             let has_inputs = m.sig.inputs.len() > 1;
 
-            let member_name = attrs.name.take().unwrap_or_else(|| {
+            let member_name = name.take().unwrap_or_else(|| {
                 case::pascal_or_camel_case(
                     if is_property && has_inputs {
                         assert!(method_name.starts_with("set_"));
@@ -213,10 +287,10 @@ pub fn create_proxy(
                 )
             });
 
-            let m = if let Some(prop_attrs) = &attrs.property {
+            let m = if let Some(prop_attrs) = &property {
                 has_properties = true;
 
-                let emits_changed_signal = if let Some(s) = &prop_attrs.emits_changed_signal {
+                let emits_changed_signal = if let Some(s) = &prop_attrs {
                     PropertyEmitsChangedSignal::parse(s, m.span())?
                 } else {
                     PropertyEmitsChangedSignal::True
@@ -247,7 +321,13 @@ pub fn create_proxy(
 
                 method
             } else {
-                gen_proxy_method_call(&member_name, &method_name, m, &attrs, &async_opts)?
+                gen_proxy_method_call::<M>(
+                    &member_name,
+                    &method_name,
+                    m,
+                    <M>::parse(&m.attrs)?,
+                    &async_opts,
+                )?
             };
             methods.extend(m);
         }
@@ -436,13 +516,32 @@ pub fn create_proxy(
     })
 }
 
-fn gen_proxy_method_call(
+fn gen_proxy_method_call<M: AttrParse + Into<MethodAttrs>>(
     method_name: &str,
     snake_case_name: &str,
     m: &TraitItemMethod,
-    attrs: &MethodAttributes,
+    method_attrs: M,
     async_opts: &AsyncOpts,
 ) -> Result<TokenStream, Error> {
+    let (object, blocking_object, async_object, no_reply, no_autostart, allow_interactive_auth) =
+        match method_attrs.into() {
+            MethodAttrs::Old(old) => (
+                old.object,
+                old.blocking_object,
+                old.async_object,
+                old.no_reply,
+                old.no_autostart,
+                old.allow_interactive_auth,
+            ),
+            MethodAttrs::New(new) => (
+                new.object,
+                new.blocking_object,
+                new.async_object,
+                new.no_reply,
+                new.no_autostart,
+                new.allow_interactive_auth,
+            ),
+        };
     let AsyncOpts {
         usage,
         wait,
@@ -452,7 +551,7 @@ fn gen_proxy_method_call(
     let other_attrs: Vec<_> = m
         .attrs
         .iter()
-        .filter(|a| !a.path.is_ident("dbus_proxy"))
+        .filter(|a| !a.path.is_ident("zbus") && !a.path.is_ident("dbus_proxy"))
         .collect();
     let args: Vec<_> = m
         .sig
@@ -462,26 +561,21 @@ fn gen_proxy_method_call(
         .filter_map(pat_ident)
         .collect();
 
-    let proxy_object = attrs.object.as_ref().map(|o| {
+    let proxy_object = object.as_ref().map(|o| {
         if *blocking {
             // FIXME: for some reason Rust doesn't let us move `blocking_proxy_object` so we've to
             // clone.
-            attrs
-                .blocking_object
+            blocking_object
                 .as_ref()
                 .cloned()
                 .unwrap_or_else(|| format!("{o}ProxyBlocking"))
         } else {
-            attrs
-                .async_object
+            async_object
                 .as_ref()
                 .cloned()
                 .unwrap_or_else(|| format!("{o}Proxy"))
         }
     });
-    let no_reply = attrs.no_reply;
-    let no_autostart = attrs.no_autostart;
-    let allow_interactive_auth = attrs.allow_interactive_auth;
 
     let method_flags = match (no_reply, no_autostart, allow_interactive_auth) {
         (true, false, false) => Some(quote!(::std::convert::Into::into(
@@ -641,7 +735,7 @@ fn gen_proxy_property(
     let other_attrs: Vec<_> = m
         .attrs
         .iter()
-        .filter(|a| !a.path.is_ident("dbus_proxy"))
+        .filter(|a| !a.path.is_ident("zbus") && !a.path.is_ident("dbus_proxy"))
         .collect();
     let signature = &m.sig;
     if signature.inputs.len() > 1 {
@@ -770,7 +864,7 @@ fn gen_proxy_signal(
     let other_attrs: Vec<_> = method
         .attrs
         .iter()
-        .filter(|a| !a.path.is_ident("dbus_proxy"))
+        .filter(|a| !a.path.is_ident("zbus") && !a.path.is_ident("dbus_proxy"))
         .collect();
     let input_types: Vec<_> = method
         .sig

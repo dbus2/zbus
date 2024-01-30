@@ -3,9 +3,8 @@ use quote::{quote, ToTokens};
 use syn::{spanned::Spanned, Data, DeriveInput, Error, Fields, Ident, Variant};
 use zvariant_utils::def_attrs;
 
-// FIXME: The list name should once be "zbus" instead of "dbus_error" (like in serde).
 def_attrs! {
-    crate dbus_error;
+    crate zbus;
 
     pub StructAttributes("struct") {
         prefix str,
@@ -14,7 +13,7 @@ def_attrs! {
 
     pub VariantAttributes("enum variant") {
         name str,
-        zbus_error none
+        error none
     };
 }
 
@@ -42,12 +41,11 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
     let mut zbus_error_variant = None;
 
     for variant in data.variants {
-        let VariantAttributes { name, zbus_error } = VariantAttributes::parse(&variant.attrs)?;
-
+        let VariantAttributes { name, error } = VariantAttributes::parse(&variant.attrs)?;
         let ident = &variant.ident;
         let name = name.unwrap_or_else(|| ident.to_string());
 
-        let fqn = if !zbus_error {
+        let fqn = if !error {
             format!("{prefix}.{name}")
         } else {
             // The ZBus error variant will always be a hardcoded string.
@@ -70,9 +68,9 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
         };
         error_names.extend(e);
 
-        if zbus_error {
+        if error {
             if zbus_error_variant.is_some() {
-                panic!("More than 1 `zbus_error` variant found");
+                panic!("More than 1 `#[zbus(error)]` variant found");
             }
 
             zbus_error_variant = Some(quote! { #ident });
@@ -85,7 +83,7 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
                 Self::#ident => None,
             },
             Fields::Unnamed(_) => {
-                if zbus_error {
+                if error {
                     quote! {
                         Self::#ident(#zbus::Error::MethodError(_, desc, _)) => desc.as_deref(),
                         Self::#ident(_) => None,
@@ -109,8 +107,8 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
         };
         error_descriptions.extend(e);
 
-        // The conversion for zbus_error variant is handled separately/explicitly.
-        if !zbus_error {
+        // The conversion for #[zbus(error)] variant is handled separately/explicitly.
+        if !error {
             // FIXME: deserialize msg to error field instead, to support variable args
             let e = match &variant.fields {
                 Fields::Unit => quote! {
@@ -137,7 +135,7 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
             error_converts.extend(e);
         }
 
-        let r = gen_reply_for_variant(&variant, zbus_error)?;
+        let r = gen_reply_for_variant(&variant, error)?;
         replies.extend(r);
     }
 
@@ -223,7 +221,7 @@ fn gen_reply_for_variant(
                 let error_field = in_fields.first().ok_or_else(|| {
                     Error::new(
                         ident.span(),
-                        "expected at least one field for zbus_error variant",
+                        "expected at least one field for #[zbus(error)] variant",
                     )
                 })?;
                 vec![quote! {

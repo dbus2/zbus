@@ -6,21 +6,21 @@
 
 use async_std::stream::StreamExt;
 use zbus::Connection;
-use zbus_macros::dbus_proxy;
+use zbus_macros::proxy;
 use zvariant::OwnedObjectPath;
 
 fn main() {
     async_io::block_on(watch_systemd_jobs()).expect("Error listening to signal");
 }
 
-#[dbus_proxy(
+#[proxy(
     default_service = "org.freedesktop.systemd1",
     default_path = "/org/freedesktop/systemd1",
     interface = "org.freedesktop.systemd1.Manager"
 )]
 trait Systemd1Manager {
     // Defines signature for D-Bus signal named `JobNew`
-    #[dbus_proxy(signal)]
+    #[zbus(signal)]
     fn job_new(&self, id: u32, job: OwnedObjectPath, unit: String) -> zbus::Result<()>;
 }
 

@@ -122,13 +122,13 @@ where
     /// ```no_run
     /// # use std::error::Error;
     /// # use async_io::block_on;
-    /// # use zbus::{Connection, dbus_interface};
+    /// # use zbus::{Connection, interface};
     ///
     /// struct MyIface(u32);
     ///
-    /// #[dbus_interface(name = "org.myiface.MyIface")]
+    /// #[interface(name = "org.myiface.MyIface")]
     /// impl MyIface {
-    ///    #[dbus_interface(property)]
+    ///    #[zbus(property)]
     ///    async fn count(&self) -> u32 {
     ///        self.0
     ///    }
@@ -433,7 +433,7 @@ impl Node {
 ///
 /// ```no_run
 /// # use std::error::Error;
-/// use zbus::{Connection, dbus_interface};
+/// use zbus::{Connection, interface};
 /// use event_listener::Event;
 /// # use async_io::block_on;
 ///
@@ -449,14 +449,14 @@ impl Node {
 ///     }
 /// }
 ///
-/// #[dbus_interface(name = "org.myiface.Example")]
+/// #[interface(name = "org.myiface.Example")]
 /// impl Example {
 ///     // This will be the "Quit" D-Bus method.
 ///     async fn quit(&mut self) {
 ///         self.quit_event.notify(1);
 ///     }
 ///
-///     // See `dbus_interface` documentation to learn
+///     // See `interface` documentation to learn
 ///     // how to expose properties & signals as well.
 /// }
 ///
@@ -636,14 +636,14 @@ impl ObjectServer {
     ///
     /// ```no_run
     /// # use std::error::Error;
-    /// # use zbus::{Connection, dbus_interface};
+    /// # use zbus::{Connection, interface};
     /// # use async_io::block_on;
     /// #
     /// struct MyIface(u32);
     ///
-    /// #[dbus_interface(name = "org.myiface.MyIface")]
+    /// #[interface(name = "org.myiface.MyIface")]
     /// impl MyIface {
-    ///      #[dbus_interface(property)]
+    ///      #[zbus(property)]
     ///      async fn count(&self) -> u32 {
     ///          self.0
     ///      }
@@ -816,7 +816,7 @@ impl From<crate::blocking::ObjectServer> for ObjectServer {
 
 /// A response wrapper that notifies after response has been sent.
 ///
-/// Sometimes in [`dbus_interface`] method implemenations we need to do some other work after the
+/// Sometimes in [`interface`] method implemenations we need to do some other work after the
 /// response has been sent off. This wrapper type allows us to do that. Instead of returning your
 /// intended response type directly, wrap it in this type and return it from your method. The
 /// returned `EventListener` from `new` method will be notified when the response has been sent.
@@ -830,7 +830,7 @@ impl From<crate::blocking::ObjectServer> for ObjectServer {
 /// The notification indicates that the response has been sent off, not that destination peer has
 /// received it. That can only be guaranteed for a peer-to-peer connection.
 ///
-/// [`dbus_interface`]: crate::dbus_interface
+/// [`interface`]: crate::interface
 #[derive(Debug)]
 pub struct ResponseDispatchNotifier<R> {
     response: R,
