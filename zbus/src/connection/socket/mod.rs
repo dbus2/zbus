@@ -1,7 +1,7 @@
 mod split;
 pub use split::{BoxedSplit, Split};
 
-mod tcp;
+pub(crate) mod tcp;
 mod unix;
 mod vsock;
 
