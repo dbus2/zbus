@@ -31,3 +31,20 @@ pub(crate) async fn connect(l: &dbus_addr::transport::Launchd<'_>) -> Result<soc
         _ => Err(Error::Address(format!("Address is unsupported: {}", addr))),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use dbus_addr::{transport::Transport, DBusAddr};
+
+    #[test]
+    fn connect_launchd_session_bus() {
+        let addr: DBusAddr<'_> = "launchd:env=DBUS_LAUNCHD_SESSION_BUS_SOCKET"
+            .try_into()
+            .unwrap();
+        let launchd = match addr.transport().unwrap() {
+            Transport::Launchd(l) => l,
+            _ => unreachable!(),
+        };
+        crate::utils::block_on(super::connect(&launchd)).unwrap();
+    }
+}
