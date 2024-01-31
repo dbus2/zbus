@@ -6,6 +6,8 @@ use std::os::fd::BorrowedFd;
 #[cfg(not(feature = "tokio"))]
 use std::{net::TcpStream, sync::Arc};
 
+use crate::{address::transport::TcpFamily, Error, Result};
+
 use super::{ReadHalf, RecvmsgResult, WriteHalf};
 #[cfg(feature = "tokio")]
 use super::{Socket, Split};
@@ -169,4 +171,68 @@ fn win32_credentials_from_addr(
     Ok(crate::fdo::ConnectionCredentials::default()
         .set_process_id(pid)
         .set_windows_sid(sid))
+}
+
+#[cfg(not(feature = "tokio"))]
+type Stream = Async<TcpStream>;
+#[cfg(feature = "tokio")]
+type Stream = tokio::net::TcpStream;
+
+async fn connect_with(host: &str, port: u16, family: Option<TcpFamily>) -> Result<Stream> {
+    #[cfg(not(feature = "tokio"))]
+    {
+        use std::net::ToSocketAddrs;
+
+        let host = host.to_string();
+        let addrs = crate::Task::spawn_blocking(
+            move || -> Result<Vec<std::net::SocketAddr>> {
+                let addrs = (host, port).to_socket_addrs()?.filter(|a| {
+                    if let Some(family) = family {
+                        if family == TcpFamily::IPv4 {
+                            a.is_ipv4()
+                        } else {
+                            a.is_ipv6()
+                        }
+                    } else {
+                        true
+                    }
+                });
+                Ok(addrs.collect())
+            },
+            "connect tcp",
+        )
+        .await
+        .map_err(|e| Error::Address(format!("Failed to receive TCP addresses: {e}")))?;
+
+        // we could attempt connections in parallel?
+        let mut last_err = Error::Address("Failed to connect".into());
+        for addr in addrs {
+            match Stream::connect(addr).await {
+                Ok(stream) => return Ok(stream),
+                Err(e) => last_err = e.into(),
+            }
+        }
+
+        Err(last_err)
+    }
+
+    #[cfg(feature = "tokio")]
+    {
+        // FIXME: doesn't handle family
+        let _ = family;
+        Stream::connect((host, port))
+            .await
+            .map_err(|e| Error::InputOutput(e.into()))
+    }
+}
+
+pub(crate) async fn connect(addr: &crate::address::transport::Tcp<'_>) -> Result<Stream> {
+    let Some(host) = addr.host() else {
+        return Err(Error::Address("No host in address".into()));
+    };
+    let Some(port) = addr.port() else {
+        return Err(Error::Address("No port in address".into()));
+    };
+
+    connect_with(host, port, addr.family()).await
 }

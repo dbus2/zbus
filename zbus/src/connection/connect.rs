@@ -1,8 +1,11 @@
 use tracing::debug;
 
-use crate::{address::DBusAddr, legacy_address, Error, Guid, OwnedGuid, Result};
+use crate::{
+    address::{transport::Transport, DBusAddr},
+    legacy_address, Error, Guid, OwnedGuid, Result,
+};
 
-use super::socket::BoxedSplit;
+use super::socket::{self, BoxedSplit};
 
 async fn connect(addr: &DBusAddr<'_>) -> Result<(BoxedSplit, Option<OwnedGuid>)> {
     let guid = match addr.guid() {
@@ -10,6 +13,7 @@ async fn connect(addr: &DBusAddr<'_>) -> Result<(BoxedSplit, Option<OwnedGuid>)>
         _ => None,
     };
     let split = match addr.transport()? {
+        Transport::Tcp(t) => socket::tcp::connect(&t).await?.into(),
         _ => {
             // safety: unwrap() for code transition => addr is valid already
             let legacy: crate::Address = addr.to_string().parse().unwrap();
