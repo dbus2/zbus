@@ -292,4 +292,63 @@ mod tests {
         };
         crate::utils::block_on(super::connect(&tcp)).unwrap();
     }
+
+    #[test]
+    fn connect_nonce_tcp() {
+        struct PercentEncoded<'a>(&'a [u8]);
+
+        impl std::fmt::Display for PercentEncoded<'_> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                crate::address::encode_percents(f, self.0)
+            }
+        }
+
+        use std::io::Write;
+
+        const TEST_COOKIE: &[u8] = b"VERILY SECRETIVE";
+
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        let mut cookie = tempfile::NamedTempFile::new().unwrap();
+        cookie.as_file_mut().write_all(TEST_COOKIE).unwrap();
+
+        let encoded_path = format!(
+            "{}",
+            PercentEncoded(cookie.path().to_str().unwrap().as_ref())
+        );
+
+        let addr: DBusAddr<'_> =
+            format!("nonce-tcp:host=localhost,port={port},noncefile={encoded_path}")
+                .try_into()
+                .unwrap();
+        let tcp = match addr.transport().unwrap() {
+            Transport::NonceTcp(tcp) => tcp,
+            _ => unreachable!(),
+        };
+
+        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+
+        std::thread::spawn(move || {
+            use std::io::Read;
+
+            let mut client = listener.incoming().next().unwrap().unwrap();
+
+            let mut buf = [0u8; 16];
+            client.read_exact(&mut buf).unwrap();
+
+            sender.send(buf == TEST_COOKIE).unwrap();
+        });
+
+        crate::utils::block_on(super::connect_nonce(&tcp)).unwrap();
+
+        let saw_cookie = receiver
+            .recv_timeout(std::time::Duration::from_millis(100))
+            .expect("nonce file content hasn't been received by server thread in time");
+
+        assert!(
+            saw_cookie,
+            "nonce file content has been received, but was invalid"
+        );
+    }
 }
