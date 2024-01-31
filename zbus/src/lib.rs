@@ -41,9 +41,6 @@ pub use dbus_error::*;
 mod error;
 pub use error::*;
 
-pub mod address;
-pub use address::Address;
-
 mod guid;
 pub use guid::*;
 

@@ -2,7 +2,7 @@ use dbus_addr::{transport::Transport, DBusAddr};
 use std::{future::Future, pin::Pin};
 use tracing::debug;
 
-use crate::{address, Error, Guid, OwnedGuid, Result};
+use crate::{Error, Guid, OwnedGuid, Result};
 
 use super::socket::{self, BoxedSplit};
 
@@ -35,19 +35,7 @@ fn connect(addr: &DBusAddr<'_>) -> Pin<Box<dyn Future<Output = ConnectResult>>> 
                 return win32::connect(&l).await;
             }
             _ => {
-                // safety: unwrap() for code transition => addr is valid already
-                let legacy: crate::Address = addr.to_string().parse().unwrap();
-                match legacy.connect().await {
-                    #[cfg(any(unix, not(feature = "tokio")))]
-                    Ok(address::transport::Stream::Unix(stream)) => stream.into(),
-                    Ok(address::transport::Stream::Tcp(stream)) => stream.into(),
-                    #[cfg(any(
-                        all(feature = "vsock", not(feature = "tokio")),
-                        feature = "tokio-vsock"
-                    ))]
-                    Ok(address::transport::Stream::Vsock(stream)) => stream.into(),
-                    _ => return Err(Error::Address("unhandled address".into())),
-                }
+                return Err(Error::Address(format!("Unhandled address: {}", addr)));
             }
         };
         Ok((split, guid))
