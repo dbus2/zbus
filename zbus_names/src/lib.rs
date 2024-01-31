@@ -25,6 +25,9 @@ pub use interface_name::*;
 mod member_name;
 pub use member_name::*;
 
+mod property_name;
+pub use property_name::*;
+
 mod error;
 pub use error::*;
 
