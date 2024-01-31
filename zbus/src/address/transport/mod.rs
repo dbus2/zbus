@@ -129,7 +129,7 @@ impl Transport {
 
                     #[cfg(not(unix))]
                     {
-                        let _ = path;
+                        let _ = stream;
                         Err(Error::Unsupported)
                     }
                 }
