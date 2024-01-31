@@ -26,6 +26,8 @@ use nix::{
 use super::{ReadHalf, RecvmsgResult, WriteHalf};
 #[cfg(feature = "tokio")]
 use super::{Socket, Split};
+
+#[allow(unused_imports)]
 use crate::fdo::ConnectionCredentials;
 #[cfg(unix)]
 use crate::utils::FDS_MAX;

@@ -1,12 +1,13 @@
 #[cfg(not(feature = "tokio"))]
-use crate::fdo::ConnectionCredentials;
-#[cfg(not(feature = "tokio"))]
 use async_io::Async;
 use std::io;
 #[cfg(unix)]
 use std::os::fd::BorrowedFd;
 #[cfg(not(feature = "tokio"))]
 use std::{net::TcpStream, sync::Arc};
+
+#[allow(unused_imports)]
+use crate::fdo::ConnectionCredentials;
 
 use super::{ReadHalf, RecvmsgResult, WriteHalf};
 #[cfg(feature = "tokio")]
@@ -103,6 +104,19 @@ impl Socket for tokio::net::TcpStream {
 }
 
 #[cfg(feature = "tokio")]
+#[cfg(windows)]
+fn win32_credentials_from_addr(addr: &std::net::SocketAddr) -> io::Result<ConnectionCredentials> {
+    use crate::win32::{socket_addr_get_pid, ProcessToken};
+
+    let pid = socket_addr_get_pid(addr)? as _;
+    let sid = ProcessToken::open(if pid != 0 { Some(pid as _) } else { None })
+        .and_then(|process_token| process_token.sid())?;
+    Ok(ConnectionCredentials::default()
+        .set_process_id(pid)
+        .set_windows_sid(sid))
+}
+
+#[cfg(feature = "tokio")]
 #[async_trait::async_trait]
 impl ReadHalf for tokio::net::tcp::OwnedReadHalf {
     async fn recvmsg(&mut self, buf: &mut [u8]) -> RecvmsgResult {
@@ -116,6 +130,11 @@ impl ReadHalf for tokio::net::tcp::OwnedReadHalf {
 
             ret
         })
+    }
+
+    #[cfg(windows)]
+    async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
+        win32_credentials_from_addr(&self.peer_addr()?)
     }
 }
 
@@ -142,5 +161,10 @@ impl WriteHalf for tokio::net::tcp::OwnedWriteHalf {
 
     async fn close(&mut self) -> io::Result<()> {
         tokio::io::AsyncWriteExt::shutdown(self).await
+    }
+
+    #[cfg(windows)]
+    async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
+        win32_credentials_from_addr(&self.peer_addr()?)
     }
 }
