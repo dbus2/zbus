@@ -14,6 +14,7 @@ async fn connect(addr: &DBusAddr<'_>) -> Result<(BoxedSplit, Option<OwnedGuid>)>
     };
     let split = match addr.transport()? {
         Transport::Tcp(t) => socket::tcp::connect(&t).await?.into(),
+        Transport::NonceTcp(t) => socket::tcp::connect_nonce(&t).await?.into(),
         _ => {
             // safety: unwrap() for code transition => addr is valid already
             let legacy: crate::Address = addr.to_string().parse().unwrap();
