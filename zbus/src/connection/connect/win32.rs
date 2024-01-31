@@ -22,3 +22,19 @@ pub(crate) async fn connect(
 
     super::connect(&addr).await
 }
+
+#[cfg(test)]
+mod tests {
+    #[cfg(feature = "windows-gdbus")]
+    #[test]
+    fn connect_gdbus_session_bus() {
+        use dbus_addr::{transport::Transport, DBusAddr};
+
+        let addr: DBusAddr<'_> = "autolaunch:".try_into().unwrap();
+        let autolaunch = match addr.transport().unwrap() {
+            Transport::Autolaunch(l) => l,
+            _ => unreachable!(),
+        };
+        crate::utils::block_on(super::connect(&autolaunch)).unwrap();
+    }
+}
