@@ -235,3 +235,22 @@ pub(crate) async fn connect(addr: &dbus_addr::transport::Tcp<'_>) -> Result<Stre
 
     connect_with(host, port, addr.family()).await
 }
+
+#[cfg(test)]
+mod tests {
+    use dbus_addr::{transport::Transport, DBusAddr};
+
+    #[test]
+    fn connect() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let addr: DBusAddr<'_> = format!("tcp:host=localhost,port={port}")
+            .try_into()
+            .unwrap();
+        let tcp = match addr.transport().unwrap() {
+            Transport::Tcp(tcp) => tcp,
+            _ => unreachable!(),
+        };
+        crate::utils::block_on(super::connect(&tcp)).unwrap();
+    }
+}
