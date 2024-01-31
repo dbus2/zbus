@@ -3,7 +3,7 @@ use async_io::Async;
 use std::io;
 #[cfg(unix)]
 use std::os::unix::io::{AsRawFd, BorrowedFd, FromRawFd, RawFd};
-#[cfg(all(unix, not(feature = "tokio")))]
+#[cfg(unix)]
 use std::os::unix::net::UnixStream;
 #[cfg(not(feature = "tokio"))]
 use std::sync::Arc;
@@ -31,6 +31,8 @@ use super::{Socket, Split};
 use crate::fdo::ConnectionCredentials;
 #[cfg(unix)]
 use crate::utils::FDS_MAX;
+#[cfg(any(unix, not(feature = "tokio")))]
+use crate::{Error, Result};
 
 #[cfg(all(unix, not(feature = "tokio")))]
 #[async_trait::async_trait]
@@ -385,4 +387,65 @@ fn send_zero_byte_blocking(fd: RawFd) -> io::Result<usize> {
         None,
     )
     .map_err(|e| e.into())
+}
+
+#[cfg(not(feature = "tokio"))]
+type Stream = Async<UnixStream>;
+#[cfg(all(unix, feature = "tokio"))]
+type Stream = tokio::net::UnixStream;
+
+#[cfg(any(unix, not(feature = "tokio")))]
+pub(crate) async fn connect(addr: &dbus_addr::transport::Unix<'_>) -> Result<Stream> {
+    use dbus_addr::transport::UnixAddrKind;
+    #[cfg(target_os = "linux")]
+    use std::os::linux::net::SocketAddrExt;
+    #[cfg(unix)]
+    use std::os::unix::net::SocketAddr;
+
+    let kind = addr.kind();
+
+    // This is a `path` in case of Windows until uds_windows provides the needed API:
+    // https://github.com/haraldh/rust_uds_windows/issues/14
+    let addr = match kind {
+        #[cfg(unix)]
+        UnixAddrKind::Path(p) => SocketAddr::from_pathname(std::path::Path::new(p))?,
+        #[cfg(windows)]
+        UnixAddrKind::Path(p) => p.clone().into_owned(),
+        #[cfg(target_os = "linux")]
+        UnixAddrKind::Abstract(name) => SocketAddr::from_abstract_name(name)?,
+        _ => return Err(Error::Address("Address is not connectable".into())),
+    };
+
+    let stream = crate::Task::spawn_blocking(
+        move || -> Result<_> {
+            #[cfg(unix)]
+            let stream = UnixStream::connect_addr(&addr)?;
+            #[cfg(windows)]
+            let stream = UnixStream::connect(addr)?;
+            stream.set_nonblocking(true)?;
+
+            Ok(stream)
+        },
+        "unix stream connection",
+    )
+    .await?;
+
+    #[cfg(not(feature = "tokio"))]
+    {
+        Async::new(stream).map_err(|e| Error::InputOutput(e.into()))
+    }
+
+    #[cfg(feature = "tokio")]
+    {
+        #[cfg(unix)]
+        {
+            tokio::net::UnixStream::from_std(stream).map_err(|e| Error::InputOutput(e.into()))
+        }
+
+        #[cfg(not(unix))]
+        {
+            let _ = stream;
+            Err(Error::Unsupported)
+        }
+    }
 }

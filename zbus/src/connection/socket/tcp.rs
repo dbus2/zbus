@@ -274,7 +274,7 @@ pub(crate) async fn connect_nonce(addr: &dbus_addr::transport::NonceTcp<'_>) -> 
 
 #[cfg(test)]
 mod tests {
-    use dbus_addr::{transport::Transport, DBusAddr};
+    use dbus_addr::{encode_percents, transport::Transport, DBusAddr};
 
     #[test]
     fn connect() {
