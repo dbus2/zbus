@@ -457,7 +457,7 @@ impl<'a> Builder<'a> {
     }
 
     async fn stream_for_target(&mut self) -> Result<BoxedSplit> {
-        // SAFETY: `self.target` is always `Some` from the beginning and this methos is only called
+        // SAFETY: `self.target` is always `Some` from the beginning and this method is only called
         // once.
         Ok(match self.target.take().unwrap() {
             #[cfg(not(feature = "tokio"))]
