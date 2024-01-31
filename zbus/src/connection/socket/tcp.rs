@@ -117,24 +117,6 @@ impl ReadHalf for tokio::net::tcp::OwnedReadHalf {
             ret
         })
     }
-
-    #[cfg(windows)]
-    fn peer_sid(&self) -> Option<String> {
-        use crate::win32::{socket_addr_get_pid, ProcessToken};
-
-        let peer_addr = match self.peer_addr() {
-            Ok(addr) => addr,
-            Err(_) => return None,
-        };
-
-        if let Ok(pid) = socket_addr_get_pid(&peer_addr) {
-            if let Ok(process_token) = ProcessToken::open(if pid != 0 { Some(pid) } else { None }) {
-                return process_token.sid().ok();
-            }
-        }
-
-        None
-    }
 }
 
 #[cfg(feature = "tokio")]
