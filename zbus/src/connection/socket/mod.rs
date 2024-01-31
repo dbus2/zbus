@@ -7,7 +7,7 @@ mod split;
 pub use split::{BoxedSplit, Split};
 
 pub(crate) mod tcp;
-mod unix;
+pub(crate) mod unix;
 mod vsock;
 
 #[cfg(not(feature = "tokio"))]
