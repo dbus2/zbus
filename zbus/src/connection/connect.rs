@@ -17,6 +17,11 @@ async fn connect(addr: &DBusAddr<'_>) -> Result<(BoxedSplit, Option<OwnedGuid>)>
         Transport::NonceTcp(t) => socket::tcp::connect_nonce(&t).await?.into(),
         #[cfg(any(unix, not(feature = "tokio")))]
         Transport::Unix(u) => socket::unix::connect(&u).await?.into(),
+        #[cfg(any(
+            all(feature = "vsock", not(feature = "tokio")),
+            feature = "tokio-vsock"
+        ))]
+        Transport::Vsock(v) => socket::vsock::connect(&v).await?.into(),
         _ => {
             // safety: unwrap() for code transition => addr is valid already
             let legacy: crate::Address = addr.to_string().parse().unwrap();
