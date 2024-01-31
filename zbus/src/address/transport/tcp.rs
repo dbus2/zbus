@@ -1,3 +1,4 @@
+use super::encode_percents;
 use crate::{Error, Result};
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
@@ -165,6 +166,35 @@ impl Tcp {
         TcpStream::connect((self.host(), self.port()))
             .await
             .map_err(|e| Error::InputOutput(e.into()))
+    }
+}
+
+impl Display for Tcp {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self.nonce_file() {
+            Some(nonce_file) => {
+                f.write_str("nonce-tcp:noncefile=")?;
+                encode_percents(f, nonce_file)?;
+                f.write_str(",")?;
+            }
+            None => f.write_str("tcp:")?,
+        }
+        f.write_str("host=")?;
+
+        encode_percents(f, self.host().as_bytes())?;
+
+        write!(f, ",port={}", self.port())?;
+
+        if let Some(bind) = self.bind() {
+            f.write_str(",bind=")?;
+            encode_percents(f, bind.as_bytes())?;
+        }
+
+        if let Some(family) = self.family() {
+            write!(f, ",family={family}")?;
+        }
+
+        Ok(())
     }
 }
 

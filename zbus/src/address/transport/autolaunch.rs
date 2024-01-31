@@ -7,6 +7,17 @@ pub struct Autolaunch {
     pub(super) scope: Option<AutolaunchScope>,
 }
 
+impl std::fmt::Display for Autolaunch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "autolaunch:")?;
+        if let Some(scope) = &self.scope {
+            write!(f, "scope={}", scope)?;
+        }
+
+        Ok(())
+    }
+}
+
 impl Autolaunch {
     /// Create a new autolaunch transport.
     pub fn new() -> Self {

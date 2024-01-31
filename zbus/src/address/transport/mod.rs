@@ -7,11 +7,11 @@ use crate::win32::windows_autolaunch_bus_address;
 use crate::{Error, Result};
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
+use std::collections::HashMap;
 #[cfg(not(feature = "tokio"))]
 use std::net::TcpStream;
 #[cfg(unix)]
 use std::os::unix::net::{SocketAddr, UnixStream};
-use std::{collections::HashMap, ffi::OsStr};
 #[cfg(feature = "tokio")]
 use tokio::net::TcpStream;
 #[cfg(feature = "tokio-vsock")]
@@ -330,86 +330,18 @@ pub(super) fn encode_percents(f: &mut Formatter<'_>, mut value: &[u8]) -> std::f
 
 impl Display for Transport {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        fn fmt_unix_path(f: &mut Formatter<'_>, path: &OsStr) -> std::fmt::Result {
-            #[cfg(unix)]
-            {
-                use std::os::unix::ffi::OsStrExt;
-
-                encode_percents(f, path.as_bytes())?;
-            }
-
-            #[cfg(windows)]
-            write!(f, "{}", path.to_str().ok_or(std::fmt::Error)?)?;
-
-            Ok(())
-        }
-
         match self {
-            Self::Tcp(addr) => {
-                match addr.nonce_file() {
-                    Some(nonce_file) => {
-                        f.write_str("nonce-tcp:noncefile=")?;
-                        encode_percents(f, nonce_file)?;
-                        f.write_str(",")?;
-                    }
-                    None => f.write_str("tcp:")?,
-                }
-                f.write_str("host=")?;
-
-                encode_percents(f, addr.host().as_bytes())?;
-
-                write!(f, ",port={}", addr.port())?;
-
-                if let Some(bind) = addr.bind() {
-                    f.write_str(",bind=")?;
-                    encode_percents(f, bind.as_bytes())?;
-                }
-
-                if let Some(family) = addr.family() {
-                    write!(f, ",family={family}")?;
-                }
-            }
-
-            Self::Unix(unix) => match unix.path() {
-                UnixPath::File(path) => {
-                    f.write_str("unix:path=")?;
-                    fmt_unix_path(f, path)?;
-                }
-                #[cfg(target_os = "linux")]
-                UnixPath::Abstract(name) => {
-                    f.write_str("unix:abstract=")?;
-                    encode_percents(f, name)?;
-                }
-                UnixPath::Dir(path) => {
-                    f.write_str("unix:dir=")?;
-                    fmt_unix_path(f, path)?;
-                }
-                UnixPath::TmpDir(path) => {
-                    f.write_str("unix:tmpdir=")?;
-                    fmt_unix_path(f, path)?;
-                }
-            },
-
+            Self::Tcp(tcp) => write!(f, "{}", tcp)?,
+            Self::Unix(unix) => write!(f, "{}", unix)?,
             #[cfg(any(
                 all(feature = "vsock", not(feature = "tokio")),
                 feature = "tokio-vsock"
             ))]
-            Self::Vsock(addr) => {
-                write!(f, "vsock:cid={},port={}", addr.cid(), addr.port())?;
-            }
-
+            Self::Vsock(vsock) => write!(f, "{}", vsock)?,
             #[cfg(windows)]
-            Self::Autolaunch(autolaunch) => {
-                write!(f, "autolaunch:")?;
-                if let Some(scope) = autolaunch.scope() {
-                    write!(f, "scope={scope}")?;
-                }
-            }
-
+            Self::Autolaunch(autolaunch) => write!(f, "{}", autolaunch)?,
             #[cfg(target_os = "macos")]
-            Self::Launchd(launchd) => {
-                write!(f, "launchd:env={}", launchd.env())?;
-            }
+            Self::Launchd(launchd) => write!(f, "{}", launchd)?,
         }
 
         Ok(())
