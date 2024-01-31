@@ -1,4 +1,11 @@
-use std::{collections::HashMap, ffi::OsString};
+use std::{
+    collections::HashMap,
+    ffi::{OsStr, OsString},
+    fmt::{Display, Formatter},
+};
+
+#[cfg(unix)]
+use super::encode_percents;
 
 /// A Unix domain socket transport in a D-Bus address.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -49,6 +56,12 @@ impl Unix {
     }
 }
 
+impl Display for Unix {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "unix:{}", self.path)
+    }
+}
+
 /// A Unix domain socket path in a D-Bus address.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -72,4 +85,44 @@ pub enum UnixPath {
     ///
     /// This address is mostly relevant to server (typically bus broker) implementations.
     TmpDir(OsString),
+}
+
+impl Display for UnixPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn fmt_unix_path(f: &mut Formatter<'_>, path: &OsStr) -> std::fmt::Result {
+            #[cfg(unix)]
+            {
+                use std::os::unix::ffi::OsStrExt;
+
+                encode_percents(f, path.as_bytes())?;
+            }
+
+            #[cfg(windows)]
+            write!(f, "{}", path.to_str().ok_or(std::fmt::Error)?)?;
+
+            Ok(())
+        }
+
+        match self {
+            UnixPath::File(path) => {
+                f.write_str("path=")?;
+                fmt_unix_path(f, path)?;
+            }
+            #[cfg(target_os = "linux")]
+            UnixPath::Abstract(name) => {
+                f.write_str("abstract=")?;
+                encode_percents(f, name)?;
+            }
+            UnixPath::Dir(path) => {
+                f.write_str("dir=")?;
+                fmt_unix_path(f, path)?;
+            }
+            UnixPath::TmpDir(path) => {
+                f.write_str("tmpdir=")?;
+                fmt_unix_path(f, path)?;
+            }
+        }
+
+        Ok(())
+    }
 }

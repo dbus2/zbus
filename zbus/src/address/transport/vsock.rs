@@ -41,3 +41,9 @@ impl Vsock {
         Ok(Self { cid, port })
     }
 }
+
+impl std::fmt::Display for Vsock {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "vsock:cid={},port={}", self.cid, self.port)
+    }
+}

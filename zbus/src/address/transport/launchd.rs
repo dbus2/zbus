@@ -52,3 +52,9 @@ impl Launchd {
             })
     }
 }
+
+impl std::fmt::Display for Launchd {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "launchd:env={}", self.env)
+    }
+}
