@@ -3,7 +3,7 @@ pub use split::{BoxedSplit, Split};
 
 pub(crate) mod tcp;
 pub(crate) mod unix;
-mod vsock;
+pub(crate) mod vsock;
 
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
