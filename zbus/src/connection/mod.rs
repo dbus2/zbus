@@ -1376,15 +1376,6 @@ mod tests {
     use std::{pin::pin, time::Duration};
     use test_log::test;
 
-    #[cfg(windows)]
-    #[test]
-    fn connect_autolaunch_session_bus() {
-        let addr =
-            crate::win32::autolaunch_bus_address().expect("Unable to get session bus address");
-
-        crate::block_on(async { addr.connect().await }).expect("Unable to connect to session bus");
-    }
-
     #[test]
     #[timeout(15000)]
     fn disconnect_on_drop() {

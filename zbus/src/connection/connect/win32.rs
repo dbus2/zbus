@@ -24,3 +24,18 @@ pub(crate) async fn connect(
 
     super::connect(&addr).await
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn connect_autolaunch_session_bus() {
+        use crate::address::{transport::Transport, DBusAddr};
+
+        let addr: DBusAddr<'_> = "autolaunch:".try_into().unwrap();
+        let autolaunch = match addr.transport().unwrap() {
+            Transport::Autolaunch(l) => l,
+            _ => unreachable!(),
+        };
+        crate::utils::block_on(super::connect(&autolaunch)).unwrap();
+    }
+}
