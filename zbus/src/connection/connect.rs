@@ -3,7 +3,7 @@ use tracing::debug;
 
 use crate::{
     address::{transport::Transport, DBusAddr},
-    legacy_address, Error, Guid, OwnedGuid, Result,
+    Error, Guid, OwnedGuid, Result,
 };
 
 use super::socket::{self, BoxedSplit};
@@ -37,19 +37,7 @@ fn connect(addr: &DBusAddr<'_>) -> Pin<Box<dyn Future<Output = ConnectResult>>> 
                 return win32::connect(&l).await;
             }
             _ => {
-                // safety: unwrap() for code transition => addr is valid already
-                let legacy: crate::Address = addr.to_string().parse().unwrap();
-                match legacy.connect().await {
-                    #[cfg(any(unix, not(feature = "tokio")))]
-                    Ok(legacy_address::transport::Stream::Unix(stream)) => stream.into(),
-                    Ok(legacy_address::transport::Stream::Tcp(stream)) => stream.into(),
-                    #[cfg(any(
-                        all(feature = "vsock", not(feature = "tokio")),
-                        feature = "tokio-vsock"
-                    ))]
-                    Ok(legacy_address::transport::Stream::Vsock(stream)) => stream.into(),
-                    _ => return Err(Error::Address("unhandled address".into())),
-                }
+                return Err(Error::Address(format!("Unhandled address: {}", addr)));
             }
         };
         Ok((split, guid))
