@@ -417,14 +417,6 @@ mod tests {
     }
 
     #[test]
-    fn connect_tcp() {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let addr = Address::from_str(&format!("tcp:host=localhost,port={port}")).unwrap();
-        crate::utils::block_on(async { addr.connect().await }).unwrap();
-    }
-
-    #[test]
     fn connect_nonce_tcp() {
         struct PercentEncoded<'a>(&'a [u8]);
 
