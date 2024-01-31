@@ -161,7 +161,7 @@ impl<'a> Builder<'a> {
 
     /// Create a builder for connection that will use the given socket.
     pub fn socket<S: Socket + 'static>(socket: S) -> Self {
-        Self::new(Target::Socket(Split::new_boxed(socket)))
+        Self::new(Target::Socket(socket.into()))
     }
 
     /// Specify the mechanisms to use during authentication.
@@ -461,28 +461,28 @@ impl<'a> Builder<'a> {
         // once.
         Ok(match self.target.take().unwrap() {
             #[cfg(not(feature = "tokio"))]
-            Target::UnixStream(stream) => Split::new_boxed(Async::new(stream)?),
+            Target::UnixStream(stream) => Async::new(stream)?.into(),
             #[cfg(all(unix, feature = "tokio"))]
-            Target::UnixStream(stream) => Split::new_boxed(stream),
+            Target::UnixStream(stream) => stream.into(),
             #[cfg(all(not(unix), feature = "tokio"))]
             Target::UnixStream(_) => return Err(Error::Unsupported),
             #[cfg(not(feature = "tokio"))]
-            Target::TcpStream(stream) => Split::new_boxed(Async::new(stream)?),
+            Target::TcpStream(stream) => Async::new(stream)?.into(),
             #[cfg(feature = "tokio")]
-            Target::TcpStream(stream) => Split::new_boxed(stream),
+            Target::TcpStream(stream) => stream.into(),
             #[cfg(all(feature = "vsock", not(feature = "tokio")))]
-            Target::VsockStream(stream) => Split::new_boxed(Async::new(stream)?),
+            Target::VsockStream(stream) => Async::new(stream)?.into(),
             #[cfg(feature = "tokio-vsock")]
-            Target::VsockStream(stream) => Split::new_boxed(stream),
+            Target::VsockStream(stream) => stream.into(),
             Target::Address(address) => match address.connect().await? {
                 #[cfg(any(unix, not(feature = "tokio")))]
-                address::transport::Stream::Unix(stream) => Split::new_boxed(stream),
-                address::transport::Stream::Tcp(stream) => Split::new_boxed(stream),
+                address::transport::Stream::Unix(stream) => stream.into(),
+                address::transport::Stream::Tcp(stream) => stream.into(),
                 #[cfg(any(
                     all(feature = "vsock", not(feature = "tokio")),
                     feature = "tokio-vsock"
                 ))]
-                address::transport::Stream::Vsock(stream) => Split::new_boxed(stream),
+                address::transport::Stream::Vsock(stream) => stream.into(),
             },
             Target::Socket(stream) => stream,
         })
