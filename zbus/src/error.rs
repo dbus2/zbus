@@ -59,6 +59,8 @@ pub enum Error {
     MissingParameter(&'static str),
     /// Serial number in the message header is 0 (which is invalid).
     InvalidSerial,
+    /// DBus address error
+    DBusAddr(dbus_addr::Error),
 }
 
 assert_impl_all!(Error: Send, Sync, Unpin);
@@ -85,6 +87,7 @@ impl PartialEq for Error {
             (Self::NameTaken, Self::NameTaken) => true,
             (Error::InputOutput(_), Self::InputOutput(_)) => false,
             (Self::Failure(s1), Self::Failure(s2)) => s1 == s2,
+            (Self::DBusAddr(s), Self::DBusAddr(o)) => s == o,
             (_, _) => false,
         }
     }
@@ -113,6 +116,7 @@ impl error::Error for Error {
             Error::Failure(_) => None,
             Error::MissingParameter(_) => None,
             Error::InvalidSerial => None,
+            Error::DBusAddr(e) => Some(e),
         }
     }
 }
@@ -147,6 +151,7 @@ impl fmt::Display for Error {
                 write!(f, "Parameter `{}` was not specified but it is required", p)
             }
             Error::InvalidSerial => write!(f, "Serial number in the message header is 0"),
+            Error::DBusAddr(e) => write!(f, "{e}"),
         }
     }
 }
@@ -176,6 +181,7 @@ impl Clone for Error {
             Error::Failure(e) => Error::Failure(e.clone()),
             Error::MissingParameter(p) => Error::MissingParameter(p),
             Error::InvalidSerial => Error::InvalidSerial,
+            Error::DBusAddr(e) => Error::DBusAddr(e.clone()),
         }
     }
 }
@@ -183,6 +189,12 @@ impl Clone for Error {
 impl From<io::Error> for Error {
     fn from(val: io::Error) -> Self {
         Error::InputOutput(Arc::new(val))
+    }
+}
+
+impl From<dbus_addr::Error> for Error {
+    fn from(e: dbus_addr::Error) -> Self {
+        Error::DBusAddr(e)
     }
 }
 
