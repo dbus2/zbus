@@ -1,3 +1,4 @@
+use std::{future::Future, pin::Pin};
 use tracing::debug;
 
 use crate::{
@@ -9,40 +10,45 @@ use super::socket::{self, BoxedSplit};
 
 mod macos;
 
-async fn connect(addr: &DBusAddr<'_>) -> Result<(BoxedSplit, Option<OwnedGuid>)> {
-    let guid = match addr.guid() {
-        Some(g) => Some(Guid::try_from(g.as_ref())?.into()),
-        _ => None,
-    };
-    let split = match addr.transport()? {
-        Transport::Tcp(t) => socket::tcp::connect(&t).await?.into(),
-        Transport::NonceTcp(t) => socket::tcp::connect_nonce(&t).await?.into(),
-        #[cfg(any(unix, not(feature = "tokio")))]
-        Transport::Unix(u) => socket::unix::connect(&u).await?.into(),
-        #[cfg(any(
-            all(feature = "vsock", not(feature = "tokio")),
-            feature = "tokio-vsock"
-        ))]
-        Transport::Vsock(v) => socket::vsock::connect(&v).await?.into(),
-        #[cfg(target_os = "macos")]
-        Transport::Launchd(l) => macos::connect(&l).await?.into(),
-        _ => {
-            // safety: unwrap() for code transition => addr is valid already
-            let legacy: crate::Address = addr.to_string().parse().unwrap();
-            match legacy.connect().await {
-                #[cfg(any(unix, not(feature = "tokio")))]
-                Ok(legacy_address::transport::Stream::Unix(stream)) => stream.into(),
-                Ok(legacy_address::transport::Stream::Tcp(stream)) => stream.into(),
-                #[cfg(any(
-                    all(feature = "vsock", not(feature = "tokio")),
-                    feature = "tokio-vsock"
-                ))]
-                Ok(legacy_address::transport::Stream::Vsock(stream)) => stream.into(),
-                _ => return Err(Error::Address("unhandled address".into())),
+type ConnectResult = Result<(BoxedSplit, Option<OwnedGuid>)>;
+
+fn connect(addr: &DBusAddr<'_>) -> Pin<Box<dyn Future<Output = ConnectResult>>> {
+    let addr = addr.to_owned();
+    Box::pin(async move {
+        let guid = match addr.guid() {
+            Some(g) => Some(Guid::try_from(g.as_ref())?.into()),
+            _ => None,
+        };
+        let split = match addr.transport()? {
+            Transport::Tcp(t) => socket::tcp::connect(&t).await?.into(),
+            Transport::NonceTcp(t) => socket::tcp::connect_nonce(&t).await?.into(),
+            #[cfg(any(unix, not(feature = "tokio")))]
+            Transport::Unix(u) => socket::unix::connect(&u).await?.into(),
+            #[cfg(any(
+                all(feature = "vsock", not(feature = "tokio")),
+                feature = "tokio-vsock"
+            ))]
+            Transport::Vsock(v) => socket::vsock::connect(&v).await?.into(),
+            #[cfg(target_os = "macos")]
+            Transport::Launchd(l) => macos::connect(&l).await?.into(),
+            _ => {
+                // safety: unwrap() for code transition => addr is valid already
+                let legacy: crate::Address = addr.to_string().parse().unwrap();
+                match legacy.connect().await {
+                    #[cfg(any(unix, not(feature = "tokio")))]
+                    Ok(legacy_address::transport::Stream::Unix(stream)) => stream.into(),
+                    Ok(legacy_address::transport::Stream::Tcp(stream)) => stream.into(),
+                    #[cfg(any(
+                        all(feature = "vsock", not(feature = "tokio")),
+                        feature = "tokio-vsock"
+                    ))]
+                    Ok(legacy_address::transport::Stream::Vsock(stream)) => stream.into(),
+                    _ => return Err(Error::Address("unhandled address".into())),
+                }
             }
-        }
-    };
-    Ok((split, guid))
+        };
+        Ok((split, guid))
+    })
 }
 
 pub(crate) async fn connect_address(
