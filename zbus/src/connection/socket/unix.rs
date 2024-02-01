@@ -382,9 +382,9 @@ fn send_zero_byte_blocking(fd: RawFd) -> io::Result<usize> {
 }
 
 #[cfg(not(feature = "tokio"))]
-type Stream = Async<UnixStream>;
+pub(crate) type Stream = Async<UnixStream>;
 #[cfg(all(unix, feature = "tokio"))]
-type Stream = tokio::net::UnixStream;
+pub(crate) type Stream = tokio::net::UnixStream;
 
 #[cfg(any(unix, not(feature = "tokio")))]
 pub(crate) async fn connect(addr: &crate::address::transport::Unix<'_>) -> Result<Stream> {
