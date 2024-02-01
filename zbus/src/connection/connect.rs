@@ -7,6 +7,7 @@ use crate::{address, Error, Guid, OwnedGuid, Result};
 use super::socket::{self, BoxedSplit};
 
 mod macos;
+mod win32;
 
 type ConnectResult = Result<(BoxedSplit, Option<OwnedGuid>)>;
 
@@ -29,6 +30,10 @@ fn connect(addr: &DBusAddr<'_>) -> Pin<Box<dyn Future<Output = ConnectResult>>> 
             Transport::Vsock(v) => socket::vsock::connect(&v).await?.into(),
             #[cfg(target_os = "macos")]
             Transport::Launchd(l) => macos::connect(&l).await?.into(),
+            #[cfg(target_os = "windows")]
+            Transport::Autolaunch(l) => {
+                return win32::connect(&l).await;
+            }
             _ => {
                 // safety: unwrap() for code transition => addr is valid already
                 let legacy: crate::Address = addr.to_string().parse().unwrap();
