@@ -1,6 +1,4 @@
 #[cfg(not(feature = "tokio"))]
-use crate::fdo::ConnectionCredentials;
-#[cfg(not(feature = "tokio"))]
 use async_io::Async;
 use std::io;
 #[cfg(unix)]
@@ -28,7 +26,7 @@ impl ReadHalf for Arc<Async<TcpStream>> {
         }
     }
 
-    async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> io::Result<crate::fdo::ConnectionCredentials> {
         #[cfg(windows)]
         let creds = {
             let stream = self.clone();
@@ -40,7 +38,7 @@ impl ReadHalf for Arc<Async<TcpStream>> {
                     let sid = ProcessToken::open(if pid != 0 { Some(pid as _) } else { None })
                         .and_then(|process_token| process_token.sid())?;
                     io::Result::Ok(
-                        ConnectionCredentials::default()
+                        crate::fdo::ConnectionCredentials::default()
                             .set_process_id(pid)
                             .set_windows_sid(sid),
                     )
@@ -51,7 +49,7 @@ impl ReadHalf for Arc<Async<TcpStream>> {
         }?;
 
         #[cfg(not(windows))]
-        let creds = ConnectionCredentials::default();
+        let creds = crate::fdo::ConnectionCredentials::default();
 
         Ok(creds)
     }
@@ -85,7 +83,7 @@ impl WriteHalf for Arc<Async<TcpStream>> {
         .await
     }
 
-    async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> io::Result<crate::fdo::ConnectionCredentials> {
         ReadHalf::peer_credentials(self).await
     }
 }
@@ -119,21 +117,13 @@ impl ReadHalf for tokio::net::tcp::OwnedReadHalf {
     }
 
     #[cfg(windows)]
-    fn peer_sid(&self) -> Option<String> {
-        use crate::win32::{socket_addr_get_pid, ProcessToken};
-
-        let peer_addr = match self.peer_addr() {
-            Ok(addr) => addr,
-            Err(_) => return None,
-        };
-
-        if let Ok(pid) = socket_addr_get_pid(&peer_addr) {
-            if let Ok(process_token) = ProcessToken::open(if pid != 0 { Some(pid) } else { None }) {
-                return process_token.sid().ok();
-            }
-        }
-
-        None
+    async fn peer_credentials(&mut self) -> io::Result<crate::fdo::ConnectionCredentials> {
+        let peer_addr = self.peer_addr()?.clone();
+        crate::Task::spawn_blocking(
+            move || win32_credentials_from_addr(&peer_addr),
+            "peer credentials",
+        )
+        .await
     }
 }
 
@@ -161,4 +151,29 @@ impl WriteHalf for tokio::net::tcp::OwnedWriteHalf {
     async fn close(&mut self) -> io::Result<()> {
         tokio::io::AsyncWriteExt::shutdown(self).await
     }
+
+    #[cfg(windows)]
+    async fn peer_credentials(&mut self) -> io::Result<crate::fdo::ConnectionCredentials> {
+        let peer_addr = self.peer_addr()?.clone();
+        crate::Task::spawn_blocking(
+            move || win32_credentials_from_addr(&peer_addr),
+            "peer credentials",
+        )
+        .await
+    }
+}
+
+#[cfg(feature = "tokio")]
+#[cfg(windows)]
+fn win32_credentials_from_addr(
+    addr: &std::net::SocketAddr,
+) -> io::Result<crate::fdo::ConnectionCredentials> {
+    use crate::win32::{socket_addr_get_pid, ProcessToken};
+
+    let pid = socket_addr_get_pid(addr)? as _;
+    let sid = ProcessToken::open(if pid != 0 { Some(pid as _) } else { None })
+        .and_then(|process_token| process_token.sid())?;
+    Ok(crate::fdo::ConnectionCredentials::default()
+        .set_process_id(pid)
+        .set_windows_sid(sid))
 }

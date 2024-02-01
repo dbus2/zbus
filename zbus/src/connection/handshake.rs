@@ -1045,7 +1045,7 @@ mod tests {
 
     use super::*;
 
-    use crate::{connection::socket::Split, Guid, Socket};
+    use crate::{Guid, Socket};
 
     fn create_async_socket_pair() -> (impl AsyncWrite + Socket, impl AsyncWrite + Socket) {
         // Tokio needs us to call the sync function from async context. :shrug:
@@ -1071,9 +1071,9 @@ mod tests {
         let (p0, p1) = create_async_socket_pair();
 
         let guid = OwnedGuid::from(Guid::generate());
-        let client = ClientHandshake::new(Split::new_boxed(p0), None, Some(guid.clone()));
+        let client = ClientHandshake::new(p0.into(), None, Some(guid.clone()));
         let server = ServerHandshake::new(
-            Split::new_boxed(p1),
+            p1.into(),
             guid,
             Some(Uid::effective().into()),
             None,
@@ -1097,7 +1097,7 @@ mod tests {
     fn pipelined_handshake() {
         let (mut p0, p1) = create_async_socket_pair();
         let server = ServerHandshake::new(
-            Split::new_boxed(p1),
+            p1.into(),
             Guid::generate().into(),
             Some(Uid::effective().into()),
             None,
@@ -1126,7 +1126,7 @@ mod tests {
     fn separate_external_data() {
         let (mut p0, p1) = create_async_socket_pair();
         let server = ServerHandshake::new(
-            Split::new_boxed(p1),
+            p1.into(),
             Guid::generate().into(),
             Some(Uid::effective().into()),
             None,
@@ -1153,7 +1153,7 @@ mod tests {
     fn missing_external_data() {
         let (mut p0, p1) = create_async_socket_pair();
         let server = ServerHandshake::new(
-            Split::new_boxed(p1),
+            p1.into(),
             Guid::generate().into(),
             Some(Uid::effective().into()),
             None,
@@ -1171,7 +1171,7 @@ mod tests {
     fn anonymous_handshake() {
         let (mut p0, p1) = create_async_socket_pair();
         let server = ServerHandshake::new(
-            Split::new_boxed(p1),
+            p1.into(),
             Guid::generate().into(),
             Some(Uid::effective().into()),
             Some(vec![AuthMechanism::Anonymous].into()),
@@ -1189,7 +1189,7 @@ mod tests {
     fn separate_anonymous_data() {
         let (mut p0, p1) = create_async_socket_pair();
         let server = ServerHandshake::new(
-            Split::new_boxed(p1),
+            p1.into(),
             Guid::generate().into(),
             Some(Uid::effective().into()),
             Some(vec![AuthMechanism::Anonymous].into()),

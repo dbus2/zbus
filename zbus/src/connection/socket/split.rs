@@ -8,16 +8,6 @@ pub struct Split<R: ReadHalf, W: WriteHalf> {
 }
 
 impl<R: ReadHalf, W: WriteHalf> Split<R, W> {
-    /// Create a new boxed `Split` from `socket`.
-    pub fn new_boxed<S: Socket<ReadHalf = R, WriteHalf = W>>(socket: S) -> BoxedSplit {
-        let split = socket.split();
-
-        Split {
-            read: Box::new(split.read),
-            write: Box::new(split.write),
-        }
-    }
-
     /// Reference to the read half.
     pub fn read(&self) -> &R {
         &self.read
@@ -46,3 +36,14 @@ impl<R: ReadHalf, W: WriteHalf> Split<R, W> {
 
 /// A boxed `Split`.
 pub type BoxedSplit = Split<Box<dyn ReadHalf>, Box<dyn WriteHalf>>;
+
+impl<S: Socket> From<S> for BoxedSplit {
+    fn from(socket: S) -> Self {
+        let split = socket.split();
+
+        Split {
+            read: Box::new(split.read),
+            write: Box::new(split.write),
+        }
+    }
+}

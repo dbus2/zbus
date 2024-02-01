@@ -26,7 +26,7 @@ use nix::{
 use super::{ReadHalf, RecvmsgResult, WriteHalf};
 #[cfg(feature = "tokio")]
 use super::{Socket, Split};
-use crate::fdo::ConnectionCredentials;
+
 #[cfg(unix)]
 use crate::utils::FDS_MAX;
 
@@ -56,7 +56,7 @@ impl ReadHalf for Arc<Async<UnixStream>> {
         true
     }
 
-    async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> io::Result<crate::fdo::ConnectionCredentials> {
         get_unix_peer_creds(self).await
     }
 }
@@ -106,7 +106,7 @@ impl WriteHalf for Arc<Async<UnixStream>> {
         true
     }
 
-    async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> io::Result<crate::fdo::ConnectionCredentials> {
         get_unix_peer_creds(self).await
     }
 }
@@ -154,7 +154,7 @@ impl ReadHalf for tokio::net::unix::OwnedReadHalf {
         true
     }
 
-    async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> io::Result<crate::fdo::ConnectionCredentials> {
         get_unix_peer_creds(self.as_ref()).await
     }
 }
@@ -204,7 +204,7 @@ impl WriteHalf for tokio::net::unix::OwnedWriteHalf {
         true
     }
 
-    async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> io::Result<crate::fdo::ConnectionCredentials> {
         get_unix_peer_creds(self.as_ref()).await
     }
 }
@@ -225,7 +225,7 @@ impl ReadHalf for Arc<Async<UnixStream>> {
         }
     }
 
-    async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> io::Result<crate::fdo::ConnectionCredentials> {
         let stream = self.clone();
         crate::Task::spawn_blocking(
             move || {
@@ -234,7 +234,7 @@ impl ReadHalf for Arc<Async<UnixStream>> {
                 let pid = unix_stream_get_peer_pid(&stream.get_ref())? as _;
                 let sid = ProcessToken::open(if pid != 0 { Some(pid as _) } else { None })
                     .and_then(|process_token| process_token.sid())?;
-                Ok(ConnectionCredentials::default()
+                Ok(crate::fdo::ConnectionCredentials::default()
                     .set_process_id(pid)
                     .set_windows_sid(sid))
             },
@@ -264,7 +264,7 @@ impl WriteHalf for Arc<Async<UnixStream>> {
         .await
     }
 
-    async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> io::Result<crate::fdo::ConnectionCredentials> {
         ReadHalf::peer_credentials(self).await
     }
 }
@@ -323,7 +323,7 @@ fn fd_sendmsg(fd: RawFd, buffer: &[u8], fds: &[BorrowedFd<'_>]) -> io::Result<us
 }
 
 #[cfg(unix)]
-async fn get_unix_peer_creds(fd: &impl AsRawFd) -> io::Result<ConnectionCredentials> {
+async fn get_unix_peer_creds(fd: &impl AsRawFd) -> io::Result<crate::fdo::ConnectionCredentials> {
     let fd = fd.as_raw_fd();
     // FIXME: Is it likely enough for sending of 1 byte to block, to justify a task (possibly
     // launching a thread in turn)?
@@ -331,7 +331,7 @@ async fn get_unix_peer_creds(fd: &impl AsRawFd) -> io::Result<ConnectionCredenti
 }
 
 #[cfg(unix)]
-fn get_unix_peer_creds_blocking(fd: RawFd) -> io::Result<ConnectionCredentials> {
+fn get_unix_peer_creds_blocking(fd: RawFd) -> io::Result<crate::fdo::ConnectionCredentials> {
     #[cfg(any(target_os = "android", target_os = "linux"))]
     {
         use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
@@ -342,7 +342,7 @@ fn get_unix_peer_creds_blocking(fd: RawFd) -> io::Result<ConnectionCredentials> 
 
         getsockopt(&fd, PeerCredentials)
             .map(|creds| {
-                ConnectionCredentials::default()
+                crate::fdo::ConnectionCredentials::default()
                     .set_process_id(creds.pid() as _)
                     .set_unix_user_id(creds.uid())
             })
@@ -361,7 +361,7 @@ fn get_unix_peer_creds_blocking(fd: RawFd) -> io::Result<ConnectionCredentials> 
         let fd = fd.as_raw_fd();
         let uid = nix::unistd::getpeereid(fd).map(|(uid, _)| uid.into())?;
         // FIXME: Handle pid fetching too.
-        Ok(ConnectionCredentials::default().set_unix_user_id(uid))
+        Ok(crate::fdo::ConnectionCredentials::default().set_unix_user_id(uid))
     }
 }
 
