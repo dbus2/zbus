@@ -38,7 +38,7 @@ impl Unix {
         let path = match (path, abs, dir, tmpdir) {
             (Some(p), None, None, None) => UnixPath::File(OsString::from(p)),
             #[cfg(target_os = "linux")]
-            (None, Some(p), None, None) => UnixPath::Abstract(p.as_bytes().to_owned()),
+            (None, Some(p), None, None) => UnixPath::Abstract(OsString::from(p)),
             #[cfg(not(target_os = "linux"))]
             (None, Some(_), None, None) => {
                 return Err(crate::Error::Address(
@@ -70,7 +70,7 @@ pub enum UnixPath {
     File(OsString),
     /// A abstract unix domain socket name.
     #[cfg(target_os = "linux")]
-    Abstract(Vec<u8>),
+    Abstract(OsString),
     /// A listenable address using the specified path, in which a socket file with a random file
     /// name starting with 'dbus-' will be created by the server. See [UNIX domain socket address]
     /// reference documentation.
@@ -111,7 +111,7 @@ impl Display for UnixPath {
             #[cfg(target_os = "linux")]
             UnixPath::Abstract(name) => {
                 f.write_str("abstract=")?;
-                encode_percents(f, name)?;
+                fmt_unix_path(f, name)?;
             }
             UnixPath::Dir(path) => {
                 f.write_str("dir=")?;

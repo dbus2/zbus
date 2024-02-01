@@ -92,7 +92,9 @@ impl Transport {
                     #[cfg(windows)]
                     UnixPath::File(path) => path,
                     #[cfg(target_os = "linux")]
-                    UnixPath::Abstract(name) => SocketAddr::from_abstract_name(name)?,
+                    UnixPath::Abstract(name) => {
+                        SocketAddr::from_abstract_name(name.as_encoded_bytes())?
+                    }
                     UnixPath::Dir(_) | UnixPath::TmpDir(_) => {
                         // you can't connect to a unix:dir
                         return Err(Error::Unsupported);
