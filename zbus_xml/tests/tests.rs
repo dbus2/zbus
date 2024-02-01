@@ -17,11 +17,11 @@ fn serde() -> Result<(), Box<dyn Error>> {
             .unwrap(),
         ArgDirection::In
     );
-    assert_eq!(node.nodes().len(), 3);
+    assert_eq!(node.nodes().len(), 4);
 
     let node_str: Node<'_> = example.try_into()?;
     assert_eq!(node_str.interfaces().len(), 1);
-    assert_eq!(node_str.nodes().len(), 3);
+    assert_eq!(node_str.nodes().len(), 4);
 
     let mut writer = Vec::with_capacity(128);
     node.to_writer(&mut writer).unwrap();

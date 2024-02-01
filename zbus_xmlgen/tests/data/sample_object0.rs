@@ -34,6 +34,12 @@ trait SampleInterface0 {
     #[dbus_proxy(property)]
     fn set_bar(&self, value: u8) -> zbus::Result<()>;
 
+    /// Foo-Bar property
+    #[dbus_proxy(property, name = "Foo-Bar")]
+    fn foo_bar(&self) -> zbus::Result<u8>;
+    #[dbus_proxy(property, name = "Foo-Bar")]
+    fn set_foo_bar(&self, value: u8) -> zbus::Result<()>;
+
     /// Matryoshkas property
     #[dbus_proxy(property)]
     #[allow(clippy::type_complexity)]

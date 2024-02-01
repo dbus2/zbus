@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use static_assertions::assert_impl_all;
 use std::io::{BufReader, Read, Write};
 
-use zbus_names::{InterfaceName, MemberName};
+use zbus_names::{InterfaceName, MemberName, PropertyName};
 use zvariant::CompleteType;
 
 /// Annotations are generic key/value pairs of metadata.
@@ -176,7 +176,7 @@ impl PropertyAccess {
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct Property<'a> {
     #[serde(rename = "@name", borrow)]
-    name: MemberName<'a>,
+    name: PropertyName<'a>,
 
     #[serde(rename = "@type")]
     ty: CompleteType<'a>,
@@ -191,7 +191,7 @@ assert_impl_all!(Property<'_>: Send, Sync, Unpin);
 
 impl<'a> Property<'a> {
     /// Returns the property name.
-    pub fn name(&self) -> MemberName<'_> {
+    pub fn name(&self) -> PropertyName<'_> {
         self.name.as_ref()
     }
 

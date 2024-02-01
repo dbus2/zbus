@@ -24,4 +24,5 @@
     </interface>
     <node name="child_of_sample_object"/>
     <node name="another_child_of_sample_object"/>
+    <node name="another_child_of_sample_object-with-dashes"/>
 </node>
