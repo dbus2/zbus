@@ -192,7 +192,7 @@ impl Transport {
                     "Autolaunch scopes are currently unsupported".to_owned(),
                 )),
                 None => {
-                    let addr = windows_autolaunch_bus_address()?;
+                    let addr: crate::Address = windows_autolaunch_bus_address()?.parse()?;
                     addr.connect().await
                 }
             },

@@ -28,7 +28,6 @@ use windows_sys::Win32::{
     },
 };
 
-use crate::Address;
 #[cfg(not(feature = "tokio"))]
 use uds_windows::UnixStream;
 
@@ -314,7 +313,7 @@ fn read_shm(name: &str) -> Result<Vec<u8>, crate::Error> {
     Ok(data.to_bytes().to_owned())
 }
 
-pub fn windows_autolaunch_bus_address() -> Result<Address, crate::Error> {
+pub fn windows_autolaunch_bus_address() -> Result<String, crate::Error> {
     let mutex = Mutex::new("DBusAutolaunchMutex")?;
     let _guard = mutex.lock();
 
@@ -322,7 +321,7 @@ pub fn windows_autolaunch_bus_address() -> Result<Address, crate::Error> {
     let addr = String::from_utf8(addr)
         .map_err(|e| crate::Error::Address(format!("Unable to parse address as UTF-8: {}", e)))?;
 
-    addr.parse()
+    Ok(addr)
 }
 
 #[cfg(test)]
