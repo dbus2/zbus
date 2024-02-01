@@ -79,7 +79,7 @@ into_value!(Fd<'a>, Fd);
 #[cfg(unix)]
 try_into_value_from_ref!(Fd<'a>, Fd);
 
-impl From<String> for Value<'static> {
+impl From<String> for Value<'_> {
     fn from(v: String) -> Self {
         Value::Str(crate::Str::from(v))
     }
