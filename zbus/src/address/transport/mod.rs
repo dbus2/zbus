@@ -27,7 +27,7 @@ use std::{
 };
 
 mod unix;
-pub use unix::{Unix, UnixPath};
+pub use unix::{Unix, UnixSocket};
 mod tcp;
 pub use tcp::{Tcp, TcpTransportFamily};
 #[cfg(windows)]
@@ -88,14 +88,14 @@ impl Transport {
                 // https://github.com/haraldh/rust_uds_windows/issues/14
                 let addr = match unix.take_path() {
                     #[cfg(unix)]
-                    UnixPath::File(path) => SocketAddr::from_pathname(path)?,
+                    UnixSocket::File(path) => SocketAddr::from_pathname(path)?,
                     #[cfg(windows)]
-                    UnixPath::File(path) => path,
+                    UnixSocket::File(path) => path,
                     #[cfg(target_os = "linux")]
-                    UnixPath::Abstract(name) => {
+                    UnixSocket::Abstract(name) => {
                         SocketAddr::from_abstract_name(name.as_encoded_bytes())?
                     }
-                    UnixPath::Dir(_) | UnixPath::TmpDir(_) => {
+                    UnixSocket::Dir(_) | UnixSocket::TmpDir(_) => {
                         // you can't connect to a unix:dir
                         return Err(Error::Unsupported);
                     }

@@ -1,4 +1,4 @@
-use super::{Transport, Unix, UnixPath};
+use super::{Transport, Unix, UnixSocket};
 use crate::{process::run, Result};
 use std::collections::HashMap;
 
@@ -39,7 +39,7 @@ impl Launchd {
             crate::Error::Address(format!("Unable to parse launchctl output as UTF-8: {}", e))
         })?;
 
-        Ok(Transport::Unix(Unix::new(UnixPath::File(
+        Ok(Transport::Unix(Unix::new(UnixSocket::File(
             addr.trim().into(),
         ))))
     }
