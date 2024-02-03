@@ -994,7 +994,7 @@ fn gen_proxy_signal(
             impl #signal_name_ident {
                 #[doc = "Try to construct a "]
                 #[doc = #signal_name]
-                #[doc = " from a [::zbus::message::Message]."]
+                #[doc = " from a [`zbus::Message`]."]
                 pub fn from_message<M>(msg: M) -> ::std::option::Option<Self>
                 where
                     M: ::std::convert::Into<#zbus::message::Message>,
