@@ -15,6 +15,7 @@ use zvariant::{ObjectPath, Str};
 use crate::{
     address::Address,
     blocking::Connection,
+    connection::socket::BoxedSplit,
     names::{UniqueName, WellKnownName},
     object_server::Interface,
     utils::block_on,
@@ -66,6 +67,11 @@ impl<'a> Builder<'a> {
     /// argument.
     pub fn tcp_stream(stream: TcpStream) -> Self {
         Self(crate::connection::Builder::tcp_stream(stream))
+    }
+
+    /// Create a builder for connection that will use the given socket.
+    pub fn socket<S: Into<BoxedSplit>>(socket: S) -> Self {
+        Self(crate::connection::Builder::socket(socket))
     }
 
     /// Specify the mechanisms to use during authentication.
