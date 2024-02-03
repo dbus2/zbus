@@ -1,6 +1,6 @@
-use std::ops::Deref;
 #[cfg(unix)]
-use std::os::fd::OwnedFd;
+use crate::OwnedFd;
+use std::ops::Deref;
 
 use crate::serialized::Context;
 
