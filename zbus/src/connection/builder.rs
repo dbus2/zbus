@@ -33,7 +33,7 @@ use crate::{
 
 use super::{
     handshake::{AuthMechanism, Authenticated},
-    socket::{BoxedSplit, ReadHalf, Socket, Split, WriteHalf},
+    socket::{BoxedSplit, ReadHalf, Split, WriteHalf},
 };
 
 const DEFAULT_MAX_QUEUED: usize = 64;
@@ -160,7 +160,7 @@ impl<'a> Builder<'a> {
     }
 
     /// Create a builder for connection that will use the given socket.
-    pub fn socket<S: Socket + 'static>(socket: S) -> Self {
+    pub fn socket<S: Into<BoxedSplit>>(socket: S) -> Self {
         Self::new(Target::Socket(socket.into()))
     }
 
