@@ -1014,6 +1014,11 @@ fn gen_proxy_signal(
                         _ => None,
                     }
                 }
+
+                #[doc = "The reference to the underlying [`zbus::Message`]."]
+                pub fn message(&self) -> &#zbus::message::Message {
+                    self.0.message()
+                }
             }
 
             impl ::std::convert::From<#signal_name_ident> for #zbus::message::Message {
