@@ -26,27 +26,27 @@ pub use object_server::ObjectServer;
 pub mod proxy;
 pub use proxy::Proxy;
 
-#[deprecated(note = "Use `proxy::Builder` instead")]
+#[deprecated(since = "4.0.0", note = "Use `proxy::Builder` instead")]
 #[doc(hidden)]
 pub use proxy::Builder as ProxyBuilder;
-#[deprecated(note = "Use `proxy::OwnerChangedIterator` instead")]
+#[deprecated(since = "4.0.0", note = "Use `proxy::OwnerChangedIterator` instead")]
 #[doc(hidden)]
 pub use proxy::OwnerChangedIterator;
-#[deprecated(note = "Use `proxy::PropertyChanged` instead")]
+#[deprecated(since = "4.0.0", note = "Use `proxy::PropertyChanged` instead")]
 #[doc(hidden)]
 pub use proxy::PropertyChanged;
-#[deprecated(note = "Use `proxy::PropertyIterator` instead")]
+#[deprecated(since = "4.0.0", note = "Use `proxy::PropertyIterator` instead")]
 #[doc(hidden)]
 pub use proxy::PropertyIterator;
-#[deprecated(note = "Use `proxy::SignalIterator` instead")]
+#[deprecated(since = "4.0.0", note = "Use `proxy::SignalIterator` instead")]
 #[doc(hidden)]
 pub use proxy::SignalIterator;
 
-#[deprecated(note = "Use `object_server::InterfaceRef` instead")]
+#[deprecated(since = "4.0.0", note = "Use `object_server::InterfaceRef` instead")]
 #[doc(hidden)]
 pub use object_server::InterfaceRef;
 
-#[deprecated(note = "Use `connection::Builder` instead")]
+#[deprecated(since = "4.0.0", note = "Use `connection::Builder` instead")]
 #[doc(hidden)]
 pub use connection::Builder;
 

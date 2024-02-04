@@ -50,34 +50,34 @@ pub use guid::*;
 pub mod message;
 pub use message::Message;
 
-#[deprecated(note = "Use `message::Builder` instead")]
+#[deprecated(since = "4.0.0", note = "Use `message::Builder` instead")]
 #[doc(hidden)]
 pub use message::Builder as MessageBuilder;
-#[deprecated(note = "Use `message::EndianSig` instead")]
+#[deprecated(since = "4.0.0", note = "Use `message::EndianSig` instead")]
 #[doc(hidden)]
 pub use message::EndianSig;
 #[doc(hidden)]
 pub use message::Flags as MessageFlags;
-#[deprecated(note = "Use `message::Header` instead")]
+#[deprecated(since = "4.0.0", note = "Use `message::Header` instead")]
 #[doc(hidden)]
 pub use message::Header as MessageHeader;
-#[deprecated(note = "Use `message::PrimaryHeader` instead")]
+#[deprecated(since = "4.0.0", note = "Use `message::PrimaryHeader` instead")]
 #[doc(hidden)]
 pub use message::PrimaryHeader as MessagePrimaryHeader;
-#[deprecated(note = "Use `message::Sequence` instead")]
+#[deprecated(since = "4.0.0", note = "Use `message::Sequence` instead")]
 #[doc(hidden)]
 pub use message::Sequence as MessageSequence;
-#[deprecated(note = "Use `message::Type` instead")]
+#[deprecated(since = "4.0.0", note = "Use `message::Type` instead")]
 #[doc(hidden)]
 pub use message::Type as MessageType;
-#[deprecated(note = "Use `message::NATIVE_ENDIAN_SIG` instead")]
+#[deprecated(since = "4.0.0", note = "Use `message::NATIVE_ENDIAN_SIG` instead")]
 #[doc(hidden)]
 pub use message::NATIVE_ENDIAN_SIG;
 
 pub mod connection;
 pub use connection::{handshake::AuthMechanism, Connection};
 
-#[deprecated(note = "Use `connection::Builder` instead")]
+#[deprecated(since = "4.0.0", note = "Use `connection::Builder` instead")]
 #[doc(hidden)]
 pub use connection::Builder as ConnectionBuilder;
 
@@ -89,60 +89,66 @@ pub use abstractions::*;
 pub mod match_rule;
 pub use match_rule::{MatchRule, OwnedMatchRule};
 
-#[deprecated(note = "Use `match_rule::Builder` instead")]
+#[deprecated(since = "4.0.0", note = "Use `match_rule::Builder` instead")]
 #[doc(hidden)]
 pub use match_rule::Builder as MatchRuleBuilder;
-#[deprecated(note = "Use `match_rule::PathSpec` instead")]
+#[deprecated(since = "4.0.0", note = "Use `match_rule::PathSpec` instead")]
 #[doc(hidden)]
 pub use match_rule::PathSpec as MatchRulePathSpec;
 
 pub mod proxy;
 pub use proxy::Proxy;
 
-#[deprecated(note = "Use `proxy::Builder` instead")]
+#[deprecated(since = "4.0.0", note = "Use `proxy::Builder` instead")]
 #[doc(hidden)]
 pub use proxy::Builder as ProxyBuilder;
-#[deprecated(note = "Use `proxy::CacheProperties` instead")]
+#[deprecated(since = "4.0.0", note = "Use `proxy::CacheProperties` instead")]
 #[doc(hidden)]
 pub use proxy::CacheProperties;
-#[deprecated(note = "Use `proxy::MethodFlags` instead")]
+#[deprecated(since = "4.0.0", note = "Use `proxy::MethodFlags` instead")]
 #[doc(hidden)]
 pub use proxy::MethodFlags;
-#[deprecated(note = "Use `proxy::OwnerChangedStream` instead")]
+#[deprecated(since = "4.0.0", note = "Use `proxy::OwnerChangedStream` instead")]
 #[doc(hidden)]
 pub use proxy::OwnerChangedStream;
-#[deprecated(note = "Use `proxy::PropertyChanged` instead")]
+#[deprecated(since = "4.0.0", note = "Use `proxy::PropertyChanged` instead")]
 #[doc(hidden)]
 pub use proxy::PropertyChanged;
-#[deprecated(note = "Use `proxy::PropertyStream` instead")]
+#[deprecated(since = "4.0.0", note = "Use `proxy::PropertyStream` instead")]
 #[doc(hidden)]
 pub use proxy::PropertyStream;
-#[deprecated(note = "Use `proxy::ProxyDefault` instead")]
+#[deprecated(since = "4.0.0", note = "Use `proxy::ProxyDefault` instead")]
 #[doc(hidden)]
 pub use proxy::ProxyDefault;
 
 pub mod object_server;
 pub use object_server::ObjectServer;
 
-#[deprecated(note = "Use `object_server::DispatchResult` instead")]
+#[deprecated(since = "4.0.0", note = "Use `object_server::DispatchResult` instead")]
 #[doc(hidden)]
 pub use object_server::DispatchResult;
-#[deprecated(note = "Use `object_server::Interface` instead")]
+#[deprecated(since = "4.0.0", note = "Use `object_server::Interface` instead")]
 #[doc(hidden)]
 pub use object_server::Interface;
-#[deprecated(note = "Use `object_server::InterfaceDeref` instead")]
+#[deprecated(since = "4.0.0", note = "Use `object_server::InterfaceDeref` instead")]
 #[doc(hidden)]
 pub use object_server::InterfaceDeref;
-#[deprecated(note = "Use `object_server::InterfaceDerefMut` instead")]
+#[deprecated(
+    since = "4.0.0",
+    note = "Use `object_server::InterfaceDerefMut` instead"
+)]
 #[doc(hidden)]
 pub use object_server::InterfaceDerefMut;
-#[deprecated(note = "Use `object_server::InterfaceRef` instead")]
+#[deprecated(since = "4.0.0", note = "Use `object_server::InterfaceRef` instead")]
 #[doc(hidden)]
 pub use object_server::InterfaceRef;
-#[deprecated(note = "Use `object_server::ResponseDispatchNotifier` instead")]
+#[deprecated(
+    since = "4.0.0",
+    note = "Use `object_server::ResponseDispatchNotifier` instead"
+)]
 #[doc(hidden)]
 pub use object_server::ResponseDispatchNotifier;
-#[deprecated(note = "Use `object_server::SignalContext` instead")]
+#[deprecated(since = "4.0.0", note = "Use `object_server::SignalContext` instead")]
 #[doc(hidden)]
 pub use object_server::SignalContext;
 
@@ -152,7 +158,7 @@ pub use utils::*;
 #[macro_use]
 pub mod fdo;
 
-#[deprecated(note = "Use `connection::Socket` instead")]
+#[deprecated(since = "4.0.0", note = "Use `connection::Socket` instead")]
 #[doc(hidden)]
 pub use connection::Socket;
 

@@ -1,9 +1,9 @@
-#[cfg(unix)]
-use std::os::fd::OwnedFd;
 use std::{
     io::{Cursor, Write},
     sync::Arc,
 };
+#[cfg(unix)]
+use zvariant::OwnedFd;
 
 use enumflags2::BitFlags;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};

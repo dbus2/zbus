@@ -191,7 +191,7 @@ mod tests {
     #[cfg(windows)]
     use crate::address::transport::{Autolaunch, AutolaunchScope};
     use crate::{
-        address::transport::{Unix, UnixPath},
+        address::transport::{Unix, UnixSocket},
         Error,
     };
     use std::str::FromStr;
@@ -240,17 +240,17 @@ mod tests {
         }
         assert_eq!(
             Address::from_str("unix:path=/tmp/dbus-foo").unwrap(),
-            Transport::Unix(Unix::new(UnixPath::File("/tmp/dbus-foo".into()))).into(),
+            Transport::Unix(Unix::new(UnixSocket::File("/tmp/dbus-foo".into()))).into(),
         );
         #[cfg(target_os = "linux")]
         assert_eq!(
             Address::from_str("unix:abstract=/tmp/dbus-foo").unwrap(),
-            Transport::Unix(Unix::new(UnixPath::Abstract("/tmp/dbus-foo".into()))).into(),
+            Transport::Unix(Unix::new(UnixSocket::Abstract("/tmp/dbus-foo".into()))).into(),
         );
         let guid = crate::Guid::generate();
         assert_eq!(
             Address::from_str(&format!("unix:path=/tmp/dbus-foo,guid={guid}")).unwrap(),
-            Address::from(Transport::Unix(Unix::new(UnixPath::File(
+            Address::from(Transport::Unix(Unix::new(UnixSocket::File(
                 "/tmp/dbus-foo".into()
             ))))
             .set_guid(guid.clone())
@@ -320,32 +320,32 @@ mod tests {
         );
         assert_eq!(
             Address::from_str("unix:dir=/some/dir").unwrap(),
-            Transport::Unix(Unix::new(UnixPath::Dir("/some/dir".into()))).into(),
+            Transport::Unix(Unix::new(UnixSocket::Dir("/some/dir".into()))).into(),
         );
         assert_eq!(
             Address::from_str("unix:tmpdir=/some/dir").unwrap(),
-            Transport::Unix(Unix::new(UnixPath::TmpDir("/some/dir".into()))).into(),
+            Transport::Unix(Unix::new(UnixSocket::TmpDir("/some/dir".into()))).into(),
         );
     }
 
     #[test]
     fn stringify_dbus_addresses() {
         assert_eq!(
-            Address::from(Transport::Unix(Unix::new(UnixPath::File(
+            Address::from(Transport::Unix(Unix::new(UnixSocket::File(
                 "/tmp/dbus-foo".into()
             ))))
             .to_string(),
             "unix:path=/tmp/dbus-foo",
         );
         assert_eq!(
-            Address::from(Transport::Unix(Unix::new(UnixPath::Dir(
+            Address::from(Transport::Unix(Unix::new(UnixSocket::Dir(
                 "/tmp/dbus-foo".into()
             ))))
             .to_string(),
             "unix:dir=/tmp/dbus-foo",
         );
         assert_eq!(
-            Address::from(Transport::Unix(Unix::new(UnixPath::TmpDir(
+            Address::from(Transport::Unix(Unix::new(UnixSocket::TmpDir(
                 "/tmp/dbus-foo".into()
             ))))
             .to_string(),
@@ -354,7 +354,7 @@ mod tests {
         // FIXME: figure out how to handle abstract on Windows
         #[cfg(target_os = "linux")]
         assert_eq!(
-            Address::from(Transport::Unix(Unix::new(UnixPath::Abstract(
+            Address::from(Transport::Unix(Unix::new(UnixSocket::Abstract(
                 "/tmp/dbus-foo".into()
             ))))
             .to_string(),
