@@ -80,7 +80,7 @@ winapi = { version = "0.3", features = [
 uds_windows = "1.0.2"
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.26.0", default-features = false, features = ["socket", "uio"] }
+nix = { version = "0.26.0", default-features = false, features = ["socket", "uio", "user"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 # FIXME: This should only be enabled if async-io feature is enabled but currently
