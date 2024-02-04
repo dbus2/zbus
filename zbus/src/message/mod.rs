@@ -205,25 +205,37 @@ impl Message {
     }
 
     /// The object to send a call to, or the object a signal is emitted from.
-    #[deprecated(note = "Use `Message::header` with `message::Header::path` instead")]
+    #[deprecated(
+        since = "4.0.0",
+        note = "Use `Message::header` with `message::Header::path` instead"
+    )]
     pub fn path(&self) -> Option<ObjectPath<'_>> {
         self.inner.quick_fields.path(self)
     }
 
     /// The interface to invoke a method call on, or that a signal is emitted from.
-    #[deprecated(note = "Use `Message::header` with `message::Header::interface` instead")]
+    #[deprecated(
+        since = "4.0.0",
+        note = "Use `Message::header` with `message::Header::interface` instead"
+    )]
     pub fn interface(&self) -> Option<InterfaceName<'_>> {
         self.inner.quick_fields.interface(self)
     }
 
     /// The member, either the method name or signal name.
-    #[deprecated(note = "Use `Message::header` with `message::Header::member` instead")]
+    #[deprecated(
+        since = "4.0.0",
+        note = "Use `Message::header` with `message::Header::member` instead"
+    )]
     pub fn member(&self) -> Option<MemberName<'_>> {
         self.inner.quick_fields.member(self)
     }
 
     /// The serial number of the message this message is a reply to.
-    #[deprecated(note = "Use `Message::header` with `message::Header::reply_serial` instead")]
+    #[deprecated(
+        since = "4.0.0",
+        note = "Use `Message::header` with `message::Header::reply_serial` instead"
+    )]
     pub fn reply_serial(&self) -> Option<NonZeroU32> {
         self.inner.quick_fields.reply_serial()
     }
