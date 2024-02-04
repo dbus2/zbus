@@ -1,6 +1,8 @@
+#[cfg(target_os = "linux")]
+use std::ffi::OsString;
 use std::{
     collections::HashMap,
-    ffi::{OsStr, OsString},
+    ffi::OsStr,
     fmt::{Display, Formatter},
     path::PathBuf,
 };
