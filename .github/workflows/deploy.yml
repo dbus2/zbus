@@ -6,7 +6,6 @@ on:
       - zbus-*
     paths:
       - book/**/*
-      - book-1.0/**/*
       - .github/workflows/deploy.yml
 
 jobs:
@@ -29,10 +28,8 @@ jobs:
       - name: Build Books
         run: |
           mdbook build book
-          mdbook build book-1.0
           mkdir -p public/1.0
           cp -r ./book/book/* ./public
-          cp -r ./book-1.0/book/* ./public/1.0/
       - name: Deploy 🚀
         uses: JamesIves/github-pages-deploy-action@4.1.7
         with:
