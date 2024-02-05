@@ -8,6 +8,7 @@ use std::{
 };
 
 use clap::Parser;
+use snakecase::ascii::to_snakecase;
 use zbus::{
     blocking::{connection, fdo::IntrospectableProxy, Connection},
     names::BusName,
@@ -99,6 +100,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .split('.')
                     .last()
                     .expect("Failed to split name");
+                let filename = to_snakecase(filename);
                 std::fs::write(format!("{}.rs", &filename), output)?;
                 println!("Generated code for `{}` in {}.rs", interface_name, filename);
             }
