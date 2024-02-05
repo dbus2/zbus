@@ -436,7 +436,7 @@ code.
 The tool can be used to generate rust code directly from a D-Bus service running on our system:
 
 ```bash
-zbus-xmlgen --session \
+zbus-xmlgen session \
   org.freedesktop.Notifications \
   /org/freedesktop/Notifications
 ```
@@ -519,7 +519,7 @@ You should get a similar output:
 Save the output to a `notify.xml` file. Then call:
 
 ```bash
-zbus-xmlgen notify.xml
+zbus-xmlgen file notify.xml
 ```
 
 This will give back effortlessly the corresponding Rust traits boilerplate
