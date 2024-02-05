@@ -40,7 +40,7 @@ impl<'i> GenTrait<'i> {
         let idx = iface.name().rfind('.').unwrap() + 1;
         let name = &iface.name()[idx..];
 
-        write!(w, "#[dbus_proxy(interface = \"{}\"", iface.name())?;
+        write!(w, "#[proxy(interface = \"{}\"", iface.name())?;
         if let Some(service) = self.service {
             write!(w, ", default_service = \"{service}\"")?;
         }
@@ -61,7 +61,7 @@ impl<'i> GenTrait<'i> {
             writeln!(w)?;
             writeln!(w, "    /// {} method", m.name())?;
             if pascal_case(&name) != m.name().as_str() {
-                writeln!(w, "    #[dbus_proxy(name = \"{}\")]", m.name())?;
+                writeln!(w, "    #[zbus(name = \"{}\")]", m.name())?;
             }
             hide_clippy_lints(w, m)?;
             writeln!(w, "    fn {name}({inputs}){output};")?;
@@ -75,9 +75,9 @@ impl<'i> GenTrait<'i> {
             writeln!(w)?;
             writeln!(w, "    /// {} signal", signal.name())?;
             if pascal_case(&name) != signal.name().as_str() {
-                writeln!(w, "    #[dbus_proxy(signal, name = \"{}\")]", signal.name())?;
+                writeln!(w, "    #[zbus(signal, name = \"{}\")]", signal.name())?;
             } else {
-                writeln!(w, "    #[dbus_proxy(signal)]")?;
+                writeln!(w, "    #[zbus(signal)]")?;
             }
             writeln!(w, "    fn {name}({args}) -> zbus::Result<()>;",)?;
         }
@@ -87,9 +87,9 @@ impl<'i> GenTrait<'i> {
         for p in props {
             let name = to_identifier(&to_snakecase(p.name().as_str()));
             let fn_attribute = if pascal_case(&name) != p.name().as_str() {
-                format!("    #[dbus_proxy(property, name = \"{}\")]", p.name())
+                format!("    #[zbus(property, name = \"{}\")]", p.name())
             } else {
-                "    #[dbus_proxy(property)]".to_string()
+                "    #[zbus(property)]".to_string()
             };
 
             writeln!(w)?;

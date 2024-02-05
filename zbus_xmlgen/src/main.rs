@@ -240,7 +240,7 @@ fn write_doc_header<W: std::fmt::Write>(
     write!(
         w,
         "
-        use zbus::dbus_proxy;
+        use zbus::proxy;
         "
     )?;
 

@@ -1,4 +1,4 @@
-#[dbus_proxy(interface = "com.example.SampleInterface0", assume_defaults = true)]
+#[proxy(interface = "com.example.SampleInterface0", assume_defaults = true)]
 trait SampleInterface0 {
     /// BarplexSig method
     fn barplex_sig(
@@ -46,27 +46,27 @@ trait SampleInterface0 {
     ) -> zbus::Result<()>;
 
     /// Changed signal
-    #[dbus_proxy(signal)]
+    #[zbus(signal)]
     fn changed(&self, new_value: bool) -> zbus::Result<()>;
 
     /// Changed2 signal
-    #[dbus_proxy(signal)]
+    #[zbus(signal)]
     fn changed2(&self, new_value: bool, new_value2: bool) -> zbus::Result<()>;
 
     /// Bar property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn bar(&self) -> zbus::Result<u8>;
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn set_bar(&self, value: u8) -> zbus::Result<()>;
 
     /// Foo-Bar property
-    #[dbus_proxy(property, name = "Foo-Bar")]
+    #[zbus(property, name = "Foo-Bar")]
     fn foo_bar(&self) -> zbus::Result<u8>;
-    #[dbus_proxy(property, name = "Foo-Bar")]
+    #[zbus(property, name = "Foo-Bar")]
     fn set_foo_bar(&self, value: u8) -> zbus::Result<()>;
 
     /// Matryoshkas property
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     #[allow(clippy::type_complexity)]
     fn matryoshkas(
         &self,
