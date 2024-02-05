@@ -144,13 +144,7 @@ impl<'i> Display for GenTrait<'i> {
             let mut unformatted = String::new();
             self.write_interface(&mut unformatted)?;
 
-            let formatted = match format_generated_code(&unformatted) {
-                Ok(formatted) => formatted,
-                Err(e) => {
-                    eprintln!("Failed to format generated code: {}", e);
-                    unformatted
-                }
-            };
+            let formatted = format_generated_code(&unformatted).unwrap_or(unformatted);
 
             write!(f, "{}", formatted)
         } else {
