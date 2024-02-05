@@ -15,6 +15,7 @@ macro_rules! gen_diff {
             interface: &node.interfaces()[0],
             path: None,
             service: None,
+            format: true,
         }
         .to_string();
 
