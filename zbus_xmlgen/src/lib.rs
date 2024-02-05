@@ -123,7 +123,7 @@ fn write_doc_header<W: std::fmt::Write>(
         w,
         "//!
         //! [Writing a client proxy]: https://dbus2.github.io/zbus/client.html
-        //! [D-Bus standard interfaces]: https://dbus.freedesktop.org/doc/dbus-specification.html,
+        //! [D-Bus standard interfaces]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces,
         use zbus::proxy;
         "
     )?;
