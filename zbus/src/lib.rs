@@ -75,6 +75,8 @@ pub use message::Type as MessageType;
 pub use message::NATIVE_ENDIAN_SIG;
 
 pub mod connection;
+/// Alias for `connection` module, for convenience.
+pub use connection as conn;
 pub use connection::{handshake::AuthMechanism, Connection};
 
 #[deprecated(since = "4.0.0", note = "Use `connection::Builder` instead")]
