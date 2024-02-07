@@ -208,7 +208,7 @@ where
 pub struct PropertyStream<'a, T> {
     name: &'a str,
     proxy: Proxy<'a>,
-    changed_listener: Pin<Box<EventListener>>,
+    changed_listener: EventListener,
     phantom: std::marker::PhantomData<T>,
 }
 

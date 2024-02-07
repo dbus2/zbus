@@ -1,6 +1,7 @@
 //! Blocking connection API.
 
 use enumflags2::BitFlags;
+use event_listener::Listener;
 use static_assertions::assert_impl_all;
 use std::{
     io,
@@ -288,26 +289,22 @@ assert_impl_all!(Activity: Send, Sync, Unpin);
 
 impl Activity {
     /// Wait indefinitely for the activity.
-    pub fn wait(mut self) {
-        self.inner.listener.as_mut().wait()
+    pub fn wait(self) {
+        self.inner.listener.wait()
     }
 
     /// Wait for the activity for the given amount of time.
     ///
     /// Returns `true` if an activity occurred, `false` if it timedout.
-    pub fn wait_timeout(mut self, timeout: Duration) -> bool {
-        self.inner.listener.as_mut().wait_timeout(timeout).is_some()
+    pub fn wait_timeout(self, timeout: Duration) -> bool {
+        self.inner.listener.wait_timeout(timeout).is_some()
     }
 
     /// Wait for the activity until the given time.
     ///
     /// Returns `true` if an activity occurred, `false` if the deadline was reached.
-    pub fn wait_deadline(mut self, deadline: Instant) -> bool {
-        self.inner
-            .listener
-            .as_mut()
-            .wait_deadline(deadline)
-            .is_some()
+    pub fn wait_deadline(self, deadline: Instant) -> bool {
+        self.inner.listener.wait_deadline(deadline).is_some()
     }
 }
 

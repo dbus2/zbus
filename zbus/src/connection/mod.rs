@@ -1312,7 +1312,7 @@ enum NameStatus {
 /// Use [`Connection::monitor_activity`] to get an instance of this type.
 #[derive(Debug)]
 pub struct Activity {
-    pub(crate) listener: Pin<Box<EventListener>>,
+    pub(crate) listener: EventListener,
 }
 
 assert_impl_all!(Activity: Send, Sync, Unpin);
@@ -1321,7 +1321,7 @@ impl Future for Activity {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        Future::poll(self.listener.as_mut(), cx)
+        Future::poll(Pin::new(&mut self.as_mut().listener), cx)
     }
 }
 

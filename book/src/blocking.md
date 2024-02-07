@@ -134,7 +134,7 @@ the beginning of this chapter for details on why and a possible workaround.
 # use std::error::Error;
 # use zbus::{blocking::connection, interface, fdo, SignalContext};
 #
-use event_listener::Event;
+use event_listener::{Event, Listener};
 
 struct Greeter {
     name: String,
@@ -185,13 +185,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         name: "GreeterName".to_string(),
         done: event_listener::Event::new(),
     };
-    let mut done_listener = greeter.done.listen();
+    let done_listener = greeter.done.listen();
     let _handle = connection::Builder::session()?
         .name("org.zbus.MyGreeter")?
         .serve_at("/org/zbus/MyGreeter", greeter)?
         .build()?;
 
-    done_listener.as_mut().wait();
+    done_listener.wait();
 
     Ok(())
 }
