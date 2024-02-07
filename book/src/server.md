@@ -209,7 +209,7 @@ synchronize with the interface handlers from outside, thanks to the `event_liste
 ```rust,no_run
 # use zbus::{object_server::SignalContext, connection::Builder, interface, fdo, Result};
 #
-use event_listener::Event;
+use event_listener::{Event, Listener};
 
 struct Greeter {
     name: String,
@@ -262,14 +262,14 @@ async fn main() -> Result<()> {
         name: "GreeterName".to_string(),
         done: event_listener::Event::new(),
     };
-    let mut done_listener = greeter.done.listen();
+    let done_listener = greeter.done.listen();
     let _connection = Builder::session()?
         .name("org.zbus.MyGreeter")?
         .serve_at("/org/zbus/MyGreeter", greeter)?
         .build()
         .await?;
 
-    done_listener.as_mut().wait();
+    done_listener.wait();
 
     Ok(())
 }
