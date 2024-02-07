@@ -20,6 +20,8 @@ time = ["zvariant/time"]
 chrono = ["zvariant/chrono"]
 # Enables ser/de of `Option<T>` as an array of 0 or 1 elements.
 option-as-array = ["zvariant/option-as-array"]
+# Enables API that is only needed for bus implementations.
+bus-impl = []
 windows-gdbus = []
 async-io = [
   "dep:async-io",

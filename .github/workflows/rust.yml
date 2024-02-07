@@ -255,4 +255,4 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@v2
       - name: Check documentation build
-        run: cargo doc
+        run: cargo doc --all-features
