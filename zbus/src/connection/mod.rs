@@ -1211,13 +1211,11 @@ impl Connection {
         Builder::system()?.build().await
     }
 
-    /// Returns an [`Activity`] instance to wait for various connection activity.
+    /// Returns a listener, notified on various connection activity.
     ///
     /// This function is meant for the caller to implement idle or timeout on inactivity.
-    pub fn monitor_activity(&self) -> Activity {
-        Activity {
-            listener: self.inner.activity_event.listen(),
-        }
+    pub fn monitor_activity(&self) -> EventListener {
+        self.inner.activity_event.listen()
     }
 
     /// Returns the peer credentials.
@@ -1305,24 +1303,6 @@ enum NameStatus {
     Owner(#[allow(unused)] Option<Task<()>>),
     // The task waits for name acquisition signal.
     Queued(#[allow(unused)] Task<()>),
-}
-
-/// A future that resolves when there is activity on the connection.
-///
-/// Use [`Connection::monitor_activity`] to get an instance of this type.
-#[derive(Debug)]
-pub struct Activity {
-    pub(crate) listener: EventListener,
-}
-
-assert_impl_all!(Activity: Send, Sync, Unpin);
-
-impl Future for Activity {
-    type Output = ();
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        Future::poll(Pin::new(&mut self.as_mut().listener), cx)
-    }
 }
 
 #[cfg(test)]
