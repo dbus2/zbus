@@ -26,7 +26,7 @@ use zvariant::{ObjectPath, Str};
 use crate::{
     address::{self, Address},
     async_lock::RwLock,
-    names::{InterfaceName, UniqueName, WellKnownName},
+    names::{InterfaceName, WellKnownName},
     object_server::Interface,
     Connection, Error, Executor, Guid, OwnedGuid, Result,
 };
@@ -69,7 +69,8 @@ pub struct Builder<'a> {
     interfaces: Interfaces<'a>,
     names: HashSet<WellKnownName<'a>>,
     auth_mechanisms: Option<VecDeque<AuthMechanism>>,
-    unique_name: Option<UniqueName<'a>>,
+    #[cfg(feature = "bus-impl")]
+    unique_name: Option<crate::names::UniqueName<'a>>,
     cookie_context: Option<super::handshake::CookieContext<'a>>,
     cookie_id: Option<usize>,
 }
@@ -303,15 +304,18 @@ impl<'a> Builder<'a> {
 
     /// Sets the unique name of the connection.
     ///
+    /// This method is only available when the `bus-impl` feature is enabled.
+    ///
     /// # Panics
     ///
     /// This method panics if the to-be-created connection is not a peer-to-peer connection.
     /// It will always panic if the connection is to a message bus as it's the bus that assigns
     /// peers their unique names. This is mainly provided for bus implementations. All other users
     /// should not need to use this method.
+    #[cfg(feature = "bus-impl")]
     pub fn unique_name<U>(mut self, unique_name: U) -> Result<Self>
     where
-        U: TryInto<UniqueName<'a>>,
+        U: TryInto<crate::names::UniqueName<'a>>,
         U::Error: Into<Error>,
     {
         if !self.p2p {
@@ -380,6 +384,7 @@ impl<'a> Builder<'a> {
 
         let mut conn = Connection::new(auth, !self.p2p, executor).await?;
         conn.set_max_queued(self.max_queued.unwrap_or(DEFAULT_MAX_QUEUED));
+        #[cfg(feature = "bus-impl")]
         if let Some(unique_name) = self.unique_name {
             conn.set_unique_name(unique_name)?;
         }
@@ -444,6 +449,7 @@ impl<'a> Builder<'a> {
             interfaces: HashMap::new(),
             names: HashSet::new(),
             auth_mechanisms: None,
+            #[cfg(feature = "bus-impl")]
             unique_name: None,
             cookie_id: None,
             cookie_context: None,
