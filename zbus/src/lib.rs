@@ -15,6 +15,8 @@ mod doctests {
     // Book markdown checks
     doc_comment::doctest!("../../book/src/client.md");
     doc_comment::doctest!("../../book/src/concepts.md");
+    // The connection chapter contains a p2p example.
+    #[cfg(feature = "p2p")]
     doc_comment::doctest!("../../book/src/connection.md");
     doc_comment::doctest!("../../book/src/contributors.md");
     doc_comment::doctest!("../../book/src/introduction.md");
@@ -934,7 +936,7 @@ mod tests {
 
     #[test(tokio::test(flavor = "multi_thread", worker_threads = 2))]
     // Issue specific to tokio runtime.
-    #[cfg(all(unix, feature = "tokio"))]
+    #[cfg(all(unix, feature = "tokio", feature = "p2p"))]
     #[instrument]
     async fn issue_279() {
         // On failure to read from the socket, we were closing the error channel from the sender

@@ -271,6 +271,7 @@ impl From<crate::Connection> for Connection {
     }
 }
 
+#[cfg(feature = "p2p")]
 #[cfg(all(test, unix))]
 mod tests {
     use event_listener::Listener;

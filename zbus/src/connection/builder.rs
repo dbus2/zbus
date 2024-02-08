@@ -23,12 +23,14 @@ use vsock::VsockStream;
 
 use zvariant::{ObjectPath, Str};
 
+#[cfg(feature = "p2p")]
+use crate::Guid;
 use crate::{
     address::{self, Address},
     async_lock::RwLock,
     names::{InterfaceName, WellKnownName},
     object_server::Interface,
-    Connection, Error, Executor, Guid, OwnedGuid, Result,
+    Connection, Error, Executor, OwnedGuid, Result,
 };
 
 use super::{
@@ -61,8 +63,10 @@ type Interfaces<'a> =
 pub struct Builder<'a> {
     target: Option<Target>,
     max_queued: Option<usize>,
-    // This is only set for server case.
+    // This is only set for p2p server case.
+    #[cfg(feature = "p2p")]
     guid: Option<Guid<'a>>,
+    #[cfg(feature = "p2p")]
     p2p: bool,
     internal_executor: bool,
     #[derivative(Debug = "ignore")]
@@ -204,6 +208,9 @@ impl<'a> Builder<'a> {
     }
 
     /// The to-be-created connection will be a peer-to-peer connection.
+    ///
+    /// This method is only available when the `p2p` feature is enabled.
+    #[cfg(feature = "p2p")]
     pub fn p2p(mut self) -> Self {
         self.p2p = true;
 
@@ -214,6 +221,9 @@ impl<'a> Builder<'a> {
     ///
     /// The to-be-created connection will wait for incoming client authentication handshake and
     /// negotiation messages, for peer-to-peer communications after successful creation.
+    ///
+    /// This method is only available when the `p2p` feature is enabled.
+    #[cfg(feature = "p2p")]
     pub fn server<G>(mut self, guid: G) -> Result<Self>
     where
         G: TryInto<Guid<'a>>,
@@ -346,7 +356,9 @@ impl<'a> Builder<'a> {
     }
 
     async fn build_(mut self, executor: Executor<'static>) -> Result<Connection> {
+        #[allow(unused_mut)]
         let (mut stream, server_guid) = self.target_connect().await?;
+        #[cfg(feature = "p2p")]
         let mut auth = match self.guid {
             None => {
                 // SASL Handshake
@@ -377,11 +389,19 @@ impl<'a> Builder<'a> {
                 .await?
             }
         };
+
+        #[cfg(not(feature = "p2p"))]
+        let mut auth = Authenticated::client(stream, server_guid, self.auth_mechanisms).await?;
+
         // SAFETY: `Authenticated` is always built with these fields set to `Some`.
         let socket_read = auth.socket_read.take().unwrap();
         let already_received_bytes = auth.already_received_bytes.take().unwrap();
 
-        let mut conn = Connection::new(auth, !self.p2p, executor).await?;
+        #[cfg(feature = "p2p")]
+        let is_bus_conn = !self.p2p;
+        #[cfg(not(feature = "p2p"))]
+        let is_bus_conn = true;
+        let mut conn = Connection::new(auth, is_bus_conn, executor).await?;
         conn.set_max_queued(self.max_queued.unwrap_or(DEFAULT_MAX_QUEUED));
         #[cfg(feature = "bus-impl")]
         if let Some(unique_name) = self.unique_name {
@@ -413,7 +433,7 @@ impl<'a> Builder<'a> {
         // Start the socket reader task.
         conn.init_socket_reader(socket_read, already_received_bytes);
 
-        if !self.p2p {
+        if is_bus_conn {
             // Now that the server has approved us, we must send the bus Hello, as per specs
             conn.hello_bus().await?;
         }
@@ -441,8 +461,10 @@ impl<'a> Builder<'a> {
     fn new(target: Target) -> Self {
         Self {
             target: Some(target),
+            #[cfg(feature = "p2p")]
             p2p: false,
             max_queued: None,
+            #[cfg(feature = "p2p")]
             guid: None,
             internal_executor: true,
             interfaces: HashMap::new(),

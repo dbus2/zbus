@@ -12,9 +12,11 @@ use uds_windows::UnixStream;
 
 use zvariant::{ObjectPath, Str};
 
+#[cfg(feature = "p2p")]
+use crate::Guid;
 use crate::{
     address::Address, blocking::Connection, connection::socket::BoxedSplit, names::WellKnownName,
-    object_server::Interface, utils::block_on, AuthMechanism, Error, Guid, Result,
+    object_server::Interface, utils::block_on, AuthMechanism, Error, Result,
 };
 
 /// A builder for [`zbus::blocking::Connection`].
@@ -102,6 +104,9 @@ impl<'a> Builder<'a> {
     }
 
     /// The to-be-created connection will be a peer-to-peer connection.
+    ///
+    /// This method is only available when the `p2p` feature is enabled.
+    #[cfg(feature = "p2p")]
     pub fn p2p(self) -> Self {
         Self(self.0.p2p())
     }
@@ -110,6 +115,9 @@ impl<'a> Builder<'a> {
     ///
     /// The to-be-created connection will wait for incoming client authentication handshake and
     /// negotiation messages, for peer-to-peer communications after successful creation.
+    ///
+    /// This method is only available when the `p2p` feature is enabled.
+    #[cfg(feature = "p2p")]
     pub fn server<G>(self, guid: G) -> Result<Self>
     where
         G: TryInto<Guid<'a>>,
