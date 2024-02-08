@@ -862,19 +862,6 @@ where
     }
 }
 
-impl<'de, 'd, 'sig, 'f, B> crate::de::GetDeserializeCommon<'de, 'sig, 'f, B>
-    for &'d mut Deserializer<'de, 'sig, 'f, B>
-where
-    B: byteorder::ByteOrder,
-{
-    fn common_mut<'dr>(self) -> &'dr mut crate::de::DeserializerCommon<'de, 'sig, 'f, B>
-    where
-        Self: 'dr,
-    {
-        &mut self.0
-    }
-}
-
 impl<'de, 'd, 'sig, 'f, B> EnumAccess<'de>
     for crate::de::Enum<B, &'d mut Deserializer<'de, 'sig, 'f, B>>
 where

@@ -598,15 +598,6 @@ where
     }
 }
 
-pub(crate) trait GetDeserializeCommon<'de, 'sig, 'f, B>
-where
-    B: byteorder::ByteOrder,
-{
-    fn common_mut<'d>(self) -> &'d mut DeserializerCommon<'de, 'sig, 'f, B>
-    where
-        Self: 'd;
-}
-
 // Enum handling is very generic so it can be here and specific deserializers can use this.
 pub(crate) struct Enum<B, D> {
     pub(crate) de: D,
@@ -614,10 +605,10 @@ pub(crate) struct Enum<B, D> {
     pub(crate) phantom: PhantomData<B>,
 }
 
-impl<'de, 'sig, 'f, B, D> VariantAccess<'de> for Enum<B, D>
+impl<'de, B, D> VariantAccess<'de> for Enum<B, D>
 where
     B: byteorder::ByteOrder,
-    D: de::Deserializer<'de, Error = Error> + GetDeserializeCommon<'de, 'sig, 'f, B>,
+    D: de::Deserializer<'de, Error = Error>,
 {
     type Error = Error;
 
