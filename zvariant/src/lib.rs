@@ -10,6 +10,7 @@
     // W/o this, we seem to get some bogus warning about `extern crate zbus`.
     allow(unused_extern_crates),
 )))]
+#![cfg_attr(test, recursion_limit = "256")]
 
 #[macro_use]
 mod utils;
