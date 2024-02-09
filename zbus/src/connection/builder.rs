@@ -304,14 +304,13 @@ impl<'a> Builder<'a> {
 
     /// Sets the unique name of the connection.
     ///
-    /// This method is only available when the `bus-impl` feature is enabled.
+    /// This is mainly provided for bus implementations. All other users should not need to use this
+    /// method. Hence why this method is only available when the `bus-impl` feature is enabled.
     ///
     /// # Panics
     ///
-    /// This method panics if the to-be-created connection is not a peer-to-peer connection.
-    /// It will always panic if the connection is to a message bus as it's the bus that assigns
-    /// peers their unique names. This is mainly provided for bus implementations. All other users
-    /// should not need to use this method.
+    /// It will panic if the connection is to a message bus as it's the bus that assigns
+    /// peers their unique names.
     #[cfg(feature = "bus-impl")]
     pub fn unique_name<U>(mut self, unique_name: U) -> Result<Self>
     where

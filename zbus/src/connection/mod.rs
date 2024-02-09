@@ -793,13 +793,13 @@ impl Connection {
 
     /// Sets the unique name of the connection (if not already set).
     ///
-    /// This method is only available when the `bus-impl` feature is enabled.
+    /// This is mainly provided for bus implementations. All other users should not need to use this
+    /// method. Hence why this method is only available when the `bus-impl` feature is enabled.
     ///
     /// # Panics
     ///
     /// This method panics if the unique name is already set. It will always panic if the connection
-    /// is to a message bus as it's the bus that assigns peers their unique names. This is mainly
-    /// provided for bus implementations. All other users should not need to use this method.
+    /// is to a message bus as it's the bus that assigns peers their unique names.
     #[cfg(feature = "bus-impl")]
     pub fn set_unique_name<U>(&self, unique_name: U) -> Result<()>
     where
