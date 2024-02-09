@@ -190,7 +190,7 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@v2
-      - name: Build and Test
+      - name: Test
         run: |
           $env:PATH += ";C:\bin"
           Start-Process dbus-daemon.exe --config-file=CI/win32-session.conf
@@ -198,7 +198,10 @@ jobs:
           # tokio feature
           cargo test --no-default-features --features tokio
 
+      - name: Test gdbus feature
+        run: |
           $env:DBUS_SESSION_BUS_ADDRESS = $null
+          $env:PATH += ";C:\bin"
           # This is an undocumented implementation detail, but easier and faster than calling the gdbus C library
           Start-Process gdbus.exe _win32_run_session_bus
           # The gdbus process above will exit when idle for more than three seconds, usually right in the middle
