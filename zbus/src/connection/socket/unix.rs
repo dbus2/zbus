@@ -1,6 +1,5 @@
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
-use std::io;
 #[cfg(unix)]
 use std::os::unix::io::{AsRawFd, BorrowedFd, FromRawFd, RawFd};
 #[cfg(all(unix, not(feature = "tokio")))]
@@ -10,7 +9,7 @@ use std::sync::Arc;
 #[cfg(unix)]
 use std::{
     future::poll_fn,
-    io::{IoSlice, IoSliceMut},
+    io::{self, IoSlice, IoSliceMut},
     os::fd::OwnedFd,
     task::Poll,
 };
@@ -23,17 +22,13 @@ use nix::{
     sys::socket::{recvmsg, sendmsg, ControlMessage, ControlMessageOwned, MsgFlags, UnixAddr},
 };
 
-use super::{ReadHalf, RecvmsgResult, WriteHalf};
-#[cfg(feature = "tokio")]
-use super::{Socket, Split};
-
 #[cfg(unix)]
 use crate::utils::FDS_MAX;
 
 #[cfg(all(unix, not(feature = "tokio")))]
 #[async_trait::async_trait]
-impl ReadHalf for Arc<Async<UnixStream>> {
-    async fn recvmsg(&mut self, buf: &mut [u8]) -> RecvmsgResult {
+impl super::ReadHalf for Arc<Async<UnixStream>> {
+    async fn recvmsg(&mut self, buf: &mut [u8]) -> super::RecvmsgResult {
         poll_fn(|cx| {
             let (len, fds) = loop {
                 match fd_recvmsg(self.as_raw_fd(), buf) {
@@ -63,7 +58,7 @@ impl ReadHalf for Arc<Async<UnixStream>> {
 
 #[cfg(all(unix, not(feature = "tokio")))]
 #[async_trait::async_trait]
-impl WriteHalf for Arc<Async<UnixStream>> {
+impl super::WriteHalf for Arc<Async<UnixStream>> {
     async fn sendmsg(
         &mut self,
         buffer: &[u8],
@@ -112,21 +107,21 @@ impl WriteHalf for Arc<Async<UnixStream>> {
 }
 
 #[cfg(all(unix, feature = "tokio"))]
-impl Socket for tokio::net::UnixStream {
+impl super::Socket for tokio::net::UnixStream {
     type ReadHalf = tokio::net::unix::OwnedReadHalf;
     type WriteHalf = tokio::net::unix::OwnedWriteHalf;
 
-    fn split(self) -> Split<Self::ReadHalf, Self::WriteHalf> {
+    fn split(self) -> super::Split<Self::ReadHalf, Self::WriteHalf> {
         let (read, write) = self.into_split();
 
-        Split { read, write }
+        super::Split { read, write }
     }
 }
 
 #[cfg(all(unix, feature = "tokio"))]
 #[async_trait::async_trait]
-impl ReadHalf for tokio::net::unix::OwnedReadHalf {
-    async fn recvmsg(&mut self, buf: &mut [u8]) -> RecvmsgResult {
+impl super::ReadHalf for tokio::net::unix::OwnedReadHalf {
+    async fn recvmsg(&mut self, buf: &mut [u8]) -> super::RecvmsgResult {
         let stream = self.as_ref();
         poll_fn(|cx| {
             loop {
@@ -161,7 +156,7 @@ impl ReadHalf for tokio::net::unix::OwnedReadHalf {
 
 #[cfg(all(unix, feature = "tokio"))]
 #[async_trait::async_trait]
-impl WriteHalf for tokio::net::unix::OwnedWriteHalf {
+impl super::WriteHalf for tokio::net::unix::OwnedWriteHalf {
     async fn sendmsg(
         &mut self,
         buffer: &[u8],
@@ -211,8 +206,8 @@ impl WriteHalf for tokio::net::unix::OwnedWriteHalf {
 
 #[cfg(all(windows, not(feature = "tokio")))]
 #[async_trait::async_trait]
-impl ReadHalf for Arc<Async<UnixStream>> {
-    async fn recvmsg(&mut self, buf: &mut [u8]) -> RecvmsgResult {
+impl super::ReadHalf for Arc<Async<UnixStream>> {
+    async fn recvmsg(&mut self, buf: &mut [u8]) -> super::RecvmsgResult {
         match futures_util::AsyncReadExt::read(&mut self.as_ref(), buf).await {
             Err(e) => Err(e),
             Ok(len) => {
@@ -225,7 +220,7 @@ impl ReadHalf for Arc<Async<UnixStream>> {
         }
     }
 
-    async fn peer_credentials(&mut self) -> io::Result<crate::fdo::ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> std::io::Result<crate::fdo::ConnectionCredentials> {
         let stream = self.clone();
         crate::Task::spawn_blocking(
             move || {
@@ -246,16 +241,16 @@ impl ReadHalf for Arc<Async<UnixStream>> {
 
 #[cfg(all(windows, not(feature = "tokio")))]
 #[async_trait::async_trait]
-impl WriteHalf for Arc<Async<UnixStream>> {
+impl super::WriteHalf for Arc<Async<UnixStream>> {
     async fn sendmsg(
         &mut self,
         buf: &[u8],
         #[cfg(unix)] _fds: &[BorrowedFd<'_>],
-    ) -> io::Result<usize> {
+    ) -> std::io::Result<usize> {
         futures_util::AsyncWriteExt::write(&mut self.as_ref(), buf).await
     }
 
-    async fn close(&mut self) -> io::Result<()> {
+    async fn close(&mut self) -> std::io::Result<()> {
         let stream = self.clone();
         crate::Task::spawn_blocking(
             move || stream.get_ref().shutdown(std::net::Shutdown::Both),
@@ -264,8 +259,8 @@ impl WriteHalf for Arc<Async<UnixStream>> {
         .await
     }
 
-    async fn peer_credentials(&mut self) -> io::Result<crate::fdo::ConnectionCredentials> {
-        ReadHalf::peer_credentials(self).await
+    async fn peer_credentials(&mut self) -> std::io::Result<crate::fdo::ConnectionCredentials> {
+        super::ReadHalf::peer_credentials(self).await
     }
 }
 
