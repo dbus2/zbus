@@ -98,6 +98,7 @@ jobs:
       PKG_CONFIG_PATH: C:\lib\pkgconfig
       DBUS_SESSION_BUS_ADDRESS: tcp:host=127.0.0.1,port=9876
       TRYBUILD: overwrite # ignore ui tests
+      ZBUS_GDBUS_TEST: 1
     steps:
       - uses: actions/checkout@v3
 
@@ -199,7 +200,6 @@ jobs:
           cargo test --no-default-features --features tokio
 
           $env:DBUS_SESSION_BUS_ADDRESS = $null
-          $env:ZBUS_GDBUS_TEST = "1"
           # This is an undocumented implementation detail, but easier and faster than calling the gdbus C library
           Start-Process gdbus.exe _win32_run_session_bus
           # The gdbus process above will exit when idle for more than three seconds, usually right in the middle
