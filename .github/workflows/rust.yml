@@ -97,7 +97,6 @@ jobs:
       PKG_CONFIG: C:\bin\pkg-config.exe
       PKG_CONFIG_PATH: C:\lib\pkgconfig
       DBUS_SESSION_BUS_ADDRESS: tcp:host=127.0.0.1,port=9876
-      TRYBUILD: overwrite # ignore ui tests
       ZBUS_GDBUS_TEST: 1
     steps:
       - uses: actions/checkout@v3
