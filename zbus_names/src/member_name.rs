@@ -253,7 +253,7 @@ impl Borrow<str> for OwnedMemberName {
     }
 }
 
-impl From<OwnedMemberName> for MemberName<'static> {
+impl From<OwnedMemberName> for MemberName<'_> {
     fn from(o: OwnedMemberName) -> Self {
         o.into_inner()
     }
@@ -271,7 +271,7 @@ impl From<MemberName<'_>> for OwnedMemberName {
     }
 }
 
-impl From<OwnedMemberName> for Str<'static> {
+impl From<OwnedMemberName> for Str<'_> {
     fn from(value: OwnedMemberName) -> Self {
         value.into_inner().0
     }

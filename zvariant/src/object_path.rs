@@ -335,7 +335,7 @@ impl std::convert::From<OwnedObjectPath> for ObjectPath<'static> {
     }
 }
 
-impl std::convert::From<OwnedObjectPath> for crate::Value<'static> {
+impl std::convert::From<OwnedObjectPath> for crate::Value<'_> {
     fn from(o: OwnedObjectPath) -> Self {
         o.into_inner().into()
     }

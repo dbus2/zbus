@@ -306,7 +306,7 @@ impl<'name> From<&BusName<'name>> for BusName<'name> {
     }
 }
 
-impl TryFrom<OwnedValue> for BusName<'static> {
+impl TryFrom<OwnedValue> for BusName<'_> {
     type Error = Error;
 
     fn try_from(value: OwnedValue) -> Result<Self> {
@@ -328,7 +328,7 @@ impl TryFrom<BusName<'static>> for OwnedValue {
     }
 }
 
-impl From<OwnedUniqueName> for BusName<'static> {
+impl From<OwnedUniqueName> for BusName<'_> {
     fn from(name: OwnedUniqueName) -> Self {
         BusName::Unique(name.into())
     }
@@ -340,7 +340,7 @@ impl<'a> From<&'a OwnedUniqueName> for BusName<'a> {
     }
 }
 
-impl From<OwnedWellKnownName> for BusName<'static> {
+impl From<OwnedWellKnownName> for BusName<'_> {
     fn from(name: OwnedWellKnownName) -> Self {
         BusName::WellKnown(name.into())
     }
@@ -405,7 +405,7 @@ impl Display for OwnedBusName {
     }
 }
 
-impl From<OwnedBusName> for BusName<'static> {
+impl From<OwnedBusName> for BusName<'_> {
     fn from(name: OwnedBusName) -> Self {
         name.into_inner()
     }
@@ -458,7 +458,7 @@ impl TryFrom<Value<'static>> for OwnedBusName {
     }
 }
 
-impl From<OwnedBusName> for Value<'static> {
+impl From<OwnedBusName> for Value<'_> {
     fn from(name: OwnedBusName) -> Self {
         name.0.into()
     }
@@ -480,7 +480,7 @@ impl TryFrom<OwnedBusName> for OwnedValue {
     }
 }
 
-impl From<OwnedBusName> for Str<'static> {
+impl From<OwnedBusName> for Str<'_> {
     fn from(value: OwnedBusName) -> Self {
         match value.0 {
             BusName::Unique(name) => name.into(),

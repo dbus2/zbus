@@ -275,7 +275,7 @@ impl Borrow<str> for OwnedInterfaceName {
     }
 }
 
-impl From<OwnedInterfaceName> for InterfaceName<'static> {
+impl From<OwnedInterfaceName> for InterfaceName<'_> {
     fn from(o: OwnedInterfaceName) -> Self {
         o.into_inner()
     }
@@ -293,7 +293,7 @@ impl From<InterfaceName<'_>> for OwnedInterfaceName {
     }
 }
 
-impl From<OwnedInterfaceName> for Str<'static> {
+impl From<OwnedInterfaceName> for Str<'_> {
     fn from(value: OwnedInterfaceName) -> Self {
         value.into_inner().0
     }

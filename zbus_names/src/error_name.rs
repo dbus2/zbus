@@ -277,7 +277,7 @@ impl Borrow<str> for OwnedErrorName {
     }
 }
 
-impl From<OwnedErrorName> for ErrorName<'static> {
+impl From<OwnedErrorName> for ErrorName<'_> {
     fn from(o: OwnedErrorName) -> Self {
         o.into_inner()
     }
@@ -295,7 +295,7 @@ impl From<ErrorName<'_>> for OwnedErrorName {
     }
 }
 
-impl From<OwnedErrorName> for Str<'static> {
+impl From<OwnedErrorName> for Str<'_> {
     fn from(value: OwnedErrorName) -> Self {
         value.into_inner().0
     }

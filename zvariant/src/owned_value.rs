@@ -247,8 +247,8 @@ try_to_value!(Structure<'a>);
 #[cfg(unix)]
 try_to_value!(Fd<'a>);
 
-impl From<OwnedValue> for Value<'static> {
-    fn from(v: OwnedValue) -> Value<'static> {
+impl From<OwnedValue> for Value<'_> {
+    fn from(v: OwnedValue) -> Self {
         v.into_inner()
     }
 }

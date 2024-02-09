@@ -269,7 +269,7 @@ impl Borrow<str> for OwnedUniqueName {
     }
 }
 
-impl From<OwnedUniqueName> for UniqueName<'static> {
+impl From<OwnedUniqueName> for UniqueName<'_> {
     fn from(o: OwnedUniqueName) -> Self {
         o.into_inner()
     }
@@ -294,7 +294,7 @@ impl_try_from! {
     try_from: [&'s str, String, Arc<str>, Cow<'s, str>, Str<'s>],
 }
 
-impl From<OwnedUniqueName> for Str<'static> {
+impl From<OwnedUniqueName> for Str<'_> {
     fn from(value: OwnedUniqueName) -> Self {
         value.into_inner().0
     }

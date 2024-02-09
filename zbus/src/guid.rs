@@ -92,7 +92,7 @@ impl<'g> TryFrom<Str<'g>> for Guid<'g> {
     }
 }
 
-impl TryFrom<String> for Guid<'static> {
+impl TryFrom<String> for Guid<'_> {
     type Error = crate::Error;
 
     fn try_from(value: String) -> std::result::Result<Self, Self::Error> {
@@ -191,7 +191,7 @@ impl Borrow<str> for OwnedGuid {
     }
 }
 
-impl From<OwnedGuid> for Guid<'static> {
+impl From<OwnedGuid> for Guid<'_> {
     fn from(o: OwnedGuid) -> Self {
         o.0
     }
@@ -209,7 +209,7 @@ impl From<Guid<'_>> for OwnedGuid {
     }
 }
 
-impl From<OwnedGuid> for Str<'static> {
+impl From<OwnedGuid> for Str<'_> {
     fn from(value: OwnedGuid) -> Self {
         value.0 .0
     }

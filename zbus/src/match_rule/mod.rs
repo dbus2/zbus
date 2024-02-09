@@ -511,7 +511,7 @@ impl Deref for OwnedMatchRule {
     }
 }
 
-impl From<OwnedMatchRule> for MatchRule<'static> {
+impl From<OwnedMatchRule> for MatchRule<'_> {
     fn from(o: OwnedMatchRule) -> Self {
         o.into_inner()
     }

@@ -42,13 +42,13 @@ impl<'f> From<BorrowedFd<'f>> for Fd<'f> {
     }
 }
 
-impl From<fd::OwnedFd> for Fd<'static> {
+impl From<fd::OwnedFd> for Fd<'_> {
     fn from(fd: fd::OwnedFd) -> Self {
         Self::Owned(fd)
     }
 }
 
-impl From<OwnedFd> for Fd<'static> {
+impl From<OwnedFd> for Fd<'_> {
     fn from(owned: OwnedFd) -> Self {
         owned.inner
     }

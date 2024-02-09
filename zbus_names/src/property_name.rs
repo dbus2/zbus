@@ -233,7 +233,7 @@ impl Borrow<str> for OwnedPropertyName {
     }
 }
 
-impl From<OwnedPropertyName> for PropertyName<'static> {
+impl From<OwnedPropertyName> for PropertyName<'_> {
     fn from(o: OwnedPropertyName) -> Self {
         o.into_inner()
     }
@@ -251,7 +251,7 @@ impl From<PropertyName<'_>> for OwnedPropertyName {
     }
 }
 
-impl From<OwnedPropertyName> for Str<'static> {
+impl From<OwnedPropertyName> for Str<'_> {
     fn from(value: OwnedPropertyName) -> Self {
         value.into_inner().0
     }

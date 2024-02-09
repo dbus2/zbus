@@ -290,7 +290,7 @@ impl Display for OwnedWellKnownName {
     }
 }
 
-impl From<OwnedWellKnownName> for WellKnownName<'static> {
+impl From<OwnedWellKnownName> for WellKnownName<'_> {
     fn from(name: OwnedWellKnownName) -> Self {
         name.into_inner()
     }
@@ -315,7 +315,7 @@ impl_try_from! {
     try_from: [&'s str, String, Arc<str>, Cow<'s, str>, Str<'s>],
 }
 
-impl From<OwnedWellKnownName> for Str<'static> {
+impl From<OwnedWellKnownName> for Str<'_> {
     fn from(value: OwnedWellKnownName) -> Self {
         value.into_inner().0
     }
