@@ -89,6 +89,9 @@ windows-sys = { version = "0.52", features = [
   "Win32_Foundation",
   "Win32_Security_Authorization",
   "Win32_System_Memory",
+  "Win32_Networking",
+  "Win32_NetworkManagement",
+  "Win32_System_Threading",
 ] }
 uds_windows = "1.1.0"
 
