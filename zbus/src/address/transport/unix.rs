@@ -31,7 +31,6 @@ impl Unix {
         self.path
     }
 
-    #[cfg(any(unix, not(feature = "tokio")))]
     pub(super) fn from_options(opts: std::collections::HashMap<&str, &str>) -> crate::Result<Self> {
         let path = opts.get("path");
         let abs = opts.get("abstract");
