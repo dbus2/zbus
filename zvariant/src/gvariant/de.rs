@@ -866,17 +866,6 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de
     }
 }
 
-impl<'de, 'd, 'sig, 'f, F> crate::de::GetDeserializeCommon<'de, 'sig, 'f, F>
-    for &'d mut Deserializer<'de, 'sig, 'f, F>
-{
-    fn common_mut<'dr>(self) -> &'dr mut DeserializerCommon<'de, 'sig, 'f, F>
-    where
-        Self: 'dr,
-    {
-        &mut self.0
-    }
-}
-
 impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> EnumAccess<'de>
     for crate::de::Enum<&'d mut Deserializer<'de, 'sig, 'f, F>, F>
 {
