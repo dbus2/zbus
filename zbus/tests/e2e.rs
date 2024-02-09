@@ -1,8 +1,8 @@
 #![allow(clippy::disallowed_names)]
 use std::collections::HashMap;
-#[cfg(all(unix, not(feature = "tokio")))]
+#[cfg(all(unix, not(feature = "tokio"), feature = "p2p"))]
 use std::os::unix::net::UnixStream;
-#[cfg(all(unix, feature = "tokio"))]
+#[cfg(all(unix, feature = "tokio", feature = "p2p"))]
 use tokio::net::UnixStream;
 
 use event_listener::Event;
@@ -918,6 +918,7 @@ fn iface_and_proxy() {
     block_on(iface_and_proxy_(false));
 }
 
+#[cfg(feature = "p2p")]
 #[cfg(unix)]
 #[test]
 #[timeout(15000)]
@@ -926,10 +927,27 @@ fn iface_and_proxy_unix_p2p() {
 }
 
 #[instrument]
-async fn iface_and_proxy_(p2p: bool) {
+async fn iface_and_proxy_(#[allow(unused)] p2p: bool) {
     let event = event_listener::Event::new();
+    #[cfg(feature = "p2p")]
     let guid = zbus::Guid::generate();
 
+    let session_conns_build = || {
+        let service_conn_builder = connection::Builder::session()
+            .unwrap()
+            .name("org.freedesktop.MyService")
+            .unwrap()
+            .name("org.freedesktop.MyService.foo")
+            .unwrap()
+            .name("org.freedesktop.MyService.bar")
+            .unwrap()
+            .name("org.freedesktop.MyEmitsChangedSignalIface")
+            .unwrap();
+        let client_conn_builder = connection::Builder::session().unwrap();
+
+        (service_conn_builder, client_conn_builder)
+    };
+    #[cfg(feature = "p2p")]
     let (service_conn_builder, client_conn_builder) = if p2p {
         #[cfg(unix)]
         {
@@ -979,20 +997,11 @@ async fn iface_and_proxy_(p2p: bool) {
             }
         }
     } else {
-        let service_conn_builder = connection::Builder::session()
-            .unwrap()
-            .name("org.freedesktop.MyService")
-            .unwrap()
-            .name("org.freedesktop.MyService.foo")
-            .unwrap()
-            .name("org.freedesktop.MyService.bar")
-            .unwrap()
-            .name("org.freedesktop.MyEmitsChangedSignalIface")
-            .unwrap();
-        let client_conn_builder = connection::Builder::session().unwrap();
-
-        (service_conn_builder, client_conn_builder)
+        session_conns_build()
     };
+    #[cfg(not(feature = "p2p"))]
+    let (service_conn_builder, client_conn_builder) = session_conns_build();
+
     debug!(
         "Client connection builder created: {:?}",
         client_conn_builder

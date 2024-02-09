@@ -53,6 +53,7 @@ pub(crate) struct ConnectionInner {
     server_guid: OwnedGuid,
     #[cfg(unix)]
     cap_unix_fd: bool,
+    #[cfg(feature = "p2p")]
     bus_conn: bool,
     unique_name: OnceLock<OwnedUniqueName>,
     registered_names: Mutex<HashMap<WellKnownName<'static>, NameStatus>>,
@@ -778,9 +779,17 @@ impl Connection {
 
     /// Checks if `self` is a connection to a message bus.
     ///
-    /// This will return `false` for p2p connections.
+    /// This will return `false` for p2p connections. When the `p2p` feature is enabled, this will
+    /// always return `true`.
     pub fn is_bus(&self) -> bool {
-        self.inner.bus_conn
+        #[cfg(feature = "p2p")]
+        {
+            self.inner.bus_conn
+        }
+        #[cfg(not(feature = "p2p"))]
+        {
+            true
+        }
     }
 
     /// The unique name of the connection, if set/applicable.
@@ -793,13 +802,13 @@ impl Connection {
 
     /// Sets the unique name of the connection (if not already set).
     ///
-    /// This method is only available when the `bus-impl` feature is enabled.
+    /// This is mainly provided for bus implementations. All other users should not need to use this
+    /// method. Hence why this method is only available when the `bus-impl` feature is enabled.
     ///
     /// # Panics
     ///
     /// This method panics if the unique name is already set. It will always panic if the connection
-    /// is to a message bus as it's the bus that assigns peers their unique names. This is mainly
-    /// provided for bus implementations. All other users should not need to use this method.
+    /// is to a message bus as it's the bus that assigns peers their unique names.
     #[cfg(feature = "bus-impl")]
     pub fn set_unique_name<U>(&self, unique_name: U) -> Result<()>
     where
@@ -1144,7 +1153,7 @@ impl Connection {
 
     pub(crate) async fn new(
         auth: Authenticated,
-        bus_connection: bool,
+        #[allow(unused)] bus_connection: bool,
         executor: Executor<'static>,
     ) -> Result<Self> {
         #[cfg(unix)]
@@ -1184,6 +1193,7 @@ impl Connection {
                 server_guid: auth.server_guid,
                 #[cfg(unix)]
                 cap_unix_fd,
+                #[cfg(feature = "p2p")]
                 bus_conn: bus_connection,
                 unique_name: OnceLock::new(),
                 subscriptions,
@@ -1307,12 +1317,87 @@ enum NameStatus {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::fdo::DBusProxy;
+    use ntest::timeout;
+    use test_log::test;
+
+    #[cfg(all(windows, feature = "windows-gdbus"))]
+    #[test]
+    fn connect_gdbus_session_bus() {
+        let addr = crate::win32::windows_autolaunch_bus_address()
+            .expect("Unable to get GDBus session bus address");
+
+        crate::block_on(async { addr.connect().await }).expect("Unable to connect to session bus");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn connect_launchd_session_bus() {
+        use crate::address::{transport::Launchd, Address, Transport};
+        crate::block_on(async {
+            let addr = Address::from(Transport::Launchd(Launchd::new(
+                "DBUS_LAUNCHD_SESSION_BUS_SOCKET",
+            )));
+            addr.connect().await
+        })
+        .expect("Unable to connect to session bus");
+    }
+
+    #[test]
+    #[timeout(15000)]
+    fn disconnect_on_drop() {
+        // Reproducer for https://github.com/dbus2/zbus/issues/308 where setting up the
+        // objectserver would cause the connection to not disconnect on drop.
+        crate::utils::block_on(test_disconnect_on_drop());
+    }
+
+    async fn test_disconnect_on_drop() {
+        #[derive(Default)]
+        struct MyInterface {}
+
+        #[crate::interface(name = "dev.peelz.FooBar.Baz")]
+        impl MyInterface {
+            fn do_thing(&self) {}
+        }
+        let name = "dev.peelz.foobar";
+        let connection = Builder::session()
+            .unwrap()
+            .name(name)
+            .unwrap()
+            .serve_at("/dev/peelz/FooBar", MyInterface::default())
+            .unwrap()
+            .build()
+            .await
+            .unwrap();
+
+        let connection2 = Connection::session().await.unwrap();
+        let dbus = DBusProxy::new(&connection2).await.unwrap();
+        let mut stream = dbus
+            .receive_name_owner_changed_with_args(&[(0, name), (2, "")])
+            .await
+            .unwrap();
+
+        drop(connection);
+
+        // If the connection is not dropped, this will hang forever.
+        stream.next().await.unwrap();
+
+        // Let's still make sure the name is gone.
+        let name_has_owner = dbus.name_has_owner(name.try_into().unwrap()).await.unwrap();
+        assert!(!name_has_owner);
+    }
+}
+
+#[cfg(feature = "p2p")]
+#[cfg(test)]
+mod p2p_tests {
     use futures_util::stream::TryStreamExt;
     use ntest::timeout;
     use test_log::test;
     use zvariant::{Endian, NATIVE_ENDIAN};
 
-    use crate::{fdo::DBusProxy, AuthMechanism, Guid};
+    use crate::{AuthMechanism, Guid};
 
     use super::*;
 
@@ -1552,73 +1637,6 @@ mod tests {
             Builder::vsock_stream(client).p2p().build(),
         )
     }
-
-    #[cfg(all(windows, feature = "windows-gdbus"))]
-    #[test]
-    fn connect_gdbus_session_bus() {
-        let addr = crate::win32::windows_autolaunch_bus_address()
-            .expect("Unable to get GDBus session bus address");
-
-        crate::block_on(async { addr.connect().await }).expect("Unable to connect to session bus");
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn connect_launchd_session_bus() {
-        use crate::address::{transport::Launchd, Address, Transport};
-        crate::block_on(async {
-            let addr = Address::from(Transport::Launchd(Launchd::new(
-                "DBUS_LAUNCHD_SESSION_BUS_SOCKET",
-            )));
-            addr.connect().await
-        })
-        .expect("Unable to connect to session bus");
-    }
-
-    #[test]
-    #[timeout(15000)]
-    fn disconnect_on_drop() {
-        // Reproducer for https://github.com/dbus2/zbus/issues/308 where setting up the
-        // objectserver would cause the connection to not disconnect on drop.
-        crate::utils::block_on(test_disconnect_on_drop());
-    }
-
-    async fn test_disconnect_on_drop() {
-        #[derive(Default)]
-        struct MyInterface {}
-
-        #[crate::interface(name = "dev.peelz.FooBar.Baz")]
-        impl MyInterface {
-            fn do_thing(&self) {}
-        }
-        let name = "dev.peelz.foobar";
-        let connection = Builder::session()
-            .unwrap()
-            .name(name)
-            .unwrap()
-            .serve_at("/dev/peelz/FooBar", MyInterface::default())
-            .unwrap()
-            .build()
-            .await
-            .unwrap();
-
-        let connection2 = Connection::session().await.unwrap();
-        let dbus = DBusProxy::new(&connection2).await.unwrap();
-        let mut stream = dbus
-            .receive_name_owner_changed_with_args(&[(0, name), (2, "")])
-            .await
-            .unwrap();
-
-        drop(connection);
-
-        // If the connection is not dropped, this will hang forever.
-        stream.next().await.unwrap();
-
-        // Let's still make sure the name is gone.
-        let name_has_owner = dbus.name_has_owner(name.try_into().unwrap()).await.unwrap();
-        assert!(!name_has_owner);
-    }
-
     #[cfg(any(unix, not(feature = "tokio")))]
     #[test]
     #[timeout(15000)]

@@ -76,6 +76,7 @@ impl Authenticated {
     /// Create a server-side `Authenticated` for the given `socket`.
     ///
     /// The function takes `client_uid` on Unix only. On Windows, it takes `client_sid` instead.
+    #[cfg(feature = "p2p")]
     pub async fn server(
         socket: BoxedSplit,
         guid: OwnedGuid,
@@ -351,6 +352,7 @@ impl Cookie {
             .ok_or_else(|| Error::Handshake(format!("DBus cookie ID {id} not found")))
     }
 
+    #[cfg(feature = "p2p")]
     async fn first(context: &CookieContext<'_>) -> Result<Cookie> {
         let keyring = Self::read_keyring(context).await?;
         keyring
@@ -527,6 +529,7 @@ impl Handshake for ClientHandshake {
  * Server-side handshake logic
  */
 
+#[cfg(feature = "p2p")]
 #[derive(Debug)]
 #[allow(clippy::upper_case_acronyms)]
 enum ServerHandshakeStep {
@@ -553,6 +556,7 @@ enum ServerHandshakeStep {
 /// [`Authenticated`]: struct.Authenticated.html
 /// [`Connection::new_authenticated`]: ../struct.Connection.html#method.new_authenticated
 #[derive(Debug)]
+#[cfg(feature = "p2p")]
 pub struct ServerHandshake<'s> {
     common: HandshakeCommon,
     step: ServerHandshakeStep,
@@ -565,6 +569,7 @@ pub struct ServerHandshake<'s> {
     cookie_context: CookieContext<'s>,
 }
 
+#[cfg(feature = "p2p")]
 impl<'s> ServerHandshake<'s> {
     pub fn new(
         socket: BoxedSplit,
@@ -700,6 +705,7 @@ impl<'s> ServerHandshake<'s> {
     }
 }
 
+#[cfg(feature = "p2p")]
 #[async_trait]
 impl Handshake for ServerHandshake<'_> {
     #[instrument(skip(self))]
@@ -1027,6 +1033,7 @@ impl HandshakeCommon {
     }
 }
 
+#[cfg(feature = "p2p")]
 #[cfg(unix)]
 #[cfg(test)]
 mod tests {

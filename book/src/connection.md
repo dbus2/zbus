@@ -67,6 +67,9 @@ let (client_conn, server_conn) = futures_util::try_join!(
 # }
 ```
 
+**Note:** the `p2p` and `server` methods of `connection::Builder` are only available when `p2p`
+cargo feature of `zbus` is enabled.
+
 [NetworkManager]: https://developer.gnome.org/NetworkManager/stable/spec.html
 [BlueZ]: https://git.kernel.org/pub/scm/bluetooth/bluez.git/tree/doc
 [PID1]: https://www.freedesktop.org/wiki/Software/systemd/dbus/
