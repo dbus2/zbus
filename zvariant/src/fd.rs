@@ -140,7 +140,6 @@ impl<'de> Deserialize<'de> for Fd<'de> {
     }
 }
 
-#[allow(clippy::unconditional_recursion)]
 impl PartialEq for Fd<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.as_raw_fd().eq(&other.as_raw_fd())
