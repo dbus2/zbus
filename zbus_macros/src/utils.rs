@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use proc_macro2::{Span, TokenStream};
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::{format_ident, quote};
@@ -64,15 +66,15 @@ pub enum PropertyEmitsChangedSignal {
     False,
 }
 
-impl ToString for PropertyEmitsChangedSignal {
-    fn to_string(&self) -> String {
+impl Display for PropertyEmitsChangedSignal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let emits_changed_signal = match self {
             PropertyEmitsChangedSignal::True => "true",
             PropertyEmitsChangedSignal::Const => "const",
             PropertyEmitsChangedSignal::False => "false",
             PropertyEmitsChangedSignal::Invalidates => "invalidates",
         };
-        emits_changed_signal.to_string()
+        write!(f, "{}", emits_changed_signal)
     }
 }
 
