@@ -1,7 +1,6 @@
 #[cfg(target_os = "linux")]
 use std::ffi::OsString;
 use std::{
-    collections::HashMap,
     ffi::OsStr,
     fmt::{Display, Formatter},
     path::PathBuf,
@@ -32,8 +31,7 @@ impl Unix {
         self.path
     }
 
-    #[cfg(any(unix, not(feature = "tokio")))]
-    pub(super) fn from_options(opts: HashMap<&str, &str>) -> crate::Result<Self> {
+    pub(super) fn from_options(opts: std::collections::HashMap<&str, &str>) -> crate::Result<Self> {
         let path = opts.get("path");
         let abs = opts.get("abstract");
         let dir = opts.get("dir");

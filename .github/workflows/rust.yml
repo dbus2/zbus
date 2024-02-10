@@ -94,12 +94,10 @@ jobs:
       RUSTFLAGS: -D warnings
       RUST_BACKTRACE: full
       RUST_LOG: trace
-      ErrorActionPreference: Stop
-      WarningPreference: Stop
       PKG_CONFIG: C:\bin\pkg-config.exe
       PKG_CONFIG_PATH: C:\lib\pkgconfig
       DBUS_SESSION_BUS_ADDRESS: tcp:host=127.0.0.1,port=9876
-      TRYBUILD: overwrite # ignore ui tests
+      ZBUS_GDBUS_TEST: 1
     steps:
       - uses: actions/checkout@v3
 
@@ -143,12 +141,10 @@ jobs:
 
       - name: Install Meson and Ninja
         if: steps.cache-deps.outputs.cache-hit != 'true'
-        shell: pwsh
         run: pip3 install meson ninja
 
       - name: Install pkg-config
         if: steps.cache-deps.outputs.cache-hit != 'true'
-        shell: pwsh
         run: |
           git clone --branch meson-glib-subproject --depth 1 https://gitlab.freedesktop.org/tpm/pkg-config.git
           cd pkg-config
@@ -162,7 +158,6 @@ jobs:
 
       - name: Build & Install GLib
         if: steps.cache-deps.outputs.cache-hit != 'true'
-        shell: pwsh
         run: |
           (New-Object System.Net.WebClient).DownloadString('https://wrapdb.mesonbuild.com/v2/pcre_8.37-2/get_patch') >$null
           (New-Object System.Net.WebClient).DownloadString('https://zlib.net/fossils/') >$null
@@ -174,7 +169,6 @@ jobs:
 
       - name: Build & Install libexpat
         if: steps.cache-deps.outputs.cache-hit != 'true'
-        shell: pwsh
         run: |
           # Upstream expat doesn't ship devel? let's build it then...
           git clone --depth 1 --branch R_2_4_2 https://github.com/libexpat/libexpat \libexpat
@@ -185,7 +179,6 @@ jobs:
 
       - name: Build & Install dbus daemon
         if: steps.cache-deps.outputs.cache-hit != 'true'
-        shell: pwsh
         run: |
           git clone --depth 1 https://gitlab.freedesktop.org/dbus/dbus.git \dbus
           cd -Path \dbus
@@ -197,8 +190,7 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@v2
-      - name: Build and Test
-        shell: pwsh
+      - name: Test
         run: |
           $env:PATH += ";C:\bin"
           Start-Process dbus-daemon.exe --config-file=CI/win32-session.conf
@@ -206,8 +198,10 @@ jobs:
           # tokio feature
           cargo test --no-default-features --features tokio
 
+      - name: Test gdbus feature
+        run: |
           $env:DBUS_SESSION_BUS_ADDRESS = $null
-          $env:ZBUS_GDBUS_TEST = "1"
+          $env:PATH += ";C:\bin"
           # This is an undocumented implementation detail, but easier and faster than calling the gdbus C library
           Start-Process gdbus.exe _win32_run_session_bus
           # The gdbus process above will exit when idle for more than three seconds, usually right in the middle

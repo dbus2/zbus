@@ -210,7 +210,6 @@ impl Transport {
     // Helper for `FromStr` impl of `Address`.
     pub(super) fn from_options(transport: &str, options: HashMap<&str, &str>) -> Result<Self> {
         match transport {
-            #[cfg(any(unix, not(feature = "tokio")))]
             "unix" => Unix::from_options(options).map(Self::Unix),
             "tcp" => Tcp::from_options(options, false).map(Self::Tcp),
             "nonce-tcp" => Tcp::from_options(options, true).map(Self::Tcp),

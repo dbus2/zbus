@@ -1,7 +1,6 @@
 use std::{
     ffi::{CStr, OsStr},
     io::{Error, ErrorKind},
-    mem,
     net::SocketAddr,
     os::windows::prelude::OsStrExt,
     ptr,
@@ -239,7 +238,7 @@ pub fn tcp_stream_get_peer_pid(stream: &std::net::TcpStream) -> Result<u32, Erro
     socket_addr_get_pid(&peer_addr)
 }
 
-#[cfg(any(test, not(feature = "tokio")))]
+#[cfg(not(feature = "tokio"))]
 fn last_err() -> std::io::Error {
     use windows_sys::Win32::Networking::WinSock::WSAGetLastError;
 
@@ -271,7 +270,7 @@ pub fn unix_stream_get_peer_pid(stream: &UnixStream) -> Result<u32, Error> {
             ptr::null_mut(),
             0,
             ptr::addr_of_mut!(ret).cast(),
-            mem::size_of_val(&ret) as u32,
+            std::mem::size_of_val(&ret) as u32,
             ptr::addr_of_mut!(bytes),
             ptr::null_mut(),
             None,
