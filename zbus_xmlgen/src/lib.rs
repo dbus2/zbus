@@ -13,8 +13,8 @@ use zvariant::{
 };
 
 pub fn write_interfaces(
-    interfaces: &[&Interface<'_>],
-    standard_interfaces: &[&Interface<'_>],
+    interfaces: &[Interface<'_>],
+    standard_interfaces: &[Interface<'_>],
     service: Option<BusName<'_>>,
     path: Option<ObjectPath<'_>>,
     input_src: &str,
@@ -58,8 +58,8 @@ pub fn write_interfaces(
 /// code was generated.
 fn write_doc_header<W: std::fmt::Write>(
     w: &mut W,
-    interfaces: &[&Interface<'_>],
-    standard_interfaces: &[&Interface<'_>],
+    interfaces: &[Interface<'_>],
+    standard_interfaces: &[Interface<'_>],
     input_src: &str,
     cargo_bin_name: &str,
     cargo_bin_version: &str,

@@ -55,10 +55,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
 
     let fdo_iface_prefix = "org.freedesktop.DBus";
-    let (fdo_standard_ifaces, needed_ifaces): (Vec<&Interface<'_>>, Vec<&Interface<'_>>) = node
+    let (fdo_standard_ifaces, needed_ifaces): (Vec<Interface<'_>>, Vec<Interface<'_>>) = node
         .interfaces()
         .iter()
-        .partition(|&i| i.name().starts_with(fdo_iface_prefix));
+        .cloned()
+        .partition(|i| i.name().starts_with(fdo_iface_prefix));
 
     if !fdo_iface_prefix.is_empty() {
         eprintln!("Skipping `org.freedesktop.DBus` interfaces, please use https://docs.rs/zbus/latest/zbus/fdo/index.html")
@@ -79,7 +80,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     for interface in needed_ifaces {
         let output = write_interfaces(
-            &[&interface],
+            &[interface.clone()],
             &fdo_standard_ifaces,
             service.clone(),
             path.clone(),
