@@ -1,5 +1,9 @@
 use core::panic;
-use std::{convert::TryFrom, ops::Deref};
+use std::{
+    convert::TryFrom,
+    fmt::{Display, Write},
+    ops::Deref,
+};
 
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
@@ -331,10 +335,9 @@ impl<'m> MatchRule<'m> {
     }
 }
 
-impl ToString for MatchRule<'_> {
-    fn to_string(&self) -> String {
-        let mut s = String::new();
-
+impl Display for MatchRule<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut first_component = true;
         if let Some(msg_type) = self.msg_type() {
             let type_str = match msg_type {
                 MessageType::Error => "error",
@@ -343,50 +346,67 @@ impl ToString for MatchRule<'_> {
                 MessageType::MethodReturn => "method_return",
                 MessageType::Signal => "signal",
             };
-            add_match_rule_string_component(&mut s, "type", type_str);
+            write_match_rule_string_component(f, "type", type_str, &mut first_component)?;
         }
         if let Some(sender) = self.sender() {
-            add_match_rule_string_component(&mut s, "sender", sender);
+            write_match_rule_string_component(f, "sender", sender, &mut first_component)?;
         }
         if let Some(interface) = self.interface() {
-            add_match_rule_string_component(&mut s, "interface", interface);
+            write_match_rule_string_component(f, "interface", interface, &mut first_component)?;
         }
         if let Some(member) = self.member() {
-            add_match_rule_string_component(&mut s, "member", member);
+            write_match_rule_string_component(f, "member", member, &mut first_component)?;
         }
         if let Some(destination) = self.destination() {
-            add_match_rule_string_component(&mut s, "destination", destination);
+            write_match_rule_string_component(f, "destination", destination, &mut first_component)?;
         }
         if let Some(path_spec) = self.path_spec() {
             let (key, value) = match path_spec {
                 MatchRulePathSpec::Path(path) => ("path", path),
                 MatchRulePathSpec::PathNamespace(ns) => ("path_namespace", ns),
             };
-            add_match_rule_string_component(&mut s, key, value);
+            write_match_rule_string_component(f, key, value, &mut first_component)?;
         }
         for (i, arg) in self.args() {
-            add_match_rule_string_component(&mut s, &format!("arg{i}"), arg);
+            write_comma(f, &mut first_component)?;
+            write!(f, "arg{i}='{arg}'")?;
         }
         for (i, arg_path) in self.arg_paths() {
-            add_match_rule_string_component(&mut s, &format!("arg{i}path"), arg_path);
+            write_comma(f, &mut first_component)?;
+            write!(f, "arg{i}path='{arg_path}'")?;
         }
         if let Some(arg0namespace) = self.arg0ns() {
-            add_match_rule_string_component(&mut s, "arg0namespace", arg0namespace)
+            write_comma(f, &mut first_component)?;
+            write!(f, "arg0namespace='{arg0namespace}'")?;
         }
 
-        s
+        Ok(())
     }
 }
 
-fn add_match_rule_string_component(rule: &mut String, key: &str, value: &str) {
-    if !rule.is_empty() {
-        rule.push(',');
+fn write_match_rule_string_component(
+    f: &mut std::fmt::Formatter<'_>,
+    key: &str,
+    value: &str,
+    first_component: &mut bool,
+) -> std::fmt::Result {
+    write_comma(f, first_component)?;
+    f.write_str(key)?;
+    f.write_str("='")?;
+    f.write_str(value)?;
+    f.write_char('\'')?;
+
+    Ok(())
+}
+
+fn write_comma(f: &mut std::fmt::Formatter<'_>, first_component: &mut bool) -> std::fmt::Result {
+    if *first_component {
+        *first_component = false;
+    } else {
+        f.write_char(',')?;
     }
-    rule.push_str(key);
-    rule.push('=');
-    rule.push('\'');
-    rule.push_str(value);
-    rule.push('\'');
+
+    Ok(())
 }
 
 impl<'m> TryFrom<&'m str> for MatchRule<'m> {

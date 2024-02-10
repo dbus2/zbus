@@ -1137,7 +1137,7 @@ impl Connection {
 
     pub(crate) fn queue_remove_match(&self, rule: OwnedMatchRule) {
         let conn = self.clone();
-        let task_name = format!("Remove match `{}`", rule.to_string());
+        let task_name = format!("Remove match `{}`", *rule);
         let remove_match =
             async move { conn.remove_match(rule).await }.instrument(trace_span!("{}", task_name));
         self.inner.executor.spawn(remove_match, &task_name).detach()
