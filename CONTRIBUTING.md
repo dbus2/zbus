@@ -24,12 +24,27 @@ Same rules apply here as for bug reports and feature requests. Plus:
 
 * We prefer atomic commits. Please read
   [this excellent blog post](https://www.aleksandrhovhannisyan.com/blog/atomic-git-commits/) for
-  more information, including the rationale.
+  more information, including the rationale. For larger changes addressing several packages
+  consider splitting your pull request, using a single commit for each package changed.
 * Please try your best to follow [these guidelines](https://wiki.gnome.org/Git/CommitMessages) for
   commit messages.
 * We also prefer adding [emoji prefixes to commit messages](https://gitmoji.carloscuesta.me/). Since
   the the `gitmoji` CLI tool can be very [slow](https://github.com/zeenix/gimoji#rationale), we
   recommend using [`gimoji`](https://github.com/zeenix/gimoji) instead.
+* Add a prefix indicating the packages being changed. Use either the package name or an abbreviation.
+  
+  | package name    | abbreviation |
+  |-----------------|--------------|
+  | zbus            | zb           |
+  | zbus_macros     | zm           |
+  | zbus_names      | zn           |
+  | zbus_xml        | zx           |
+  | zbus_xmlgen     | zx           |
+  | zvariant        | zv           |
+  | zvariant_derive | zv           |
+  | zvariant_utils  | zu           |
+
+  E.g. for a commit changing the packages `zbus` and `zvariant`, prefix the commit message with `zb,zv: `.
 * Add details to each commit about the changes it contains. PR description is for summarizing the
   overall changes in the PR, while commit logs are for describing the specific changes of the
   commit in question.
