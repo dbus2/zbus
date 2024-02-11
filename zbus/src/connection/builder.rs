@@ -16,7 +16,7 @@ use tokio::net::TcpStream;
 use tokio::net::UnixStream;
 #[cfg(feature = "tokio-vsock")]
 use tokio_vsock::VsockStream;
-#[cfg(windows)]
+#[cfg(all(windows, not(feature = "tokio")))]
 use uds_windows::UnixStream;
 #[cfg(all(feature = "vsock", not(feature = "tokio")))]
 use vsock::VsockStream;
@@ -42,6 +42,7 @@ const DEFAULT_MAX_QUEUED: usize = 64;
 
 #[derive(Debug)]
 enum Target {
+    #[cfg(any(unix, not(feature = "tokio")))]
     UnixStream(UnixStream),
     TcpStream(TcpStream),
     #[cfg(any(
@@ -138,6 +139,12 @@ impl<'a> Builder<'a> {
     /// If the default `async-io` feature is disabled, this method will expect
     /// [`tokio::net::UnixStream`](https://docs.rs/tokio/latest/tokio/net/struct.UnixStream.html)
     /// argument.
+    ///
+    /// Since tokio currently [does not support Unix domain sockets][tuds] on Windows, this method
+    /// is not available when the `tokio` feature is enabled and building for Windows target.
+    ///
+    /// [tuds]: https://github.com/tokio-rs/tokio/issues/2201
+    #[cfg(any(unix, not(feature = "tokio")))]
     pub fn unix_stream(stream: UnixStream) -> Self {
         Self::new(Target::UnixStream(stream))
     }
@@ -485,8 +492,6 @@ impl<'a> Builder<'a> {
             Target::UnixStream(stream) => Async::new(stream)?.into(),
             #[cfg(all(unix, feature = "tokio"))]
             Target::UnixStream(stream) => stream.into(),
-            #[cfg(all(not(unix), feature = "tokio"))]
-            Target::UnixStream(_) => return Err(Error::Unsupported),
             #[cfg(not(feature = "tokio"))]
             Target::TcpStream(stream) => Async::new(stream)?.into(),
             #[cfg(feature = "tokio")]
