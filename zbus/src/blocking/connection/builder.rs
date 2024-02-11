@@ -7,7 +7,7 @@ use std::os::unix::net::UnixStream;
 use tokio::net::TcpStream;
 #[cfg(all(unix, feature = "tokio"))]
 use tokio::net::UnixStream;
-#[cfg(windows)]
+#[cfg(all(windows, not(feature = "tokio")))]
 use uds_windows::UnixStream;
 
 use zvariant::{ObjectPath, Str};
@@ -53,6 +53,12 @@ impl<'a> Builder<'a> {
     /// If the default `async-io` feature is disabled, this method will expect
     /// [`tokio::net::UnixStream`](https://docs.rs/tokio/latest/tokio/net/struct.UnixStream.html)
     /// argument.
+    ///
+    /// Since tokio currently [does not support Unix domain sockets][tuds] on Windows, this method
+    /// is not available when the `tokio` feature is enabled and building for Windows target.
+    ///
+    /// [tuds]: https://github.com/tokio-rs/tokio/issues/2201
+    #[cfg(any(unix, not(feature = "tokio")))]
     pub fn unix_stream(stream: UnixStream) -> Self {
         Self(crate::connection::Builder::unix_stream(stream))
     }
