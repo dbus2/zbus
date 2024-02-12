@@ -179,68 +179,66 @@
                         <h1 id="blocking-api"><a class="header" href="#blocking-api">Blocking API</a></h1>
 <p>While zbus API being primarily asynchronous (since 2.0) is a great thing, it could easily feel
 daunting for simple use cases. Not to worry! In the spirit of “ease” being a primary goal of zbus,
-it provides blocking wrapper types, under the <a href="https://docs.rs/zbus/3/zbus/blocking/index.html">blocking module</a>.</p>
+it provides blocking wrapper types, under the <a href="https://docs.rs/zbus/latest/zbus/blocking/index.html">blocking module</a>.</p>
 <p><strong>Note:</strong> Use of the blocking API presented in this chapter in an async context will likely result
 in panics and hangs. This is not a limitation of zbus but rather a
 <a href="https://rust-lang.github.io/wg-async-foundations/vision/shiny_future/users_manual.html#caveat-beware-the-async-sandwich">well-known general problem</a> in the Rust async/await world. The <a href="https://docs.rs/blocking/"><code>blocking</code> crate</a>,
 <a href="https://docs.rs/async-std/latest/async_std/task/fn.spawn_blocking.html"><code>async-std</code></a> and <a href="https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html"><code>tokio</code></a> crates provide a easy way around this problem.</p>
 <h2 id="establishing-a-connection"><a class="header" href="#establishing-a-connection">Establishing a connection</a></h2>
-<p>The only difference to that of <a href="https://docs.rs/zbus/3/zbus/struct.Connection.html">asynchronous <code>Connection</code> API</a> is that you use
-<a href="https://docs.rs/zbus/3/zbus/blocking/struct.Connection.html"><code>blocking::Connection</code></a> type instead. This type’s API is almost identical to that of <code>Connection</code>,
-except all its methods are blocking. One notable difference is that there is no equivalent of
-<a href="https://docs.rs/futures/latest/futures/sink/trait.Sink.html"><code>futures::sink::Sink</code></a> implementation provided. There is however [<code>blocking::MessageIterator</code>]
-type, that implements <a href="https://doc.rust-lang.org/nightly/std/iter/trait.Iterator.html"><code>std::iter::Iterator</code></a>.</p>
+<p>The only difference to that of <a href="https://docs.rs/zbus/latest/zbus/connection/struct.Connection.html">asynchronous <code>Connection</code> API</a> is that you use
+<a href="https://docs.rs/zbus/latest/zbus/blocking/connection/struct.Connection.html"><code>blocking::Connection</code></a> type instead. This type’s API is almost identical to that of <code>Connection</code>,
+except all its methods are blocking.</p>
 <h2 id="client"><a class="header" href="#client">Client</a></h2>
 <p>Similar to <code>blocking::Connection</code>, you use <code>blocking::Proxy</code> type. Its constructors require
-<code>blocking::Connection</code> instead of <code>Connection</code>. Moreover, <code>dbus_proxy</code> macro generates a
+<code>blocking::Connection</code> instead of <code>Connection</code>. Moreover, <code>proxy</code> macro generates a
 <code>blocking::Proxy</code> wrapper for you as well. Let’s convert the last example in the previous chapter,
 to use the blocking connection and proxy:</p>
 <pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>use zbus::{blocking::Connection, zvariant::ObjectPath, dbus_proxy, Result};
+</span>use zbus::{blocking::Connection, zvariant::ObjectPath, proxy, Result};
 
-#[dbus_proxy(
-    default_service = &quot;org.freedesktop.GeoClue2&quot;,
-    interface = &quot;org.freedesktop.GeoClue2.Manager&quot;,
-    default_path = &quot;/org/freedesktop/GeoClue2/Manager&quot;
+#[proxy(
+    default_service = "org.freedesktop.GeoClue2",
+    interface = "org.freedesktop.GeoClue2.Manager",
+    default_path = "/org/freedesktop/GeoClue2/Manager"
 )]
 trait Manager {
-    #[dbus_proxy(object = &quot;Client&quot;)]
+    #[zbus(object = "Client")]
     /// The method normally returns an `ObjectPath`.
     /// With the object attribute, we can make it return a `ClientProxy` directly.
     fn get_client(&amp;self);
 }
 
-#[dbus_proxy(
-    default_service = &quot;org.freedesktop.GeoClue2&quot;,
-    interface = &quot;org.freedesktop.GeoClue2.Client&quot;
+#[proxy(
+    default_service = "org.freedesktop.GeoClue2",
+    interface = "org.freedesktop.GeoClue2.Client"
 )]
 trait Client {
     fn start(&amp;self) -&gt; Result&lt;()&gt;;
     fn stop(&amp;self) -&gt; Result&lt;()&gt;;
 
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn set_desktop_id(&amp;mut self, id: &amp;str) -&gt; Result&lt;()&gt;;
 
-    #[dbus_proxy(signal)]
+    #[zbus(signal)]
     fn location_updated(&amp;self, old: ObjectPath&lt;'_&gt;, new: ObjectPath&lt;'_&gt;) -&gt; Result&lt;()&gt;;
 }
 
-#[dbus_proxy(
-    default_service = &quot;org.freedesktop.GeoClue2&quot;,
-    interface = &quot;org.freedesktop.GeoClue2.Location&quot;
+#[proxy(
+    default_service = "org.freedesktop.GeoClue2",
+    interface = "org.freedesktop.GeoClue2.Location"
 )]
 trait Location {
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn latitude(&amp;self) -&gt; Result&lt;f64&gt;;
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn longitude(&amp;self) -&gt; Result&lt;f64&gt;;
 }
 let conn = Connection::system().unwrap();
 let manager = ManagerProxyBlocking::new(&amp;conn).unwrap();
 let mut client = manager.get_client().unwrap();
 // Gotta do this, sorry!
-client.set_desktop_id(&quot;org.freedesktop.zbus&quot;).unwrap();
+client.set_desktop_id("org.freedesktop.zbus").unwrap();
 
 let mut location_updated = client.receive_location_updated().unwrap();
 
@@ -256,25 +254,25 @@ let location = LocationProxyBlocking::builder(&amp;conn)
     .build()
     .unwrap();
 println!(
-    &quot;Latitude: {}\nLongitude: {}&quot;,
+    "Latitude: {}\nLongitude: {}",
     location.latitude().unwrap(),
     location.longitude().unwrap(),
 );
 <span class="boring">}</span></code></pre></pre>
-<p>As you can see, nothing changed in the <code>dbus_proxy</code> usage here and the rest largely remained the
+<p>As you can see, nothing changed in the <code>proxy</code> usage here and the rest largely remained the
 same as well. One difference that’s not obvious is that the blocking API for receiving signals,
 implement <a href="https://doc.rust-lang.org/nightly/std/iter/trait.Iterator.html"><code>std::iter::Iterator</code></a> trait instead of <a href="https://docs.rs/futures/0.3.17/futures/stream/trait.Stream.html"><code>futures::stream::Stream</code></a>.</p>
 <h3 id="watching-for-properties"><a class="header" href="#watching-for-properties">Watching for properties</a></h3>
 <p>That’s almost the same as receiving signals:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use zbus::{blocking::Connection, dbus_proxy, Result};
+<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use zbus::{blocking::Connection, proxy, Result};
 </span><span class="boring">
-</span>#[dbus_proxy(
-    interface = &quot;org.freedesktop.systemd1.Manager&quot;,
-    default_service = &quot;org.freedesktop.systemd1&quot;,
-    default_path = &quot;/org/freedesktop/systemd1&quot;
+</span>#[proxy(
+    interface = "org.freedesktop.systemd1.Manager",
+    default_service = "org.freedesktop.systemd1",
+    default_path = "/org/freedesktop/systemd1"
 )]
 trait SystemdManager {
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn log_level(&amp;self) -&gt; zbus::Result&lt;String&gt;;
 }
 
@@ -283,31 +281,31 @@ fn main() -&gt; Result&lt;()&gt; {
 
     let proxy = SystemdManagerProxyBlocking::new(&amp;connection)?;
     let v = proxy.receive_log_level_changed().next().unwrap();
-    println!(&quot;LogLevel changed: {:?}&quot;, v.get());
+    println!("LogLevel changed: {:?}", v.get());
 
     Ok(())
 }</code></pre></pre>
 <h2 id="server"><a class="header" href="#server">Server</a></h2>
 <p>Similarly here, you’d use [<code>blocking::ObjectServer</code>] that is associated with every
-<a href="https://docs.rs/zbus/3/zbus/blocking/struct.Connection.html"><code>blocking::Connection</code></a> instance. While there is no blocking version of <code>Interface</code>,
-<code>dbus_interface</code> allows you to write non-async methods.</p>
+<a href="https://docs.rs/zbus/latest/zbus/blocking/connection/struct.Connection.html"><code>blocking::Connection</code></a> instance. While there is no blocking version of <code>Interface</code>,
+<code>interface</code> allows you to write non-async methods.</p>
 <p><strong>Note:</strong> Even though you can write non-async methods, these methods are still called from an async
 context. Therefore, you can not use blocking API in the method implementation directly. See note at
 the beginning of this chapter for details on why and a possible workaround.</p>
 <pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use std::error::Error;
-</span><span class="boring">use zbus::{blocking::ConnectionBuilder, dbus_interface, fdo, SignalContext};
+</span><span class="boring">use zbus::{blocking::connection, interface, fdo, SignalContext};
 </span><span class="boring">
-</span>use event_listener::Event;
+</span>use event_listener::{Event, Listener};
 
 struct Greeter {
     name: String,
     done: Event,
 }
 
-#[dbus_interface(name = &quot;org.zbus.MyGreeter1&quot;)]
+#[interface(name = "org.zbus.MyGreeter1")]
 impl Greeter {
     fn say_hello(&amp;self, name: &amp;str) -&gt; String {
-        format!(&quot;Hello {}!&quot;, name)
+        format!("Hello {}!", name)
     }
 
     // Rude!
@@ -322,36 +320,36 @@ impl Greeter {
         Ok(())
     }
 
-    /// A &quot;GreeterName&quot; property.
-    #[dbus_interface(property)]
+    /// A "GreeterName" property.
+    #[zbus(property)]
     fn greeter_name(&amp;self) -&gt; &amp;str {
         &amp;self.name
     }
 
-    /// A setter for the &quot;GreeterName&quot; property.
+    /// A setter for the "GreeterName" property.
     ///
     /// Additionally, a `greeter_name_changed` method has been generated for you if you need to
-    /// notify listeners that &quot;GreeterName&quot; was updated. It will be automatically called when
+    /// notify listeners that "GreeterName" was updated. It will be automatically called when
     /// using this setter.
-    #[dbus_interface(property)]
+    #[zbus(property)]
     fn set_greeter_name(&amp;mut self, name: String) {
         self.name = name;
     }
 
     /// A signal; the implementation is provided by the macro.
-    #[dbus_interface(signal)]
+    #[zbus(signal)]
     async fn greeted_everyone(ctxt: &amp;SignalContext&lt;'_&gt;) -&gt; zbus::Result&lt;()&gt;;
 }
 
 fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
     let greeter = Greeter {
-        name: &quot;GreeterName&quot;.to_string(),
+        name: "GreeterName".to_string(),
         done: event_listener::Event::new(),
     };
     let done_listener = greeter.done.listen();
-    let _handle = ConnectionBuilder::session()?
-        .name(&quot;org.zbus.MyGreeter&quot;)?
-        .serve_at(&quot;/org/zbus/MyGreeter&quot;, greeter)?
+    let _handle = connection::Builder::session()?
+        .name("org.zbus.MyGreeter")?
+        .serve_at("/org/zbus/MyGreeter", greeter)?
         .build()?;
 
     done_listener.wait();
