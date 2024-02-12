@@ -8,7 +8,11 @@ use zbus_names::{BusName, InterfaceName, MemberName, UniqueName};
 use zvariant::{ObjectPath, OwnedValue, Value};
 
 use crate::{
-    blocking::Connection, message::Message, proxy::MethodFlags, utils::block_on, Error, Result,
+    blocking::Connection,
+    message::Message,
+    proxy::{MethodFlags, ProxyDefault},
+    utils::block_on,
+    Error, Result,
 };
 
 use crate::fdo;
@@ -353,6 +357,12 @@ impl<'a> Proxy<'a> {
     pub fn into_inner(mut self) -> crate::Proxy<'a> {
         self.azync.take().expect("Inner proxy is `None`")
     }
+}
+
+impl ProxyDefault for Proxy<'_> {
+    const INTERFACE: Option<&'static str> = None;
+    const DESTINATION: Option<&'static str> = None;
+    const PATH: Option<&'static str> = None;
 }
 
 impl<'a> std::convert::AsRef<Proxy<'a>> for Proxy<'a> {
