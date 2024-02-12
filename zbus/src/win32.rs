@@ -212,9 +212,13 @@ pub fn socket_addr_get_pid(addr: &SocketAddr) -> Result<u32, Error> {
     }
 
     let tcp_table = tcp_table.as_mut_ptr().cast::<MIB_TCPTABLE2>();
-    let num_entries = unsafe { (*tcp_table).dwNumEntries };
-    for i in 0..num_entries {
-        let entry = unsafe { *(*tcp_table).table.as_ptr().add(i as usize) };
+    let entries = unsafe {
+        std::slice::from_raw_parts(
+            (*tcp_table).table.as_ptr(),
+            (*tcp_table).dwNumEntries as usize,
+        )
+    };
+    for entry in entries {
         let port = (entry.dwLocalPort & 0xFFFF) as u16;
         let port = u16::from_be(port);
 
