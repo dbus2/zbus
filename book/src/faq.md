@@ -99,16 +99,14 @@ update accordingly.
 However, you can disabling caching for specific properties:
 
 - Add the `#[zbus(property(emits_changed_signal = "false"))]` annotation to the property for which
-  you desire to disable caching on.
+  you desire to disable caching on. For more information about all the possible values for
+  `emits_changed_signal` refer to [`proxy`] documentation.
 
 - Use `proxy::Builder` to build your proxy instance and use [`proxy::Builder::uncached_properties`]
   method to list all properties you wish to disable caching for.
 
 - In order to disable caching for either type of proxy use the [`proxy::Builder::cache_properites`]
   method.
-
-For more information about all the possible values for `emits_changed_signal` refer to [`proxy`]
-documentation.
 
 ## How do I use `Option<T>`` with zbus?
 
