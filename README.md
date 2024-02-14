@@ -15,7 +15,8 @@ The project is divided into the following subcrates:
 * [`zvariant`] and [`zvariant_derive`]: API for encoding/decoding of data to/from D-Bus wire
   format.
 * [`zbus_names`]: A collection of types for various [D-Bus bus names][dbn].
-* [`zbus_xmlgen`]: A developer tool to generate Rust code from D-Bus XML interface descriptions.
+* [`zbus_xml`]: API to handle D-Bus introspection description XML.
+* [`zbus_xmlgen`]: A developer tool to generate Rust code from D-Bus interface description XML.
 
 ## Getting Started
 
@@ -131,6 +132,7 @@ There are many other D-Bus crates out there with various levels of maturity and 
 [`zbus`]: zbus/README.md
 [`zbus_macros`]: zbus_macros/README.md
 [`zbus_names`]: zbus_names/README.md
+[`zbus_xml`]: zbus_xml/README.md
 [`zbus_xmlgen`]: zbus_xmlgen/README.md
 [`zvariant`]: zvariant/README.md
 [`zvariant_derive`]: zvariant_derive/README.md
