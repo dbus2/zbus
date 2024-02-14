@@ -147,16 +147,16 @@ enabled.
 
 **Note**: We hope to be able to remove #2 and #4, once [specialization] lands in stable Rust.
 
-[`proxy::Builder::uncached_properties`]: https://docs.rs/zbus/latest/zbus/proxy/struct.Builder.html#method.uncached_properties
-[`proxy::Builder::cache_properites`]: https://docs.rs/zbus/latest/zbus/proxy/struct.Builder.html#method.cache_properties
-[`proxy`]: https://docs.rs/zbus/latest/zbus/attr.proxy.html
+[`proxy::Builder::uncached_properties`]: https://docs.rs/zbus/4/zbus/proxy/struct.Builder.html#method.uncached_properties
+[`proxy::Builder::cache_properites`]: https://docs.rs/zbus/4/zbus/proxy/struct.Builder.html#method.cache_properties
+[`proxy`]: https://docs.rs/zbus/4/zbus/attr.proxy.html
 [tctiog]: https://github.com/tokio-rs/tokio/issues/2201
-[`Type`]: https://docs.rs/zvariant/latest/zvariant/derive.Type.html
-[`SerializeDict`]: https://docs.rs/zvariant/latest/zvariant/derive.SerializeDict.html
-[`DeserializeDict`]: https://docs.rs/zvariant/latest/zvariant/derive.DeserializeDict.html
-[`MessageStream`]: https://docs.rs/zbus/latest/zbus/struct.MessageStream.html
+[`Type`]: https://docs.rs/zvariant/4/zvariant/derive.Type.html
+[`SerializeDict`]: https://docs.rs/zvariant/4/zvariant/derive.SerializeDict.html
+[`DeserializeDict`]: https://docs.rs/zvariant/4/zvariant/derive.DeserializeDict.html
+[`MessageStream`]: https://docs.rs/zbus/4/zbus/struct.MessageStream.html
 [nonull]: https://gitlab.freedesktop.org/dbus/dbus/-/issues/25
 [dsi]: http://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces
-[`Optional<T>`]: https://docs.rs/zvariant/latest/zvariant/struct.Optional.html
+[`Optional<T>`]: https://docs.rs/zvariant/4/zvariant/struct.Optional.html
 [`d-feet`]: https://wiki.gnome.org/Apps/DFeet
 [specialization]: https://rust-lang.github.io/rfcs/1210-impl-specialization.html
