@@ -98,17 +98,17 @@ update accordingly.
 
 However, you can disabling caching for specific properties:
 
-- Add the `#[zbus(property(emits_changed_signal = "false"))]` annotation to the property
-for which you desire to disable caching on.
+- Add the `#[zbus(property(emits_changed_signal = "false"))]` annotation to the property for which
+  you desire to disable caching on.
 
-- Use `proxy::Builder` to build your proxy instance and use `proxy::Builder::uncached_properties` method
-to list all properties you wish to disable caching for.
+- Use `proxy::Builder` to build your proxy instance and use [`proxy::Builder::uncached_properties`]
+  method to list all properties you wish to disable caching for.
 
-- In order to disable caching for either type of proxy use the `proxy::Builder::cache_properites` 
-method.
+- In order to disable caching for either type of proxy use the [`proxy::Builder::cache_properites`]
+  method.
 
-For more information about all the possible values for `emits_changed_signal` refer
- to [`proxy`](https://docs.rs/zbus/latest/zbus/attr.proxy.html) documentation.
+For more information about all the possible values for `emits_changed_signal` refer to [`proxy`]
+documentation.
 
 ## How do I use `Option<T>`` with zbus?
 
@@ -149,6 +149,9 @@ enabled.
 
 **Note**: We hope to be able to remove #2 and #4, once [specialization] lands in stable Rust.
 
+[`proxy::Builder::uncached_properties`]: https://docs.rs/zbus/latest/zbus/proxy/struct.Builder.html#method.uncached_properties
+[`proxy::Builder::cache_properites`]: https://docs.rs/zbus/latest/zbus/proxy/struct.Builder.html#method.cache_properties
+[`proxy`]: https://docs.rs/zbus/latest/zbus/attr.proxy.html
 [tctiog]: https://github.com/tokio-rs/tokio/issues/2201
 [`Type`]: https://docs.rs/zvariant/latest/zvariant/derive.Type.html
 [`SerializeDict`]: https://docs.rs/zvariant/latest/zvariant/derive.SerializeDict.html
