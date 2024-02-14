@@ -354,4 +354,4 @@ iface.greeter_name_changed(iface_ref.signal_context()).await?;
 ```
 
 [D-Bus concepts]: concepts.html#bus-name--service-name
-[didoc]: https://docs.rs/zbus/latest/zbus/attr.interface.html
+[didoc]: https://docs.rs/zbus/4/zbus/attr.interface.html

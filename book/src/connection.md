@@ -73,9 +73,9 @@ cargo feature of `zbus` is enabled.
 [NetworkManager]: https://developer.gnome.org/NetworkManager/stable/spec.html
 [BlueZ]: https://git.kernel.org/pub/scm/bluetooth/bluez.git/tree/doc
 [PID1]: https://www.freedesktop.org/wiki/Software/systemd/dbus/
-[`futures::stream::Stream`]: https://docs.rs/futures/latest/futures/stream/trait.Stream.html
-[`MessageStream`]: https://docs.rs/zbus/latest/zbus/struct.MessageStream.html
-[`connection::Builder::address`]: https://docs.rs/zbus/latest/zbus/connection/struct.Builder.html#method.address
+[`futures::stream::Stream`]: https://docs.rs/futures/4/futures/stream/trait.Stream.html
+[`MessageStream`]: https://docs.rs/zbus/4/zbus/struct.MessageStream.html
+[`connection::Builder::address`]: https://docs.rs/zbus/4/zbus/connection/struct.Builder.html#method.address
 [dspec]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
 
 [^bus-less] Unless you implemented them, none of the bus methods will exist.
