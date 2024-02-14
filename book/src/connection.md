@@ -75,7 +75,7 @@ cargo feature of `zbus` is enabled.
 [PID1]: https://www.freedesktop.org/wiki/Software/systemd/dbus/
 [`futures::stream::Stream`]: https://docs.rs/futures/latest/futures/stream/trait.Stream.html
 [`MessageStream`]: https://docs.rs/zbus/latest/zbus/struct.MessageStream.html
-[`connection::Builder::address`]: https://docs.rs/zbus/latest/zbus/connection/struct.ConnectionBuilder.html#method.address
+[`connection::Builder::address`]: https://docs.rs/zbus/latest/zbus/connection/struct.Builder.html#method.address
 [dspec]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
 
 [^bus-less] Unless you implemented them, none of the bus methods will exist.
