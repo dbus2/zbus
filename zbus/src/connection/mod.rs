@@ -4,8 +4,6 @@ use enumflags2::BitFlags;
 use event_listener::{Event, EventListener};
 use ordered_stream::{OrderedFuture, OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
-#[cfg(unix)]
-use std::os::fd::AsFd;
 use std::{
     collections::HashMap,
     io::{self, ErrorKind},
@@ -274,35 +272,15 @@ impl OrderedFuture for PendingMethodCall {
 impl Connection {
     /// Send `msg` to the peer.
     pub async fn send(&self, msg: &Message) -> Result<()> {
-        let data = msg.data();
         #[cfg(unix)]
-        if !data.fds().is_empty() && !self.inner.cap_unix_fd {
+        if !msg.data().fds().is_empty() && !self.inner.cap_unix_fd {
             return Err(Error::Unsupported);
         }
-        let serial = msg.primary_header().serial_num();
 
-        trace!("Sending message: {:?}", msg);
         self.inner.activity_event.notify(usize::MAX);
         let mut write = self.inner.socket_write.lock().await;
-        let mut pos = 0;
-        while pos < data.len() {
-            #[cfg(unix)]
-            let fds = if pos == 0 {
-                data.fds().iter().map(|f| f.as_fd()).collect()
-            } else {
-                vec![]
-            };
-            pos += write
-                .sendmsg(
-                    &data[pos..],
-                    #[cfg(unix)]
-                    &fds,
-                )
-                .await?;
-        }
-        trace!("Sent message with serial: {}", serial);
 
-        Ok(())
+        write.send_message(msg).await
     }
 
     /// Send a method call.

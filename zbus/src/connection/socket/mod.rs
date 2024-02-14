@@ -10,10 +10,11 @@ use async_io::Async;
 use std::io;
 #[cfg(not(feature = "tokio"))]
 use std::sync::Arc;
+use tracing::trace;
 
-use crate::fdo::ConnectionCredentials;
+use crate::{fdo::ConnectionCredentials, Message};
 #[cfg(unix)]
-use std::os::fd::{BorrowedFd, OwnedFd};
+use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 
 #[cfg(unix)]
 type RecvmsgResult = io::Result<(usize, Vec<OwnedFd>)>;
@@ -73,6 +74,38 @@ pub trait ReadHalf: std::fmt::Debug + Send + Sync + 'static {
 /// See [`Socket`] for more details.
 #[async_trait::async_trait]
 pub trait WriteHalf: std::fmt::Debug + Send + Sync + 'static {
+    /// Send a message on the socket.
+    ///
+    /// This is the higher-level method to send a full D-Bus message.
+    ///
+    /// The default implementation uses `sendmsg` to send the message. Implementers should override
+    /// either this or `sendmsg`.
+    async fn send_message(&mut self, msg: &Message) -> crate::Result<()> {
+        let data = msg.data();
+        let serial = msg.primary_header().serial_num();
+
+        trace!("Sending message: {:?}", msg);
+        let mut pos = 0;
+        while pos < data.len() {
+            #[cfg(unix)]
+            let fds = if pos == 0 {
+                data.fds().iter().map(|f| f.as_fd()).collect()
+            } else {
+                vec![]
+            };
+            pos += self
+                .sendmsg(
+                    &data[pos..],
+                    #[cfg(unix)]
+                    &fds,
+                )
+                .await?;
+        }
+        trace!("Sent message with serial: {}", serial);
+
+        Ok(())
+    }
+
     /// Attempt to send a message on the socket
     ///
     /// On success, return the number of bytes written. There may be a partial write, in
@@ -84,11 +117,16 @@ pub trait WriteHalf: std::fmt::Debug + Send + Sync + 'static {
     ///
     /// If the underlying transport does not support transmitting file descriptors, this
     /// will return `Err(ErrorKind::InvalidInput)`.
+    ///
+    /// The default implementation simply panics. Implementers must override either `send_message`
+    /// or this method.
     async fn sendmsg(
         &mut self,
-        buffer: &[u8],
-        #[cfg(unix)] fds: &[BorrowedFd<'_>],
-    ) -> io::Result<usize>;
+        _buffer: &[u8],
+        #[cfg(unix)] _fds: &[BorrowedFd<'_>],
+    ) -> io::Result<usize> {
+        unimplemented!("`WriteHalf` implementers must either override `send_message` or `sendmsg`");
+    }
 
     /// The dbus daemon on `freebsd` and `dragonfly` currently requires sending the zero byte
     /// as a separate message with SCM_CREDS, as part of the `EXTERNAL` authentication on unix
@@ -134,6 +172,10 @@ impl ReadHalf for Box<dyn ReadHalf> {
 
 #[async_trait::async_trait]
 impl WriteHalf for Box<dyn WriteHalf> {
+    async fn send_message(&mut self, msg: &Message) -> crate::Result<()> {
+        (**self).send_message(msg).await
+    }
+
     async fn sendmsg(
         &mut self,
         buffer: &[u8],
