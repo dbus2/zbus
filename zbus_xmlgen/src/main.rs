@@ -61,7 +61,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .cloned()
         .partition(|i| i.name().starts_with(fdo_iface_prefix));
 
-    if !fdo_iface_prefix.is_empty() {
+    if !fdo_standard_ifaces.is_empty() {
         eprintln!("Skipping `org.freedesktop.DBus` interfaces, please use https://docs.rs/zbus/latest/zbus/fdo/index.html")
     }
 
