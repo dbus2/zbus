@@ -22,13 +22,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Check build with MSRV
         run: |
-          cargo check
-          cargo check --target x86_64-pc-windows-gnu
-          cargo check --target x86_64-apple-darwin
-          cargo check --target x86_64-unknown-freebsd
-          cargo check --target x86_64-unknown-netbsd
+          cargo --locked check
+          cargo --locked check --target x86_64-pc-windows-gnu
+          cargo --locked check --target x86_64-apple-darwin
+          cargo --locked check --target x86_64-unknown-freebsd
+          cargo --locked check --target x86_64-unknown-netbsd
         # This would be nice but some optional deps (e.g `time`) move very fast wrt to MSRV.
-        # cargo check --all-features
+        # cargo --locked check --all-features
 
   lint:
     runs-on: ubuntu-latest
@@ -44,9 +44,9 @@ jobs:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
       - name: Check formatting
-        run: cargo fmt -- --check
+        run: cargo --locked fmt -- --check
       - name: Catch common mistakes and unwrap calls
-        run: cargo clippy -- -D warnings -D clippy::large_futures
+        run: cargo --locked clippy -- -D warnings -D clippy::large_futures
 
   linux_test:
     runs-on: ubuntu-latest
@@ -72,20 +72,20 @@ jobs:
           mkdir -p /run/user/$UID
           sed -e s/UID/$UID/ -e s/PATH/path/ CI/dbus-session.conf > /tmp/dbus-session.conf
           sed -e s/UID/$UID/ -e s/PATH/abstract/ CI/dbus-session.conf > /tmp/dbus-session-abstract.conf
-          dbus-run-session --config-file /tmp/dbus-session-abstract.conf -- cargo test --verbose -- basic_connection
+          dbus-run-session --config-file /tmp/dbus-session-abstract.conf -- cargo --locked test --verbose -- basic_connection
           # All features except tokio.
           dbus-run-session --config-file /tmp/dbus-session.conf -- \
-            cargo test --verbose --features uuid,url,time,chrono,option-as-array,vsock,bus-impl \
+            cargo --locked test --verbose --features uuid,url,time,chrono,option-as-array,vsock,bus-impl \
               -- --skip fdpass_systemd
           # check cookie-sha1 auth against dbus-daemon
           sed -i s/EXTERNAL/DBUS_COOKIE_SHA1/g /tmp/dbus-session.conf
-          dbus-run-session --config-file /tmp/dbus-session.conf -- cargo test --verbose -- basic_connection
+          dbus-run-session --config-file /tmp/dbus-session.conf -- cargo --locked test --verbose -- basic_connection
           # Test tokio support.
           dbus-run-session --config-file /tmp/dbus-session.conf -- \
-            cargo test --verbose --tests -p zbus --no-default-features \
+            cargo --locked test --verbose --tests -p zbus --no-default-features \
               --features tokio-vsock -- --skip fdpass_systemd
           dbus-run-session --config-file /tmp/dbus-session.conf -- \
-            cargo test --verbose --doc --no-default-features connection::Connection::executor
+            cargo --locked test --verbose --doc --no-default-features connection::Connection::executor
 
   windows_test:
     runs-on: windows-latest
@@ -194,9 +194,9 @@ jobs:
         run: |
           $env:PATH += ";C:\bin"
           Start-Process dbus-daemon.exe --config-file=CI/win32-session.conf
-          cargo test
+          cargo --locked test
           # tokio feature
-          cargo test --no-default-features --features tokio
+          cargo --locked test --no-default-features --features tokio
 
       - name: Test gdbus feature
         run: |
@@ -207,7 +207,7 @@ jobs:
           # The gdbus process above will exit when idle for more than three seconds, usually right in the middle
           # of the doc tests. This process will keep it alive.
           Start-Process gdbus.exe 'monitor -e -d org.freedesktop.DBus'
-          cargo test --features zbus/windows-gdbus
+          cargo --locked test --features zbus/windows-gdbus
 
   cross_check:
     runs-on: ubuntu-latest
@@ -222,9 +222,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Check portability
         run: |
-          cargo check --target x86_64-apple-darwin
-          cargo check --target x86_64-unknown-freebsd
-          cargo check --target x86_64-unknown-netbsd
+          cargo --locked check --target x86_64-apple-darwin
+          cargo --locked check --target x86_64-unknown-freebsd
+          cargo --locked check --target x86_64-unknown-netbsd
 
   zvariant_fuzz:
     runs-on: ubuntu-latest
@@ -239,9 +239,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Fuzz zvariant
         run: |
-          cargo install cargo-fuzz
-          cargo fuzz run --fuzz-dir zvariant/fuzz dbus -- -max_total_time=30 -max_len=100M
-          cargo fuzz run --fuzz-dir zvariant/fuzz gvariant -- -max_total_time=30 -max_len=100M
+          cargo --locked install cargo-fuzz
+          cargo --locked fuzz run --fuzz-dir zvariant/fuzz dbus -- -max_total_time=30 -max_len=100M
+          cargo --locked fuzz run --fuzz-dir zvariant/fuzz gvariant -- -max_total_time=30 -max_len=100M
 
   doc_build:
     runs-on: ubuntu-latest
@@ -254,4 +254,4 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@v2
       - name: Check documentation build
-        run: cargo doc --all-features
+        run: cargo --locked doc --all-features
