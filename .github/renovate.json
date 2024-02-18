@@ -1,0 +1,14 @@
+{
+  "packageRules": [
+    {
+      "matchManagers": ["github-actions"],
+      "commitMessagePrefix": "⬆️  "
+    },
+    {
+      "matchManagers": ["cargo"],
+      "commitMessagePrefix": "⬆️  ",
+      "commitMessageTopic": "{{depName}}",
+      "lockFileMaintenance": { "enabled": true }
+    }
+  ]
+}
