@@ -2,7 +2,7 @@
 //
 // NB: It only works on a GNOME (based) system.
 //
-// Usage is simple. Either pass a '+' as argument or no argument on commandline, and it incresses
+// Usage is simple. Either pass a '+' as argument or no argument on commandline, and it increases
 // the brightness by 5%. Pass '-' for decreasing it by 5%.
 
 fn main() {
