@@ -2,7 +2,6 @@ target
 zbus/target
 zvariant/target
 **/*.rs.bk
-Cargo.lock
 *.swp
 *.orig
 settings.json
