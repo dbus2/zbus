@@ -33,4 +33,4 @@ serde = { version = "1.0", features = ["derive"] }
 trybuild = "1.0.71"
 rustversion = "1.0.9"
 async-io = "1.13.0"
-futures-util = { version = "0.3.25", default-features = false }
+futures-util = { version = "0.3.30", default-features = false }
