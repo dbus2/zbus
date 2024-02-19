@@ -1,8 +1,8 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens};
 use syn::{
-    self, spanned::Spanned, Attribute, Data, DataEnum, DeriveInput, Error, Expr, Fields, Generics,
-    Ident, Lifetime, LifetimeDef,
+    spanned::Spanned, Attribute, Data, DataEnum, DeriveInput, Error, Expr, Fields, Generics, Ident,
+    Lifetime, LifetimeDef,
 };
 
 use crate::utils::*;

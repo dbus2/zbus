@@ -4,7 +4,6 @@ use std::{
     error::Error,
     fs::{File, OpenOptions},
     io::Write,
-    result::Result,
 };
 
 use clap::Parser;
