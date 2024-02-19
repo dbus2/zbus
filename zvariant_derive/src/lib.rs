@@ -11,7 +11,7 @@
 )))]
 
 use proc_macro::TokenStream;
-use syn::{self, DeriveInput};
+use syn::DeriveInput;
 
 mod dict;
 mod r#type;

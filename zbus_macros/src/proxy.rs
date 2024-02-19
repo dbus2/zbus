@@ -3,7 +3,7 @@ use proc_macro2::{Literal, Span, TokenStream};
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use regex::Regex;
 use syn::{
-    self, fold::Fold, parse_quote, parse_str, spanned::Spanned, AttributeArgs, Error, FnArg, Ident,
+    fold::Fold, parse_quote, parse_str, spanned::Spanned, AttributeArgs, Error, FnArg, Ident,
     ItemTrait, Path, ReturnType, TraitItemMethod,
 };
 use zvariant_utils::{case, def_attrs, macros::AttrParse, old_new};
