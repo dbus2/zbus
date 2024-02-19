@@ -134,7 +134,7 @@ tracing-subscriber = { version = "0.3.16", features = [
   "fmt",
   "ansi",
 ], default-features = false }
-tempfile = "3.3.0"
+tempfile = "3.10.0"
 
 [package.metadata.docs.rs]
 all-features = true
