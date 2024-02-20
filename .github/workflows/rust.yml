@@ -13,7 +13,7 @@ jobs:
       RUSTFLAGS: -D warnings
       MSRV: 1.75.0
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.MSRV }}
@@ -37,7 +37,7 @@ jobs:
       RUST_BACKTRACE: full
       RUST_LOG: trace
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly
@@ -56,7 +56,7 @@ jobs:
       RUST_BACKTRACE: full
       RUST_LOG: trace
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Setup
         run: |
           sudo mkdir -p /run/user/$UID |
@@ -99,7 +99,7 @@ jobs:
       DBUS_SESSION_BUS_ADDRESS: tcp:host=127.0.0.1,port=9876
       ZBUS_GDBUS_TEST: 1
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Cache Dependencies
         id: cache-deps
@@ -214,7 +214,7 @@ jobs:
     env:
       RUSTFLAGS: -D warnings
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
@@ -232,7 +232,7 @@ jobs:
       RUSTFLAGS: -D warnings
       RUST_BACKTRACE: full
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly
@@ -248,7 +248,7 @@ jobs:
     env:
       RUSTDOCFLAGS: -D warnings
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
