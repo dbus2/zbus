@@ -30,7 +30,7 @@ serde_bytes = { version = "0.11", optional = true }
 static_assertions = "1.1.0"
 uuid = { version = "1.2.1", features = ["serde"], optional = true }
 url = { version = "2.3.1", features = ["serde"], optional = true }
-time = { version = "0.3.16", features = ["serde"], optional = true }
+time = { version = "0.3.34", features = ["serde"], optional = true }
 chrono = { version = "0.4.34", features = [
     "serde",
 ], default-features = false, optional = true }
