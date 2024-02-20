@@ -1,5 +1,5 @@
 use pretty_assertions::assert_eq;
-use std::{env, error::Error, io::Write, path::Path, result::Result};
+use std::{env, error::Error, io::Write, path::Path};
 
 use zbus_xml::Node;
 use zbus_xmlgen::GenTrait;

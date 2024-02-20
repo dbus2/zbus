@@ -281,7 +281,7 @@ impl<'de> Deserialize<'de> for OwnedValue {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, error::Error, result::Result};
+    use std::{collections::HashMap, error::Error};
 
     use crate::{serialized::Context, to_bytes, OwnedValue, Value, LE};
 
