@@ -1342,9 +1342,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        connection, interface, object_server::SignalContext, proxy, utils::block_on, AsyncDrop,
-    };
+    use crate::{connection, interface, object_server::SignalContext, proxy, utils::block_on};
     use futures_util::StreamExt;
     use ntest::timeout;
     use test_log::test;

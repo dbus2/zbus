@@ -359,7 +359,7 @@ static SERIAL_NUM: AtomicU32 = AtomicU32::new(1);
 mod tests {
     use crate::message::{Field, Fields, Header, PrimaryHeader, Type};
 
-    use std::{error::Error, result::Result};
+    use std::error::Error;
     use test_log::test;
     use zbus_names::{InterfaceName, MemberName};
     use zvariant::{ObjectPath, Signature};
