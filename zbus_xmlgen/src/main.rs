@@ -8,7 +8,6 @@ use std::{
     io::Write,
     path::Path,
     process::{Command, Stdio},
-    result::Result,
 };
 
 use zbus::{

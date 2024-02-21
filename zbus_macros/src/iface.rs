@@ -2,7 +2,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use std::collections::BTreeMap;
 use syn::{
-    self, parse_quote, punctuated::Punctuated, spanned::Spanned, AngleBracketedGenericArguments,
+    parse_quote, punctuated::Punctuated, spanned::Spanned, AngleBracketedGenericArguments,
     AttributeArgs, Error, FnArg, GenericArgument, ImplItem, ItemImpl, Lit::Str, Meta,
     Meta::NameValue, MetaList, MetaNameValue, NestedMeta, PatType, PathArguments, ReturnType,
     Signature, Token, Type, TypePath,
