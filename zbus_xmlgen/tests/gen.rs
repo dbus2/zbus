@@ -8,8 +8,8 @@ macro_rules! gen_diff {
     ($infile:literal, $outfile:literal) => {{
         let input = include_str!(concat!("data/", $infile));
         let expected = include_str!(concat!("data/", $outfile));
-        #[cfg(windows)]
-        let expected = expected.replace("\r\n", "\n");
+        // #[cfg(windows)]
+        // let expected = expected.replace("\r\n", "\n");
         let node = Node::from_reader(input.as_bytes())?;
         let gen = GenTrait {
             interface: &node.interfaces()[0],
