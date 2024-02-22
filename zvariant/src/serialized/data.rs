@@ -304,11 +304,7 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
                 }
                 #[cfg(not(unix))]
                 {
-                    crate::gvariant::Deserializer::<_, ()>::new(
-                        self.bytes(),
-                        signature,
-                        self.context,
-                    )
+                    crate::gvariant::Deserializer::new(self.bytes(), signature, self.context)
                 }
             }
             .map(Deserializer::GVariant)?,
