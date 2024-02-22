@@ -48,6 +48,6 @@ pub use object_server::InterfaceRef;
 
 #[deprecated(since = "4.0.0", note = "Use `connection::Builder` instead")]
 #[doc(hidden)]
-pub use connection::Builder;
+pub use connection::Builder as ConnectionBuilder;
 
 pub mod fdo;
