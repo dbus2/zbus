@@ -1070,3 +1070,52 @@ mod tests {
         }
     }
 }
+
+#[test]
+#[ntest::timeout(15000)]
+fn issue_647() {
+    struct MyIfaceImpl(u32);
+
+    #[crate::interface(name = "org.freedesktop.zbus.Issue647")]
+    impl MyIfaceImpl {
+        #[zbus(property)]
+        fn brightness(&self) -> fdo::Result<u32> {
+            Ok(self.0)
+        }
+        #[zbus(property)]
+        fn set_brightness(&mut self, value: u32) -> fdo::Result<()> {
+            self.0 = value;
+            Ok(())
+        }
+    }
+
+    #[crate::proxy(
+        name = "org.freedesktop.zbus.Issue647",
+        default_service = "org.freedesktop.zbus.Issue647"
+    )]
+    trait MyIface {
+        #[zbus(property)]
+        fn brightness(&self) -> fdo::Result<u32>;
+        #[zbus(property)]
+        fn set_brightness(&self, value: u32) -> fdo::Result<()>;
+    }
+
+    // The issue is about property getter hanging on the client side when used through the blocking
+    // proxy. For details: https://github.com/dbus2/zbus/issues/647
+    let iface = MyIfaceImpl(0);
+    let conn = zbus::blocking::connection::Builder::session()
+        .unwrap()
+        .serve_at("/org/freedesktop/zbus/Issue647", iface)
+        .unwrap()
+        .name("org.freedesktop.zbus.Issue647")
+        .unwrap()
+        .build()
+        .unwrap();
+    let proxy = MyIfaceProxyBlocking::builder(&conn)
+        .path("/org/freedesktop/zbus/Issue647")
+        .unwrap()
+        .build()
+        .unwrap();
+    proxy.set_brightness(1).unwrap();
+    assert_eq!(proxy.brightness().unwrap(), 1);
+}
