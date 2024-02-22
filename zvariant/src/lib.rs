@@ -133,7 +133,7 @@ mod tests {
     use std::str::FromStr;
 
     #[cfg(feature = "gvariant")]
-    use glib::{Bytes, FromVariant, Variant};
+    use glib::{variant::FromVariant, Bytes, Variant};
     use serde::{Deserialize, Serialize};
 
     use crate::{serialized::Data, to_bytes, to_bytes_for_signature, MaxDepthExceeded};
