@@ -248,7 +248,7 @@ async fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
         &amp;("my-app", 0u32, "dialog-information", "A summary", "Some body",
           vec![""; 0], HashMap::&lt;&amp;str, &amp;Value&gt;::new(), 5000),
     ).await?;
-    let reply: u32 = m.body().unwrap();
+    let reply: u32 = m.body().deserialize().unwrap();
     dbg!(reply);
     Ok(())
 }</code></pre></pre>
@@ -258,16 +258,19 @@ arguments with the wrong type or other kind of errors (what would happen if you 
 of <code>0u32</code>?).</p>
 <p>Instead, we want to wrap this <code>Notify</code> D-Bus method in a Rust function. Let’s see how next.</p>
 <h2 id="trait-derived-proxy-call"><a class="header" href="#trait-derived-proxy-call">Trait-derived proxy call</a></h2>
-<p>A trait declaration <code>T</code> with a <code>dbus_proxy</code> attribute will have a derived <code>TProxy</code> and
+<p>A trait declaration <code>T</code> with a <code>proxy</code> attribute will have a derived <code>TProxy</code> and
 <code>TProxyBlocking</code> (see <a href="blocking.html">chapter on “blocking”</a> for more information on that) implemented thanks
 to procedural macros. The trait methods will have respective <code>impl</code> methods wrapping the D-Bus
 calls:</p>
 <pre><pre class="playground"><code class="language-rust no_run edition2018">use std::collections::HashMap;
 use std::error::Error;
 
-use zbus::{zvariant::Value, dbus_proxy, Connection};
+use zbus::{zvariant::Value, proxy, Connection};
 
-#[dbus_proxy]
+#[proxy(
+    default_service = "org.freedesktop.Notifications",
+    default_path = "/org/freedesktop/Notifications"
+)]
 trait Notifications {
     /// Call the org.freedesktop.Notifications.Notify D-Bus method
     fn notify(&amp;self,
@@ -315,23 +318,65 @@ convenient to use.</p>
 <h3 id="signals"><a class="header" href="#signals">Signals</a></h3>
 <p>Signals are like methods, except they don’t expect a reply. They are typically emitted by services
 to notify interested peers of any changes to the state of the service. zbus provides you a
-<a href="https://docs.rs/futures/0.3.17/futures/stream/trait.Stream.html"><code>Stream</code></a>-based API for receiving signals.</p>
-<p>Let’s look at this API in action, with an example where we get our location from
+<a href="https://docs.rs/futures/4/futures/stream/trait.Stream.html"><code>Stream</code></a>-based API for receiving signals.</p>
+<p>Let’s look at this API in action, with an example where we monitor started systemd units.</p>
+<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">// NOTE: When changing this, please also keep `zbus/examples/watch-systemd-jobs.rs` in sync.
+</span>use async_std::stream::StreamExt;
+use zbus::Connection;
+use zbus_macros::proxy;
+use zvariant::OwnedObjectPath;
+
+<span class="boring">fn main() {
+</span><span class="boring">    async_io::block_on(watch_systemd_jobs()).expect("Error listening to signal");
+</span><span class="boring">}
+</span>
+#[proxy(
+    default_service = "org.freedesktop.systemd1",
+    default_path = "/org/freedesktop/systemd1",
+    interface = "org.freedesktop.systemd1.Manager"
+)]
+trait Systemd1Manager {
+    // Defines signature for D-Bus signal named `JobNew`
+    #[zbus(signal)]
+    fn job_new(&amp;self, id: u32, job: OwnedObjectPath, unit: String) -&gt; zbus::Result&lt;()&gt;;
+}
+
+async fn watch_systemd_jobs() -&gt; zbus::Result&lt;()&gt; {
+    let connection = Connection::system().await?;
+    // `Systemd1ManagerProxy` is generated from `Systemd1Manager` trait
+    let systemd_proxy = Systemd1ManagerProxy::new(&amp;connection).await?;
+    // Method `receive_job_new` is generated from `job_new` signal
+    let mut new_jobs_stream = systemd_proxy.receive_job_new().await?;
+
+    while let Some(msg) = new_jobs_stream.next().await {
+        // struct `JobNewArgs` is generated from `job_new` signal function arguments
+        let args: JobNewArgs = msg.args().expect("Error parsing message");
+
+        println!(
+            "JobNew received: unit={} id={} path={}",
+            args.unit, args.id, args.job
+        );
+    }
+
+    panic!("Stream ended unexpectedly");
+}</code></pre></pre>
+<h4 id="more-advanced-example"><a class="header" href="#more-advanced-example">More advanced example</a></h4>
+<p>Here is a more elaborate example, where we get our location from
 <a href="https://gitlab.freedesktop.org/geoclue/geoclue/-/blob/master/README.md">Geoclue</a>:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018">use zbus::{zvariant::ObjectPath, dbus_proxy, Connection, Result};
+<pre><pre class="playground"><code class="language-rust no_run edition2018">use zbus::{zvariant::ObjectPath, proxy, Connection, Result};
 use futures_util::stream::StreamExt;
 
-#[dbus_proxy(
+#[proxy(
     default_service = "org.freedesktop.GeoClue2",
     interface = "org.freedesktop.GeoClue2.Manager",
     default_path = "/org/freedesktop/GeoClue2/Manager"
 )]
 trait Manager {
-    #[dbus_proxy(object = "Client")]
+    #[zbus(object = "Client")]
     fn get_client(&amp;self);
 }
 
-#[dbus_proxy(
+#[proxy(
     default_service = "org.freedesktop.GeoClue2",
     interface = "org.freedesktop.GeoClue2.Client"
 )]
@@ -339,21 +384,21 @@ trait Client {
     fn start(&amp;self) -&gt; Result&lt;()&gt;;
     fn stop(&amp;self) -&gt; Result&lt;()&gt;;
 
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn set_desktop_id(&amp;mut self, id: &amp;str) -&gt; Result&lt;()&gt;;
 
-    #[dbus_proxy(signal)]
+    #[zbus(signal)]
     fn location_updated(&amp;self, old: ObjectPath&lt;'_&gt;, new: ObjectPath&lt;'_&gt;) -&gt; Result&lt;()&gt;;
 }
 
-#[dbus_proxy(
+#[proxy(
     default_service = "org.freedesktop.GeoClue2",
     interface = "org.freedesktop.GeoClue2.Location"
 )]
 trait Location {
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn latitude(&amp;self) -&gt; Result&lt;f64&gt;;
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn longitude(&amp;self) -&gt; Result&lt;f64&gt;;
 }
 
@@ -368,7 +413,7 @@ async fn main() -&gt; Result&lt;()&gt; {
 
     let props = zbus::fdo::PropertiesProxy::builder(&amp;conn)
         .destination("org.freedesktop.GeoClue2")?
-        .path(client.path())?
+        .path(client.inner().path())?
         .build()
         .await?;
     let mut props_changed = props.receive_properties_changed().await?;
@@ -414,29 +459,29 @@ async fn main() -&gt; Result&lt;()&gt; {
 LOC) code for getting our location.</p>
 <h3 id="properties"><a class="header" href="#properties">Properties</a></h3>
 <p>Interfaces can have associated properties, which can be read or set with the
-<code>org.freedesktop.DBus.Properties</code> interface. Here again, the <code>#[dbus_proxy]</code> attribute comes to the
+<code>org.freedesktop.DBus.Properties</code> interface. Here again, the <code>#[proxy]</code> attribute comes to the
 rescue to help you. You can annotate a trait method to be a getter:</p>
-<pre><code class="language-rust noplayground"><span class="boring">use zbus::{dbus_proxy, Result};
+<pre><code class="language-rust noplayground"><span class="boring">use zbus::{proxy, Result};
 </span><span class="boring">
-</span>#[dbus_proxy]
+</span>#[proxy]
 trait MyInterface {
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn state(&amp;self) -&gt; Result&lt;String&gt;;
 }</code></pre>
 <p>The <code>state()</code> method will translate to a <code>"State"</code> property <code>Get</code> call.</p>
 <p>To set the property, prefix the name of the property with <code>set_</code>.</p>
 <p>For a more real world example, let’s try and read two properties from systemd’s main service:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use zbus::{Connection, dbus_proxy, Result};
+<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use zbus::{Connection, proxy, Result};
 </span><span class="boring">
-</span>#[dbus_proxy(
+</span>#[proxy(
     interface = "org.freedesktop.systemd1.Manager",
     default_service = "org.freedesktop.systemd1",
     default_path = "/org/freedesktop/systemd1"
 )]
 trait SystemdManager {
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn architecture(&amp;self) -&gt; Result&lt;String&gt;;
-    #[dbus_proxy(property)]
+    #[zbus(property)]
     fn environment(&amp;self) -&gt; Result&lt;Vec&lt;String&gt;&gt;;
 }
 
@@ -471,28 +516,28 @@ Environment variables:
 </code></pre>
 <h4 id="trait-bounds-for-property-values"><a class="header" href="#trait-bounds-for-property-values">Trait-bounds for property values</a></h4>
 <p>If you use custom types for property values, you might get a compile error for missing
-<code>From&lt;zvariant::Value&lt;'_&gt;&gt;</code> and/or <code>From&lt;OwnedValue&gt;</code> implementations. This is because properties
-are always sent as Variants on the bus, so you need to implement these conversions for your custom
-types.</p>
-<p>Not to worry though, the <code>zvariant</code> crate provides a <a href="https://docs.rs/zvariant/3/zvariant/derive.Value.html"><code>Value</code></a> and <a href="https://docs.rs/zvariant/3/zvariant/derive.OwnedValue.html"><code>OwnedValue</code></a> derive macro to
+<code>TryFrom&lt;zvariant::Value&lt;'_&gt;&gt;</code> and/or <code>TryFrom&lt;OwnedValue&gt;</code> implementations. This is because
+properties are always sent as Variants on the bus, so you need to implement these conversions for
+your custom types.</p>
+<p>Not to worry though, the <code>zvariant</code> crate provides a <a href="https://docs.rs/zvariant/4/zvariant/derive.Value.html"><code>Value</code></a> and <a href="https://docs.rs/zvariant/4/zvariant/derive.OwnedValue.html"><code>OwnedValue</code></a> derive macro to
 implement these conversions for you.</p>
 <h4 id="watching-for-changes"><a class="header" href="#watching-for-changes">Watching for changes</a></h4>
 <p>By default, the proxy will cache the properties and watch for changes.</p>
 <p>To be notified of a property change, you use a stream API, just like for receiving signals. The
 methods are named after the properties’ names: <code>receive_&lt;prop_name&gt;_changed()</code>.</p>
 <p>Here is an example:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use zbus::{Connection, dbus_proxy, Result};
+<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use zbus::{Connection, proxy, Result};
 </span><span class="boring">use futures_util::stream::StreamExt;
 </span><span class="boring">
 </span><span class="boring">#[async_std::main]
 </span><span class="boring">async fn main() -&gt; Result&lt;()&gt; {
-</span>    #[dbus_proxy(
+</span>    #[proxy(
         interface = "org.freedesktop.systemd1.Manager",
         default_service = "org.freedesktop.systemd1",
         default_path = "/org/freedesktop/systemd1"
     )]
     trait SystemdManager {
-        #[dbus_proxy(property)]
+        #[zbus(property)]
         fn log_level(&amp;self) -&gt; Result&lt;String&gt;;
     }
 
@@ -510,11 +555,11 @@ methods are named after the properties’ names: <code>receive_&lt;prop_name&gt;
 <p>The <code>zbus_xmlgen</code> crate provides a <a href="https://crates.io/crates/zbus_xmlgen">developer-friendly tool</a>, that can generate Rust traits from a
 given D-Bus introspection XML for you.</p>
 <p><strong>Note:</strong> This tool should not be considered a drop-in Rust-specific replacement for similar tools
-available for low-level languages, such as <a href="https://developer.gnome.org/gio/stable/gdbus-codegen.html"><code>gdbus-codegen</code></a>. Unlike those tools, this is only meant
+available for low-level languages, such as <a href="https://docs.gtk.org/gio/migrating-gdbus.html#generating-code-and-docs"><code>gdbus-codegen</code></a>. Unlike those tools, this is only meant
 as a starting point to generate the code, once. In many cases, you will want to tweak the generated
 code.</p>
 <p>The tool can be used to generate rust code directly from a D-Bus service running on our system:</p>
-<pre><code class="language-bash">zbus-xmlgen --session \
+<pre><code class="language-bash">zbus-xmlgen session \
   org.freedesktop.Notifications \
   /org/freedesktop/Notifications
 </code></pre>
@@ -587,13 +632,13 @@ the <code>busctl</code><sup class="footnote-reference"><a href="#busctl">1</a></
 &lt;/node&gt;
 </code></pre>
 <p>Save the output to a <code>notify.xml</code> file. Then call:</p>
-<pre><code class="language-bash">zbus-xmlgen notify.xml
+<pre><code class="language-bash">zbus-xmlgen file notify.xml
 </code></pre>
 <p>This will give back effortlessly the corresponding Rust traits boilerplate
 code:</p>
-<pre><code class="language-rust noplayground"><span class="boring">use zbus::dbus_proxy;
+<pre><code class="language-rust noplayground"><span class="boring">use zbus::proxy;
 </span><span class="boring">
-</span>#[dbus_proxy(
+</span>#[proxy(
     interface = "org.freedesktop.Notifications",
     default_service = "org.freedesktop.Notifications",
     default_path= "/org/freedesktop/Notifications",
@@ -622,11 +667,11 @@ trait Notifications {
     ) -&gt; zbus::Result&lt;u32&gt;;
 
     /// ActionInvoked signal
-    #[dbus_proxy(signal)]
+    #[zbus(signal)]
     fn action_invoked(&amp;self, arg_0: u32, arg_1: &amp;str) -&gt; zbus::Result&lt;()&gt;;
 
     /// NotificationClosed signal
-    #[dbus_proxy(signal)]
+    #[zbus(signal)]
     fn notification_closed(&amp;self, arg_0: u32, arg_1: u32) -&gt; zbus::Result&lt;()&gt;;
 }</code></pre>
 <p>It should be usable as such. But you may as well improve a bit the naming of the arguments, use
@@ -634,7 +679,7 @@ better types (using <code>BitFlags</code>, structs or other custom types), add e
 functions to make the binding more pleasing to use from Rust.</p>
 <p>For example, the generated <code>GetServerInformation</code> method can be improved to a nicer version:</p>
 <pre><code class="language-rust noplayground"><span class="boring">use serde::{Serialize, Deserialize};
-</span><span class="boring">use zbus::{zvariant::Type, dbus_proxy};
+</span><span class="boring">use zbus::{zvariant::Type, proxy};
 </span><span class="boring">
 </span>#[derive(Debug, Type, Serialize, Deserialize)]
 pub struct ServerInformation {
@@ -651,7 +696,7 @@ pub struct ServerInformation {
     pub spec_version: String,
 }
 
-#[dbus_proxy(
+#[proxy(
     interface = "org.freedesktop.Notifications",
     default_service = "org.freedesktop.Notifications",
     default_path= "/org/freedesktop/Notifications",
@@ -662,7 +707,7 @@ trait Notifications {
     /// This message returns the information on the server.
     fn get_server_information(&amp;self) -&gt; zbus::Result&lt;ServerInformation&gt;;
 }</code></pre>
-<p>You can learn more from the zbus-ify <a href="https://github.com/dbus2/zbus/tree/main/zbus_polkit#readme">binding of
+<p>You can learn more from the zbus-ify <a href="https://github.com/dbus2/zbus_polkit">binding of
 PolicyKit</a>, for example, which was
 implemented starting from the <em>xmlgen</em> output.</p>
 <p>There you have it, a Rust-friendly binding for your D-Bus service!</p>

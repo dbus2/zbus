@@ -181,11 +181,11 @@
 <p>Since the use of a dictionary, specifically one with strings as keys and variants as value (i-e
 <code>a{sv}</code>) is very common in the D-Bus world and use of HashMaps isn’t as convenient and type-safe as
 a struct, you might find yourself wanting to use a struct as a dictionary.</p>
-<p><code>zvariant</code> provides convenient macros for making this possible: <a href="https://docs.rs/zvariant/3/zvariant/derive.SerializeDict.html"><code>SerializeDict</code></a> and
-<a href="https://docs.rs/zvariant/3/zvariant/derive.DeserializeDict.html"><code>DeserializeDict</code></a>. You’ll also need to tell <a href="https://docs.rs/zvariant/3/zvariant/derive.Type.html"><code>Type</code></a> macro to treat the type as a dictionary using
+<p><code>zvariant</code> provides convenient macros for making this possible: <a href="https://docs.rs/zvariant/4/zvariant/derive.SerializeDict.html"><code>SerializeDict</code></a> and
+<a href="https://docs.rs/zvariant/4/zvariant/derive.DeserializeDict.html"><code>DeserializeDict</code></a>. You’ll also need to tell <a href="https://docs.rs/zvariant/4/zvariant/derive.Type.html"><code>Type</code></a> macro to treat the type as a dictionary using
 the <code>signature</code> attribute. Here is a simple example:</p>
 <pre><code class="language-rust noplayground">use zbus::{
-    dbus_proxy, dbus_interface, fdo::Result,
+    proxy, interface, fdo::Result,
     zvariant::{DeserializeDict, SerializeDict, Type},
 };
 
@@ -199,7 +199,7 @@ pub struct Dictionary {
     optional_field: Option&lt;String&gt;,
 }
 
-#[dbus_proxy(
+#[proxy(
     interface = "org.zbus.DictionaryGiver",
     default_path = "/org/zbus/DictionaryGiver",
     default_service = "org.zbus.DictionaryGiver",
@@ -210,7 +210,7 @@ trait DictionaryGiver {
 
 struct DictionaryGiverInterface;
 
-#[dbus_interface(interface = "org.zbus.DictionaryGiver")]
+#[interface(interface = "org.zbus.DictionaryGiver")]
 impl DictionaryGiverInterface {
     fn give_me(&amp;self) -&gt; Result&lt;Dictionary&gt; {
         Ok(Dictionary {
@@ -236,7 +236,7 @@ zbus = { version = "3", default-features = false, features = ["tokio"] }
 see <a href="https://github.com/tokio-rs/tokio/issues/2201">the corresponding tokio issue on GitHub</a>.</p>
 <h2 id="im-experiencing-hangs-what-could-be-wrong"><a class="header" href="#im-experiencing-hangs-what-could-be-wrong">I’m experiencing hangs, what could be wrong?</a></h2>
 <p>There are typically two reasons this can happen with zbus:</p>
-<h3 id="1-a-dbus_interface-method-that-takes-a-mut-self-argument-is-taking-too-long"><a class="header" href="#1-a-dbus_interface-method-that-takes-a-mut-self-argument-is-taking-too-long">1. A <code>dbus_interface</code> method that takes a <code>&amp;mut self</code> argument is taking too long</a></h3>
+<h3 id="1-a-interface-method-that-takes-a-mut-self-argument-is-taking-too-long"><a class="header" href="#1-a-interface-method-that-takes-a-mut-self-argument-is-taking-too-long">1. A <code>interface</code> method that takes a <code>&amp;mut self</code> argument is taking too long</a></h3>
 <p>Simply put, this is because of one of the primary rules of Rust: while a mutable reference to a
 resource exists, no other references to that same resource can exist at the same time. This means
 that before the method in question returns, all other method calls on the providing interface will
@@ -245,7 +245,7 @@ have to wait in line.</p>
 combined with signals to report the progress of the work to clients. Both of these solutions
 involve converting the methods in question to take <code>&amp;self</code> argument instead of <code>&amp;mut self</code>.</p>
 <h3 id="2-a-stream-eg-signalstream-is-not-being-continuously-polled"><a class="header" href="#2-a-stream-eg-signalstream-is-not-being-continuously-polled">2. A stream (e.g <code>SignalStream</code>) is not being continuously polled</a></h3>
-<p>Please consult <a href="https://docs.rs/zbus/3/zbus/struct.MessageStream.html"><code>MessageStream</code></a> documentation for details.</p>
+<p>Please consult <a href="https://docs.rs/zbus/4/zbus/struct.MessageStream.html"><code>MessageStream</code></a> documentation for details.</p>
 <h2 id="why-arent-property-values-updating-for-my-service-that-doesnt-notify-changes"><a class="header" href="#why-arent-property-values-updating-for-my-service-that-doesnt-notify-changes">Why aren’t property values updating for my service that doesn’t notify changes?</a></h2>
 <p>A common issue might arise when using a zbus proxy is that your proxy’s property values aren’t
 updating. This is due to zbus’ default caching policy, which updates the value of a property only
@@ -255,20 +255,51 @@ update accordingly.</p>
 <p>However, you can disabling caching for specific properties:</p>
 <ul>
 <li>
-<p>Add the <code>#[dbus_proxy(property(emits_changed_signal = "false"))]</code> annotation to the property
-for which you desire to disable caching on.</p>
+<p>Add the <code>#[zbus(property(emits_changed_signal = "false"))]</code> annotation to the property for which
+you desire to disable caching on. For more information about all the possible values for
+<code>emits_changed_signal</code> refer to <a href="https://docs.rs/zbus/4/zbus/attr.proxy.html"><code>proxy</code></a> documentation.</p>
 </li>
 <li>
-<p>Use <code>ProxyBuilder</code> to build your proxy instance and use <code>ProxyBuilder::uncached_properties</code> method
-to list all properties you wish to disable caching for.</p>
+<p>Use <code>proxy::Builder</code> to build your proxy instance and use <a href="https://docs.rs/zbus/4/zbus/proxy/struct.Builder.html#method.uncached_properties"><code>proxy::Builder::uncached_properties</code></a>
+method to list all properties you wish to disable caching for.</p>
 </li>
 <li>
-<p>In order to disable caching for either type of proxy use the <code>ProxyBuilder::cache_properites</code>
+<p>In order to disable caching for either type of proxy use the <a href="https://docs.rs/zbus/4/zbus/proxy/struct.Builder.html#method.cache_properties"><code>proxy::Builder::cache_properites</code></a>
 method.</p>
 </li>
 </ul>
-<p>For more information about all the possible values for <code>emits_changed_signal</code> refer
-to <a href="https://docs.rs/zbus/3.13.1/zbus/attr.dbus_proxy.html"><code>dbus_proxy</code></a> documentation.</p>
+<h2 id="how-do-i-use-option-with-zbus"><a class="header" href="#how-do-i-use-option-with-zbus">How do I use `Option<T>`` with zbus?</a></h2>
+<p>While <code>Option&lt;T&gt;</code> is a very commonly used type in Rust, there is unfortunately <a href="https://gitlab.freedesktop.org/dbus/dbus/-/issues/25">no concept of a
+nullable-type in the D-Bus protocol</a>. However, there are two ways to simulate it:</p>
+<h3 id="1-designation-of-a-special-value-as-none"><a class="header" href="#1-designation-of-a-special-value-as-none">1. Designation of a special value as <code>None</code></a></h3>
+<p>This is the simplest way to simulate <code>Option&lt;T&gt;</code>. Typically the
+default value for the type in question is a good choice. For example the empty string (<code>""</code>) is
+often used as <code>None</code> for strings and string-based types. Note however that this solution can not
+work for all types, for example <code>bool</code>.</p>
+<p>Since this is the most widely used solution in the D-Bus world and is even used by the <a href="http://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces">D-Bus
+standard interfaces</a>, <code>zvariant</code> provides a custom type for this, <a href="https://docs.rs/zvariant/4/zvariant/struct.Optional.html"><code>Optional&lt;T&gt;</code></a> that makes
+it super easy to simulate a nullable type, especially if the contained type implements the <code>Default</code>
+trait.</p>
+<h3 id="2-encoding-as-an-array-a"><a class="header" href="#2-encoding-as-an-array-a">2. Encoding as an array (<code>a?</code>)</a></h3>
+<p>The idea here is to represent <code>None</code> case with 0 elements (empty array) and the <code>Some</code> case with 1
+element. <code>zvariant</code> and <code>zbus</code> provide <code>option-as-array</code> Cargo feature, which when enabled, allows
+the (de)serialization of <code>Option&lt;T&gt;</code>. Unlike the previous solution, this solution can be used with
+all types. However, it does come with some caveats and limitations:</p>
+<ol>
+<li>Since the D-Bus type signature does not provide any hints about the array being in fact a
+nullable type, this can be confusing for users of generic tools like <a href="https://wiki.gnome.org/Apps/DFeet"><code>d-feet</code></a>. It is therefore
+highly recommended that service authors document each use of <code>Option&lt;T&gt;</code> in their D-Bus
+interface documentation.</li>
+<li>Currently it is not possible to use <code>Option&lt;T&gt;</code> for <code>interface</code> and <code>proxy</code> property
+methods.</li>
+<li>Both the sender and receiver must agree on use of this encoding. If the sender sends <code>T</code>, the
+receiver will not be able to decode it successfully as <code>Option&lt;T&gt;</code> and vice versa.</li>
+<li>While <code>zvariant::Value</code> can be converted into <code>Option&lt;T&gt;</code>, the reverse is currently not
+possible.</li>
+</ol>
+<p>Due to these limitations, <code>option-as-array</code> feature is not enabled by default and must be explicitly
+enabled.</p>
+<p><strong>Note</strong>: We hope to be able to remove #2 and #4, once <a href="https://rust-lang.github.io/rfcs/1210-impl-specialization.html">specialization</a> lands in stable Rust.</p>
 
                     </main>
 
