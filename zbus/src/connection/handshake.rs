@@ -8,7 +8,7 @@ use std::{
     path::PathBuf,
     str::FromStr,
 };
-use tracing::{instrument, trace};
+use tracing::{debug, instrument, trace};
 use zvariant::Str;
 
 use sha1::{Digest, Sha1};
@@ -102,21 +102,6 @@ impl Authenticated {
     }
 }
 
-/*
- * Client-side handshake logic
- */
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[allow(clippy::upper_case_acronyms)]
-enum ClientHandshakeStep {
-    Init,
-    MechanismInit,
-    WaitingForData,
-    WaitingForOK,
-    WaitingForAgreeUnixFD,
-    Done,
-}
-
 // The plain-text SASL profile authentication protocol described here:
 // <https://dbus.freedesktop.org/doc/dbus-specification.html#auth-protocol>
 //
@@ -152,7 +137,6 @@ enum Command {
 pub struct ClientHandshake {
     common: HandshakeCommon,
     server_guid: Option<OwnedGuid>,
-    step: ClientHandshakeStep,
 }
 
 #[async_trait]
@@ -181,63 +165,52 @@ impl ClientHandshake {
 
         ClientHandshake {
             common: HandshakeCommon::new(socket, mechanisms),
-            step: ClientHandshakeStep::Init,
             server_guid,
         }
     }
 
-    fn mechanism_init(&mut self) -> Result<(ClientHandshakeStep, Command)> {
-        use ClientHandshakeStep::*;
-        let mech = self.common.mechanism()?;
-        match mech {
-            AuthMechanism::Anonymous => Ok((
-                WaitingForOK,
-                Command::Auth(Some(*mech), Some("zbus".into())),
-            )),
-            AuthMechanism::External => Ok((
-                WaitingForOK,
-                Command::Auth(Some(*mech), Some(sasl_auth_id()?.into_bytes())),
-            )),
-            AuthMechanism::Cookie => Ok((
-                WaitingForData,
-                Command::Auth(Some(*mech), Some(sasl_auth_id()?.into_bytes())),
-            )),
-        }
+    /// Respond to a cookie authentication challenge from the server.
+    ///
+    /// Returns the next command to send to the server.
+    async fn handle_cookie_challenge(&mut self, data: Vec<u8>) -> Result<Command> {
+        let context = std::str::from_utf8(&data)
+            .map_err(|_| Error::Handshake("Cookie context was not valid UTF-8".into()))?;
+        let mut split = context.split_ascii_whitespace();
+        let context = split
+            .next()
+            .ok_or_else(|| Error::Handshake("Missing cookie context name".into()))?;
+        let context = Str::from(context).try_into()?;
+        let id = split
+            .next()
+            .ok_or_else(|| Error::Handshake("Missing cookie ID".into()))?;
+        let id = id
+            .parse()
+            .map_err(|e| Error::Handshake(format!("Invalid cookie ID `{id}`: {e}")))?;
+        let server_challenge = split
+            .next()
+            .ok_or_else(|| Error::Handshake("Missing cookie challenge".into()))?;
+
+        let cookie = Cookie::lookup(&context, id).await?.cookie;
+        let client_challenge = random_ascii(16);
+        let sec = format!("{server_challenge}:{client_challenge}:{cookie}");
+        let sha1 = hex::encode(Sha1::digest(sec));
+        let data = format!("{client_challenge} {sha1}").into_bytes();
+
+        Ok(Command::Data(Some(data)))
     }
 
-    async fn mechanism_data(&mut self, data: Vec<u8>) -> Result<(ClientHandshakeStep, Command)> {
-        let mech = self.common.mechanism()?;
-        match mech {
-            AuthMechanism::Cookie => {
-                let context = std::str::from_utf8(&data)
-                    .map_err(|_| Error::Handshake("Cookie context was not valid UTF-8".into()))?;
-                let mut split = context.split_ascii_whitespace();
-                let context = split
-                    .next()
-                    .ok_or_else(|| Error::Handshake("Missing cookie context name".into()))?;
-                let context = Str::from(context).try_into()?;
-                let id = split
-                    .next()
-                    .ok_or_else(|| Error::Handshake("Missing cookie ID".into()))?;
-                let id = id
-                    .parse()
-                    .map_err(|e| Error::Handshake(format!("Invalid cookie ID `{id}`: {e}")))?;
-                let server_challenge = split
-                    .next()
-                    .ok_or_else(|| Error::Handshake("Missing cookie challenge".into()))?;
-
-                let cookie = Cookie::lookup(&context, id).await?.cookie;
-                let client_challenge = random_ascii(16);
-                let sec = format!("{server_challenge}:{client_challenge}:{cookie}");
-                let sha1 = hex::encode(Sha1::digest(sec));
-                let data = format!("{client_challenge} {sha1}");
-                Ok((
-                    ClientHandshakeStep::WaitingForOK,
-                    Command::Data(Some(data.into())),
-                ))
+    fn set_guid(&mut self, guid: OwnedGuid) -> Result<()> {
+        match &self.server_guid {
+            Some(server_guid) if *server_guid != guid => {
+                return Err(Error::Handshake(format!(
+                    "Server GUID mismatch: expected {server_guid}, got {guid}",
+                )));
             }
-            _ => Err(Error::Handshake("Unexpected mechanism DATA".into())),
+            Some(_) => (),
+            None => self.server_guid = Some(guid),
         }
+
+        Ok(())
     }
 }
 
@@ -391,137 +364,143 @@ impl Default for CookieContext<'_> {
 impl Handshake for ClientHandshake {
     #[instrument(skip(self))]
     async fn perform(mut self) -> Result<Authenticated> {
-        use ClientHandshakeStep::*;
-        loop {
-            let (next_step, cmd) = match self.step {
-                Init => {
-                    trace!("Initializing");
-                    #[allow(clippy::let_and_return)]
-                    let ret = self.mechanism_init()?;
-                    // The dbus daemon on some platforms requires sending the zero byte as a
-                    // separate message with SCM_CREDS.
-                    #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
-                    let written = self
-                        .common
-                        .socket
-                        .write_mut()
-                        .send_zero_byte()
-                        .await
-                        .map_err(|e| {
-                            Error::Handshake(format!(
-                                "Could not send zero byte with credentials: {}",
-                                e
-                            ))
-                        })
-                        .and_then(|n| match n {
-                            None => Err(Error::Handshake(
-                                "Could not send zero byte with credentials".to_string(),
-                            )),
-                            Some(n) => Ok(n),
-                        })?;
+        trace!("Initializing");
+        // The dbus daemon on some platforms requires sending the zero byte as a
+        // separate message with SCM_CREDS.
+        #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
+        let written = self
+            .common
+            .socket
+            .write_mut()
+            .send_zero_byte()
+            .await
+            .map_err(|e| {
+                Error::Handshake(format!("Could not send zero byte with credentials: {}", e))
+            })
+            .and_then(|n| match n {
+                None => Err(Error::Handshake(
+                    "Could not send zero byte with credentials".to_string(),
+                )),
+                Some(n) => Ok(n),
+            })?;
 
-                    // leading 0 is sent separately already for `freebsd` and `dragonfly` above.
-                    #[cfg(not(any(target_os = "freebsd", target_os = "dragonfly")))]
-                    let written = self
-                        .common
-                        .socket
-                        .write_mut()
-                        .sendmsg(
-                            &[b'\0'],
-                            #[cfg(unix)]
-                            &[],
-                        )
-                        .await?;
+        // leading 0 is sent separately already for `freebsd` and `dragonfly` above.
+        #[cfg(not(any(target_os = "freebsd", target_os = "dragonfly")))]
+        let written = self
+            .common
+            .socket
+            .write_mut()
+            .sendmsg(
+                &[b'\0'],
+                #[cfg(unix)]
+                &[],
+            )
+            .await?;
 
-                    if written != 1 {
-                        return Err(Error::Handshake(
-                            "Could not send zero byte with credentials".to_string(),
-                        ));
-                    }
-
-                    ret
-                }
-                MechanismInit => {
-                    trace!("Initializing auth mechanisms");
-                    self.mechanism_init()?
-                }
-                WaitingForData | WaitingForOK => {
-                    trace!("Waiting for DATA or OK from server");
-                    let reply = self.common.read_command().await?;
-                    match (self.step, reply) {
-                        (_, Command::Data(data)) => {
-                            trace!("Received DATA from server");
-                            let data = data.ok_or_else(|| {
-                                Error::Handshake("Received DATA with no data from server".into())
-                            })?;
-                            self.mechanism_data(data).await?
-                        }
-                        (_, Command::Rejected(_)) => {
-                            trace!("Received REJECT from server. Will try next auth mechanism..");
-                            self.common.mechanisms.pop_front();
-                            self.step = MechanismInit;
-                            continue;
-                        }
-                        (WaitingForOK, Command::Ok(guid)) => {
-                            trace!("Received OK from server");
-                            match self.server_guid {
-                                Some(server_guid) if server_guid != guid => {
-                                    return Err(Error::Handshake(format!(
-                                        "Server GUID mismatch: expected {server_guid}, got {guid}",
-                                    )));
-                                }
-                                Some(_) => (),
-                                None => self.server_guid = Some(guid),
-                            }
-                            if self.common.socket.read_mut().can_pass_unix_fd() {
-                                (WaitingForAgreeUnixFD, Command::NegotiateUnixFD)
-                            } else {
-                                (Done, Command::Begin)
-                            }
-                        }
-                        (_, reply) => {
-                            return Err(Error::Handshake(format!(
-                                "Unexpected server AUTH OK reply: {reply}"
-                            )));
-                        }
-                    }
-                }
-                WaitingForAgreeUnixFD => {
-                    trace!("Waiting for Unix FD passing agreement from server");
-                    let reply = self.common.read_command().await?;
-                    match reply {
-                        Command::AgreeUnixFD => {
-                            trace!("Unix FD passing agreed by server");
-                            self.common.cap_unix_fd = true
-                        }
-                        Command::Error(_) => {
-                            trace!("Unix FD passing rejected by server");
-                            self.common.cap_unix_fd = false
-                        }
-                        _ => {
-                            return Err(Error::Handshake(format!(
-                                "Unexpected server UNIX_FD reply: {reply}"
-                            )));
-                        }
-                    }
-                    (Done, Command::Begin)
-                }
-                Done => {
-                    trace!("Handshake done");
-                    let (read, write) = self.common.socket.take();
-                    return Ok(Authenticated {
-                        socket_write: write,
-                        socket_read: Some(read),
-                        server_guid: self.server_guid.unwrap(),
-                        #[cfg(unix)]
-                        cap_unix_fd: self.common.cap_unix_fd,
-                        already_received_bytes: Some(self.common.recv_buffer),
-                    });
-                }
-            };
-            self.common.write_command(cmd).await?;
-            self.step = next_step;
+        if written != 1 {
+            return Err(Error::Handshake(
+                "Could not send zero byte with credentials".to_string(),
+            ));
         }
+
+        let mut commands = Vec::with_capacity(4);
+        loop {
+            self.common.cap_unix_fd = false;
+            let mechanism = self.common.next_mechanism()?;
+            trace!("Trying {mechanism} mechanism");
+            let auth_cmd = match mechanism {
+                AuthMechanism::Anonymous => Command::Auth(Some(mechanism), Some("zbus".into())),
+                AuthMechanism::External => {
+                    Command::Auth(Some(mechanism), Some(sasl_auth_id()?.into_bytes()))
+                }
+                AuthMechanism::Cookie => Command::Auth(
+                    Some(AuthMechanism::Cookie),
+                    Some(sasl_auth_id()?.into_bytes()),
+                ),
+            };
+            self.common.write_command(auth_cmd).await?;
+
+            match self.common.read_command().await? {
+                Command::Ok(guid) => {
+                    trace!("Received OK from server");
+                    self.set_guid(guid)?;
+
+                    break;
+                }
+                Command::Data(data) if mechanism == AuthMechanism::Cookie => {
+                    let data = data.ok_or_else(|| {
+                        Error::Handshake("Received DATA with no data from server".into())
+                    })?;
+                    trace!("Received cookie challenge from server");
+                    let response = self.handle_cookie_challenge(data).await?;
+                    commands.push(response);
+
+                    break;
+                }
+                Command::Rejected(_) => debug!("{mechanism} rejected by the server"),
+                Command::Error(e) => debug!("Received error from server: {e}"),
+                cmd => {
+                    return Err(Error::Handshake(format!(
+                        "Unexpected command from server: {cmd}"
+                    )))
+                }
+            }
+        }
+
+        let can_pass_fd = self.common.socket.read_mut().can_pass_unix_fd();
+        if can_pass_fd {
+            commands.push(Command::NegotiateUnixFD);
+        };
+
+        let expected_n_responses;
+        // `gdbus` is unable to handle multiple commands in a single message, it seems.
+        #[cfg(not(all(windows, feature = "windows-gdbus")))]
+        {
+            commands.push(Command::Begin);
+            // Server replies to all commands except `BEGIN`.
+            expected_n_responses = commands.len() - 1;
+        }
+        #[cfg(all(windows, feature = "windows-gdbus"))]
+        {
+            expected_n_responses = commands.len();
+        }
+        self.common.write_commands(&commands).await?;
+
+        if expected_n_responses > 0 {
+            for response in self.common.read_commands(expected_n_responses).await? {
+                match response {
+                    Command::Ok(guid) => {
+                        trace!("Received OK from server");
+                        self.set_guid(guid)?;
+                    }
+                    Command::AgreeUnixFD => self.common.cap_unix_fd = true,
+                    // This also covers "REJECTED" and "ERROR", which would mean that the server has
+                    // rejected the authentication challenge response (likely cookie) since it already
+                    // agreed to the mechanism. Theoretically we should be just trying the next auth
+                    // mechanism but this most likely means something is very wrong and we're already
+                    // too deep into the handshake to recover.
+                    cmd => {
+                        return Err(Error::Handshake(format!(
+                            "Unexpected command from server: {cmd}"
+                        )))
+                    }
+                }
+            }
+        }
+
+        #[cfg(all(windows, feature = "windows-gdbus"))]
+        self.common.write_command(Command::Begin).await?;
+
+        trace!("Handshake done");
+        let (read, write) = self.common.socket.take();
+        Ok(Authenticated {
+            socket_write: write,
+            socket_read: Some(read),
+            server_guid: self.server_guid.unwrap(),
+            #[cfg(unix)]
+            cap_unix_fd: self.common.cap_unix_fd,
+            already_received_bytes: Some(self.common.recv_buffer),
+        })
     }
 }
 
@@ -849,8 +828,8 @@ impl FromStr for AuthMechanism {
     }
 }
 
-impl From<Command> for Vec<u8> {
-    fn from(c: Command) -> Self {
+impl From<&Command> for Vec<u8> {
+    fn from(c: &Command) -> Self {
         c.to_string().into()
     }
 }
@@ -965,7 +944,19 @@ impl HandshakeCommon {
 
     #[instrument(skip(self))]
     async fn write_command(&mut self, command: Command) -> Result<()> {
-        let mut send_buffer = Vec::<u8>::from(command);
+        self.write_commands(&[command]).await
+    }
+
+    #[instrument(skip(self))]
+    async fn write_commands(&mut self, commands: &[Command]) -> Result<()> {
+        let mut send_buffer =
+            commands
+                .iter()
+                .map(Vec::<u8>::from)
+                .fold(vec![], |mut acc, mut c| {
+                    acc.append(&mut c);
+                    acc
+                });
         while !send_buffer.is_empty() {
             let written = self
                 .socket
@@ -978,25 +969,41 @@ impl HandshakeCommon {
                 .await?;
             send_buffer.drain(..written);
         }
+        trace!("Wrote all commands");
         Ok(())
     }
 
     #[instrument(skip(self))]
     async fn read_command(&mut self) -> Result<Command> {
-        let mut cmd_end = 0;
-        loop {
-            if let Some(i) = self.recv_buffer[cmd_end..].iter().position(|b| *b == b'\n') {
-                if cmd_end + i == 0 || self.recv_buffer.get(cmd_end + i - 1) != Some(&b'\r') {
+        self.read_commands(1)
+            .await
+            .map(|cmds| cmds.into_iter().next().unwrap())
+    }
+
+    #[instrument(skip(self))]
+    async fn read_commands(&mut self, n_commands: usize) -> Result<Vec<Command>> {
+        let mut commands = Vec::with_capacity(n_commands);
+        let mut n_received_commands = 0;
+        'outer: loop {
+            while let Some(lf_index) = self.recv_buffer.iter().position(|b| *b == b'\n') {
+                if self.recv_buffer[lf_index - 1] != b'\r' {
                     return Err(Error::Handshake("Invalid line ending in handshake".into()));
                 }
-                cmd_end += i + 1;
 
-                break;
-            } else {
-                cmd_end = self.recv_buffer.len();
+                let line_bytes = self.recv_buffer.drain(..=lf_index);
+                let line = std::str::from_utf8(line_bytes.as_slice())
+                    .map_err(|e| Error::Handshake(e.to_string()))?;
+
+                trace!("Reading {line}");
+                commands.push(line.parse()?);
+                n_received_commands += 1;
+
+                if n_received_commands == n_commands {
+                    break 'outer;
+                }
             }
 
-            let mut buf = [0; 64];
+            let mut buf = vec![0; 1024];
             let res = self.socket.read_mut().recvmsg(&mut buf).await?;
             let read = {
                 #[cfg(unix)]
@@ -1018,17 +1025,12 @@ impl HandshakeCommon {
             self.recv_buffer.extend(&buf[..read]);
         }
 
-        let line_bytes = self.recv_buffer.drain(..cmd_end);
-        let line = std::str::from_utf8(line_bytes.as_slice())
-            .map_err(|e| Error::Handshake(e.to_string()))?;
-
-        trace!("Reading {line}");
-        line.parse()
+        Ok(commands)
     }
 
-    fn mechanism(&self) -> Result<&AuthMechanism> {
+    fn next_mechanism(&mut self) -> Result<AuthMechanism> {
         self.mechanisms
-            .front()
+            .pop_front()
             .ok_or_else(|| Error::Handshake("Exhausted available AUTH mechanisms".into()))
     }
 }
