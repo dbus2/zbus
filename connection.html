@@ -184,9 +184,9 @@ entry point of the zbus API.</p>
 returns an instance of the connection (if all went well). Similarly, to connect to the system bus
 (to communicate with services such as <a href="https://developer.gnome.org/NetworkManager/stable/spec.html">NetworkManager</a>, <a href="https://git.kernel.org/pub/scm/bluetooth/bluez.git/tree/doc">BlueZ</a> or <a href="https://www.freedesktop.org/wiki/Software/systemd/dbus/">PID1</a>), use
 <code>Connection::system()</code>.</p>
-<p>Moreover, it can be converted to a <a href="https://docs.rs/zbus/4/zbus/struct.MessageStream.html"><code>MessageStream</code></a> that implements <a href="https://docs.rs/futures/4/futures/stream/trait.Stream.html"><code>futures::stream::Stream</code></a>,
-which can be used to conveniently receive messages, for the times when low-level API is
-more appropriate for your use case.</p>
+<p>Moreover, it also implements <a href="https://docs.rs/futures/latest/futures/sink/trait.Sink.html"><code>futures::sink::Sink</code></a> and can be converted to a <a href="https://docs.rs/zbus/3/zbus/struct.MessageStream.html"><code>MessageStream</code></a>
+that implements <a href="https://docs.rs/futures/latest/futures/stream/trait.Stream.html"><code>futures::stream::Stream</code></a>, which can be used to conveniently send and receive
+messages, for the times when low-level API is more appropriate for your use case.</p>
 <p><strong>Note:</strong> it is common for a D-Bus library to provide a “shared” connection to a bus for a process:
 all <code>session()</code> share the same underlying connection for example. At the time of this writing,
 zbus doesn’t do that.</p>
@@ -199,7 +199,7 @@ The official dbus installation method via <code>Homebrew</code> provides a sessi
 utilizing macOS <code>LaunchAgents</code> feature. By default, zbus consumes an address for a bus connection that
 is provided via <code>launchctl getenv DBUS_LAUNCHD_SESSION_BUS_SOCKET</code> command output.</p>
 <h2 id="using-a-custom-bus-address"><a class="header" href="#using-a-custom-bus-address">Using a custom bus address</a></h2>
-<p>You may also specify a custom bus with <a href="https://docs.rs/zbus/4/zbus/connection/struct.Builder.html#method.address"><code>connection::Builder::address</code></a> which takes a D-Bus address
+<p>You may also specify a custom bus with <a href="https://docs.rs/zbus/3/zbus/struct.ConnectionBuilder.html#method.address"><code>ConnectionBuilder::address</code></a> which takes a D-Bus address
 <a href="https://dbus.freedesktop.org/doc/dbus-specification.html#addresses">as specified in the specification</a>.</p>
 <h2 id="peer-to-peer-connection"><a class="header" href="#peer-to-peer-connection">Peer to peer connection</a></h2>
 <p>Peer-to-peer connections are bus-less[^bus-less], and the initial handshake protocol is a bit
@@ -214,7 +214,7 @@ once the connection is established (both ends are equal, and can send any messag
 use std::os::unix::net::UnixStream;
 #[cfg(feature = "tokio")]
 use tokio::net::UnixStream;
-use zbus::{connection::Builder, Guid};
+use zbus::{ConnectionBuilder as Builder, Guid};
 
 let guid = Guid::generate();
 let (p0, p1) = UnixStream::pair().unwrap();
@@ -223,14 +223,12 @@ let (p0, p1) = UnixStream::pair().unwrap();
     // Client
     Builder::unix_stream(p0).p2p().build(),
     // Server
-    Builder::unix_stream(p1).server(guid)?.p2p().build(),
+    Builder::unix_stream(p1).server(&amp;guid).p2p().build(),
 )?;
 <span class="boring">}
 </span><span class="boring">
 </span><span class="boring">Ok(())
 </span><span class="boring">}</span></code></pre>
-<p><strong>Note:</strong> the <code>p2p</code> and <code>server</code> methods of <code>connection::Builder</code> are only available when <code>p2p</code>
-cargo feature of <code>zbus</code> is enabled.</p>
 <p>[^bus-less] Unless you implemented them, none of the bus methods will exist.</p>
 
                     </main>

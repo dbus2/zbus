@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Blocking API - zbus: D-Bus for Rust made easy</title>
+        <title>Writing a server interface - zbus: D-Bus for Rust made easy</title>
 
 
         <!-- Custom HTML head -->
@@ -88,7 +88,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded affix "><a href="introduction.html">Introduction</a></li><li class="chapter-item expanded "><a href="concepts.html"><strong aria-hidden="true">1.</strong> Some D-Bus concepts</a></li><li class="chapter-item expanded "><a href="connection.html"><strong aria-hidden="true">2.</strong> Establishing connections</a></li><li class="chapter-item expanded "><a href="client.html"><strong aria-hidden="true">3.</strong> Writing a client proxy</a></li><li class="chapter-item expanded "><a href="server.html"><strong aria-hidden="true">4.</strong> Writing a server interface</a></li><li class="chapter-item expanded "><a href="blocking.html" class="active"><strong aria-hidden="true">5.</strong> Blocking API</a></li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">6.</strong> FAQ</a></li><li class="spacer"></li><li class="chapter-item expanded affix "><a href="contributors.html">Contributors</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="introduction.html">Introduction</a></li><li class="chapter-item expanded "><a href="concepts.html"><strong aria-hidden="true">1.</strong> Some D-Bus concepts</a></li><li class="chapter-item expanded "><a href="connection.html"><strong aria-hidden="true">2.</strong> Establishing connections</a></li><li class="chapter-item expanded "><a href="client.html"><strong aria-hidden="true">3.</strong> Writing a client proxy</a></li><li class="chapter-item expanded "><a href="server.html" class="active"><strong aria-hidden="true">4.</strong> Writing a server interface</a></li><li class="spacer"></li><li class="chapter-item expanded affix "><a href="contributors.html">Contributors</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -176,198 +176,146 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="blocking-api"><a class="header" href="#blocking-api">Blocking API</a></h1>
-<p>While zbus API being primarily asynchronous (since 2.0) is a great thing, it could easily feel
-daunting for simple use cases. Not to worry! In the spirit of “ease” being a primary goal of zbus,
-it provides blocking wrapper types, under the <a href="https://docs.rs/zbus/3/zbus/blocking/index.html">blocking module</a>.</p>
-<p><strong>Note:</strong> Use of the blocking API presented in this chapter in an async context will likely result
-in panics and hangs. This is not a limitation of zbus but rather a
-<a href="https://rust-lang.github.io/wg-async-foundations/vision/shiny_future/users_manual.html#caveat-beware-the-async-sandwich">well-known general problem</a> in the Rust async/await world. The <a href="https://docs.rs/blocking/"><code>blocking</code> crate</a>,
-<a href="https://docs.rs/async-std/latest/async_std/task/fn.spawn_blocking.html"><code>async-std</code></a> and <a href="https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html"><code>tokio</code></a> crates provide a easy way around this problem.</p>
-<h2 id="establishing-a-connection"><a class="header" href="#establishing-a-connection">Establishing a connection</a></h2>
-<p>The only difference to that of <a href="https://docs.rs/zbus/3/zbus/struct.Connection.html">asynchronous <code>Connection</code> API</a> is that you use
-<a href="https://docs.rs/zbus/3/zbus/blocking/struct.Connection.html"><code>blocking::Connection</code></a> type instead. This type’s API is almost identical to that of <code>Connection</code>,
-except all its methods are blocking. One notable difference is that there is no equivalent of
-<a href="https://docs.rs/futures/latest/futures/sink/trait.Sink.html"><code>futures::sink::Sink</code></a> implementation provided. There is however [<code>blocking::MessageIterator</code>]
-type, that implements <a href="https://doc.rust-lang.org/nightly/std/iter/trait.Iterator.html"><code>std::iter::Iterator</code></a>.</p>
-<h2 id="client"><a class="header" href="#client">Client</a></h2>
-<p>Similar to <code>blocking::Connection</code>, you use <code>blocking::Proxy</code> type. Its constructors require
-<code>blocking::Connection</code> instead of <code>Connection</code>. Moreover, <code>dbus_proxy</code> macro generates a
-<code>blocking::Proxy</code> wrapper for you as well. Let’s convert the last example in the previous chapter,
-to use the blocking connection and proxy:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>use zbus::{blocking::Connection, zvariant::ObjectPath, dbus_proxy, Result};
+                        <blockquote>
+<p><strong>Note</strong></p>
+<p>This version of the book is based on older zbus 1.0 API. The 2.0 version of this book is available
+<a href="https://dbus2.github.io/zbus/">here</a>.</p>
+</blockquote>
+<h1 id="writing-a-server-interface"><a class="header" href="#writing-a-server-interface">Writing a server interface</a></h1>
+<p>Let see how to provide a server method “SayHello”, to greet a client.</p>
+<h2 id="taking-a-service-name"><a class="header" href="#taking-a-service-name">Taking a service name</a></h2>
+<p>As we know from the chapter on <a href="concepts.html#bus-name--service-name">D-Bus concepts</a>, each connection on the bus is given a unique name
+(such as “:1.27”). This could be all you need, depending on your use case, and the design of your
+D-Bus API. However, typically services use a service name (aka <em>well-known name</em>) so peers (clients,
+in this context) can easily discover them.</p>
+<p>In this example, that is exactly what we’re going to do and request the bus for the service name of
+our choice. To achieve that, we will we call the <a href="https://dbus.freedesktop.org/doc/dbus-specification.html#bus-messages-request-name"><code>RequestName</code></a> method on the bus, using
+<code>zbus::fdo</code> module:</p>
+<pre><pre class="playground"><code class="language-rust no_run">use std::error::Error;
 
-#[dbus_proxy(
-    default_service = "org.freedesktop.GeoClue2",
-    interface = "org.freedesktop.GeoClue2.Manager",
-    default_path = "/org/freedesktop/GeoClue2/Manager"
-)]
-trait Manager {
-    #[dbus_proxy(object = "Client")]
-    /// The method normally returns an `ObjectPath`.
-    /// With the object attribute, we can make it return a `ClientProxy` directly.
-    fn get_client(&amp;self);
-}
+use zbus::Connection;
+use zbus::fdo;
 
-#[dbus_proxy(
-    default_service = "org.freedesktop.GeoClue2",
-    interface = "org.freedesktop.GeoClue2.Client"
-)]
-trait Client {
-    fn start(&amp;self) -&gt; Result&lt;()&gt;;
-    fn stop(&amp;self) -&gt; Result&lt;()&gt;;
+fn main() -&gt; std::result::Result&lt;(), Box&lt;dyn Error&gt;&gt; {
+    let connection = Connection::new_session()?;
 
-    #[dbus_proxy(property)]
-    fn set_desktop_id(&amp;mut self, id: &amp;str) -&gt; Result&lt;()&gt;;
+    fdo::DBusProxy::new(&amp;connection)?.request_name(
+        "org.zbus.MyGreeter",
+        fdo::RequestNameFlags::ReplaceExisting.into(),
+    )?;
 
-    #[dbus_proxy(signal)]
-    fn location_updated(&amp;self, old: ObjectPath&lt;'_&gt;, new: ObjectPath&lt;'_&gt;) -&gt; Result&lt;()&gt;;
-}
-
-#[dbus_proxy(
-    default_service = "org.freedesktop.GeoClue2",
-    interface = "org.freedesktop.GeoClue2.Location"
-)]
-trait Location {
-    #[dbus_proxy(property)]
-    fn latitude(&amp;self) -&gt; Result&lt;f64&gt;;
-    #[dbus_proxy(property)]
-    fn longitude(&amp;self) -&gt; Result&lt;f64&gt;;
-}
-let conn = Connection::system().unwrap();
-let manager = ManagerProxyBlocking::new(&amp;conn).unwrap();
-let mut client = manager.get_client().unwrap();
-// Gotta do this, sorry!
-client.set_desktop_id("org.freedesktop.zbus").unwrap();
-
-let mut location_updated = client.receive_location_updated().unwrap();
-
-client.start().unwrap();
-
-// Wait for the signal.
-let signal = location_updated.next().unwrap();
-let args = signal.args().unwrap();
-
-let location = LocationProxyBlocking::builder(&amp;conn)
-    .path(args.new())
-    .unwrap()
-    .build()
-    .unwrap();
-println!(
-    "Latitude: {}\nLongitude: {}",
-    location.latitude().unwrap(),
-    location.longitude().unwrap(),
-);
-<span class="boring">}</span></code></pre></pre>
-<p>As you can see, nothing changed in the <code>dbus_proxy</code> usage here and the rest largely remained the
-same as well. One difference that’s not obvious is that the blocking API for receiving signals,
-implement <a href="https://doc.rust-lang.org/nightly/std/iter/trait.Iterator.html"><code>std::iter::Iterator</code></a> trait instead of <a href="https://docs.rs/futures/0.3.17/futures/stream/trait.Stream.html"><code>futures::stream::Stream</code></a>.</p>
-<h3 id="watching-for-properties"><a class="header" href="#watching-for-properties">Watching for properties</a></h3>
-<p>That’s almost the same as receiving signals:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use zbus::{blocking::Connection, dbus_proxy, Result};
-</span><span class="boring">
-</span>#[dbus_proxy(
-    interface = "org.freedesktop.systemd1.Manager",
-    default_service = "org.freedesktop.systemd1",
-    default_path = "/org/freedesktop/systemd1"
-)]
-trait SystemdManager {
-    #[dbus_proxy(property)]
-    fn log_level(&amp;self) -&gt; zbus::Result&lt;String&gt;;
-}
-
-fn main() -&gt; Result&lt;()&gt; {
-    let connection = Connection::session()?;
-
-    let proxy = SystemdManagerProxyBlocking::new(&amp;connection)?;
-    let v = proxy.receive_log_level_changed().next().unwrap();
-    println!("LogLevel changed: {:?}", v.get());
-
-    Ok(())
+    loop {}
 }</code></pre></pre>
-<h2 id="server"><a class="header" href="#server">Server</a></h2>
-<p>Similarly here, you’d use [<code>blocking::ObjectServer</code>] that is associated with every
-<a href="https://docs.rs/zbus/3/zbus/blocking/struct.Connection.html"><code>blocking::Connection</code></a> instance. While there is no blocking version of <code>Interface</code>,
-<code>dbus_interface</code> allows you to write non-async methods.</p>
-<p><strong>Note:</strong> Even though you can write non-async methods, these methods are still called from an async
-context. Therefore, you can not use blocking API in the method implementation directly. See note at
-the beginning of this chapter for details on why and a possible workaround.</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use std::error::Error;
-</span><span class="boring">use zbus::{blocking::ConnectionBuilder, dbus_interface, fdo, SignalContext};
+<p>We can check our service is running and is associated with the service name:</p>
+<pre><code class="language-bash">$ busctl --user list | grep zbus
+org.zbus.MyGreeter                             412452 server            elmarco :1.396        user@1000.service -       -
+</code></pre>
+<h3 id="-hang-on"><a class="header" href="#-hang-on">⚠ Hang on</a></h3>
+<p>This example is not handling incoming messages yet. Any attempt to call the server will time out
+(including the shell completion!).</p>
+<h2 id="handling-low-level-messages"><a class="header" href="#handling-low-level-messages">Handling low-level messages</a></h2>
+<p>At the low-level, you can handle method calls by checking the incoming messages manually.</p>
+<p>Let’s write a <code>SayHello</code> method, that takes a string as argument, and reply with a “hello” greeting
+by replacing the loop above with this code:</p>
+<pre><pre class="playground"><code class="language-rust no_run"><span class="boring">fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+</span><span class="boring">   let connection = zbus::Connection::new_session()?;
+</span><span class="boring">   zbus::fdo::DBusProxy::new(&amp;connection)?.request_name(
+</span><span class="boring">       "org.zbus.MyGreeter",
+</span><span class="boring">       zbus::fdo::RequestNameFlags::ReplaceExisting.into(),
+</span><span class="boring">   )?;
 </span><span class="boring">
-</span>use event_listener::Event;
+</span>loop {
+    let msg = connection.receive_message()?;
+    let msg_header = msg.header()?;
+    dbg!(&amp;msg);
 
-struct Greeter {
-    name: String,
-    done: Event,
+    match msg_header.message_type()? {
+        zbus::MessageType::MethodCall =&gt; {
+            // real code would check msg_header path(), interface() and member()
+            // handle invalid calls, introspection, errors etc
+            let arg: &amp;str = msg.body()?;
+            connection.reply(&amp;msg, &amp;(format!("Hello {}!", arg)))?;
+        }
+        _ =&gt; continue,
+    }
 }
+<span class="boring">}</span></code></pre></pre>
+<p>And check if it works as expected:</p>
+<pre><code class="language-bash">$ busctl --user call org.zbus.MyGreeter /org/zbus/MyGreeter org.zbus.MyGreeter1 SayHello s "zbus"
+s "Hello zbus!"
+</code></pre>
+<p>This is the crust of low-level message handling. It should give you all the flexibility you ever
+need, but it is also easy to get it wrong. Fortunately, zbus has a simpler solution to offer.</p>
+<h2 id="using-the-objectserver"><a class="header" href="#using-the-objectserver">Using the <code>ObjectServer</code></a></h2>
+<p>One can write an <code>impl</code> with a set of methods and let the <code>dbus_interface</code> procedural macro write
+the D-Bus details for us. It will dispatch all the incoming method calls to their respective
+handlers, and implicilty handle introspection requests. It also has support for properties and
+signal emission.</p>
+<p>Let see how to use it:</p>
+<pre><pre class="playground"><code class="language-rust no_run"><span class="boring">use std::error::Error;
+</span><span class="boring">use std::convert::TryInto;
+</span><span class="boring">use zbus::{dbus_interface, fdo};
+</span><span class="boring">
+</span>struct Greeter;
 
 #[dbus_interface(name = "org.zbus.MyGreeter1")]
 impl Greeter {
     fn say_hello(&amp;self, name: &amp;str) -&gt; String {
         format!("Hello {}!", name)
     }
-
-    // Rude!
-    async fn go_away(
-        &amp;self,
-        #[zbus(signal_context)]
-        ctxt: SignalContext&lt;'_&gt;,
-    ) -&gt; fdo::Result&lt;()&gt; {
-        Self::greeted_everyone(&amp;ctxt).await?;
-        self.done.notify(1);
-
-        Ok(())
-    }
-
-    /// A "GreeterName" property.
-    #[dbus_interface(property)]
-    fn greeter_name(&amp;self) -&gt; &amp;str {
-        &amp;self.name
-    }
-
-    /// A setter for the "GreeterName" property.
-    ///
-    /// Additionally, a `greeter_name_changed` method has been generated for you if you need to
-    /// notify listeners that "GreeterName" was updated. It will be automatically called when
-    /// using this setter.
-    #[dbus_interface(property)]
-    fn set_greeter_name(&amp;mut self, name: String) {
-        self.name = name;
-    }
-
-    /// A signal; the implementation is provided by the macro.
-    #[dbus_interface(signal)]
-    async fn greeted_everyone(ctxt: &amp;SignalContext&lt;'_&gt;) -&gt; zbus::Result&lt;()&gt;;
 }
 
 fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
-    let greeter = Greeter {
-        name: "GreeterName".to_string(),
-        done: event_listener::Event::new(),
-    };
-    let done_listener = greeter.done.listen();
-    let _handle = ConnectionBuilder::session()?
-        .name("org.zbus.MyGreeter")?
-        .serve_at("/org/zbus/MyGreeter", greeter)?
-        .build()?;
+    let connection = zbus::Connection::new_session()?;
+<span class="boring">    fdo::DBusProxy::new(&amp;connection)?.request_name(
+</span><span class="boring">        "org.zbus.MyGreeter",
+</span><span class="boring">        fdo::RequestNameFlags::ReplaceExisting.into(),
+</span><span class="boring">    )?;
+</span>
+    let object_server = zbus::ObjectServer::new(&amp;connection);
+    object_server.at(&amp;"/org/zbus/MyGreeter".try_into()?, Greeter)?;
+    loop {
+        if let Err(err) = object_server.try_handle_next() {
+            eprintln!("{}", err);
+        }
+    }
 
-    done_listener.wait();
-
-    Ok(())
 }</code></pre></pre>
+<p>(check it works with the same <code>busctl</code> command as last time)</p>
+<p>This time, we can also introspect the server:</p>
+<pre><code class="language-bash">$ busctl --user introspect org.zbus.MyGreeter /org/zbus/MyGreeter
+NAME                                TYPE      SIGNATURE RESULT/VALUE FLAGS
+org.freedesktop.DBus.Introspectable interface -         -            -
+.Introspect                         method    -         s            -
+org.freedesktop.DBus.Peer           interface -         -            -
+.GetMachineId                       method    -         s            -
+.Ping                               method    -         -            -
+org.freedesktop.DBus.Properties     interface -         -            -
+.Get                                method    ss        v            -
+.GetAll                             method    s         a{sv}        -
+.Set                                method    ssv       -            -
+.PropertiesChanged                  signal    sa{sv}as  -            -
+org.zbus.MyGreeter1                 interface -         -            -
+.SayHello                           method    s         s            -
+</code></pre>
+<p>Easy-peasy!</p>
+<blockquote>
+<p><strong>Note:</strong> As you must have noticed, your code needed to run a loop to continuously read incoming
+messages (register the associated FD for input in poll/select to avoid blocking). This is because
+at the time of the this writing (<em>pre-1.0</em>), zbus neither provides an event loop API, nor any
+integration with other event loop implementations. We are evaluating different options to make this
+easier, especially with <em>async</em> support.</p>
+</blockquote>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="server.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="client.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="faq.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="contributors.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -377,11 +325,11 @@ fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="server.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="client.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="faq.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="contributors.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>
