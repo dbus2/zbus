@@ -25,7 +25,7 @@ syn = { version = "1.0.109", features = ["extra-traits", "fold", "full"] }
 quote = "1.0.35"
 proc-macro-crate = "3.1.0"
 regex = "1.10.3"
-zvariant_utils = { path = "../zvariant_utils", version = "=1.1.0" }
+zvariant_utils = { path = "../zvariant_utils", version = "1.1.0" }
 
 [dev-dependencies]
 zbus = { path = "../zbus" }
