@@ -150,6 +150,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-executor"
+version = "1.9.0"
+source = "git+https://github.com/james7132/async-executor?branch=steal-on-tick#4e6f85afef632fd05b812e768672b54e68dc9649"
+dependencies = [
+ "async-lock 3.3.0",
+ "async-task",
+ "atomic-waker",
+ "concurrent-queue",
+ "fastrand 2.0.1",
+ "futures-lite 2.2.0",
+ "slab",
+ "thread_local",
+]
+
+[[package]]
 name = "async-fs"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -167,7 +182,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05b1b633a2115cd122d73b955eadd9916c18c8f510ec9cd1686404c60ad1c29c"
 dependencies = [
  "async-channel 2.2.0",
- "async-executor",
+ "async-executor 1.8.0",
  "async-io 2.3.1",
  "async-lock 3.3.0",
  "blocking",
@@ -2539,7 +2554,7 @@ name = "zbus"
 version = "4.1.1"
 dependencies = [
  "async-broadcast",
- "async-executor",
+ "async-executor 1.9.0",
  "async-fs",
  "async-io 2.3.1",
  "async-lock 3.3.0",
