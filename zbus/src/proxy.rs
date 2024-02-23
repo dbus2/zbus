@@ -439,9 +439,7 @@ impl PropertiesCache {
             }
             trace!("Property `{interface}.{property_name}` updated");
 
-            let entry = values
-                .entry(property_name.to_string())
-                .or_insert_with(PropertyValue::default);
+            let entry = values.entry(property_name.to_string()).or_default();
 
             entry.value = Some(OwnedValue::from(value));
             entry.event.notify(usize::MAX);
