@@ -327,13 +327,13 @@ async fn get_unix_peer_creds(fd: &impl AsRawFd) -> io::Result<crate::fdo::Connec
 
 #[cfg(unix)]
 fn get_unix_peer_creds_blocking(fd: RawFd) -> io::Result<crate::fdo::ConnectionCredentials> {
+    // TODO: get this BorrowedFd directly from get_unix_peer_creds(), but this requires a
+    // 'static lifetime due to the Task.
+    let fd = unsafe { BorrowedFd::borrow_raw(fd) };
+
     #[cfg(any(target_os = "android", target_os = "linux"))]
     {
         use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
-
-        // TODO: get this BorrowedFd directly from get_unix_peer_creds(), but this requires a
-        // 'static lifetime due to the Task.
-        let fd = unsafe { BorrowedFd::borrow_raw(fd) };
 
         getsockopt(&fd, PeerCredentials)
             .map(|creds| {
@@ -353,7 +353,6 @@ fn get_unix_peer_creds_blocking(fd: RawFd) -> io::Result<crate::fdo::ConnectionC
         target_os = "netbsd"
     ))]
     {
-        let fd = fd.as_raw_fd();
         let uid = nix::unistd::getpeereid(fd).map(|(uid, _)| uid.into())?;
         // FIXME: Handle pid fetching too.
         Ok(crate::fdo::ConnectionCredentials::default().set_unix_user_id(uid))
