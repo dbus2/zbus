@@ -98,7 +98,7 @@ windows-sys = { version = "0.52", features = [
 uds_windows = "1.1.0"
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.27", default-features = false, features = [
+nix = { version = "0.28", default-features = false, features = [
   "socket",
   "uio",
   "user",
