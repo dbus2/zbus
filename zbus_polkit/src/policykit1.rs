@@ -127,7 +127,7 @@ fn pid_uid_racy(pid: u32) -> Result<u32, Error> {
     let fname = format!("/proc/{pid}/status");
     let file = std::fs::File::open(fname)?;
     let lines = std::io::BufReader::new(file).lines();
-    for line in lines.flatten() {
+    for line in lines.map_while(Result::ok) {
         if line.starts_with("Uid:") {
             if let Some(uid) = line.split('\t').nth(1) {
                 return Ok(uid.parse()?);
