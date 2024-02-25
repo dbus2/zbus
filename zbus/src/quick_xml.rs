@@ -22,7 +22,6 @@ use static_assertions::assert_impl_all;
 use std::{
     convert::{TryFrom, TryInto},
     io::{BufReader, Read, Write},
-    result::Result,
 };
 
 use crate::{

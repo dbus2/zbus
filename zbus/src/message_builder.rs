@@ -1,5 +1,5 @@
 use std::{
-    convert::{Into, TryInto},
+    convert::TryInto,
     io::{Cursor, Write},
 };
 
