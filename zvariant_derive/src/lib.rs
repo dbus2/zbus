@@ -404,6 +404,26 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// assert_eq!(e, Enum::Variant2);
 /// ```
 ///
+/// String-encoded enums are also supported:
+///
+/// ```
+/// # use zvariant::{OwnedValue, Value};
+/// #
+/// #[derive(Debug, PartialEq, Value, OwnedValue)]
+/// #[zvariant(signature = "s")]
+/// enum StrEnum {
+///     Variant1,
+///     Variant2,
+/// }
+///
+/// let value = Value::from(StrEnum::Variant1);
+/// let e = StrEnum::try_from(value).unwrap();
+/// assert_eq!(e, StrEnum::Variant1);
+/// let value = OwnedValue::try_from(StrEnum::Variant2).unwrap();
+/// let e = StrEnum::try_from(value).unwrap();
+/// assert_eq!(e, StrEnum::Variant2);
+/// ```
+///
 /// # Dictionary encoding
 ///
 /// For treating your type as a dictionary, you can use the `signature = "dict"` attribute. See
@@ -412,7 +432,7 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 ///
 /// [`Value`]: https://docs.rs/zvariant/latest/zvariant/enum.Value.html
 /// [`Type`]: derive.Type.html#custom-types
-#[proc_macro_derive(Value)]
+#[proc_macro_derive(Value, attributes(zbus, zvariant))]
 pub fn value_macro_derive(input: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(input).unwrap();
     value::expand_derive(ast, value::ValueType::Value)
@@ -427,7 +447,7 @@ pub fn value_macro_derive(input: TokenStream) -> TokenStream {
 /// See [`Value`] documentation for examples.
 ///
 /// [`OwnedValue`]: https://docs.rs/zvariant/latest/zvariant/struct.OwnedValue.html
-#[proc_macro_derive(OwnedValue)]
+#[proc_macro_derive(OwnedValue, attributes(zbus, zvariant))]
 pub fn owned_value_macro_derive(input: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(input).unwrap();
     value::expand_derive(ast, value::ValueType::OwnedValue)
