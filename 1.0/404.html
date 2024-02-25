@@ -3,7 +3,8 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>FAQ - zbus: D-Bus for Rust made easy</title>
+        <title>Page not found - zbus: D-Bus for Rust made easy</title>
+        <base href="/">
 
 
         <!-- Custom HTML head -->
@@ -88,7 +89,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded affix "><a href="introduction.html">Introduction</a></li><li class="chapter-item expanded "><a href="concepts.html"><strong aria-hidden="true">1.</strong> Some D-Bus concepts</a></li><li class="chapter-item expanded "><a href="connection.html"><strong aria-hidden="true">2.</strong> Establishing connections</a></li><li class="chapter-item expanded "><a href="client.html"><strong aria-hidden="true">3.</strong> Writing a client proxy</a></li><li class="chapter-item expanded "><a href="server.html"><strong aria-hidden="true">4.</strong> Writing a server interface</a></li><li class="chapter-item expanded "><a href="blocking.html"><strong aria-hidden="true">5.</strong> Blocking API</a></li><li class="chapter-item expanded "><a href="faq.html" class="active"><strong aria-hidden="true">6.</strong> FAQ</a></li><li class="spacer"></li><li class="chapter-item expanded affix "><a href="contributors.html">Contributors</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="introduction.html">Introduction</a></li><li class="chapter-item expanded "><a href="concepts.html"><strong aria-hidden="true">1.</strong> Some D-Bus concepts</a></li><li class="chapter-item expanded "><a href="connection.html"><strong aria-hidden="true">2.</strong> Establishing connections</a></li><li class="chapter-item expanded "><a href="client.html"><strong aria-hidden="true">3.</strong> Writing a client proxy</a></li><li class="chapter-item expanded "><a href="server.html"><strong aria-hidden="true">4.</strong> Writing a server interface</a></li><li class="spacer"></li><li class="chapter-item expanded affix "><a href="contributors.html">Contributors</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -176,111 +177,14 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="faq"><a class="header" href="#faq">FAQ</a></h1>
-<h2 id="how-to-use-a-struct-as-a-dictionary"><a class="header" href="#how-to-use-a-struct-as-a-dictionary">How to use a struct as a dictionary?</a></h2>
-<p>Since the use of a dictionary, specifically one with strings as keys and variants as value (i-e
-<code>a{sv}</code>) is very common in the D-Bus world and use of HashMaps isn’t as convenient and type-safe as
-a struct, you might find yourself wanting to use a struct as a dictionary.</p>
-<p><code>zvariant</code> provides convenient macros for making this possible: <a href="https://docs.rs/zvariant/3/zvariant/derive.SerializeDict.html"><code>SerializeDict</code></a> and
-<a href="https://docs.rs/zvariant/3/zvariant/derive.DeserializeDict.html"><code>DeserializeDict</code></a>. You’ll also need to tell <a href="https://docs.rs/zvariant/3/zvariant/derive.Type.html"><code>Type</code></a> macro to treat the type as a dictionary using
-the <code>signature</code> attribute. Here is a simple example:</p>
-<pre><code class="language-rust noplayground">use zbus::{
-    dbus_proxy, dbus_interface, fdo::Result,
-    zvariant::{DeserializeDict, SerializeDict, Type},
-};
-
-#[derive(DeserializeDict, SerializeDict, Type)]
-// `Type` treats `dict` is an alias for `a{sv}`.
-#[zvariant(signature = "dict")]
-pub struct Dictionary {
-    field1: u16,
-    #[zvariant(rename = "another-name")]
-    field2: i64,
-    optional_field: Option&lt;String&gt;,
-}
-
-#[dbus_proxy(
-    interface = "org.zbus.DictionaryGiver",
-    default_path = "/org/zbus/DictionaryGiver",
-    default_service = "org.zbus.DictionaryGiver",
-)]
-trait DictionaryGiver {
-    fn give_me(&amp;self) -&gt; Result&lt;Dictionary&gt;;
-}
-
-struct DictionaryGiverInterface;
-
-#[dbus_interface(interface = "org.zbus.DictionaryGiver")]
-impl DictionaryGiverInterface {
-    fn give_me(&amp;self) -&gt; Result&lt;Dictionary&gt; {
-        Ok(Dictionary {
-            field1: 1,
-            field2: 4,
-            optional_field: Some(String::from("blah")),
-        })
-    }
-}</code></pre>
-<h2 id="why-do-async-tokio-api-calls-from-interface-methods-not-work"><a class="header" href="#why-do-async-tokio-api-calls-from-interface-methods-not-work">Why do async tokio API calls from interface methods not work?</a></h2>
-<p>Many of the tokio (and tokio-based) APIs assume the tokio runtime to be driving the async machinery
-and since by default, zbus runs the <code>ObjectServer</code> in its own internal runtime thread, it’s not
-possible to use these APIs from interface methods. Moreover, by default zbus relies on <code>async-io</code>
-crate to communicate with the bus, which uses its own thread.</p>
-<p>Not to worry, though! You can enable tight integration between tokio and zbus by enabling <code>tokio</code>
-feature:</p>
-<pre><code class="language-toml"># Sample Cargo.toml snippet.
-[dependencies]
-# Also disable the default `async-io` feature to avoid unused dependencies.
-zbus = { version = "3", default-features = false, features = ["tokio"] }
-</code></pre>
-<p><strong>Note</strong>: On Windows, the <code>async-io</code> feature is currently required for UNIX domain socket support,
-see <a href="https://github.com/tokio-rs/tokio/issues/2201">the corresponding tokio issue on GitHub</a>.</p>
-<h2 id="im-experiencing-hangs-what-could-be-wrong"><a class="header" href="#im-experiencing-hangs-what-could-be-wrong">I’m experiencing hangs, what could be wrong?</a></h2>
-<p>There are typically two reasons this can happen with zbus:</p>
-<h3 id="1-a-dbus_interface-method-that-takes-a-mut-self-argument-is-taking-too-long"><a class="header" href="#1-a-dbus_interface-method-that-takes-a-mut-self-argument-is-taking-too-long">1. A <code>dbus_interface</code> method that takes a <code>&amp;mut self</code> argument is taking too long</a></h3>
-<p>Simply put, this is because of one of the primary rules of Rust: while a mutable reference to a
-resource exists, no other references to that same resource can exist at the same time. This means
-that before the method in question returns, all other method calls on the providing interface will
-have to wait in line.</p>
-<p>A typical solution here is use of interior mutability or launching tasks to do the actual work
-combined with signals to report the progress of the work to clients. Both of these solutions
-involve converting the methods in question to take <code>&amp;self</code> argument instead of <code>&amp;mut self</code>.</p>
-<h3 id="2-a-stream-eg-signalstream-is-not-being-continuously-polled"><a class="header" href="#2-a-stream-eg-signalstream-is-not-being-continuously-polled">2. A stream (e.g <code>SignalStream</code>) is not being continuously polled</a></h3>
-<p>Please consult <a href="https://docs.rs/zbus/3/zbus/struct.MessageStream.html"><code>MessageStream</code></a> documentation for details.</p>
-<h2 id="why-arent-property-values-updating-for-my-service-that-doesnt-notify-changes"><a class="header" href="#why-arent-property-values-updating-for-my-service-that-doesnt-notify-changes">Why aren’t property values updating for my service that doesn’t notify changes?</a></h2>
-<p>A common issue might arise when using a zbus proxy is that your proxy’s property values aren’t
-updating. This is due to zbus’ default caching policy, which updates the value of a property only
-when a change is signaled, primarily to minimize latency and optimize client request performance.
-By default, if your service does not emit change notifications, the property values will not
-update accordingly.</p>
-<p>However, you can disabling caching for specific properties:</p>
-<ul>
-<li>
-<p>Add the <code>#[dbus_proxy(property(emits_changed_signal = "false"))]</code> annotation to the property
-for which you desire to disable caching on.</p>
-</li>
-<li>
-<p>Use <code>ProxyBuilder</code> to build your proxy instance and use <code>ProxyBuilder::uncached_properties</code> method
-to list all properties you wish to disable caching for.</p>
-</li>
-<li>
-<p>In order to disable caching for either type of proxy use the <code>ProxyBuilder::cache_properites</code>
-method.</p>
-</li>
-</ul>
-<p>For more information about all the possible values for <code>emits_changed_signal</code> refer
-to <a href="https://docs.rs/zbus/3.13.1/zbus/attr.dbus_proxy.html"><code>dbus_proxy</code></a> documentation.</p>
+                        <h1 id="document-not-found-404"><a class="header" href="#document-not-found-404">Document not found (404)</a></h1>
+<p>This URL is invalid, sorry. Please use the navigation bar or search to continue.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="blocking.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
-                                <i class="fa fa-angle-left"></i>
-                            </a>
 
-                            <a rel="next prefetch" href="contributors.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
-                                <i class="fa fa-angle-right"></i>
-                            </a>
 
                         <div style="clear: both"></div>
                     </nav>
@@ -288,13 +192,7 @@ to <a href="https://docs.rs/zbus/3.13.1/zbus/attr.dbus_proxy.html"><code>dbus_pr
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="blocking.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
-                        <i class="fa fa-angle-left"></i>
-                    </a>
 
-                    <a rel="next prefetch" href="contributors.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
-                        <i class="fa fa-angle-right"></i>
-                    </a>
             </nav>
 
         </div>

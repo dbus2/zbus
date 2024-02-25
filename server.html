@@ -226,15 +226,14 @@ by replacing the loop above with this code:</p>
 </span><span class="boring">       .await?;
 </span><span class="boring">
 </span>while let Some(msg) = stream.try_next().await? {
-    let msg_header = msg.header();
+    let msg_header = msg.header()?;
     dbg!(&amp;msg);
 
-    match msg_header.message_type() {
-        zbus::message::Type::MethodCall =&gt; {
+    match msg_header.message_type()? {
+        zbus::MessageType::MethodCall =&gt; {
             // real code would check msg_header path(), interface() and member()
             // handle invalid calls, introspection, errors etc
-            let body = msg.body();
-            let arg: &amp;str = body.deserialize()?;
+            let arg: &amp;str = msg.body()?;
             connection.reply(&amp;msg, &amp;(format!("Hello {}!", arg))).await?;
 
             break;
@@ -252,17 +251,17 @@ s "Hello zbus!"
 <p>This is the crust of low-level message handling. It should give you all the flexibility you ever
 need, but it is also easy to get it wrong. Fortunately, zbus has a simpler solution to offer.</p>
 <h2 id="using-the-objectserver"><a class="header" href="#using-the-objectserver">Using the <code>ObjectServer</code></a></h2>
-<p>One can write an <code>impl</code> block with a set of methods and let the <code>interface</code> procedural macro
+<p>One can write an <code>impl</code> block with a set of methods and let the <code>dbus_interface</code> procedural macro
 write the D-Bus message handling details. It will dispatch the incoming method calls to their
 respective handlers, as well as replying to introspection requests.</p>
 <h3 id="mygreeter-simple-example"><a class="header" href="#mygreeter-simple-example"><code>MyGreeter</code> simple example</a></h3>
 <p>Let see how to use it for <code>MyGreeter</code> interface:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use zbus::{Connection, interface, Result};
+<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use zbus::{Connection, dbus_interface, Result};
 </span><span class="boring">
 </span>
 struct Greeter;
 
-#[interface(name = "org.zbus.MyGreeter1")]
+#[dbus_interface(name = "org.zbus.MyGreeter1")]
 impl Greeter {
     async fn say_hello(&amp;self, name: &amp;str) -&gt; String {
         format!("Hello {}!", name)
@@ -292,14 +291,14 @@ async fn main() -&gt; Result&lt;()&gt; {
 <h3 id="-service-activation-pitfalls"><a class="header" href="#-service-activation-pitfalls">⚠ Service activation pitfalls</a></h3>
 <p>A possible footgun here is that you must request the service name <strong>after</strong> you setup the handlers,
 otherwise incoming messages may be lost. Activated services may receive calls (or messages) right
-after taking their name. This is why it’s typically better to make use of <code>connection::Builder</code> for
+after taking their name. This is why it’s typically better to make use of <code>ConnectionBuilder</code> for
 setting up your interfaces and requesting names, and not have to care about this:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use zbus::{connection, interface, Result};
+<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use zbus::{ConnectionBuilder, dbus_interface, Result};
 </span><span class="boring">
 </span><span class="boring">
 </span><span class="boring">struct Greeter;
 </span><span class="boring">
-</span><span class="boring">#[interface(name = "org.zbus.MyGreeter1")]
+</span><span class="boring">#[dbus_interface(name = "org.zbus.MyGreeter1")]
 </span><span class="boring">impl Greeter {
 </span><span class="boring">    async fn say_hello(&amp;self, name: &amp;str) -&gt; String {
 </span><span class="boring">        format!("Hello {}!", name)
@@ -308,7 +307,7 @@ setting up your interfaces and requesting names, and not have to care about this
 </span><span class="boring">
 </span><span class="boring">#[async_std::main]
 </span><span class="boring">async fn main() -&gt; Result&lt;()&gt; {
-</span>    let _connection = connection::Builder::session()?
+</span>    let _connection = ConnectionBuilder::session()?
         .name("org.zbus.MyGreeter")?
         .serve_at("/org/zbus/MyGreeter", Greeter)?
         .build()
@@ -341,16 +340,16 @@ org.zbus.MyGreeter1                 interface -         -             -
 <p>This is a more complete example, demonstrating some of its usages. It also shows a way to
 synchronize with the interface handlers from outside, thanks to the <code>event_listener</code> crate
 (this is just one of the many ways).</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use zbus::{object_server::SignalContext, connection::Builder, interface, fdo, Result};
+<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use zbus::{SignalContext, ConnectionBuilder, dbus_interface, fdo, Result};
 </span><span class="boring">
-</span>use event_listener::{Event, Listener};
+</span>use event_listener::Event;
 
 struct Greeter {
     name: String,
     done: Event,
 }
 
-#[interface(name = "org.zbus.MyGreeter1")]
+#[dbus_interface(name = "org.zbus.MyGreeter1")]
 impl Greeter {
     async fn say_hello(&amp;self, name: &amp;str) -&gt; String {
         format!("Hello {}!", name)
@@ -369,7 +368,7 @@ impl Greeter {
     }
 
     /// A "GreeterName" property.
-    #[zbus(property)]
+    #[dbus_interface(property)]
     async fn greeter_name(&amp;self) -&gt; &amp;str {
         &amp;self.name
     }
@@ -379,13 +378,13 @@ impl Greeter {
     /// Additionally, a `greeter_name_changed` method has been generated for you if you need to
     /// notify listeners that "GreeterName" was updated. It will be automatically called when
     /// using this setter.
-    #[zbus(property)]
+    #[dbus_interface(property)]
     async fn set_greeter_name(&amp;mut self, name: String) {
         self.name = name;
     }
 
     /// A signal; the implementation is provided by the macro.
-    #[zbus(signal)]
+    #[dbus_interface(signal)]
     async fn greeted_everyone(ctxt: &amp;SignalContext&lt;'_&gt;) -&gt; Result&lt;()&gt;;
 }
 
@@ -397,7 +396,7 @@ async fn main() -&gt; Result&lt;()&gt; {
         done: event_listener::Event::new(),
     };
     let done_listener = greeter.done.listen();
-    let _connection = Builder::session()?
+    let _connection = ConnectionBuilder::session()?
         .name("org.zbus.MyGreeter")?
         .serve_at("/org/zbus/MyGreeter", greeter)?
         .build()
@@ -431,29 +430,29 @@ you’ll want to use <code>zbus::fdo::Error::UnknownProperty</code> variant.</p>
 <h3 id="sending-signals"><a class="header" href="#sending-signals">Sending signals</a></h3>
 <p>As you might have noticed in the previous example, the signal methods don’t take a <code>&amp;self</code> argument
 but a <code>SignalContext</code> reference. This allows to emit signals whether from inside or outside of the
-<code>interface</code> methods’ context. To make things simpler, <code>interface</code> methods can receive a
+<code>dbus_interface</code> methods’ context. To make things simpler, <code>dbus_interface</code> methods can receive a
 <code>SignalContext</code> passed to them using the special <code>zbus(signal_context)</code> attribute, as demonstrated
 in the previous example.</p>
-<p>Please refer to <a href="https://docs.rs/zbus/4/zbus/attr.interface.html"><code>interface</code> documentation</a> for more examples and list of other special
+<p>Please refer to <a href="https://docs.rs/zbus/3/zbus/attr.dbus_interface.html"><code>dbus_interface</code> documentation</a> for more examples and list of other special
 attributes you can make use of.</p>
 <h3 id="notifying-property-changes"><a class="header" href="#notifying-property-changes">Notifying property changes</a></h3>
-<p>For each property declared through the <code>interface</code> macro, a <code>&lt;property_name&gt;_changed</code> method is
+<p>For each property declared through the <code>dbus_interface</code> macro, a <code>&lt;property_name&gt;_changed</code> method is
 generated that emits the necessary property change signal. Here is how to use it with the previous
 example code:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use zbus::interface;
+<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use zbus::dbus_interface;
 </span><span class="boring">
 </span><span class="boring">struct Greeter {
 </span><span class="boring">    name: String
 </span><span class="boring">}
 </span><span class="boring">
-</span><span class="boring">#[interface(name = "org.zbus.MyGreeter1")]
+</span><span class="boring">#[dbus_interface(name = "org.zbus.MyGreeter1")]
 </span><span class="boring">impl Greeter {
-</span><span class="boring">    #[zbus(property)]
+</span><span class="boring">    #[dbus_interface(property)]
 </span><span class="boring">    async fn greeter_name(&amp;self) -&gt; &amp;str {
 </span><span class="boring">        &amp;self.name
 </span><span class="boring">    }
 </span><span class="boring">
-</span><span class="boring">    #[zbus(property)]
+</span><span class="boring">    #[dbus_interface(property)]
 </span><span class="boring">    async fn set_greeter_name(&amp;mut self, name: String) {
 </span><span class="boring">        self.name = name;
 </span><span class="boring">    }
