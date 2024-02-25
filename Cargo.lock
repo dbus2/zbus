@@ -2555,7 +2555,7 @@ checksum = "09041cd90cf85f7f8b2df60c646f853b7f535ce68f85244eb6731cf89fa498ec"
 
 [[package]]
 name = "zbus"
-version = "4.1.1"
+version = "4.1.2"
 dependencies = [
  "async-broadcast",
  "async-executor",
@@ -2602,7 +2602,7 @@ dependencies = [
 
 [[package]]
 name = "zbus_macros"
-version = "4.1.1"
+version = "4.1.2"
 dependencies = [
  "async-io 2.3.1",
  "futures-util",
@@ -2653,7 +2653,7 @@ dependencies = [
 
 [[package]]
 name = "zvariant"
-version = "4.0.1"
+version = "4.0.2"
 dependencies = [
  "arrayvec",
  "chrono",
@@ -2675,7 +2675,7 @@ dependencies = [
 
 [[package]]
 name = "zvariant_derive"
-version = "4.0.1"
+version = "4.0.2"
 dependencies = [
  "enumflags2",
  "proc-macro-crate 3.1.0",
