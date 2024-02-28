@@ -1,14 +1,17 @@
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "serde_bytes")]
+use serde_bytes::ByteBuf;
 use std::collections::HashMap;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use zvariant::{serialized::Context, to_bytes_for_signature, Type, Value, LE};
 
-fn fixed_size_array(c: &mut Criterion) {
-    let ay = vec![77u8; 100_000];
+#[cfg(feature = "serde_bytes")]
+fn byte_array(c: &mut Criterion) {
+    let ay = ByteBuf::from(vec![77u8; 100_000]);
     let ctxt = Context::new_dbus(LE, 0);
-    let signature = Vec::<u8>::signature();
+    let signature = ByteBuf::signature();
     c.bench_function("byte_array_ser", |b| {
         b.iter(|| {
             to_bytes_for_signature(black_box(ctxt), black_box(&signature), black_box(&ay)).unwrap()
@@ -16,6 +19,25 @@ fn fixed_size_array(c: &mut Criterion) {
     });
     let enc = to_bytes_for_signature(ctxt, &signature, &ay).unwrap();
     c.bench_function("byte_array_de", |b| {
+        b.iter(|| {
+            let _: (ByteBuf, _) = enc
+                .deserialize_for_signature(black_box(&signature))
+                .unwrap();
+        })
+    });
+}
+
+fn fixed_size_array(c: &mut Criterion) {
+    let ay = vec![77u8; 100_000];
+    let ctxt = Context::new_dbus(LE, 0);
+    let signature = Vec::<u8>::signature();
+    c.bench_function("fixed_size_array_ser", |b| {
+        b.iter(|| {
+            to_bytes_for_signature(black_box(ctxt), black_box(&signature), black_box(&ay)).unwrap()
+        })
+    });
+    let enc = to_bytes_for_signature(ctxt, &signature, &ay).unwrap();
+    c.bench_function("fixed_size_array_de", |b| {
         b.iter(|| {
             let _: (Vec<u8>, _) = enc
                 .deserialize_for_signature(black_box(&signature))
@@ -120,5 +142,8 @@ fn big_array_ser_and_de(c: &mut Criterion) {
     }
 }
 
+#[cfg(feature = "serde_bytes")]
+criterion_group!(benches, big_array_ser_and_de, byte_array, fixed_size_array);
+#[cfg(not(feature = "serde_bytes"))]
 criterion_group!(benches, big_array_ser_and_de, fixed_size_array);
 criterion_main!(benches);
