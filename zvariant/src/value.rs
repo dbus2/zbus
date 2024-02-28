@@ -387,9 +387,9 @@ impl<'a> Value<'a> {
     /// [`Value::Value`]: enum.Value.html#variant.Value
     /// [`TryFrom<Value>`]: https://doc.rust-lang.org/std/convert/trait.TryFrom.html
     /// [`From<Value>`]: https://doc.rust-lang.org/std/convert/trait.From.html
-    pub fn downcast<T: ?Sized>(self) -> Result<T, crate::Error>
+    pub fn downcast<T>(self) -> Result<T, crate::Error>
     where
-        T: TryFrom<Value<'a>>,
+        T: ?Sized + TryFrom<Value<'a>>,
         <T as TryFrom<Value<'a>>>::Error: Into<crate::Error>,
     {
         if let Value::Value(v) = self {

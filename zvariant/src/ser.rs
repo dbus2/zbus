@@ -47,9 +47,9 @@ impl Seek for NullWriteSeek {
 /// let len = serialized_size(ctxt, &("hello world!", 42_u64)).unwrap();
 /// assert_eq!(*len, 32);
 /// ```
-pub fn serialized_size<T: ?Sized>(ctxt: Context, value: &T) -> Result<Size>
+pub fn serialized_size<T>(ctxt: Context, value: &T) -> Result<Size>
 where
-    T: Serialize + DynamicType,
+    T: ?Sized + Serialize + DynamicType,
 {
     let mut null = NullWriteSeek;
     let signature = value.dynamic_signature();
@@ -119,10 +119,10 @@ where
 /// hence is safe to drop.
 ///
 /// [`to_writer_fds`]: fn.to_writer_fds.html
-pub unsafe fn to_writer<W, T: ?Sized>(writer: &mut W, ctxt: Context, value: &T) -> Result<Written>
+pub unsafe fn to_writer<W, T>(writer: &mut W, ctxt: Context, value: &T) -> Result<Written>
 where
     W: Write + Seek,
-    T: Serialize + DynamicType,
+    T: ?Sized + Serialize + DynamicType,
 {
     let signature = value.dynamic_signature();
 
@@ -132,9 +132,9 @@ where
 /// Serialize `T` as a byte vector.
 ///
 /// See [`Data::deserialize`] documentation for an example of how to use this function.
-pub fn to_bytes<T: ?Sized>(ctxt: Context, value: &T) -> Result<Data<'static, 'static>>
+pub fn to_bytes<T>(ctxt: Context, value: &T) -> Result<Data<'static, 'static>>
 where
-    T: Serialize + DynamicType,
+    T: ?Sized + Serialize + DynamicType,
 {
     to_bytes_for_signature(ctxt, value.dynamic_signature(), value)
 }
@@ -155,7 +155,7 @@ where
 /// hence is safe to drop.
 ///
 /// [`to_writer`]: fn.to_writer.html
-pub unsafe fn to_writer_for_signature<'s, W, S, T: ?Sized>(
+pub unsafe fn to_writer_for_signature<'s, W, S, T>(
     writer: &mut W,
     ctxt: Context,
     signature: S,
@@ -165,7 +165,7 @@ where
     W: Write + Seek,
     S: TryInto<Signature<'s>>,
     S::Error: Into<Error>,
-    T: Serialize,
+    T: ?Sized + Serialize,
 {
     #[cfg(unix)]
     let mut fds = FdList::Fds(vec![]);
@@ -214,7 +214,7 @@ where
 ///
 /// [`to_bytes`]: fn.to_bytes.html
 /// [`from_slice_for_signature`]: fn.from_slice_for_signature.html#examples
-pub fn to_bytes_for_signature<'s, S, T: ?Sized>(
+pub fn to_bytes_for_signature<'s, S, T>(
     ctxt: Context,
     signature: S,
     value: &T,
@@ -222,7 +222,7 @@ pub fn to_bytes_for_signature<'s, S, T: ?Sized>(
 where
     S: TryInto<Signature<'s>>,
     S::Error: Into<Error>,
-    T: Serialize,
+    T: ?Sized + Serialize,
 {
     let mut cursor = std::io::Cursor::new(vec![]);
     // SAFETY: We put the bytes and FDs in the `Data` to ensure that the data and FDs are only
