@@ -666,7 +666,6 @@ impl ObjectServer {
         })
     }
 
-    #[instrument(skip(self, connection))]
     async fn dispatch_method_call_try(
         &self,
         connection: &Connection,
@@ -732,7 +731,6 @@ impl ObjectServer {
         )))
     }
 
-    #[instrument(skip(self, connection))]
     async fn dispatch_method_call(&self, connection: &Connection, msg: &Message) -> Result<()> {
         match self.dispatch_method_call_try(connection, msg).await {
             Err(e) => {
