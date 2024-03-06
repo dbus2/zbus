@@ -31,7 +31,7 @@ static_assertions = "1.1.0"
 uuid = { version = "1.7.0", features = ["serde"], optional = true }
 url = { version = "2.5.0", features = ["serde"], optional = true }
 time = { version = "0.3.34", features = ["serde"], optional = true }
-chrono = { version = "0.4.34", features = [
+chrono = { version = "0.4.35", features = [
     "serde",
 ], default-features = false, optional = true }
 
