@@ -971,7 +971,10 @@ impl Connection {
                                     // destination doesn't matter if no name has been registered
                                     // (probably means name it's registered through external means).
                                     if !names.is_empty() && !names.contains_key(dest) {
-                                        trace!("Got a method call for a different destination: {}", dest);
+                                        trace!(
+                                            "Got a method call for a different destination: {}",
+                                            dest
+                                        );
 
                                         continue;
                                     }
@@ -1005,7 +1008,8 @@ impl Connection {
                                 )
                                 .detach();
                         } else {
-                            // If connection is completely gone, no reason to keep running the task anymore.
+                            // If connection is completely gone, no reason to keep running the task
+                            // anymore.
                             trace!("Connection is gone, stopping associated object server task");
                             break;
                         }
