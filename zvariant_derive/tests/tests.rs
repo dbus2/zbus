@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use zvariant::{
     serialized::{Context, Format},
@@ -37,6 +38,38 @@ fn derive_enum() {
     }
 
     assert_eq!(RequestNameFlags::signature(), "u")
+}
+
+fn derive_dict_struct() {
+    #[derive(Deserialize, Serialize, Type)]
+    #[serde(rename_all = "PascalCase")]
+    #[zvariant(signature = "a{sv}")]
+    struct HostAddress {
+        host_name: String,
+        port: u16,
+    }
+
+    let address = HostAddress {
+        host_name: "example.org".into(),
+        port: 0x2342,
+    };
+
+    let ctxt = Context::new(Format::DBus, LE, 0);
+    let serialized = zvariant::to_bytes(ctxt, &address).unwrap();
+    let deserialized: HashMap<String, OwnedValue> = serialized.deserialize().unwrap().0;
+
+    assert_eq!(
+        b"\x2e\0\0\0\0\0\0\0\x08\0\0\0HostName\0\x01s\0\x0b\0\0\0example.org\0\x04\0\0\0Port\0\x01q\0\x42\x23",
+        serialized,
+    );
+    assert_eq!(
+        deserialized["HostName"],
+        Value::from("foobar").try_into().unwrap()
+    );
+    assert_eq!(
+        deserialized["Port"],
+        Value::from(0x2342u16).try_into().unwrap()
+    );
 }
 
 #[test]

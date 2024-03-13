@@ -774,7 +774,14 @@ macro_rules! serialize_struct_named_fields {
             {
                 match self {
                     StructSeqSerializer::Struct(ser) => ser.serialize_field(key, value),
-                    StructSeqSerializer::Seq(ser) => ser.serialize_element(value),
+                    StructSeqSerializer::Seq(ser) => match ser.ser.0.sig_parser.next_char()? {
+                        DICT_ENTRY_SIG_START_CHAR => {
+                            use ser::SerializeMap as _;
+                            ser.serialize_key(key)?;
+                            ser.serialize_value(value)
+                        }
+                        _ => ser.serialize_element(value),
+                    },
                 }
             }
 
