@@ -776,9 +776,9 @@ impl ObjectServer {
     /// - returning a message (responding to the caller with either a return or error message) to
     ///   the caller through the associated server connection.
     ///
-    /// Returns an error if the message is malformed, true if it's handled, false otherwise.
+    /// Returns an error if the message is malformed.
     #[instrument(skip(self))]
-    pub(crate) async fn dispatch_call(&self, msg: &Message) -> Result<bool> {
+    pub(crate) async fn dispatch_call(&self, msg: &Message) -> Result<()> {
         let conn = self.connection();
 
         if let Err(e) = self.dispatch_method_call_try(&conn, msg).await {
@@ -788,7 +788,7 @@ impl ObjectServer {
         }
         trace!("Handled: {}", msg);
 
-        Ok(true)
+        Ok(())
     }
 
     pub(crate) fn connection(&self) -> Connection {
