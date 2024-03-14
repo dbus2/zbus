@@ -731,18 +731,6 @@ impl ObjectServer {
         )))
     }
 
-    async fn dispatch_method_call(&self, connection: &Connection, msg: &Message) -> Result<()> {
-        match self.dispatch_method_call_try(connection, msg).await {
-            Err(e) => {
-                let hdr = msg.header();
-                debug!("Returning error: {}", e);
-                connection.reply_dbus_error(&hdr, e).await?;
-                Ok(())
-            }
-            Ok(r) => r,
-        }
-    }
-
     /// Dispatch an incoming message to a registered interface.
     ///
     /// The object server will handle the message by:
@@ -758,7 +746,12 @@ impl ObjectServer {
     #[instrument(skip(self))]
     pub(crate) async fn dispatch_message(&self, msg: &Message) -> Result<bool> {
         let conn = self.connection();
-        self.dispatch_method_call(&conn, msg).await?;
+
+        if let Err(e) = self.dispatch_method_call_try(&conn, msg).await {
+            let hdr = msg.header();
+            debug!("Returning error: {}", e);
+            conn.reply_dbus_error(hdr, e).await?;
+        }
         trace!("Handled: {}", msg);
 
         Ok(true)
