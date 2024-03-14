@@ -996,7 +996,7 @@ impl Connection {
                                     async move {
                                         trace!("spawned a task to dispatch `{}`.", msg);
                                         let server = conn.object_server();
-                                        if let Err(e) = server.dispatch_message(&msg).await {
+                                        if let Err(e) = server.dispatch_call(&msg).await {
                                             debug!(
                                                 "Error dispatching message. Message: {:?}, error: {:?}",
                                                 msg, e

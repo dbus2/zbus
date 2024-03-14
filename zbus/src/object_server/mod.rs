@@ -744,7 +744,7 @@ impl ObjectServer {
     ///
     /// Returns an error if the message is malformed, true if it's handled, false otherwise.
     #[instrument(skip(self))]
-    pub(crate) async fn dispatch_message(&self, msg: &Message) -> Result<bool> {
+    pub(crate) async fn dispatch_call(&self, msg: &Message) -> Result<bool> {
         let conn = self.connection();
 
         if let Err(e) = self.dispatch_method_call_try(&conn, msg).await {
