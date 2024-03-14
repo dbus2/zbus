@@ -666,39 +666,19 @@ impl ObjectServer {
         })
     }
 
-    async fn dispatch_method_call_try(
+    async fn dispatch_call_to_iface(
         &self,
+        iface: Arc<RwLock<dyn Interface>>,
         connection: &Connection,
         msg: &Message,
         hdr: &Header<'_>,
     ) -> fdo::Result<()> {
-        let path = hdr
-            .path()
-            .ok_or_else(|| fdo::Error::Failed("Missing object path".into()))?;
-        let iface_name = hdr
-            .interface()
-            // TODO: In the absence of an INTERFACE field, if two or more interfaces on the same
-            // object have a method with the same name, it is undefined which of those
-            // methods will be invoked. Implementations may choose to either return an
-            // error, or deliver the message as though it had an arbitrary one of those
-            // interfaces.
-            .ok_or_else(|| fdo::Error::Failed("Missing interface".into()))?;
         let member = hdr
             .member()
             .ok_or_else(|| fdo::Error::Failed("Missing member".into()))?;
-
-        // Ensure the root lock isn't held while dispatching the message. That
-        // way, the object server can be mutated during that time.
-        let iface = {
-            let root = self.root.read().await;
-            let node = root
-                .get_child(path)
-                .ok_or_else(|| fdo::Error::UnknownObject(format!("Unknown object '{path}'")))?;
-
-            node.interface_lock(iface_name.as_ref()).ok_or_else(|| {
-                fdo::Error::UnknownInterface(format!("Unknown interface '{iface_name}'"))
-            })?
-        };
+        let iface_name = hdr
+            .interface()
+            .ok_or_else(|| fdo::Error::Failed("Missing interface".into()))?;
 
         trace!("acquiring read lock on interface `{}`", iface_name);
         let read_lock = iface.read().await;
@@ -735,6 +715,41 @@ impl ObjectServer {
         Err(fdo::Error::UnknownMethod(format!(
             "Unknown method '{member}'"
         )))
+    }
+
+    async fn dispatch_method_call_try(
+        &self,
+        connection: &Connection,
+        msg: &Message,
+        hdr: &Header<'_>,
+    ) -> fdo::Result<()> {
+        let path = hdr
+            .path()
+            .ok_or_else(|| fdo::Error::Failed("Missing object path".into()))?;
+        let iface_name = hdr
+            .interface()
+            // TODO: In the absence of an INTERFACE field, if two or more interfaces on the same
+            // object have a method with the same name, it is undefined which of those
+            // methods will be invoked. Implementations may choose to either return an
+            // error, or deliver the message as though it had an arbitrary one of those
+            // interfaces.
+            .ok_or_else(|| fdo::Error::Failed("Missing interface".into()))?;
+
+        // Ensure the root lock isn't held while dispatching the message. That
+        // way, the object server can be mutated during that time.
+        let iface = {
+            let root = self.root.read().await;
+            let node = root
+                .get_child(path)
+                .ok_or_else(|| fdo::Error::UnknownObject(format!("Unknown object '{path}'")))?;
+
+            node.interface_lock(iface_name.as_ref()).ok_or_else(|| {
+                fdo::Error::UnknownInterface(format!("Unknown interface '{iface_name}'"))
+            })?
+        };
+
+        self.dispatch_call_to_iface(iface, connection, msg, hdr)
+            .await
     }
 
     /// Dispatch an incoming message to a registered interface.
