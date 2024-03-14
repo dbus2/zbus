@@ -24,7 +24,7 @@ use crate::{
     async_lock::Mutex,
     blocking,
     fdo::{self, ConnectionCredentials, RequestNameFlags, RequestNameReply},
-    message::{Flags, Message, Type},
+    message::{Flags, Header, Message, Type},
     proxy::CacheProperties,
     DBusError, Error, Executor, MatchRule, MessageStream, ObjectServer, OwnedGuid, OwnedMatchRule,
     Result, Task,
@@ -991,12 +991,14 @@ impl Connection {
                             trace!("Got `{}`. Will spawn a task for dispatch..", msg);
                             let executor = conn.inner.executor.clone();
                             let task_name = format!("`{member}` method dispatcher");
+                            // SAFETY: msg becomes 'static when moved to the task, and dropped after
+                            let hdr = unsafe { std::mem::transmute::<_, Header<'static>>(hdr) };
                             executor
                                 .spawn(
                                     async move {
                                         trace!("spawned a task to dispatch `{}`.", msg);
                                         let server = conn.object_server();
-                                        if let Err(e) = server.dispatch_call(&msg).await {
+                                        if let Err(e) = server.dispatch_call(&msg, &hdr).await {
                                             debug!(
                                                 "Error dispatching message. Message: {:?}, error: {:?}",
                                                 msg, e

@@ -20,7 +20,7 @@ use crate::{
     connection::WeakConnection,
     fdo,
     fdo::{Introspectable, ManagedObjects, ObjectManager, Peer, Properties},
-    message::Message,
+    message::{Header, Message},
     Connection, Error, Result,
 };
 
@@ -670,8 +670,8 @@ impl ObjectServer {
         &self,
         connection: &Connection,
         msg: &Message,
+        hdr: &Header<'_>,
     ) -> fdo::Result<()> {
-        let hdr = msg.header();
         let path = hdr
             .path()
             .ok_or_else(|| fdo::Error::Failed("Missing object path".into()))?;
@@ -750,11 +750,10 @@ impl ObjectServer {
     ///
     /// Returns an error if the message is malformed.
     #[instrument(skip(self))]
-    pub(crate) async fn dispatch_call(&self, msg: &Message) -> Result<()> {
+    pub(crate) async fn dispatch_call(&self, msg: &Message, hdr: &Header<'_>) -> Result<()> {
         let conn = self.connection();
 
-        if let Err(e) = self.dispatch_method_call_try(&conn, msg).await {
-            let hdr = msg.header();
+        if let Err(e) = self.dispatch_method_call_try(&conn, msg, hdr).await {
             debug!("Returning error: {}", e);
             conn.reply_dbus_error(hdr, e).await?;
         }
