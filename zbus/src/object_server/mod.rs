@@ -9,7 +9,7 @@ use std::{
     ops::{Deref, DerefMut},
     sync::Arc,
 };
-use tracing::{debug, instrument, trace};
+use tracing::{debug, instrument, trace, trace_span, Instrument};
 
 use static_assertions::assert_impl_all;
 use zbus_names::InterfaceName;
@@ -782,8 +782,35 @@ impl ObjectServer {
             })?
         };
 
-        self.dispatch_call_from_iface(iface, connection, msg, hdr)
-            .await
+        trace!("acquiring read lock on interface `{}`", iface_name);
+        let read_lock = iface.read().await;
+        trace!("acquired read lock on interface `{}`", iface_name);
+        let with_spawn = read_lock.with_spawn();
+        drop(read_lock);
+
+        if with_spawn {
+            let executor = connection.executor().clone();
+            let task_name = format!("`{msg}` method dispatcher");
+            let connection = connection.clone();
+            let msg = msg.clone();
+            executor
+                .spawn(
+                    async move {
+                        let server = connection.object_server();
+                        let hdr = msg.header();
+                        server
+                            .dispatch_call_from_iface(iface, &connection, &msg, &hdr)
+                            .await
+                    }
+                    .instrument(trace_span!("{}", task_name)),
+                    &task_name,
+                )
+                .detach();
+            Ok(())
+        } else {
+            self.dispatch_call_from_iface(iface, connection, msg, hdr)
+                .await
+        }
     }
 
     /// Dispatch an incoming message to a registered interface.
