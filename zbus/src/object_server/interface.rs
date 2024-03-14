@@ -72,6 +72,14 @@ pub trait Interface: Any + Send + Sync {
     where
         Self: Sized;
 
+    /// Whether each method call will be handled from a different spawned task.
+    ///
+    /// Note: When methods are called from separate tasks, they may not be run in the order in which
+    /// they were called.
+    fn spawn_tasks_for_methods(&self) -> bool {
+        true
+    }
+
     /// Get a property value. Returns `None` if the property doesn't exist.
     async fn get(&self, property_name: &str) -> Option<fdo::Result<OwnedValue>>;
 
