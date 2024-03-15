@@ -670,7 +670,7 @@ impl ObjectServer {
         &self,
         connection: &Connection,
         msg: &Message,
-    ) -> fdo::Result<Result<()>> {
+    ) -> fdo::Result<()> {
         let hdr = msg.header();
         let path = hdr
             .path()
@@ -710,7 +710,10 @@ impl ObjectServer {
                 )));
             }
             DispatchResult::Async(f) => {
-                return Ok(f.await);
+                return f.await.map_err(|e| match e {
+                    Error::FDO(e) => *e,
+                    e => fdo::Error::Failed(format!("{e}")),
+                });
             }
             DispatchResult::RequiresMut => {}
         }
@@ -722,7 +725,10 @@ impl ObjectServer {
             DispatchResult::NotFound => {}
             DispatchResult::RequiresMut => {}
             DispatchResult::Async(f) => {
-                return Ok(f.await);
+                return f.await.map_err(|e| match e {
+                    Error::FDO(e) => *e,
+                    e => fdo::Error::Failed(format!("{e}")),
+                });
             }
         }
         drop(write_lock);
