@@ -18,7 +18,8 @@ pub mod old {
 
         pub TraitAttributes("trait") {
             interface str,
-            name str
+            name str,
+            spawn bool
         };
 
         pub MethodAttributes("method") {
@@ -39,7 +40,8 @@ def_attrs! {
 
     pub TraitAttributes("trait") {
         interface str,
-        name str
+        name str,
+        spawn bool
     };
 
     pub MethodAttributes("method") {
@@ -300,13 +302,13 @@ pub fn expand<T: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>
         _ => return Err(Error::new_spanned(&input.self_ty, "Invalid type")),
     };
 
-    let iface_name =
-        {
-            let (name, interface) = match T::parse_nested_metas(&args)?.into() {
-                TraitAttrs::New(new) => (new.name, new.interface),
-                TraitAttrs::Old(old) => (old.name, old.interface),
-            };
+    let (iface_name, with_spawn) = {
+        let (name, interface, spawn) = match T::parse_nested_metas(&args)?.into() {
+            TraitAttrs::New(new) => (new.name, new.interface, new.spawn),
+            TraitAttrs::Old(old) => (old.name, old.interface, old.spawn),
+        };
 
+        let name =
             match (name, interface) {
                 (Some(name), None) | (None, Some(name)) => name,
                 (None, None) => format!("org.freedesktop.{ty}"),
@@ -314,8 +316,10 @@ pub fn expand<T: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>
                     input.span(),
                     "`name` and `interface` attributes should not be specified at the same time",
                 )),
-            }
-        };
+            };
+
+        (name, !spawn.unwrap_or(true))
+    };
 
     // Store parsed information about each method
     let mut methods = vec![];
@@ -711,6 +715,10 @@ pub fn expand<T: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>
         {
             fn name() -> #zbus::names::InterfaceName<'static> {
                 #zbus::names::InterfaceName::from_static_str_unchecked(#iface_name)
+            }
+
+            fn spawn_tasks_for_methods(&self) -> bool {
+                #with_spawn
             }
 
             async fn get(

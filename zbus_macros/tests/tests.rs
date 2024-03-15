@@ -139,7 +139,7 @@ fn test_interface() {
     #[derive(Serialize, Deserialize, Type, Value)]
     struct MyCustomPropertyType(u32);
 
-    #[interface(name = "org.freedesktop.zbus.Test")]
+    #[interface(name = "org.freedesktop.zbus.Test", spawn = false)]
     impl<T: 'static> Test<T>
     where
         T: serde::ser::Serialize + zbus::zvariant::Type + Send + Sync,

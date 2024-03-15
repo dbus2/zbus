@@ -215,6 +215,25 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// properties or signal depending on the item attributes. It will implement the [`Interface`] trait
 /// `for T` on your behalf, to handle the message dispatching and introspection support.
 ///
+/// The trait accepts the `interface` attributes:
+///
+/// * `name` - the D-Bus interface name
+///
+/// * `spawn` - Controls the spawning of tasks for method calls. By default, `true`, allowing zbus
+///   to spawn a separate task for each method call. This default behavior can lead to methods being
+///   handled out of their received order, which might not always align with expected or desired
+///   behavior.
+///
+///   - **When True (Default):** Suitable for interfaces where method calls are independent of each
+///   other or can be processed asynchronously without strict ordering. In scenarios where a client
+///   must wait for a reply before making further dependent calls, this default behavior is
+///   appropriate.
+///
+///   - **When False:** Use this setting to ensure methods are handled in the order they are
+///   received, which is crucial for interfaces requiring sequential processing of method calls.
+///   However, care must be taken to avoid making D-Bus method calls from within your interface
+///   methods when this setting is false, as it may lead to deadlocks under certain conditions.
+///
 /// The methods accepts the `interface` attributes:
 ///
 /// * `name` - override the D-Bus name (pascal case form of the method by default)
