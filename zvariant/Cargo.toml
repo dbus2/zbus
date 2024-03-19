@@ -28,7 +28,7 @@ enumflags2 = { version = "0.7.9", features = ["serde"], optional = true }
 zvariant_derive = { version = "=4.0.2", path = "../zvariant_derive" }
 serde_bytes = { version = "0.11", optional = true }
 static_assertions = "1.1.0"
-uuid = { version = "1.7.0", features = ["serde"], optional = true }
+uuid = { version = "1.8.0", features = ["serde"], optional = true }
 url = { version = "2.5.0", features = ["serde"], optional = true }
 time = { version = "0.3.34", features = ["serde"], optional = true }
 chrono = { version = "0.4.35", features = [
