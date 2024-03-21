@@ -19,11 +19,22 @@ jobs:
         with:
           toolchain: nightly
           components: clippy, rustfmt
+          targets: x86_64-apple-darwin, x86_64-unknown-freebsd, x86_64-unknown-netbsd x86_64-pc-windows-gnu
       - uses: Swatinem/rust-cache@v2
       - name: Check formatting
-        run: cargo --locked fmt -- --check
+        run: |
+          cargo --locked fmt -- --check
+          cargo --locked check --target x86_64-apple-darwin
+          cargo --locked check --target x86_64-unknown-freebsd
+          cargo --locked check --target x86_64-unknown-netbsd
+          cargo --locked check --target x86_64-pc-windows-gnu
       - name: Catch common mistakes and unwrap calls
-        run: cargo --locked clippy -- -D warnings -D clippy::large_futures
+        run: |
+          cargo --locked clippy -- -D warnings -D clippy::large_futures
+          cargo --locked clippy --target x86_64-apple-darwin -- -D warnings -D clippy::large_futures
+          cargo --locked clippy --target x86_64-unknown-freebsd -- -D warnings -D clippy::large_futures
+          cargo --locked clippy --target x86_64-unknown-netbsd -- -D warnings -D clippy::large_futures
+          cargo --locked clippy --target x86_64-pc-windows-gnu -- -D warnings -D clippy::large_futures
 
   linux_test:
     runs-on: ubuntu-latest
@@ -185,23 +196,6 @@ jobs:
           # of the doc tests. This process will keep it alive.
           Start-Process gdbus.exe 'monitor -e -d org.freedesktop.DBus'
           cargo --locked test --features zbus/windows-gdbus
-
-  cross_check:
-    runs-on: ubuntu-latest
-    env:
-      RUSTFLAGS: -D warnings
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: stable
-          targets: x86_64-apple-darwin, x86_64-unknown-freebsd, x86_64-unknown-netbsd
-      - uses: Swatinem/rust-cache@v2
-      - name: Check portability
-        run: |
-          cargo --locked check --target x86_64-apple-darwin
-          cargo --locked check --target x86_64-unknown-freebsd
-          cargo --locked check --target x86_64-unknown-netbsd
 
   zvariant_fuzz:
     runs-on: ubuntu-latest
