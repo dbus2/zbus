@@ -707,7 +707,10 @@ impl Handshake for ServerHandshake<'_> {
                                 _ => self.rejected_error().await?,
                             }
                         }
-                        Command::Error(_) => self.rejected_error().await?,
+                        Command::Cancel | Command::Error(_) => {
+                            trace!("Received CANCEL or ERROR command from the client");
+                            self.rejected_error().await?;
+                        }
                         _ => self.unsupported_command_error().await?,
                     }
                 }
