@@ -42,12 +42,10 @@ pub enum AuthMechanism {
 
 /// The result of a finalized handshake
 ///
-/// The result of a finalized [`ClientHandshake`] or [`ServerHandshake`]. It can be passed to
-/// [`Connection::new_authenticated`] to initialize a connection.
+/// The result of a finalized [`ClientHandshake`] or [`ServerHandshake`].
 ///
 /// [`ClientHandshake`]: struct.ClientHandshake.html
 /// [`ServerHandshake`]: struct.ServerHandshake.html
-/// [`Connection::new_authenticated`]: ../struct.Connection.html#method.new_authenticated
 #[derive(Debug)]
 pub struct Authenticated {
     pub(crate) socket_write: Box<dyn WriteHalf>,
@@ -123,16 +121,7 @@ enum Command {
 /// A representation of an in-progress handshake, client-side
 ///
 /// This struct is an async-compatible representation of the initial handshake that must be
-/// performed before a D-Bus connection can be used. To use it, you should call the
-/// [`advance_handshake`] method whenever the underlying socket becomes ready (tracking the
-/// readiness itself is not managed by this abstraction) until it returns `Ok(())`, at which point
-/// you can invoke the [`try_finish`] method to get an [`Authenticated`], which can be given to
-/// [`Connection::new_authenticated`].
-///
-/// [`advance_handshake`]: struct.ClientHandshake.html#method.advance_handshake
-/// [`try_finish`]: struct.ClientHandshake.html#method.try_finish
-/// [`Authenticated`]: struct.AUthenticated.html
-/// [`Connection::new_authenticated`]: ../struct.Connection.html#method.new_authenticated
+/// performed before a D-Bus connection can be used.
 #[derive(Debug)]
 pub struct ClientHandshake {
     common: HandshakeCommon,
@@ -522,18 +511,6 @@ enum ServerHandshakeStep {
 /// A representation of an in-progress handshake, server-side
 ///
 /// This would typically be used to implement a D-Bus broker, or in the context of a P2P connection.
-///
-/// This struct is an async-compatible representation of the initial handshake that must be
-/// performed before a D-Bus connection can be used. To use it, you should call the
-/// [`advance_handshake`] method whenever the underlying socket becomes ready (tracking the
-/// readiness itself is not managed by this abstraction) until it returns `Ok(())`, at which point
-/// you can invoke the [`try_finish`] method to get an [`Authenticated`], which can be given to
-/// [`Connection::new_authenticated`].
-///
-/// [`advance_handshake`]: struct.ServerHandshake.html#method.advance_handshake
-/// [`try_finish`]: struct.ServerHandshake.html#method.try_finish
-/// [`Authenticated`]: struct.Authenticated.html
-/// [`Connection::new_authenticated`]: ../struct.Connection.html#method.new_authenticated
 #[derive(Debug)]
 #[cfg(feature = "p2p")]
 pub struct ServerHandshake<'s> {
