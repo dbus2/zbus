@@ -835,6 +835,7 @@ mod tests {
         let ctxt = Context::new_dbus(LE, 0);
         let encoded = to_bytes(ctxt, &ar).unwrap();
         assert_eq!(encoded.len(), 78);
+        #[allow(clippy::type_complexity)]
         let decoded: Vec<(u8, u32, (i64, bool, i64, Vec<&str>), &str)> =
             encoded.deserialize().unwrap().0;
         assert_eq!(decoded.len(), 1);

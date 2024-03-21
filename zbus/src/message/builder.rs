@@ -231,7 +231,6 @@ impl<'a> Builder<'a> {
                     #[cfg(not(unix))]
                     {
                         let _ = s;
-                        ()
                     }
                 })
                 .map_err(Into::into)

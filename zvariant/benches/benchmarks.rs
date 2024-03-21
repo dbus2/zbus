@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "serde_bytes")]
 use serde_bytes::ByteBuf;
-use std::collections::HashMap;
+use std::{collections::HashMap, vec};
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
@@ -64,8 +64,7 @@ fn big_array_ser_and_de(c: &mut Criterion) {
     }
 
     let mut dict = HashMap::new();
-    let mut int_array = Vec::new();
-    int_array.resize(1024 * 10, 0u64);
+    let int_array = vec![0u64; 1024 * 10];
     let mut strings = Vec::new();
     let mut string_array: Vec<&str> = Vec::new();
     for idx in 0..1024 * 10 {
