@@ -7,29 +7,6 @@ on:
     branches: [main]
 
 jobs:
-  MSRV:
-    runs-on: ubuntu-latest
-    env:
-      RUSTFLAGS: -D warnings
-      MSRV: 1.75.0
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.MSRV }}
-          targets: x86_64-pc-windows-gnu, x86_64-apple-darwin, x86_64-unknown-freebsd, x86_64-unknown-netbsd
-          components: rustfmt
-      - uses: Swatinem/rust-cache@v2
-      - name: Check build with MSRV
-        run: |
-          cargo --locked check
-          cargo --locked check --target x86_64-pc-windows-gnu
-          cargo --locked check --target x86_64-apple-darwin
-          cargo --locked check --target x86_64-unknown-freebsd
-          cargo --locked check --target x86_64-unknown-netbsd
-        # This would be nice but some optional deps (e.g `time`) move very fast wrt to MSRV.
-        # cargo --locked check --all-features
-
   lint:
     runs-on: ubuntu-latest
     env:
