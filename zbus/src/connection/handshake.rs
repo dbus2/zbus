@@ -863,8 +863,7 @@ impl fmt::Display for Command {
             }
             Command::Ok(guid) => write!(f, "OK {guid}"),
             Command::AgreeUnixFD => write!(f, "AGREE_UNIX_FD"),
-        }?;
-        write!(f, "\r\n")
+        }
     }
 }
 
@@ -955,6 +954,7 @@ impl HandshakeCommon {
                 .map(Vec::<u8>::from)
                 .fold(vec![], |mut acc, mut c| {
                     acc.append(&mut c);
+                    acc.extend_from_slice(b"\r\n");
                     acc
                 });
         while !send_buffer.is_empty() {
