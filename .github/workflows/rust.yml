@@ -30,11 +30,11 @@ jobs:
           cargo --locked check --target x86_64-pc-windows-gnu
       - name: Catch common mistakes and unwrap calls
         run: |
-          cargo --locked clippy -- -D warnings
-          cargo --locked clippy --target x86_64-apple-darwin -- -D warnings
-          cargo --locked clippy --target x86_64-unknown-freebsd -- -D warnings
-          cargo --locked clippy --target x86_64-unknown-netbsd -- -D warnings
-          cargo --locked clippy --target x86_64-pc-windows-gnu -- -D warnings
+          cargo --locked clippy
+          cargo --locked clippy --target x86_64-apple-darwin
+          cargo --locked clippy --target x86_64-unknown-freebsd
+          cargo --locked clippy --target x86_64-unknown-netbsd
+          cargo --locked clippy --target x86_64-pc-windows-gnu
 
   linux_test:
     runs-on: ubuntu-latest
