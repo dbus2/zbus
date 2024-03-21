@@ -226,7 +226,7 @@ impl super::ReadHalf for Arc<Async<UnixStream>> {
             move || {
                 use crate::win32::{unix_stream_get_peer_pid, ProcessToken};
 
-                let pid = unix_stream_get_peer_pid(&stream.get_ref())? as _;
+                let pid = unix_stream_get_peer_pid(stream.get_ref())? as _;
                 let sid = ProcessToken::open(if pid != 0 { Some(pid as _) } else { None })
                     .and_then(|process_token| process_token.sid())?;
                 Ok(crate::fdo::ConnectionCredentials::default()

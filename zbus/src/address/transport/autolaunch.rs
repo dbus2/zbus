@@ -18,6 +18,12 @@ impl std::fmt::Display for Autolaunch {
     }
 }
 
+impl Default for Autolaunch {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Autolaunch {
     /// Create a new autolaunch transport.
     pub fn new() -> Self {

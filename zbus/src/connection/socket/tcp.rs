@@ -34,7 +34,7 @@ impl ReadHalf for Arc<Async<TcpStream>> {
                 move || {
                     use crate::win32::{tcp_stream_get_peer_pid, ProcessToken};
 
-                    let pid = tcp_stream_get_peer_pid(&stream.get_ref())? as _;
+                    let pid = tcp_stream_get_peer_pid(stream.get_ref())? as _;
                     let sid = ProcessToken::open(if pid != 0 { Some(pid as _) } else { None })
                         .and_then(|process_token| process_token.sid())?;
                     io::Result::Ok(
