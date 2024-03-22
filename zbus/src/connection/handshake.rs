@@ -642,10 +642,8 @@ impl<'s> ServerHandshake<'s> {
     }
 
     async fn unsupported_command_error(&mut self) -> Result<()> {
-        let cmd = Command::Error("Unsupported command".to_string());
-        trace!("Sending authentication error");
+        let cmd = Command::Error("Unsupported or misplaced command".to_string());
         self.common.write_command(cmd).await?;
-        self.step = ServerHandshakeStep::WaitingForAuth;
 
         Ok(())
     }
@@ -710,11 +708,6 @@ impl Handshake for ServerHandshake<'_> {
                             }
                         }
                         Command::Error(_) => self.rejected_error().await?,
-                        Command::Begin => {
-                            return Err(Error::Handshake(
-                                "Received BEGIN while not authenticated".to_string(),
-                            ));
-                        }
                         _ => self.unsupported_command_error().await?,
                     }
                 }
