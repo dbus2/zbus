@@ -57,9 +57,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build and Test
         run: |
-          mkdir -p /run/user/$UID
-          sed -e s/UID/$UID/ -e s/PATH/path/ CI/dbus-session.conf > /tmp/dbus-session.conf
-          sed -e s/UID/$UID/ -e s/PATH/abstract/ CI/dbus-session.conf > /tmp/dbus-session-abstract.conf
           dbus-run-session --config-file /tmp/dbus-session-abstract.conf -- cargo --locked test --verbose -- basic_connection
           # All features except tokio.
           dbus-run-session --config-file /tmp/dbus-session.conf -- \
