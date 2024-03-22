@@ -1074,6 +1074,7 @@ mod tests {
     }
 
     #[test]
+    #[timeout(15000)]
     fn handshake() {
         let (p0, p1) = create_async_socket_pair();
 
