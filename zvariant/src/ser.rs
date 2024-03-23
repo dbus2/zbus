@@ -1,3 +1,4 @@
+use core::convert::TryInto;
 use serde::Serialize;
 use std::io::{Seek, Write};
 
@@ -313,34 +314,185 @@ where
         Ok(())
     }
 
+    fn serialize_enum_variant_tag(&mut self, variant_index: u32, variant_name: &str) -> Result<()> {
+        let endian = self.ctxt.endian();
+        match self.sig_parser.next_char()? {
+            bool::SIGNATURE_CHAR => {
+                // Encode as `y(...)`
+                self.sig_parser.skip_char()?;
+                let variant_index = match variant_index {
+                    0 => Ok(0),
+                    1 => Ok(1),
+                    _ => Err(Error::OutOfBounds),
+                }?;
+                self.add_padding(bool::alignment(self.ctxt.format()))?;
+                self.writer.write_u8(endian, variant_index)
+                    .map_err(<_>::into)
+                    .map_err(Error::InputOutput)
+            }
+            u8::SIGNATURE_CHAR => {
+                // Encode as `y(...)`
+                self.sig_parser.skip_char()?;
+                let variant_index = variant_index.try_into().map_err(|_| Error::OutOfBounds)?;
+                self.add_padding(u8::alignment(self.ctxt.format()))?;
+                self.write_u8(endian, variant_index)
+                    .map_err(<_>::into)
+                    .map_err(Error::InputOutput)
+            }
+            u16::SIGNATURE_CHAR => {
+                // Encode as `q(...)`
+                self.sig_parser.skip_char()?;
+                let variant_index = variant_index.try_into().map_err(|_| Error::OutOfBounds)?;
+                self.add_padding(u16::alignment(self.ctxt.format()))?;
+                self.write_u16(endian, variant_index)
+                    .map_err(<_>::into)
+                    .map_err(Error::InputOutput)
+            }
+            i16::SIGNATURE_CHAR => {
+                // Encode as `n(...)`
+                self.sig_parser.skip_char()?;
+                let variant_index = variant_index.try_into().map_err(|_| Error::OutOfBounds)?;
+                self.add_padding(i16::alignment(self.ctxt.format()))?;
+                self.write_i16(endian, variant_index)
+                    .map_err(<_>::into)
+                    .map_err(Error::InputOutput)
+            }
+            u32::SIGNATURE_CHAR => {
+                // Encode as `u(...)`
+                self.sig_parser.skip_char()?;
+                self.add_padding(u32::alignment(self.ctxt.format()))?;
+                self.write_u32(endian, variant_index)
+                    .map_err(<_>::into)
+                    .map_err(Error::InputOutput)
+            }
+            i32::SIGNATURE_CHAR => {
+                // Encode as `i(...)`
+                self.sig_parser.skip_char()?;
+                let variant_index = variant_index.try_into().map_err(|_| Error::OutOfBounds)?;
+                self.add_padding(i32::alignment(self.ctxt.format()))?;
+                self.write_i32(endian, variant_index)
+                    .map_err(<_>::into)
+                    .map_err(Error::InputOutput)
+            }
+            u64::SIGNATURE_CHAR => {
+                // Encode as `t(...)`
+                self.sig_parser.skip_char()?;
+                self.add_padding(u64::alignment(self.ctxt.format()))?;
+                self.write_u64(endian, variant_index.into())
+                    .map_err(<_>::into)
+                    .map_err(Error::InputOutput)
+            }
+            i64::SIGNATURE_CHAR => {
+                // Encode as `x(...)`
+                self.sig_parser.skip_char()?;
+                self.add_padding(i64::alignment(self.ctxt.format()))?;
+                self.write_i64(endian, variant_index.into())
+                    .map_err(<_>::into)
+                    .map_err(Error::InputOutput)
+            }
+            str::SIGNATURE_CHAR => {
+                // Encode as `s(...)`
+                self.write_string(variant_name)
+            }
+            signature => Err(Error::SignatureMismatch(
+                Signature::from_string_unchecked(signature.into()),
+                format!(
+                    "expected `{}`, `{}`, `{}`, `{}`, `{}`, `{}`, `{}`, or `{}`",
+                    bool::SIGNATURE_CHAR,
+                    u8::SIGNATURE_CHAR,
+                    u16::SIGNATURE_CHAR,
+                    u32::SIGNATURE_CHAR,
+                    i32::SIGNATURE_CHAR,
+                    u64::SIGNATURE_CHAR,
+                    i64::SIGNATURE_CHAR,
+                    str::SIGNATURE_CHAR,
+                ),
+            )),
+        }
+    }
+
     /// This starts the enum serialization.
     ///
     /// It's up to the caller to do the rest: serialize the variant payload and skip the `).
-    pub(crate) fn prep_serialize_enum_variant(&mut self, variant_index: u32) -> Result<()> {
-        // Encode enum variants as a struct with first field as variant index
+    pub(crate) fn prep_serialize_enum_variant(
+        &mut self,
+        variant_index: u32,
+        variant_name: &str
+    ) -> Result<()> {
+        let tagged = if self.sig_parser.next_char()? == STRUCT_SIG_START_CHAR {
+            // Encode enum variants as a struct with first field as variant index
+            false
+        } else {
+            // Encode enum variants as a prefix of the struct
+            self.serialize_enum_variant_tag(variant_index, variant_name)?;
+            true
+        };
+
         let signature = self.sig_parser.next_signature()?;
-        if self.sig_parser.next_char()? != STRUCT_SIG_START_CHAR {
-            return Err(Error::SignatureMismatch(
+        if self.sig_parser.next_char()? == STRUCT_SIG_START_CHAR {
+
+            let alignment = alignment_for_signature(&signature, self.ctxt.format())?;
+            self.add_padding(alignment)?;
+
+            // Skip the `(`.
+            self.sig_parser.skip_char()?;
+
+            if tagged {
+                Ok(())
+            } else {
+                self.serialize_enum_variant_tag(variant_index, variant_name)
+            }
+        } else {
+            Err(Error::SignatureMismatch(
                 signature.to_owned(),
                 format!("expected `{STRUCT_SIG_START_CHAR}`"),
-            ));
+            ))
         }
-
-        let alignment = alignment_for_signature(&signature, self.ctxt.format())?;
-        self.add_padding(alignment)?;
-
-        // Now serialize the veriant index.
-        self.write_u32(self.ctxt.endian(), variant_index)
-            .map_err(|e| Error::InputOutput(e.into()))?;
-
-        // Skip the `(`, `u`.
-        self.sig_parser.skip_chars(2)?;
-
-        Ok(())
     }
 
     fn abs_pos(&self) -> usize {
         self.ctxt.position() + self.bytes_written
+    }
+
+    fn write_cstring(&mut self, bytes: &[u8]) -> Result<()> {
+        self.sig_parser.skip_char()?;
+        self.write_all(bytes)
+            .map_err(<_>::into)
+            .map_err(Error::InputOutput)?;
+        self.write_u8(self.ctxt.endian(), 0)
+            .map_err(<_>::into)
+            .map_err(Error::InputOutput)
+    }
+
+    pub(crate) fn write_string<S>(&mut self, string: S) -> Result<()>
+    where
+        S: AsRef<[u8]>,
+    {
+        let string = string.as_ref();
+        match self.ctxt.format() {
+            Format::DBus => {
+                self.add_padding(<&str>::alignment(Format::DBus))?;
+                self.write_u32(self.ctxt.endian(), usize_to_u32(string.len()))
+                    .map_err(<_>::into)
+                    .map_err(Error::InputOutput)?;
+            }
+            #[cfg(feature = "gvariant")]
+            Format::GVariant => {
+                // Strings in GVariant format require neither alignment nor a size-field.
+            }
+        }
+        self.write_cstring(string)
+    }
+
+    pub(crate) fn write_signature<S>(&mut self, signature: S) -> Result<()>
+    where
+        S: AsRef<[u8]>,
+    {
+        let signature = signature.as_ref();
+        self.write_u8(self.ctxt.endian(), usize_to_u8(signature.len()))
+            .map_err(<_>::into)
+            .map_err(Error::InputOutput)?;
+        self.write_cstring(signature)
     }
 }
 
