@@ -142,8 +142,8 @@ mod tests {
     use crate::Fd;
     use crate::{
         serialized::{Context, Format},
-        Array, Basic, DeserializeDict, DeserializeValue, Dict, Error, ObjectPath, Result,
-        SerializeDict, SerializeValue, Signature, Str, Structure, Type, Value, BE, LE,
+        Array, Basic, DeserializeDict, DeserializeValue, Dict, Error, ObjectPath, OwnedValue,
+        Result, SerializeDict, SerializeValue, Signature, Str, Structure, Type, Value, BE, LE,
         NATIVE_ENDIAN,
     };
 
@@ -1484,7 +1484,7 @@ mod tests {
         let _: UnitStruct = encoded.deserialize().unwrap().0;
 
         #[repr(u8)]
-        #[derive(Deserialize_repr, Serialize_repr, Type, Debug, PartialEq)]
+        #[derive(Deserialize_repr, Serialize_repr, Type, Value, OwnedValue, Debug, PartialEq)]
         enum Enum {
             Variant1,
             Variant2,
@@ -1497,8 +1497,12 @@ mod tests {
         let decoded: Enum = encoded.deserialize().unwrap().0;
         assert_eq!(decoded, Enum::Variant3);
 
+        assert_eq!(Value::from(Enum::Variant1), Value::U8(0));
+        assert_eq!(Enum::try_from(Value::U8(2)), Ok(Enum::Variant3));
+        assert_eq!(Enum::try_from(Value::U8(4)), Err(Error::IncorrectType));
+
         #[repr(i64)]
-        #[derive(Deserialize_repr, Serialize_repr, Type, Debug, PartialEq)]
+        #[derive(Deserialize_repr, Serialize_repr, Type, Value, OwnedValue, Debug, PartialEq)]
         enum Enum2 {
             Variant1,
             Variant2,
@@ -1511,7 +1515,11 @@ mod tests {
         let decoded: Enum2 = encoded.deserialize().unwrap().0;
         assert_eq!(decoded, Enum2::Variant2);
 
-        #[derive(Deserialize, Serialize, Type, Debug, PartialEq)]
+        assert_eq!(Value::from(Enum2::Variant1), Value::I64(0));
+        assert_eq!(Enum2::try_from(Value::I64(2)), Ok(Enum2::Variant3));
+        assert_eq!(Enum2::try_from(Value::I64(4)), Err(Error::IncorrectType));
+
+        #[derive(Deserialize, Serialize, Type, Value, OwnedValue, Debug, PartialEq)]
         enum NoReprEnum {
             Variant1,
             Variant2,
@@ -1528,10 +1536,10 @@ mod tests {
         let decoded: NoReprEnum = encoded.deserialize().unwrap().0;
         assert_eq!(decoded, NoReprEnum::Variant2);
 
-        #[derive(Deserialize, Serialize, Type, Debug, PartialEq)]
-        #[zvariant(signature = "s")]
+        #[derive(Deserialize, Serialize, Type, Value, OwnedValue, Debug, PartialEq)]
+        #[zvariant(signature = "s", rename_all = "snake_case")]
         enum StrEnum {
-            Variant1,
+            VariantOne,
             Variant2,
             Variant3,
         }
@@ -1541,6 +1549,20 @@ mod tests {
         assert_eq!(encoded.len(), 13);
         let decoded: StrEnum = encoded.deserialize().unwrap().0;
         assert_eq!(decoded, StrEnum::Variant2);
+
+        assert_eq!(
+            StrEnum::try_from(Value::Str("variant_one".into())),
+            Ok(StrEnum::VariantOne)
+        );
+        assert_eq!(
+            StrEnum::try_from(Value::Str("variant2".into())),
+            Ok(StrEnum::Variant2)
+        );
+        assert_eq!(
+            StrEnum::try_from(Value::Str("variant4".into())),
+            Err(Error::IncorrectType)
+        );
+        assert_eq!(StrEnum::try_from(Value::U32(0)), Err(Error::IncorrectType));
 
         #[derive(Deserialize, Serialize, Type)]
         enum NewType {
