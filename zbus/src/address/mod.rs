@@ -67,13 +67,7 @@ impl Address {
             Ok(val) => Self::from_str(&val),
             _ => {
                 #[cfg(windows)]
-                {
-                    #[cfg(feature = "windows-gdbus")]
-                    return Self::from_str("autolaunch:");
-
-                    #[cfg(not(feature = "windows-gdbus"))]
-                    return Self::from_str("autolaunch:scope=*user");
-                }
+                return Self::from_str("autolaunch:");
 
                 #[cfg(all(unix, not(target_os = "macos")))]
                 {
