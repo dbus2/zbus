@@ -386,7 +386,7 @@ fn to_rust_type(ty: &CompleteType, input: bool, as_ref: bool) -> String {
                         if input {
                             format!("&[{ty}]")
                         } else {
-                            format!("{}Vec<{}>", if as_ref { "&" } else { "" }, ty)
+                            format!("{}Vec<{ty}>", if as_ref { "&" } else { "" })
                         }
                     }
                 }
