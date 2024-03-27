@@ -379,14 +379,14 @@ fn to_rust_type(ty: &CompleteType, input: bool, as_ref: bool) -> String {
                 match **c as char {
                     '{' => format!(
                         "std::collections::HashMap<{}>",
-                        iter_to_rust_type(it, input, false)
+                        iter_to_rust_type(it, input, as_ref)
                     ),
                     _ => {
-                        let ty = iter_to_rust_type(it, input, false);
-                        if input {
+                        let ty = iter_to_rust_type(it, input, as_ref);
+                        if input && as_ref {
                             format!("&[{ty}]")
                         } else {
-                            format!("{}Vec<{ty}>", if as_ref { "&" } else { "" })
+                            format!("Vec<{ty}>")
                         }
                     }
                 }
@@ -402,7 +402,7 @@ fn to_rust_type(ty: &CompleteType, input: bool, as_ref: bool) -> String {
                             it.next().unwrap();
                             break;
                         }
-                        _ => vec.push(iter_to_rust_type(it, input, false)),
+                        _ => vec.push(iter_to_rust_type(it, input, as_ref)),
                     }
                 }
                 if dict {
