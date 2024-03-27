@@ -30,7 +30,7 @@ trait SampleInterface0 {
     ) -> zbus::Result<(String, std::collections::HashMap<u32, String>)>;
 
     /// MogrifyMe method
-    fn mogrify_me(&self, bar: &(i32, i32, &[zbus::zvariant::Value<'_>])) -> zbus::Result<()>;
+    fn mogrify_me(&self, bar: &(i32, i32, &[&zbus::zvariant::Value<'_>])) -> zbus::Result<()>;
 
     /// Odyssey method
     #[allow(clippy::too_many_arguments)]
@@ -52,6 +52,21 @@ trait SampleInterface0 {
     /// Changed2 signal
     #[zbus(signal)]
     fn changed2(&self, new_value: bool, new_value2: bool) -> zbus::Result<()>;
+
+    /// SignalArrayOfStrings signal
+    #[zbus(signal)]
+    fn signal_array_of_strings(&self, array: Vec<&str>) -> zbus::Result<()>;
+
+    /// SignalDictStringToValue signal
+    #[zbus(signal)]
+    fn signal_dict_string_to_value(
+        &self,
+        dict: std::collections::HashMap<&str, zbus::zvariant::Value<'_>>,
+    ) -> zbus::Result<()>;
+
+    /// SignalValue signal
+    #[zbus(signal)]
+    fn signal_value(&self, value: zbus::zvariant::Value<'_>) -> zbus::Result<()>;
 
     /// Bar property
     #[zbus(property)]

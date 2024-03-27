@@ -43,6 +43,15 @@
        <arg name="new_value" type="b" direction="out"/>
        <arg name="new_value2" type="b" direction="out"/>
      </signal>
+     <signal name="SignalArrayOfStrings">
+       <arg type="as" name="array"/>
+     </signal>
+     <signal name="SignalValue">
+       <arg type="v" name="value"/>
+     </signal>
+     <signal name="SignalDictStringToValue">
+       <arg type="a{sv}" name="dict"/>
+     </signal>
      <property name="Bar" type="y" access="readwrite"/>
      <property name="Foo-Bar" type="y" access="readwrite"/>
      <property name="Matryoshkas" type="a(oiasta{sv})" access="read"/>
