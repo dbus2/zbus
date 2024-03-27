@@ -31,6 +31,8 @@ pub(crate) struct DeserializerCommon<'de, 'sig, 'f, F> {
 
     pub(crate) sig_parser: SignatureParser<'sig>,
 
+    pub(crate) resolve_variant: bool,
+
     pub(crate) container_depths: ContainerDepths,
 }
 

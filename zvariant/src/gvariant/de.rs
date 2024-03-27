@@ -43,6 +43,7 @@ impl<'de, 'sig, 'f, F> Deserializer<'de, 'sig, 'f, F> {
         Ok(Self(DeserializerCommon {
             ctxt,
             sig_parser,
+            resolve_variant: false,
             bytes,
             #[cfg(unix)]
             fds,
@@ -65,6 +66,7 @@ macro_rules! deserialize_basic {
             let mut dbus_de = crate::dbus::Deserializer::<F>(DeserializerCommon::<F> {
                 ctxt,
                 sig_parser: self.0.sig_parser.clone(),
+                resolve_variant: false,
                 bytes: subslice(self.0.bytes, self.0.pos..)?,
                 fds: self.0.fds,
                 pos: 0,
@@ -226,6 +228,7 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
             let mut de = Deserializer::<F>(DeserializerCommon {
                 ctxt,
                 sig_parser: self.0.sig_parser.clone(),
+                resolve_variant: false,
                 bytes: subslice(self.0.bytes, self.0.pos..end)?,
                 fds: self.0.fds,
                 pos: 0,
@@ -538,6 +541,7 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de
         let mut de = Deserializer::<F>(DeserializerCommon {
             ctxt,
             sig_parser: self.de.0.sig_parser.clone(),
+            resolve_variant: false,
             bytes: subslice(self.de.0.bytes, self.de.0.pos..end)?,
             fds: self.de.0.fds,
             pos: 0,
@@ -604,6 +608,7 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> MapAccess<'de
         let mut de = Deserializer::<F>(DeserializerCommon {
             ctxt,
             sig_parser: self.de.0.sig_parser.clone(),
+            resolve_variant: false,
             bytes: subslice(self.de.0.bytes, self.de.0.pos..key_end)?,
             fds: self.de.0.fds,
             pos: 0,
@@ -644,6 +649,7 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> MapAccess<'de
         let mut de = Deserializer::<F>(DeserializerCommon {
             ctxt,
             sig_parser,
+            resolve_variant: false,
             bytes: subslice(self.de.0.bytes, self.de.0.pos..value_end)?,
             fds: self.de.0.fds,
             pos: 0,
@@ -728,6 +734,7 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de
         let mut de = Deserializer::<F>(DeserializerCommon {
             ctxt,
             sig_parser,
+            resolve_variant: false,
             bytes: subslice(self.de.0.bytes, self.de.0.pos..element_end)?,
             fds: self.de.0.fds,
             pos: 0,
@@ -825,6 +832,7 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de
                     // No padding in signatures so just pass the same context
                     ctxt: self.de.0.ctxt,
                     sig_parser,
+                    resolve_variant: false,
                     bytes: subslice(self.de.0.bytes, self.sig_start..self.sig_end)?,
                     fds: self.de.0.fds,
                     pos: 0,
@@ -849,6 +857,7 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de
                 let mut de = Deserializer::<F>(DeserializerCommon {
                     ctxt,
                     sig_parser,
+                    resolve_variant: false,
                     bytes: subslice(self.de.0.bytes, self.value_start..self.value_end)?,
                     fds: self.de.0.fds,
                     pos: 0,
