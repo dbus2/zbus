@@ -68,6 +68,11 @@ pub trait Interface: Any + Send + Sync {
     where
         Self: Sized;
 
+    /// Whether methods will be called with a spawned task (and potentially out of order)
+    fn with_spawn(&self) -> bool {
+        true
+    }
+
     /// Get a property value. Returns `None` if the property doesn't exist.
     async fn get(&self, property_name: &str) -> Option<fdo::Result<OwnedValue>>;
 

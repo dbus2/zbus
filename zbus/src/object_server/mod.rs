@@ -9,7 +9,7 @@ use std::{
     ops::{Deref, DerefMut},
     sync::Arc,
 };
-use tracing::{debug, instrument, trace};
+use tracing::{debug, instrument, trace, trace_span, Instrument};
 
 use static_assertions::assert_impl_all;
 use zbus_names::InterfaceName;
@@ -20,7 +20,7 @@ use crate::{
     connection::WeakConnection,
     fdo,
     fdo::{Introspectable, ManagedObjects, ObjectManager, Peer, Properties},
-    message::Message,
+    message::{Header, Message},
     Connection, Error, Result,
 };
 
@@ -699,13 +699,63 @@ impl ObjectServer {
         })
     }
 
-    #[instrument(skip(self, connection))]
+    async fn dispatch_call_from_iface(
+        &self,
+        iface: Arc<RwLock<dyn Interface>>,
+        connection: &Connection,
+        msg: &Message,
+        hdr: &Header<'_>,
+    ) -> fdo::Result<()> {
+        let member = hdr
+            .member()
+            .ok_or_else(|| fdo::Error::Failed("Missing member".into()))?;
+        let iface_name = hdr
+            .interface()
+            .ok_or_else(|| fdo::Error::Failed("Missing interface".into()))?;
+
+        trace!("acquiring read lock on interface `{}`", iface_name);
+        let read_lock = iface.read().await;
+        trace!("acquired read lock on interface `{}`", iface_name);
+        match read_lock.call(self, connection, msg, member.as_ref()) {
+            DispatchResult::NotFound => {
+                return Err(fdo::Error::UnknownMethod(format!(
+                    "Unknown method '{member}'"
+                )));
+            }
+            DispatchResult::Async(f) => {
+                return f.await.map_err(|e| match e {
+                    Error::FDO(e) => *e,
+                    e => fdo::Error::Failed(format!("{e}")),
+                });
+            }
+            DispatchResult::RequiresMut => {}
+        }
+        drop(read_lock);
+        trace!("acquiring write lock on interface `{}`", iface_name);
+        let mut write_lock = iface.write().await;
+        trace!("acquired write lock on interface `{}`", iface_name);
+        match write_lock.call_mut(self, connection, msg, member.as_ref()) {
+            DispatchResult::NotFound => {}
+            DispatchResult::RequiresMut => {}
+            DispatchResult::Async(f) => {
+                return f.await.map_err(|e| match e {
+                    Error::FDO(e) => *e,
+                    e => fdo::Error::Failed(format!("{e}")),
+                });
+            }
+        }
+        drop(write_lock);
+        Err(fdo::Error::UnknownMethod(format!(
+            "Unknown method '{member}'"
+        )))
+    }
+
     async fn dispatch_method_call_try(
         &self,
         connection: &Connection,
         msg: &Message,
-    ) -> fdo::Result<Result<()>> {
-        let hdr = msg.header();
+        hdr: &Header<'_>,
+    ) -> fdo::Result<()> {
         let path = hdr
             .path()
             .ok_or_else(|| fdo::Error::Failed("Missing object path".into()))?;
@@ -717,9 +767,6 @@ impl ObjectServer {
             // error, or deliver the message as though it had an arbitrary one of those
             // interfaces.
             .ok_or_else(|| fdo::Error::Failed("Missing interface".into()))?;
-        let member = hdr
-            .member()
-            .ok_or_else(|| fdo::Error::Failed("Missing member".into()))?;
 
         // Ensure the root lock isn't held while dispatching the message. That
         // way, the object server can be mutated during that time.
@@ -738,44 +785,31 @@ impl ObjectServer {
         trace!("acquiring read lock on interface `{}`", iface_name);
         let read_lock = iface.read().await;
         trace!("acquired read lock on interface `{}`", iface_name);
-        match read_lock.call(self, connection, msg, member.as_ref()) {
-            DispatchResult::NotFound => {
-                return Err(fdo::Error::UnknownMethod(format!(
-                    "Unknown method '{member}'"
-                )));
-            }
-            DispatchResult::Async(f) => {
-                return Ok(f.await);
-            }
-            DispatchResult::RequiresMut => {}
-        }
+        let with_spawn = read_lock.with_spawn();
         drop(read_lock);
-        trace!("acquiring write lock on interface `{}`", iface_name);
-        let mut write_lock = iface.write().await;
-        trace!("acquired write lock on interface `{}`", iface_name);
-        match write_lock.call_mut(self, connection, msg, member.as_ref()) {
-            DispatchResult::NotFound => {}
-            DispatchResult::RequiresMut => {}
-            DispatchResult::Async(f) => {
-                return Ok(f.await);
-            }
-        }
-        drop(write_lock);
-        Err(fdo::Error::UnknownMethod(format!(
-            "Unknown method '{member}'"
-        )))
-    }
 
-    #[instrument(skip(self, connection))]
-    async fn dispatch_method_call(&self, connection: &Connection, msg: &Message) -> Result<()> {
-        match self.dispatch_method_call_try(connection, msg).await {
-            Err(e) => {
-                let hdr = msg.header();
-                debug!("Returning error: {}", e);
-                connection.reply_dbus_error(&hdr, e).await?;
-                Ok(())
-            }
-            Ok(r) => r,
+        if with_spawn {
+            let executor = connection.executor().clone();
+            let task_name = format!("`{msg}` method dispatcher");
+            let connection = connection.clone();
+            let msg = msg.clone();
+            executor
+                .spawn(
+                    async move {
+                        let server = connection.object_server();
+                        let hdr = msg.header();
+                        server
+                            .dispatch_call_from_iface(iface, &connection, &msg, &hdr)
+                            .await
+                    }
+                    .instrument(trace_span!("{}", task_name)),
+                    &task_name,
+                )
+                .detach();
+            Ok(())
+        } else {
+            self.dispatch_call_from_iface(iface, connection, msg, hdr)
+                .await
         }
     }
 
@@ -790,14 +824,18 @@ impl ObjectServer {
     /// - returning a message (responding to the caller with either a return or error message) to
     ///   the caller through the associated server connection.
     ///
-    /// Returns an error if the message is malformed, true if it's handled, false otherwise.
+    /// Returns an error if the message is malformed.
     #[instrument(skip(self))]
-    pub(crate) async fn dispatch_message(&self, msg: &Message) -> Result<bool> {
+    pub(crate) async fn dispatch_call(&self, msg: &Message, hdr: &Header<'_>) -> Result<()> {
         let conn = self.connection();
-        self.dispatch_method_call(&conn, msg).await?;
+
+        if let Err(e) = self.dispatch_method_call_try(&conn, msg, hdr).await {
+            debug!("Returning error: {}", e);
+            conn.reply_dbus_error(hdr, e).await?;
+        }
         trace!("Handled: {}", msg);
 
-        Ok(true)
+        Ok(())
     }
 
     pub(crate) fn connection(&self) -> Connection {
