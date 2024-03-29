@@ -1,3 +1,4 @@
+mod auth_mechanism;
 mod client;
 #[cfg(feature = "p2p")]
 mod server;
@@ -23,28 +24,10 @@ use crate::{file::FileLines, guid::Guid, Error, OwnedGuid, Result};
 
 use super::socket::{BoxedSplit, ReadHalf, WriteHalf};
 
+pub use auth_mechanism::AuthMechanism;
 use client::ClientHandshake;
 #[cfg(feature = "p2p")]
 use server::ServerHandshake;
-
-/// Authentication mechanisms
-///
-/// See <https://dbus.freedesktop.org/doc/dbus-specification.html#auth-mechanisms>
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum AuthMechanism {
-    /// This is the recommended authentication mechanism on platforms where credentials can be
-    /// transferred out-of-band, in particular Unix platforms that can perform credentials-passing
-    /// over the `unix:` transport.
-    External,
-
-    /// This mechanism is designed to establish that a client has the ability to read a private
-    /// file owned by the user being authenticated.
-    Cookie,
-
-    /// Does not perform any authentication at all, and should not be accepted by message buses.
-    /// However, it might sometimes be useful for non-message-bus uses of D-Bus.
-    Anonymous,
-}
 
 /// The result of a finalized handshake
 ///
@@ -276,30 +259,6 @@ impl<'c> TryFrom<Str<'c>> for CookieContext<'c> {
 impl Default for CookieContext<'_> {
     fn default() -> Self {
         Self(Str::from_static("org_freedesktop_general"))
-    }
-}
-
-impl fmt::Display for AuthMechanism {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mech = match self {
-            AuthMechanism::External => "EXTERNAL",
-            AuthMechanism::Cookie => "DBUS_COOKIE_SHA1",
-            AuthMechanism::Anonymous => "ANONYMOUS",
-        };
-        write!(f, "{mech}")
-    }
-}
-
-impl FromStr for AuthMechanism {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self> {
-        match s {
-            "EXTERNAL" => Ok(AuthMechanism::External),
-            "DBUS_COOKIE_SHA1" => Ok(AuthMechanism::Cookie),
-            "ANONYMOUS" => Ok(AuthMechanism::Anonymous),
-            _ => Err(Error::Handshake(format!("Unknown mechanism: {s}"))),
-        }
     }
 }
 
