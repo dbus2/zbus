@@ -61,7 +61,8 @@ impl ClientHandshake {
             .next()
             .ok_or_else(|| Error::Handshake("Missing cookie challenge".into()))?;
 
-        let cookie = Cookie::lookup(&context, id).await?.cookie;
+        let cookie = Cookie::lookup(&context, id).await?;
+        let cookie = cookie.cookie();
         let client_challenge = random_ascii(16);
         let sec = format!("{server_challenge}:{client_challenge}:{cookie}");
         let sha1 = hex::encode(Sha1::digest(sec));

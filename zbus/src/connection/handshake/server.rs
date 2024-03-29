@@ -122,7 +122,7 @@ impl<'s> ServerHandshake<'s> {
             return Ok(());
         }
         let server_challenge = random_ascii(16);
-        let data = format!("{} {} {server_challenge}", self.cookie_context.0, cookie.id);
+        let data = format!("{} {} {server_challenge}", self.cookie_context, cookie.id());
         let cmd = Command::Data(Some(data.into_bytes()));
         trace!("Sending DBUS_COOKIE_SHA1 authentication challenge");
         self.common.write_command(cmd).await?;
@@ -143,7 +143,7 @@ impl<'s> ServerHandshake<'s> {
         let client_sha1 = split
             .next()
             .ok_or_else(|| Error::Handshake("Missing client cookie data".into()))?;
-        let sec = format!("{server_challenge}:{client_challenge}:{}", cookie.cookie);
+        let sec = format!("{server_challenge}:{client_challenge}:{}", cookie.cookie());
         let sha1 = hex::encode(Sha1::digest(sec));
 
         if sha1 == client_sha1 {

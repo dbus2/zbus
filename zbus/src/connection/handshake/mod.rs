@@ -1,28 +1,28 @@
 mod auth_mechanism;
 mod client;
 mod command;
+mod cookies;
 #[cfg(feature = "p2p")]
 mod server;
 
 use async_trait::async_trait;
-use futures_util::StreamExt;
 #[cfg(unix)]
 use nix::unistd::Uid;
-use std::{collections::VecDeque, fmt::Debug, path::PathBuf};
+use std::{collections::VecDeque, fmt::Debug};
 use tracing::{instrument, trace};
 use zvariant::Str;
 
-use xdg_home::home_dir;
-
 #[cfg(windows)]
 use crate::win32;
-use crate::{file::FileLines, Error, OwnedGuid, Result};
+use crate::{Error, OwnedGuid, Result};
 
 use super::socket::{BoxedSplit, ReadHalf, WriteHalf};
 
 pub use auth_mechanism::AuthMechanism;
 use client::ClientHandshake;
 use command::Command;
+use cookies::Cookie;
+pub(crate) use cookies::CookieContext;
 #[cfg(feature = "p2p")]
 use server::ServerHandshake;
 
@@ -121,130 +121,6 @@ fn sasl_auth_id() -> Result<String> {
     };
 
     Ok(id)
-}
-
-#[derive(Debug)]
-struct Cookie {
-    id: usize,
-    cookie: String,
-}
-
-impl Cookie {
-    fn keyring_path() -> Result<PathBuf> {
-        let mut path = home_dir()
-            .ok_or_else(|| Error::Handshake("Failed to determine home directory".into()))?;
-        path.push(".dbus-keyrings");
-        Ok(path)
-    }
-
-    async fn read_keyring(context: &CookieContext<'_>) -> Result<Vec<Cookie>> {
-        let mut path = Cookie::keyring_path()?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-
-            let perms = crate::file::metadata(&path).await?.permissions().mode();
-            if perms & 0o066 != 0 {
-                return Err(Error::Handshake(
-                    "DBus keyring has invalid permissions".into(),
-                ));
-            }
-        }
-        #[cfg(not(unix))]
-        {
-            // FIXME: add code to check directory permissions
-        }
-        path.push(&*context.0);
-        trace!("Reading keyring {:?}", path);
-        let mut lines = FileLines::open(&path).await?.enumerate();
-        let mut cookies = vec![];
-        while let Some((n, line)) = lines.next().await {
-            let line = line?;
-            let mut split = line.split_whitespace();
-            let id = split
-                .next()
-                .ok_or_else(|| {
-                    Error::Handshake(format!(
-                        "DBus cookie `{}` missing ID at line {n}",
-                        path.display(),
-                    ))
-                })?
-                .parse()
-                .map_err(|e| {
-                    Error::Handshake(format!(
-                        "Failed to parse cookie ID in file `{}` at line {n}: {e}",
-                        path.display(),
-                    ))
-                })?;
-            let _ = split.next().ok_or_else(|| {
-                Error::Handshake(format!(
-                    "DBus cookie `{}` missing creation time at line {n}",
-                    path.display(),
-                ))
-            })?;
-            let cookie = split
-                .next()
-                .ok_or_else(|| {
-                    Error::Handshake(format!(
-                        "DBus cookie `{}` missing cookie data at line {}",
-                        path.to_str().unwrap(),
-                        n
-                    ))
-                })?
-                .to_string();
-            cookies.push(Cookie { id, cookie })
-        }
-        trace!("Loaded keyring {:?}", cookies);
-        Ok(cookies)
-    }
-
-    async fn lookup(context: &CookieContext<'_>, id: usize) -> Result<Cookie> {
-        let keyring = Self::read_keyring(context).await?;
-        keyring
-            .into_iter()
-            .find(|c| c.id == id)
-            .ok_or_else(|| Error::Handshake(format!("DBus cookie ID {id} not found")))
-    }
-
-    #[cfg(feature = "p2p")]
-    async fn first(context: &CookieContext<'_>) -> Result<Cookie> {
-        let keyring = Self::read_keyring(context).await?;
-        keyring
-            .into_iter()
-            .next()
-            .ok_or_else(|| Error::Handshake("No cookies available".into()))
-    }
-}
-
-#[derive(Debug)]
-pub struct CookieContext<'c>(Str<'c>);
-
-impl<'c> TryFrom<Str<'c>> for CookieContext<'c> {
-    type Error = Error;
-
-    fn try_from(value: Str<'c>) -> Result<Self> {
-        if value.is_empty() {
-            return Err(Error::Handshake("Empty cookie context".into()));
-        } else if !value.is_ascii() || value.contains(['/', '\\', ' ', '\n', '\r', '\t', '.']) {
-            return Err(Error::Handshake(
-                "Invalid characters in cookie context".into(),
-            ));
-        }
-
-        Ok(Self(value))
-    }
-}
-
-impl Default for CookieContext<'_> {
-    fn default() -> Self {
-        Self(Str::from_static("org_freedesktop_general"))
-    }
-}
-
-impl From<hex::FromHexError> for Error {
-    fn from(e: hex::FromHexError) -> Self {
-        Error::Handshake(format!("Invalid hexcode: {e}"))
-    }
 }
 
 // Common code for the client and server side of the handshake.
