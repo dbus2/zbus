@@ -96,7 +96,7 @@ impl Handshake for ClientHandshake {
         #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
         let written = self
             .common
-            .socket
+            .socket_mut()
             .write_mut()
             .send_zero_byte()
             .await
@@ -114,7 +114,7 @@ impl Handshake for ClientHandshake {
         #[cfg(not(any(target_os = "freebsd", target_os = "dragonfly")))]
         let written = self
             .common
-            .socket
+            .socket_mut()
             .write_mut()
             .sendmsg(
                 &[b'\0'],
@@ -131,7 +131,7 @@ impl Handshake for ClientHandshake {
 
         let mut commands = Vec::with_capacity(4);
         loop {
-            self.common.cap_unix_fd = false;
+            self.common.set_cap_unix_fd(false);
             let mechanism = self.common.next_mechanism()?;
             trace!("Trying {mechanism} mechanism");
             let auth_cmd = match mechanism {
@@ -173,7 +173,7 @@ impl Handshake for ClientHandshake {
             }
         }
 
-        let can_pass_fd = self.common.socket.read_mut().can_pass_unix_fd();
+        let can_pass_fd = self.common.socket_mut().read_mut().can_pass_unix_fd();
         if can_pass_fd {
             commands.push(Command::NegotiateUnixFD);
         };
@@ -199,7 +199,7 @@ impl Handshake for ClientHandshake {
                         trace!("Received OK from server");
                         self.set_guid(guid)?;
                     }
-                    Command::AgreeUnixFD => self.common.cap_unix_fd = true,
+                    Command::AgreeUnixFD => self.common.set_cap_unix_fd(true),
                     // This also covers "REJECTED" and "ERROR", which would mean that the server has
                     // rejected the authentication challenge response (likely cookie) since it already
                     // agreed to the mechanism. Theoretically we should be just trying the next auth
@@ -218,14 +218,16 @@ impl Handshake for ClientHandshake {
         self.common.write_command(Command::Begin).await?;
 
         trace!("Handshake done");
-        let (read, write) = self.common.socket.take();
+        #[allow(unused_variables)]
+        let (socket, recv_buffer, cap_unix_fd, _) = self.common.into_components();
+        let (read, write) = socket.take();
         Ok(Authenticated {
             socket_write: write,
             socket_read: Some(read),
             server_guid: self.server_guid.unwrap(),
             #[cfg(unix)]
-            cap_unix_fd: self.common.cap_unix_fd,
-            already_received_bytes: Some(self.common.recv_buffer),
+            cap_unix_fd,
+            already_received_bytes: Some(recv_buffer),
         })
     }
 }

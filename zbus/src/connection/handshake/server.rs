@@ -161,7 +161,7 @@ impl<'s> ServerHandshake<'s> {
     }
 
     async fn rejected_error(&mut self) -> Result<()> {
-        let mechanisms = self.common.mechanisms.iter().cloned().collect();
+        let mechanisms = self.common.mechanisms().iter().cloned().collect();
         let cmd = Command::Rejected(mechanisms);
         trace!("Sending authentication error");
         self.common.write_command(cmd).await?;
@@ -180,7 +180,12 @@ impl Handshake for ServerHandshake<'_> {
                 ServerHandshakeStep::WaitingForNull => {
                     trace!("Waiting for NULL");
                     let mut buffer = [0; 1];
-                    let read = self.common.socket.read_mut().recvmsg(&mut buffer).await?;
+                    let read = self
+                        .common
+                        .socket_mut()
+                        .read_mut()
+                        .recvmsg(&mut buffer)
+                        .await?;
                     #[cfg(unix)]
                     let read = read.0;
                     // recvmsg cannot return anything else than Ok(1) or Err
@@ -198,7 +203,7 @@ impl Handshake for ServerHandshake<'_> {
                     let reply = self.common.read_command().await?;
                     match reply {
                         Command::Auth(mech, resp) => {
-                            let mech = mech.filter(|m| self.common.mechanisms.contains(m));
+                            let mech = mech.filter(|m| self.common.mechanisms().contains(m));
 
                             match (mech, &resp) {
                                 (Some(mech), None) => {
@@ -253,8 +258,8 @@ impl Handshake for ServerHandshake<'_> {
                         #[cfg(unix)]
                         Command::NegotiateUnixFD => {
                             trace!("Received NEGOTIATE_UNIX_FD command from the client");
-                            if self.common.socket.read().can_pass_unix_fd() {
-                                self.common.cap_unix_fd = true;
+                            if self.common.socket().read().can_pass_unix_fd() {
+                                self.common.set_cap_unix_fd(true);
                                 trace!("Sending AGREE_UNIX_FD to the client");
                                 self.common.write_command(Command::AgreeUnixFD).await?;
                             } else {
@@ -273,14 +278,16 @@ impl Handshake for ServerHandshake<'_> {
                 }
                 ServerHandshakeStep::Done => {
                     trace!("Handshake done");
-                    let (read, write) = self.common.socket.take();
+                    #[allow(unused_variables)]
+                    let (socket, recv_buffer, cap_unix_fd, _) = self.common.into_components();
+                    let (read, write) = socket.take();
                     return Ok(Authenticated {
                         socket_write: write,
                         socket_read: Some(read),
                         server_guid: self.guid,
                         #[cfg(unix)]
-                        cap_unix_fd: self.common.cap_unix_fd,
-                        already_received_bytes: Some(self.common.recv_buffer),
+                        cap_unix_fd,
+                        already_received_bytes: Some(recv_buffer),
                     });
                 }
             }
