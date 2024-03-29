@@ -11,7 +11,7 @@
       "lockFileMaintenance": { "enabled": true }
     },
     {
-      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "matchUpdateTypes": ["patch", "pin", "digest"],
       "automerge": true,
       "rebaseWhen": "conflicted"
     }
