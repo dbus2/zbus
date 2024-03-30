@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  lint:
+  fmt:
     runs-on: ubuntu-latest
     env:
       RUSTFLAGS: -D warnings
@@ -18,7 +18,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly
-          components: clippy, rustfmt
+          components: rustfmt
           targets: x86_64-apple-darwin, x86_64-unknown-freebsd, x86_64-unknown-netbsd x86_64-pc-windows-gnu
       - uses: Swatinem/rust-cache@v2
       - name: Check formatting
@@ -28,6 +28,21 @@ jobs:
           cargo --locked check --target x86_64-unknown-freebsd
           cargo --locked check --target x86_64-unknown-netbsd
           cargo --locked check --target x86_64-pc-windows-gnu
+
+  clippy:
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -D warnings
+      RUST_BACKTRACE: full
+      RUST_LOG: trace
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: clippy
+          targets: x86_64-apple-darwin, x86_64-unknown-freebsd, x86_64-unknown-netbsd x86_64-pc-windows-gnu
+      - uses: Swatinem/rust-cache@v2
       - name: Catch common mistakes and unwrap calls
         run: |
           cargo --locked clippy
@@ -38,7 +53,7 @@ jobs:
 
   linux_test:
     runs-on: ubuntu-latest
-    needs: lint
+    needs: [fmt, clippy]
     env:
       RUSTFLAGS: -D warnings
       RUST_BACKTRACE: full
@@ -74,7 +89,7 @@ jobs:
 
   windows_test:
     runs-on: windows-latest
-    needs: lint
+    needs: [fmt, clippy]
     env:
       RUSTFLAGS: -D warnings
       RUST_BACKTRACE: full
