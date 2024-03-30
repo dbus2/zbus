@@ -527,6 +527,27 @@ impl<'a> Builder<'a> {
 /// tasks until socket reader task kicks in.
 #[cfg(not(feature = "tokio"))]
 fn start_internal_executor(executor: &Executor<'static>, internal_executor: bool) -> Result<()> {
+    use core::{
+        future::Future,
+        pin::Pin,
+        task::{Context, Poll},
+    };
+
+    /// A future that ends once the executor is empty.
+    struct Empty<'a>(&'a Executor<'static>);
+
+    impl Future for Empty<'_> {
+        type Output = ();
+
+        fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
+            if self.0.is_empty() {
+                Poll::Ready(())
+            } else {
+                Poll::Pending
+            }
+        }
+    }
+
     if internal_executor {
         let executor = executor.clone();
         std::thread::Builder::new()
@@ -534,9 +555,7 @@ fn start_internal_executor(executor: &Executor<'static>, internal_executor: bool
             .spawn(move || {
                 crate::utils::block_on(async move {
                     // Run as long as there is a task to run.
-                    while !executor.is_empty() {
-                        executor.tick().await;
-                    }
+                    executor.run(Empty(&executor)).await
                 })
             })?;
     }
