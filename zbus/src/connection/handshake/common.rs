@@ -6,7 +6,7 @@ use crate::{Error, Result};
 
 // Common code for the client and server side of the handshake.
 #[derive(Debug)]
-pub(super) struct HandshakeCommon {
+pub(super) struct Common {
     socket: BoxedSplit,
     recv_buffer: Vec<u8>,
     cap_unix_fd: bool,
@@ -14,7 +14,7 @@ pub(super) struct HandshakeCommon {
     mechanisms: VecDeque<AuthMechanism>,
 }
 
-impl HandshakeCommon {
+impl Common {
     /// Start a handshake on this client socket
     pub fn new(socket: BoxedSplit, mechanisms: VecDeque<AuthMechanism>) -> Self {
         Self {

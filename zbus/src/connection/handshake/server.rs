@@ -5,8 +5,8 @@ use tracing::{instrument, trace};
 use sha1::{Digest, Sha1};
 
 use super::{
-    random_ascii, sasl_auth_id, AuthMechanism, Authenticated, BoxedSplit, Command, Cookie,
-    CookieContext, Error, Handshake, HandshakeCommon, OwnedGuid, Result,
+    random_ascii, sasl_auth_id, AuthMechanism, Authenticated, BoxedSplit, Command, Common, Cookie,
+    CookieContext, Error, Handshake, OwnedGuid, Result,
 };
 
 /*
@@ -26,8 +26,8 @@ enum ServerHandshakeStep {
 ///
 /// This would typically be used to implement a D-Bus broker, or in the context of a P2P connection.
 #[derive(Debug)]
-pub struct ServerHandshake<'s> {
-    common: HandshakeCommon,
+pub struct Server<'s> {
+    common: Common,
     step: ServerHandshakeStep,
     guid: OwnedGuid,
     #[cfg(unix)]
@@ -38,7 +38,7 @@ pub struct ServerHandshake<'s> {
     cookie_context: CookieContext<'s>,
 }
 
-impl<'s> ServerHandshake<'s> {
+impl<'s> Server<'s> {
     pub fn new(
         socket: BoxedSplit,
         guid: OwnedGuid,
@@ -47,7 +47,7 @@ impl<'s> ServerHandshake<'s> {
         mechanisms: Option<VecDeque<AuthMechanism>>,
         cookie_id: Option<usize>,
         cookie_context: CookieContext<'s>,
-    ) -> Result<ServerHandshake<'s>> {
+    ) -> Result<Server<'s>> {
         let mechanisms = match mechanisms {
             Some(mechanisms) => mechanisms,
             None => {
@@ -58,8 +58,8 @@ impl<'s> ServerHandshake<'s> {
             }
         };
 
-        Ok(ServerHandshake {
-            common: HandshakeCommon::new(socket, mechanisms),
+        Ok(Server {
+            common: Common::new(socket, mechanisms),
             step: ServerHandshakeStep::WaitingForNull,
             #[cfg(unix)]
             client_uid,
@@ -172,7 +172,7 @@ impl<'s> ServerHandshake<'s> {
 }
 
 #[async_trait]
-impl Handshake for ServerHandshake<'_> {
+impl Handshake for Server<'_> {
     #[instrument(skip(self))]
     async fn perform(mut self) -> Result<Authenticated> {
         loop {

@@ -5,8 +5,8 @@ use tracing::{debug, instrument, trace};
 use sha1::{Digest, Sha1};
 
 use super::{
-    random_ascii, sasl_auth_id, AuthMechanism, Authenticated, BoxedSplit, Command, Cookie, Error,
-    Handshake, HandshakeCommon, OwnedGuid, Result, Str,
+    random_ascii, sasl_auth_id, AuthMechanism, Authenticated, BoxedSplit, Command, Common, Cookie,
+    Error, Handshake, OwnedGuid, Result, Str,
 };
 
 /// A representation of an in-progress handshake, client-side
@@ -14,18 +14,18 @@ use super::{
 /// This struct is an async-compatible representation of the initial handshake that must be
 /// performed before a D-Bus connection can be used.
 #[derive(Debug)]
-pub struct ClientHandshake {
-    common: HandshakeCommon,
+pub struct Client {
+    common: Common,
     server_guid: Option<OwnedGuid>,
 }
 
-impl ClientHandshake {
+impl Client {
     /// Start a handshake on this client socket
     pub fn new(
         socket: BoxedSplit,
         mechanisms: Option<VecDeque<AuthMechanism>>,
         server_guid: Option<OwnedGuid>,
-    ) -> ClientHandshake {
+    ) -> Client {
         let mechanisms = mechanisms.unwrap_or_else(|| {
             let mut mechanisms = VecDeque::new();
             mechanisms.push_back(AuthMechanism::External);
@@ -34,8 +34,8 @@ impl ClientHandshake {
             mechanisms
         });
 
-        ClientHandshake {
-            common: HandshakeCommon::new(socket, mechanisms),
+        Client {
+            common: Common::new(socket, mechanisms),
             server_guid,
         }
     }
@@ -87,7 +87,7 @@ impl ClientHandshake {
 }
 
 #[async_trait]
-impl Handshake for ClientHandshake {
+impl Handshake for Client {
     #[instrument(skip(self))]
     async fn perform(mut self) -> Result<Authenticated> {
         trace!("Initializing");

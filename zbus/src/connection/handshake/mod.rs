@@ -19,13 +19,13 @@ use crate::{Error, OwnedGuid, Result};
 use super::socket::{BoxedSplit, ReadHalf, WriteHalf};
 
 pub use auth_mechanism::AuthMechanism;
-use client::ClientHandshake;
+use client::Client;
 use command::Command;
-use common::HandshakeCommon;
+use common::Common;
 use cookies::Cookie;
 pub(crate) use cookies::CookieContext;
 #[cfg(feature = "p2p")]
-use server::ServerHandshake;
+use server::Server;
 
 /// The result of a finalized handshake
 ///
@@ -53,9 +53,7 @@ impl Authenticated {
         server_guid: Option<OwnedGuid>,
         mechanisms: Option<VecDeque<AuthMechanism>>,
     ) -> Result<Self> {
-        ClientHandshake::new(socket, mechanisms, server_guid)
-            .perform()
-            .await
+        Client::new(socket, mechanisms, server_guid).perform().await
     }
 
     /// Create a server-side `Authenticated` for the given `socket`.
@@ -71,7 +69,7 @@ impl Authenticated {
         cookie_id: Option<usize>,
         cookie_context: CookieContext<'_>,
     ) -> Result<Self> {
-        ServerHandshake::new(
+        Server::new(
             socket,
             guid,
             #[cfg(unix)]
@@ -170,8 +168,8 @@ mod tests {
         let (p0, p1) = create_async_socket_pair();
 
         let guid = OwnedGuid::from(Guid::generate());
-        let client = ClientHandshake::new(p0.into(), None, Some(guid.clone()));
-        let server = ServerHandshake::new(
+        let client = Client::new(p0.into(), None, Some(guid.clone()));
+        let server = Server::new(
             p1.into(),
             guid,
             Some(Uid::effective().into()),
@@ -195,7 +193,7 @@ mod tests {
     #[timeout(15000)]
     fn pipelined_handshake() {
         let (mut p0, p1) = create_async_socket_pair();
-        let server = ServerHandshake::new(
+        let server = Server::new(
             p1.into(),
             Guid::generate().into(),
             Some(Uid::effective().into()),
@@ -224,7 +222,7 @@ mod tests {
     #[timeout(15000)]
     fn separate_external_data() {
         let (mut p0, p1) = create_async_socket_pair();
-        let server = ServerHandshake::new(
+        let server = Server::new(
             p1.into(),
             Guid::generate().into(),
             Some(Uid::effective().into()),
@@ -251,7 +249,7 @@ mod tests {
     #[timeout(15000)]
     fn missing_external_data() {
         let (mut p0, p1) = create_async_socket_pair();
-        let server = ServerHandshake::new(
+        let server = Server::new(
             p1.into(),
             Guid::generate().into(),
             Some(Uid::effective().into()),
@@ -269,7 +267,7 @@ mod tests {
     #[timeout(15000)]
     fn anonymous_handshake() {
         let (mut p0, p1) = create_async_socket_pair();
-        let server = ServerHandshake::new(
+        let server = Server::new(
             p1.into(),
             Guid::generate().into(),
             Some(Uid::effective().into()),
@@ -287,7 +285,7 @@ mod tests {
     #[timeout(15000)]
     fn separate_anonymous_data() {
         let (mut p0, p1) = create_async_socket_pair();
-        let server = ServerHandshake::new(
+        let server = Server::new(
             p1.into(),
             Guid::generate().into(),
             Some(Uid::effective().into()),
