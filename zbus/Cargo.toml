@@ -107,7 +107,7 @@ nix = { version = "0.28", default-features = false, features = [
 [target.'cfg(target_os = "macos")'.dependencies]
 # FIXME: This should only be enabled if async-io feature is enabled but currently
 # Cargo doesn't provide a way to do that for only specific target OS: https://github.com/rust-lang/cargo/issues/1197.
-async-process = "2.1.0"
+async-process = "2.2.0"
 
 [target.'cfg(any(target_os = "macos", windows))'.dependencies]
 async-recursion = "1.1.0"
