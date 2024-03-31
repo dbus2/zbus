@@ -1,7 +1,6 @@
 use crate::utils::{pat_ident, typed_arg, zbus_path, PropertyEmitsChangedSignal};
 use proc_macro2::{Literal, Span, TokenStream};
 use quote::{format_ident, quote, quote_spanned, ToTokens};
-use regex::Regex;
 use syn::{
     fold::Fold, parse_quote, parse_str, spanned::Spanned, AttributeArgs, Error, FnArg, Ident,
     ItemTrait, Path, ReturnType, TraitItemMethod,
@@ -619,12 +618,18 @@ fn gen_proxy_method_call<M: AttrParse + Into<MethodAttrs>>(
         let is_input_type = inputs.iter().any(|arg| {
             // FIXME: We want to only require `Serialize` from input types and `DeserializeOwned`
             // from output types but since we don't have type introspection, we employ this
-            // workaround of regex matching on string reprepresention of the the types to figure out
+            // workaround of matching on the string representation of the the types to figure out
             // which generic types are input types.
             if let FnArg::Typed(pat) = arg {
-                let pattern = format!("& *{}", param.to_token_stream());
-                let regex = Regex::new(&pattern).unwrap();
-                regex.is_match(&pat.ty.to_token_stream().to_string())
+                let pat = pat.ty.to_token_stream().to_string();
+
+                if let Some(ty_name) = pat.strip_prefix('&') {
+                    let ty_name = ty_name.trim_start();
+
+                    ty_name == param.to_token_stream().to_string()
+                } else {
+                    false
+                }
             } else {
                 false
             }
