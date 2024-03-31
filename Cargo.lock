@@ -2579,7 +2579,6 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "regex",
  "rustversion",
  "serde",
  "syn 1.0.109",
