@@ -10,6 +10,7 @@ use async_trait::async_trait;
 #[cfg(unix)]
 use nix::unistd::Uid;
 use std::{collections::VecDeque, fmt::Debug};
+use zbus_names::OwnedUniqueName;
 use zvariant::Str;
 
 #[cfg(windows)]
@@ -44,6 +45,7 @@ pub struct Authenticated {
 
     pub(crate) socket_read: Option<Box<dyn ReadHalf>>,
     pub(crate) already_received_bytes: Option<Vec<u8>>,
+    pub(crate) unique_name: Option<OwnedUniqueName>,
 }
 
 impl Authenticated {
@@ -52,8 +54,11 @@ impl Authenticated {
         socket: BoxedSplit,
         server_guid: Option<OwnedGuid>,
         mechanisms: Option<VecDeque<AuthMechanism>>,
+        bus: bool,
     ) -> Result<Self> {
-        Client::new(socket, mechanisms, server_guid).perform().await
+        Client::new(socket, mechanisms, server_guid, bus)
+            .perform()
+            .await
     }
 
     /// Create a server-side `Authenticated` for the given `socket`.
@@ -68,6 +73,7 @@ impl Authenticated {
         auth_mechanisms: Option<VecDeque<AuthMechanism>>,
         cookie_id: Option<usize>,
         cookie_context: CookieContext<'_>,
+        unique_name: Option<OwnedUniqueName>,
     ) -> Result<Self> {
         Server::new(
             socket,
@@ -79,6 +85,7 @@ impl Authenticated {
             auth_mechanisms,
             cookie_id,
             cookie_context,
+            unique_name,
         )?
         .perform()
         .await
@@ -168,7 +175,7 @@ mod tests {
         let (p0, p1) = create_async_socket_pair();
 
         let guid = OwnedGuid::from(Guid::generate());
-        let client = Client::new(p0.into(), None, Some(guid.clone()));
+        let client = Client::new(p0.into(), None, Some(guid.clone()), false);
         let server = Server::new(
             p1.into(),
             guid,
@@ -176,6 +183,7 @@ mod tests {
             None,
             None,
             CookieContext::default(),
+            None,
         )
         .unwrap();
 
@@ -200,6 +208,7 @@ mod tests {
             None,
             None,
             CookieContext::default(),
+            None,
         )
         .unwrap();
 
@@ -229,6 +238,7 @@ mod tests {
             None,
             None,
             CookieContext::default(),
+            None,
         )
         .unwrap();
 
@@ -256,6 +266,7 @@ mod tests {
             None,
             None,
             CookieContext::default(),
+            None,
         )
         .unwrap();
 
@@ -274,6 +285,7 @@ mod tests {
             Some(vec![AuthMechanism::Anonymous].into()),
             None,
             CookieContext::default(),
+            None,
         )
         .unwrap();
 
@@ -292,6 +304,7 @@ mod tests {
             Some(vec![AuthMechanism::Anonymous].into()),
             None,
             CookieContext::default(),
+            None,
         )
         .unwrap();
 

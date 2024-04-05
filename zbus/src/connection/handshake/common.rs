@@ -54,11 +54,15 @@ impl Common {
 
     #[instrument(skip(self))]
     pub async fn write_command(&mut self, command: Command) -> Result<()> {
-        self.write_commands(&[command]).await
+        self.write_commands(&[command], None).await
     }
 
     #[instrument(skip(self))]
-    pub async fn write_commands(&mut self, commands: &[Command]) -> Result<()> {
+    pub async fn write_commands(
+        &mut self,
+        commands: &[Command],
+        extra_bytes: Option<&[u8]>,
+    ) -> Result<()> {
         let mut send_buffer =
             commands
                 .iter()
@@ -68,6 +72,9 @@ impl Common {
                     acc.extend_from_slice(b"\r\n");
                     acc
                 });
+        if let Some(extra_bytes) = extra_bytes {
+            send_buffer.extend_from_slice(extra_bytes);
+        }
         while !send_buffer.is_empty() {
             let written = self
                 .socket

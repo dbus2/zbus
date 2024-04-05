@@ -378,6 +378,16 @@ impl<'a> Builder<'a> {
     }
 
     async fn build_(mut self, executor: Executor<'static>) -> Result<Connection> {
+        #[cfg(feature = "p2p")]
+        let is_bus_conn = !self.p2p;
+        #[cfg(not(feature = "p2p"))]
+        let is_bus_conn = true;
+
+        #[cfg(not(feature = "bus-impl"))]
+        let unique_name = None;
+        #[cfg(feature = "bus-impl")]
+        let unique_name = self.unique_name.take().map(Into::into);
+
         #[allow(unused_mut)]
         let (mut stream, server_guid, authenticated) = self.target_connect().await?;
         let mut auth = if authenticated {
@@ -390,13 +400,15 @@ impl<'a> Builder<'a> {
                 // SAFETY: `server_guid` is provided as arg of `Builder::authenticated_socket`.
                 server_guid: server_guid.unwrap(),
                 already_received_bytes: None,
+                unique_name,
             }
         } else {
             #[cfg(feature = "p2p")]
             match self.guid {
                 None => {
                     // SASL Handshake
-                    Authenticated::client(stream, server_guid, self.auth_mechanisms).await?
+                    Authenticated::client(stream, server_guid, self.auth_mechanisms, is_bus_conn)
+                        .await?
                 }
                 Some(guid) => {
                     if !self.p2p {
@@ -419,29 +431,22 @@ impl<'a> Builder<'a> {
                         self.auth_mechanisms,
                         self.cookie_id,
                         self.cookie_context.unwrap_or_default(),
+                        unique_name,
                     )
                     .await?
                 }
             }
 
             #[cfg(not(feature = "p2p"))]
-            Authenticated::client(stream, server_guid, self.auth_mechanisms).await?
+            Authenticated::client(stream, server_guid, self.auth_mechanisms, is_bus_conn).await?
         };
 
         // SAFETY: `Authenticated` is always built with these fields set to `Some`.
         let socket_read = auth.socket_read.take().unwrap();
         let already_received_bytes = auth.already_received_bytes.take();
 
-        #[cfg(feature = "p2p")]
-        let is_bus_conn = !self.p2p;
-        #[cfg(not(feature = "p2p"))]
-        let is_bus_conn = true;
         let mut conn = Connection::new(auth, is_bus_conn, executor).await?;
         conn.set_max_queued(self.max_queued.unwrap_or(DEFAULT_MAX_QUEUED));
-        #[cfg(feature = "bus-impl")]
-        if let Some(unique_name) = self.unique_name {
-            conn.set_unique_name(unique_name)?;
-        }
 
         if !self.interfaces.is_empty() {
             let object_server = conn.sync_object_server(false, None);
@@ -467,11 +472,6 @@ impl<'a> Builder<'a> {
 
         // Start the socket reader task.
         conn.init_socket_reader(socket_read, already_received_bytes);
-
-        if is_bus_conn {
-            // Now that the server has approved us, we must send the bus Hello, as per specs
-            conn.hello_bus().await?;
-        }
 
         for name in self.names {
             conn.request_name(name).await?;
