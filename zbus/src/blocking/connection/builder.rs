@@ -72,6 +72,19 @@ impl<'a> Builder<'a> {
         Self(crate::connection::Builder::tcp_stream(stream))
     }
 
+    /// Create a builder for a connection that will use the given pre-authenticated socket.
+    ///
+    /// This is similar to [`Builder::socket`], except that the socket is either already
+    /// authenticated or does not require authentication.
+    pub fn authenticated_socket<S, G>(socket: S, guid: G) -> Result<Self>
+    where
+        S: Into<BoxedSplit>,
+        G: TryInto<crate::Guid<'a>>,
+        G::Error: Into<Error>,
+    {
+        crate::connection::Builder::authenticated_socket(socket, guid).map(Self)
+    }
+
     /// Create a builder for connection that will use the given socket.
     pub fn socket<S: Into<BoxedSplit>>(socket: S) -> Self {
         Self(crate::connection::Builder::socket(socket))
@@ -123,6 +136,10 @@ impl<'a> Builder<'a> {
     /// negotiation messages, for peer-to-peer communications after successful creation.
     ///
     /// This method is only available when the `p2p` feature is enabled.
+    ///
+    /// **NOTE:** This method is redundant when using [`Builder::authenticated_socket`] since the
+    /// latter already sets the GUID for the connection and zbus doesn't differentiate between a
+    /// server and a client connection, except for authentication.
     #[cfg(feature = "p2p")]
     pub fn server<G>(self, guid: G) -> Result<Self>
     where
