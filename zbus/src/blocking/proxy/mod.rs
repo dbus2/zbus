@@ -3,7 +3,7 @@
 use enumflags2::BitFlags;
 use futures_util::StreamExt;
 use static_assertions::assert_impl_all;
-use std::ops::Deref;
+use std::{fmt, ops::Deref};
 use zbus_names::{BusName, InterfaceName, MemberName, UniqueName};
 use zvariant::{ObjectPath, OwnedValue, Value};
 
@@ -60,15 +60,21 @@ pub use builder::Builder;
 ///
 /// [`proxy`]: attr.proxy.html
 /// [al]: https://github.com/dbus2/zbus/issues/54
-#[derive(derivative::Derivative)]
-#[derivative(Clone, Debug)]
+#[derive(Clone)]
 pub struct Proxy<'a> {
-    #[derivative(Debug = "ignore")]
     conn: Connection,
     // Wrap it in an `Option` to ensure the proxy is dropped in a `block_on` call. This is needed
     // for tokio because the proxy spawns a task in its `Drop` impl and that needs a runtime
     // context in case of tokio.
     azync: Option<crate::Proxy<'a>>,
+}
+
+impl fmt::Debug for Proxy<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Proxy")
+            .field("azync", &self.azync)
+            .finish_non_exhaustive()
+    }
 }
 
 assert_impl_all!(Proxy<'_>: Send, Sync, Unpin);

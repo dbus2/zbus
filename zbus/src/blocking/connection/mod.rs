@@ -21,8 +21,7 @@ pub use builder::Builder;
 /// A blocking wrapper of [`zbus::Connection`].
 ///
 /// Most of the API is very similar to [`zbus::Connection`], except it's blocking.
-#[derive(derivative::Derivative, Clone)]
-#[derivative(Debug)]
+#[derive(Debug, Clone)]
 #[must_use = "Dropping a `Connection` will close the underlying socket."]
 pub struct Connection {
     inner: crate::Connection,

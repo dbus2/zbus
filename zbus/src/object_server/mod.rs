@@ -4,6 +4,7 @@ use event_listener::{Event, EventListener};
 use serde::Serialize;
 use std::{
     collections::{hash_map::Entry, HashMap},
+    fmt,
     fmt::Write,
     marker::PhantomData,
     ops::{Deref, DerefMut},
@@ -180,13 +181,20 @@ impl<I> Clone for InterfaceRef<I> {
     }
 }
 
-#[derive(Default, derivative::Derivative)]
-#[derivative(Debug)]
+#[derive(Default)]
 pub(crate) struct Node {
     path: OwnedObjectPath,
     children: HashMap<String, Node>,
-    #[derivative(Debug = "ignore")]
     interfaces: HashMap<InterfaceName<'static>, Arc<RwLock<dyn Interface>>>,
+}
+
+impl fmt::Debug for Node {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Node")
+            .field("path", &self.path)
+            .field("children", &self.children)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Node {

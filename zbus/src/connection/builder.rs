@@ -8,6 +8,7 @@ use std::net::TcpStream;
 use std::os::unix::net::UnixStream;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
+    fmt,
     sync::Arc,
 };
 #[cfg(feature = "tokio")]
@@ -58,8 +59,6 @@ type Interfaces<'a> =
     HashMap<ObjectPath<'a>, HashMap<InterfaceName<'static>, Arc<RwLock<dyn Interface>>>>;
 
 /// A builder for [`zbus::Connection`].
-#[derive(derivative::Derivative)]
-#[derivative(Debug)]
 #[must_use]
 pub struct Builder<'a> {
     target: Option<Target>,
@@ -70,7 +69,6 @@ pub struct Builder<'a> {
     #[cfg(feature = "p2p")]
     p2p: bool,
     internal_executor: bool,
-    #[derivative(Debug = "ignore")]
     interfaces: Interfaces<'a>,
     names: HashSet<WellKnownName<'a>>,
     auth_mechanisms: Option<VecDeque<AuthMechanism>>,
@@ -81,6 +79,26 @@ pub struct Builder<'a> {
 }
 
 assert_impl_all!(Builder<'_>: Send, Sync, Unpin);
+
+impl fmt::Debug for Builder<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut f = f.debug_struct("Builder");
+        f.field("target", &self.target);
+        f.field("max_queued", &self.max_queued);
+        #[cfg(feature = "p2p")]
+        f.field("guid", &self.target);
+        #[cfg(feature = "p2p")]
+        f.field("p2p", &self.p2p);
+        f.field("internal_executor", &self.internal_executor);
+        f.field("names", &self.names);
+        f.field("auth_mechanisms", &self.auth_mechanisms);
+        #[cfg(feature = "bus-impl")]
+        f.field("unique_name", &self.unique_name);
+        f.field("cookie_context", &self.cookie_context);
+        f.field("cookie_id", &self.cookie_id);
+        f.finish_non_exhaustive()
+    }
+}
 
 impl<'a> Builder<'a> {
     /// Create a builder for the session/user message bus connection.
