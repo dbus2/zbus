@@ -55,12 +55,14 @@ impl<'a> DispatchResult<'a> {
     }
 }
 
-/// The trait used to dispatch messages to an interface instance.
+/// The trait is used to dispatch messages to an interface instance.
 ///
-/// Note: It is not recommended to manually implement this trait. The [`dbus_interface`] macro
-/// implements it for you.
+/// This trait should be treated as unstable API and compatibility may break in minor
+/// version bumps. Because of this and other reasons, it is not recommended to manually implement
+/// this trait. The [`crate::dbus_interface`] macro implements it for you.
 ///
-/// [`dbus_interface`]: attr.dbus_interface.html
+/// If you have an advanced use case where `dbus_interface` is inadequate, consider using
+/// [`crate::MessageStream`] or [`crate::blocking::MessageIterator`] instead.
 #[async_trait]
 pub trait Interface: Any + Send + Sync {
     /// Return the name of the interface. Ex: "org.foo.MyInterface"
