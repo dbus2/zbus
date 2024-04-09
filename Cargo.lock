@@ -1232,18 +1232,6 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.27.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2eb04e9c688eff1c89d72b407f168cf79bb9e867a9d3323ed6c01519eb9cc053"
-dependencies = [
- "bitflags 2.4.2",
- "cfg-if",
- "libc",
- "memoffset 0.9.0",
-]
-
-[[package]]
-name = "nix"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab2156c4fce2f8df6c499cc1c763e4394b7482525bf2a9701c9d79d215f519e4"
@@ -2231,12 +2219,12 @@ dependencies = [
 
 [[package]]
 name = "vsock"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2dfb6e7a74830912f1f4a7655227c9ded1ea4e9136676311fedf54bedb412f35"
+checksum = "f82e291049535877d607cd861b6820eb622538c88853c1c01df72b1dbed4e32d"
 dependencies = [
  "libc",
- "nix 0.27.1",
+ "nix 0.28.0",
 ]
 
 [[package]]
@@ -2563,7 +2551,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uds_windows",
- "vsock 0.4.0",
+ "vsock 0.5.0",
  "windows-sys 0.52.0",
  "xdg-home",
  "zbus_macros",
