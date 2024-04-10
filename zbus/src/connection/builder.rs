@@ -30,7 +30,7 @@ use crate::{
     address::{self, Address},
     async_lock::RwLock,
     names::{InterfaceName, WellKnownName},
-    object_server::Interface,
+    object_server::{ArcInterface, Interface},
     Connection, Error, Executor, OwnedGuid, Result,
 };
 
@@ -55,8 +55,7 @@ enum Target {
     Socket(Split<Box<dyn ReadHalf>, Box<dyn WriteHalf>>),
 }
 
-type Interfaces<'a> =
-    HashMap<ObjectPath<'a>, HashMap<InterfaceName<'static>, Arc<RwLock<dyn Interface>>>>;
+type Interfaces<'a> = HashMap<ObjectPath<'a>, HashMap<InterfaceName<'static>, ArcInterface>>;
 
 /// A builder for [`zbus::Connection`].
 #[must_use]
@@ -315,7 +314,7 @@ impl<'a> Builder<'a> {
     {
         let path = path.try_into().map_err(Into::into)?;
         let entry = self.interfaces.entry(path).or_default();
-        entry.insert(I::name(), Arc::new(RwLock::new(iface)));
+        entry.insert(I::name(), ArcInterface(Arc::new(RwLock::new(iface))));
 
         Ok(self)
     }
@@ -441,7 +440,7 @@ impl<'a> Builder<'a> {
                     let future =
                         object_server
                             .inner()
-                            .at_ready(path.to_owned(), name.clone(), || iface);
+                            .at_ready(path.to_owned(), name.clone(), || iface.0);
                     let added = future.await?;
                     // Duplicates shouldn't happen.
                     assert!(added);

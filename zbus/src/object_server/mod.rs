@@ -26,6 +26,7 @@ use crate::{
 };
 
 mod interface;
+pub(crate) use interface::ArcInterface;
 pub use interface::{DispatchResult, Interface};
 
 mod signal_context;
@@ -185,7 +186,7 @@ impl<I> Clone for InterfaceRef<I> {
 pub(crate) struct Node {
     path: OwnedObjectPath,
     children: HashMap<String, Node>,
-    interfaces: HashMap<InterfaceName<'static>, Arc<RwLock<dyn Interface>>>,
+    interfaces: HashMap<InterfaceName<'static>, ArcInterface>,
 }
 
 impl fmt::Debug for Node {
@@ -281,7 +282,7 @@ impl Node {
         &self,
         interface_name: InterfaceName<'_>,
     ) -> Option<Arc<RwLock<dyn Interface>>> {
-        self.interfaces.get(&interface_name).cloned()
+        self.interfaces.get(&interface_name).map(|x| x.0.clone())
     }
 
     fn remove_interface(&mut self, interface_name: InterfaceName<'static>) -> bool {
@@ -308,7 +309,7 @@ impl Node {
         F: FnOnce() -> Arc<RwLock<dyn Interface>>,
     {
         match self.interfaces.entry(name) {
-            Entry::Vacant(e) => e.insert(iface_creator()),
+            Entry::Vacant(e) => e.insert(ArcInterface(iface_creator())),
             Entry::Occupied(_) => return false,
         };
 
@@ -371,7 +372,7 @@ impl Node {
                     }
 
                     for iface in node.interfaces.values() {
-                        iface.read().await.introspect_to_writer(writer, level + 2);
+                        iface.0.read().await.introspect_to_writer(writer, level + 2);
                     }
                 }
                 Fragment::End { level } => {
