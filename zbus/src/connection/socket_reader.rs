@@ -54,6 +54,7 @@ impl SocketReader {
         loop {
             trace!("Waiting for message on the socket..");
             let msg = self.read_socket().await;
+
             match &msg {
                 Ok(msg) => trace!("Message received on the socket: {:?}", msg),
                 Err(e) => trace!("Error reading from the socket: {:?}", e),

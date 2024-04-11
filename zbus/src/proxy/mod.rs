@@ -309,7 +309,7 @@ impl PropertiesCache {
                 .keep_updated(prop_changes, interface, uncached_properties)
                 .await
             {
-                debug!("Error keeping properties cache updated: {e}");
+                debug!("Error keeping properties cache updated: {}", e);
             }
         };
         #[cfg(feature = "tracing")]
@@ -455,7 +455,8 @@ impl PropertiesCache {
                 Ok(value) => value,
                 Err(e) => {
                     debug!(
-                        "Failed to convert property `{interface}.{property_name}` to OwnedValue: {e}"
+                        "Failed to convert property `{interface}.{property_name}` to OwnedValue: {}",
+                        e
                     );
                     continue;
                 }
@@ -1194,7 +1195,7 @@ impl<'a> SignalStream<'a> {
                         }
                         Some(Either::Right(Err(e))) => {
                             // Probably the name is not owned. Not a problem but let's still log it.
-                            debug!("Failed to get owner of {name}: {e}");
+                            debug!("Failed to get owner of {name}: {}", e);
 
                             break None;
                         }

@@ -39,52 +39,56 @@ mod log {
         };
     }
 
-    pub(crate) use {debug, info, trace, warning};
+    pub(crate) use debug;
+    pub(crate) use info;
+    pub(crate) use trace;
+    pub(crate) use warning;
 }
 
 #[cfg(not(feature = "tracing"))]
 mod log {
-    /// A macro for [`tracing::debug`] that does nothing, because the tracing feature is not
-    /// enabled.
+    /// A macro for `tracing::debug` that does nothing, because the tracing feature is disabled.
     macro_rules! debug {
-        ($first:literal $(, $arg:expr)+$(,)?) => {
-            ()
-        };
-        ($only:literal) => {
-            ()
+        ($first:literal $(, $arg:expr)*$(,)?) => {
+            {
+                #[allow(unused_variables)]
+                let _ = (&$first $(, &$arg)*);
+            }
         };
     }
-    /// A macro for [`tracing::trace`] that does nothing, because the tracing feature is not
-    /// enabled.
+    /// A macro for `tracing::trace` that does nothing, because the tracing feature is disabled.
     macro_rules! trace {
-        ($first:literal $(, $arg:expr)+$(,)?) => {
-            ()
-        };
-        ($only:literal) => {
-            ()
+        ($first:literal $(, $arg:expr)*$(,)?) => {
+            {
+                #[allow(unused_variables)]
+                let _ = (&$first $(, &$arg)*);
+            }
         };
     }
 
-    /// A macro for [`tracing::warn`] that does nothing, because the tracing feature is not enabled.
+    /// A macro for `tracing::warn` that does nothing, because the tracing feature is disabled.
     macro_rules! warning {
-        ($first:literal $(, $arg:expr)+$(,)?) => {
-            ()
-        };
-        ($only:literal) => {
-            ()
+        ($first:literal $(, $arg:expr)*$(,)?) => {
+            {
+                #[allow(unused_variables)]
+                let _ = (&$first $(, &$arg)*);
+            }
         };
     }
-    /// A macro for [`tracing::info`] that does nothing, because the tracing feature is not enabled.
+    /// A macro for `tracing::info` that does nothing, because the tracing feature is disabled.
     macro_rules! info {
-        ($first:literal $(, $arg:expr)+$(,)?) => {
-            ()
-        };
-        ($only:literal) => {
-            ()
+        ($first:literal $(, $arg:expr)*$(,)?) => {
+            {
+                #[allow(unused_variables)]
+                let _ = (&$first $(, &$arg)*);
+            }
         };
     }
 
-    pub(crate) use {debug, info, trace, warning};
+    pub(crate) use debug;
+    pub(crate) use info;
+    pub(crate) use trace;
+    pub(crate) use warning;
 }
 
 pub(crate) use log::*;

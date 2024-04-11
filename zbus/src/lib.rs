@@ -196,8 +196,10 @@ mod tests {
         sync::{mpsc::channel, Arc, Condvar, Mutex},
     };
 
-    use crate::abstractions::logging::{debug, trace};
-    use crate::utils::block_on;
+    use crate::{
+        abstractions::logging::{debug, trace},
+        utils::block_on,
+    };
     use enumflags2::BitFlags;
     use ntest::timeout;
     use test_log::test;
@@ -361,6 +363,7 @@ mod tests {
 
         let body = reply.body();
         assert!(body.signature().map(|s| s == <&str>::signature()).unwrap());
+
         let id: &str = body.deserialize().unwrap();
         debug!("Unique ID of the bus: {}", id);
 
@@ -412,6 +415,7 @@ mod tests {
 
         let body = reply.body();
         assert!(body.signature().map(|s| s == "a{sv}").unwrap());
+
         let hashmap: HashMap<&str, OwnedValue> = body.deserialize().unwrap();
 
         let pid: u32 = (&hashmap["ProcessID"]).try_into().unwrap();
@@ -466,6 +470,7 @@ mod tests {
 
         let body = reply.body();
         assert!(body.signature().map(|s| s == <&str>::signature()).unwrap());
+
         let id: &str = body.deserialize().unwrap();
         debug!("Unique ID of the bus: {}", id);
 

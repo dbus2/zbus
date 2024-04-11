@@ -1040,7 +1040,8 @@ impl Connection {
 
                         executor.spawn(dispatch_future, &task_name).detach();
                     } else {
-                        // If connection is completely gone, no reason to keep running the task anymore.
+                        // If connection is completely gone, no reason to keep running the task
+                        // anymore.
                         trace!("Connection is gone, stopping associated object server task");
                         break;
                     }
