@@ -14,7 +14,6 @@ use std::{
     sync::{Arc, OnceLock, RwLock, RwLockReadGuard},
     task::{Context, Poll},
 };
-use tracing::{debug, info_span, instrument, trace, Instrument};
 
 use zbus_names::{BusName, InterfaceName, MemberName, UniqueName};
 use zvariant::{ObjectPath, OwnedValue, Str, Value};
@@ -24,6 +23,10 @@ use crate::{
     message::{Flags, Message, Sequence, Type},
     AsyncDrop, Connection, Error, Executor, MatchRule, MessageStream, OwnedMatchRule, Result, Task,
 };
+
+use crate::abstractions::logging::{debug, trace};
+#[cfg(feature = "tracing")]
+use tracing::Instrument;
 
 mod builder;
 pub use builder::{Builder, CacheProperties, ProxyDefault};
@@ -258,7 +261,7 @@ enum CachingResult {
 }
 
 impl PropertiesCache {
-    #[instrument(skip_all)]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "trace", skip_all))]
     fn new(
         proxy: PropertiesProxy<'static>,
         interface: InterfaceName<'static>,
@@ -308,8 +311,10 @@ impl PropertiesCache {
             {
                 debug!("Error keeping properties cache updated: {e}");
             }
-        }
-        .instrument(info_span!("{}", task_name));
+        };
+        #[cfg(feature = "tracing")]
+        let proxy_caching = proxy_caching.instrument(tracing::trace_span!("{}", task_name));
+
         let task = executor.spawn(proxy_caching, &task_name);
 
         (cache, task)
@@ -383,7 +388,7 @@ impl PropertiesCache {
     }
 
     // new() runs this in a task it spawns for keeping the cache in sync.
-    #[instrument(skip_all)]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "trace", skip_all))]
     async fn keep_updated(
         &self,
         mut prop_changes: PropertiesChangedStream<'static>,

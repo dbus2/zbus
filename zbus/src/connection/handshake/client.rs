@@ -1,6 +1,6 @@
+use crate::abstractions::logging::{debug, trace};
 use async_trait::async_trait;
 use std::collections::VecDeque;
-use tracing::{debug, instrument, trace};
 
 use sha1::{Digest, Sha1};
 
@@ -88,7 +88,7 @@ impl Client {
 
 #[async_trait]
 impl Handshake for Client {
-    #[instrument(skip(self))]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "trace", skip(self)))]
     async fn perform(mut self) -> Result<Authenticated> {
         trace!("Initializing");
         // The dbus daemon on some platforms requires sending the zero byte as a

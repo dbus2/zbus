@@ -1,5 +1,6 @@
 //! The object server API.
 
+use crate::abstractions::logging::{debug, trace};
 use event_listener::{Event, EventListener};
 use serde::Serialize;
 use std::{
@@ -9,7 +10,6 @@ use std::{
     ops::{Deref, DerefMut},
     sync::Arc,
 };
-use tracing::{debug, instrument, trace};
 
 use static_assertions::assert_impl_all;
 use zbus_names::InterfaceName;
@@ -699,7 +699,10 @@ impl ObjectServer {
         })
     }
 
-    #[instrument(skip(self, connection))]
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(level = "trace", skip(self, connection))
+    )]
     async fn dispatch_method_call_try(
         &self,
         connection: &Connection,
@@ -766,7 +769,10 @@ impl ObjectServer {
         )))
     }
 
-    #[instrument(skip(self, connection))]
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(level = "trace", skip(self, connection))
+    )]
     async fn dispatch_method_call(&self, connection: &Connection, msg: &Message) -> Result<()> {
         match self.dispatch_method_call_try(connection, msg).await {
             Err(e) => {
@@ -791,7 +797,7 @@ impl ObjectServer {
     ///   the caller through the associated server connection.
     ///
     /// Returns an error if the message is malformed, true if it's handled, false otherwise.
-    #[instrument(skip(self))]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "trace", skip(self)))]
     pub(crate) async fn dispatch_message(&self, msg: &Message) -> Result<bool> {
         let conn = self.connection();
         self.dispatch_method_call(&conn, msg).await?;

@@ -9,9 +9,9 @@ use futures_core::stream;
 use futures_util::stream::FusedStream;
 use ordered_stream::{OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
-use tracing::warn;
 
 use crate::{
+    abstractions::logging::warning,
     connection::ConnectionInner,
     message::{Message, Sequence},
     AsyncDrop, Connection, MatchRule, OwnedMatchRule, Result,
@@ -299,7 +299,7 @@ impl AsyncDrop for MessageStream {
 
         if let Some(rule) = self.inner.match_rule.take() {
             if let Err(e) = conn.remove_match(rule).await {
-                warn!("Failed to remove match rule: {}", e);
+                warning!("Failed to remove match rule: {}", e);
             }
         }
     }

@@ -15,7 +15,11 @@ use std::{
     sync::{Arc, OnceLock, Weak},
     task::{Context, Poll},
 };
-use tracing::{debug, info_span, instrument, trace, trace_span, warn, Instrument};
+
+use crate::abstractions::logging::{debug, info, trace, warning};
+#[cfg(feature = "tracing")]
+use tracing::Instrument;
+
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
 use zvariant::ObjectPath;
 
@@ -639,49 +643,52 @@ impl Connection {
         let name_lost_fut = if flags.contains(RequestNameFlags::AllowReplacement) {
             let weak_conn = WeakConnection::from(self);
             let well_known_name = well_known_name.to_owned();
-            Some(
-                async move {
-                    loop {
-                        let signal = lost_stream.next().await;
-                        let inner = match weak_conn.upgrade() {
-                            Some(conn) => conn.inner.clone(),
-                            None => break,
-                        };
 
-                        match signal {
-                            Some(signal) => match signal.args() {
-                                Ok(args) if args.name == well_known_name => {
-                                    tracing::info!(
-                                        "Connection `{}` lost name `{}`",
-                                        // SAFETY: This is bus connection so unique name can't be
-                                        // None.
-                                        inner.unique_name.get().unwrap(),
-                                        well_known_name
-                                    );
-                                    inner.registered_names.lock().await.remove(&well_known_name);
+            let name_request_future = async move {
+                loop {
+                    let signal = lost_stream.next().await;
+                    let inner = match weak_conn.upgrade() {
+                        Some(conn) => conn.inner.clone(),
+                        None => break,
+                    };
 
-                                    break;
-                                }
-                                Ok(_) => (),
-                                Err(e) => warn!("Failed to parse `NameLost` signal: {}", e),
-                            },
-                            None => {
-                                trace!("`NameLost` signal stream closed");
-                                // This is a very strange state we end up in. Now the name is
-                                // question remains in the queue
-                                // forever. Maybe we can do better here but I
-                                // think it's a very unlikely scenario anyway.
-                                //
-                                // Can happen if the connection is lost/dropped but then the whole
-                                // `Connection` instance will go away soon anyway and hence this
-                                // strange state along with it.
+                    match signal {
+                        Some(signal) => match signal.args() {
+                            Ok(args) if args.name == well_known_name => {
+                                info!(
+                                    "Connection `{}` lost name `{}`",
+                                    // SAFETY: This is bus connection so unique name can't be
+                                    // None.
+                                    inner.unique_name.get().unwrap(),
+                                    well_known_name
+                                );
+                                inner.registered_names.lock().await.remove(&well_known_name);
+
                                 break;
                             }
+                            Ok(_) => (),
+                            Err(e) => warning!("Failed to parse `NameLost` signal: {}", e),
+                        },
+                        None => {
+                            trace!("`NameLost` signal stream closed");
+                            // This is a very strange state we end up in. Now the name is
+                            // question remains in the queue
+                            // forever. Maybe we can do better here but I
+                            // think it's a very unlikely scenario anyway.
+                            //
+                            // Can happen if the connection is lost/dropped but then the whole
+                            // `Connection` instance will go away soon anyway and hence this
+                            // strange state along with it.
+                            break;
                         }
                     }
                 }
-                .instrument(info_span!("{}", lost_task_name)),
-            )
+            };
+            #[cfg(feature = "tracing")]
+            let name_request_future =
+                name_request_future.instrument(tracing::trace_span!("{}", lost_task_name));
+
+            Some(name_request_future)
         } else {
             None
         };
@@ -690,43 +697,45 @@ impl Connection {
                 let weak_conn = WeakConnection::from(self);
                 let well_known_name = well_known_name.to_owned();
                 let task_name = format!("monitor name {well_known_name} acquired");
-                let task = self.executor().spawn(
-                    async move {
-                        loop {
-                            let signal = acquired_stream.next().await;
-                            let inner = match weak_conn.upgrade() {
-                                Some(conn) => conn.inner.clone(),
-                                None => break,
-                            };
-                            match signal {
-                                Some(signal) => match signal.args() {
-                                    Ok(args) if args.name == well_known_name => {
-                                        let mut names = inner.registered_names.lock().await;
-                                        if let Some(status) = names.get_mut(&well_known_name) {
-                                            let task = name_lost_fut.map(|fut| {
-                                                inner.executor.spawn(fut, &lost_task_name)
-                                            });
-                                            *status = NameStatus::Owner(task);
 
-                                            break;
-                                        }
-                                        // else the name was released in the meantime. :shrug:
+                let queue_future = async move {
+                    loop {
+                        let signal = acquired_stream.next().await;
+                        let inner = match weak_conn.upgrade() {
+                            Some(conn) => conn.inner.clone(),
+                            None => break,
+                        };
+                        match signal {
+                            Some(signal) => match signal.args() {
+                                Ok(args) if args.name == well_known_name => {
+                                    let mut names = inner.registered_names.lock().await;
+                                    if let Some(status) = names.get_mut(&well_known_name) {
+                                        let task = name_lost_fut
+                                            .map(|fut| inner.executor.spawn(fut, &lost_task_name));
+                                        *status = NameStatus::Owner(task);
+
+                                        break;
                                     }
-                                    Ok(_) => (),
-                                    Err(e) => warn!("Failed to parse `NameAcquired` signal: {}", e),
-                                },
-                                None => {
-                                    trace!("`NameAcquired` signal stream closed");
-                                    // See comment above for similar state in case of `NameLost`
-                                    // stream.
-                                    break;
+                                    // else the name was released in the meantime. :shrug:
                                 }
+                                Ok(_) => (),
+                                Err(e) => {
+                                    warning!("Failed to parse `NameAcquired` signal: {}", e)
+                                }
+                            },
+                            None => {
+                                trace!("`NameAcquired` signal stream closed");
+                                // See comment above for similar state in case of `NameLost`
+                                // stream.
+                                break;
                             }
                         }
                     }
-                    .instrument(info_span!("{}", task_name)),
-                    &task_name,
-                );
+                };
+                #[cfg(feature = "tracing")]
+                let queue_future = queue_future.instrument(tracing::trace_span!("{}", task_name));
+
+                let task = self.executor().spawn(queue_future, &task_name);
 
                 NameStatus::Queued(task)
             }
@@ -943,102 +952,107 @@ impl Connection {
         blocking::ObjectServer::new(self)
     }
 
-    #[instrument(skip(self))]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "trace", skip(self)))]
     pub(crate) fn start_object_server(&self, started_event: Option<Event>) {
         self.inner.object_server_dispatch_task.get_or_init(|| {
             trace!("starting ObjectServer task");
             let weak_conn = WeakConnection::from(self);
 
             let obj_server_task_name = "ObjectServer task";
-            self.inner.executor.spawn(
-                async move {
-                    let mut stream = match weak_conn.upgrade() {
-                        Some(conn) => {
-                            let mut builder = MatchRule::builder().msg_type(Type::MethodCall);
-                            if let Some(unique_name) = conn.unique_name() {
-                                builder = builder.destination(&**unique_name).expect("unique name");
-                            }
-                            let rule = builder.build();
-                            match conn.add_match(rule.into(), None).await {
-                                Ok(stream) => stream,
-                                Err(e) => {
-                                    // Very unlikely but can happen I guess if connection is closed.
-                                    debug!("Failed to create message stream: {}", e);
+            let obj_server_task = async move {
+                let mut stream = match weak_conn.upgrade() {
+                    Some(conn) => {
+                        let mut builder = MatchRule::builder().msg_type(Type::MethodCall);
+                        if let Some(unique_name) = conn.unique_name() {
+                            builder = builder.destination(&**unique_name).expect("unique name");
+                        }
+                        let rule = builder.build();
+                        match conn.add_match(rule.into(), None).await {
+                            Ok(stream) => stream,
+                            Err(e) => {
+                                // Very unlikely but can happen I guess if connection is closed.
+                                debug!("Failed to create message stream: {}", e);
 
-                                    return;
-                                }
+                                return;
                             }
                         }
-                        None => {
-                            trace!("Connection is gone, stopping associated object server task");
-
-                            return;
-                        }
-                    };
-                    if let Some(started_event) = started_event {
-                        started_event.notify(1);
                     }
+                    None => {
+                        trace!("Connection is gone, stopping associated object server task");
 
-                    trace!("waiting for incoming method call messages..");
-                    while let Some(msg) = stream.next().await.and_then(|m| {
-                        if let Err(e) = &m {
-                            debug!("Error while reading from object server stream: {:?}", e);
-                        }
-                        m.ok()
-                    }) {
-                        if let Some(conn) = weak_conn.upgrade() {
-                            let hdr = msg.header();
-                            match hdr.destination() {
-                                // Unique name is already checked by the match rule.
-                                Some(BusName::Unique(_)) | None => (),
-                                Some(BusName::WellKnown(dest)) => {
-                                    let names = conn.inner.registered_names.lock().await;
-                                    // destination doesn't matter if no name has been registered
-                                    // (probably means name it's registered through external means).
-                                    if !names.is_empty() && !names.contains_key(dest) {
-                                        trace!("Got a method call for a different destination: {}", dest);
+                        return;
+                    }
+                };
+                if let Some(started_event) = started_event {
+                    started_event.notify(1);
+                }
 
-                                        continue;
-                                    }
-                                }
-                            }
-                            let member = match hdr.member() {
-                                Some(member) => member,
-                                None => {
-                                    warn!("Got a method call with no `MEMBER` field: {}", msg);
+                trace!("waiting for incoming method call messages..");
+                while let Some(msg) = stream.next().await.and_then(|m| {
+                    if let Err(e) = &m {
+                        debug!("Error while reading from object server stream: {:?}", e);
+                    }
+                    m.ok()
+                }) {
+                    if let Some(conn) = weak_conn.upgrade() {
+                        let hdr = msg.header();
+                        match hdr.destination() {
+                            // Unique name is already checked by the match rule.
+                            Some(BusName::Unique(_)) | None => (),
+                            Some(BusName::WellKnown(dest)) => {
+                                let names = conn.inner.registered_names.lock().await;
+                                // destination doesn't matter if no name has been registered
+                                // (probably means name it's registered through external means).
+                                if !names.is_empty() && !names.contains_key(dest) {
+                                    trace!(
+                                        "Got a method call for a different destination: {}",
+                                        dest
+                                    );
 
                                     continue;
                                 }
-                            };
-                            trace!("Got `{}`. Will spawn a task for dispatch..", msg);
-                            let executor = conn.inner.executor.clone();
-                            let task_name = format!("`{member}` method dispatcher");
-                            executor
-                                .spawn(
-                                    async move {
-                                        trace!("spawned a task to dispatch `{}`.", msg);
-                                        let server = conn.object_server();
-                                        if let Err(e) = server.dispatch_message(&msg).await {
-                                            debug!(
-                                                "Error dispatching message. Message: {:?}, error: {:?}",
-                                                msg, e
-                                            );
-                                        }
-                                    }
-                                    .instrument(trace_span!("{}", task_name)),
-                                    &task_name,
-                                )
-                                .detach();
-                        } else {
-                            // If connection is completely gone, no reason to keep running the task anymore.
-                            trace!("Connection is gone, stopping associated object server task");
-                            break;
+                            }
                         }
+                        let member = match hdr.member() {
+                            Some(member) => member,
+                            None => {
+                                warning!("Got a method call with no `MEMBER` field: {}", msg);
+
+                                continue;
+                            }
+                        };
+                        trace!("Got `{}`. Will spawn a task for dispatch..", msg);
+                        let executor = conn.inner.executor.clone();
+                        let task_name = format!("`{member}` method dispatcher");
+                        let dispatch_future = async move {
+                            trace!("spawned a task to dispatch `{}`.", msg);
+                            let server = conn.object_server();
+                            if let Err(e) = server.dispatch_message(&msg).await {
+                                debug!(
+                                    "Error dispatching message. Message: {:?}, error: {:?}",
+                                    msg, e
+                                );
+                            }
+                        };
+                        #[cfg(feature = "tracing")]
+                        let dispatch_future =
+                            dispatch_future.instrument(tracing::trace_span!("{}", task_name));
+
+                        executor.spawn(dispatch_future, &task_name).detach();
+                    } else {
+                        // If connection is completely gone, no reason to keep running the task anymore.
+                        trace!("Connection is gone, stopping associated object server task");
+                        break;
                     }
                 }
-                .instrument(info_span!("{}", obj_server_task_name)),
-                obj_server_task_name,
-            )
+            };
+            #[cfg(feature = "tracing")]
+            let obj_server_task =
+                obj_server_task.instrument(tracing::trace_span!("{}", obj_server_task_name));
+
+            self.inner
+                .executor
+                .spawn(obj_server_task, obj_server_task_name)
         });
     }
 
@@ -1130,8 +1144,11 @@ impl Connection {
     pub(crate) fn queue_remove_match(&self, rule: OwnedMatchRule) {
         let conn = self.clone();
         let task_name = format!("Remove match `{}`", *rule);
-        let remove_match =
-            async move { conn.remove_match(rule).await }.instrument(trace_span!("{}", task_name));
+
+        let remove_match = async move { conn.remove_match(rule).await };
+        #[cfg(feature = "tracing")]
+        let remove_match = remove_match.instrument(tracing::trace_span!("{}", task_name));
+
         self.inner.executor.spawn(remove_match, &task_name).detach()
     }
 

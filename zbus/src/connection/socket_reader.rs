@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
+use crate::abstractions::logging::{debug, trace};
 use event_listener::Event;
-use tracing::{debug, instrument, trace};
 use zvariant::{
     serialized::{self, Context},
     Endian,
@@ -46,7 +46,10 @@ impl SocketReader {
     }
 
     // Keep receiving messages and put them on the queue.
-    #[instrument(name = "socket reader", skip(self))]
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(level = "trace", name = "socket reader", skip(self))
+    )]
     async fn receive_msg(mut self) {
         loop {
             trace!("Waiting for message on the socket..");
@@ -97,7 +100,7 @@ impl SocketReader {
         }
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "trace"))]
     async fn read_socket(&mut self) -> crate::Result<Message> {
         self.activity_event.notify(usize::MAX);
         let mut bytes = self

@@ -196,11 +196,11 @@ mod tests {
         sync::{mpsc::channel, Arc, Condvar, Mutex},
     };
 
+    use crate::abstractions::logging::{debug, trace};
     use crate::utils::block_on;
     use enumflags2::BitFlags;
     use ntest::timeout;
     use test_log::test;
-    use tracing::{debug, instrument, trace};
 
     use zbus_names::UniqueName;
     use zvariant::{OwnedObjectPath, OwnedValue, Type};
@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     #[timeout(15000)]
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument)]
     fn basic_connection() {
         let connection = blocking::Connection::session()
             .map_err(|e| {
@@ -320,7 +320,7 @@ mod tests {
     }
 
     #[test]
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument)]
     #[timeout(15000)]
     fn freedesktop_api() {
         let connection = blocking::Connection::session()
@@ -430,7 +430,7 @@ mod tests {
         block_on(test_freedesktop_api()).unwrap();
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument)]
     async fn test_freedesktop_api() -> Result<()> {
         let connection = Connection::session().await?;
 
@@ -937,7 +937,7 @@ mod tests {
     #[test(tokio::test(flavor = "multi_thread", worker_threads = 2))]
     // Issue specific to tokio runtime.
     #[cfg(all(unix, feature = "tokio", feature = "p2p"))]
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument)]
     async fn issue_279() {
         // On failure to read from the socket, we were closing the error channel from the sender
         // side and since the underlying tokio API doesn't provide a `close` method on the sender,
@@ -964,7 +964,7 @@ mod tests {
     #[test(tokio::test(flavor = "multi_thread"))]
     // Issue specific to tokio runtime.
     #[cfg(all(unix, feature = "tokio"))]
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument)]
     async fn issue_310() {
         // The issue was we were deadlocking on fetching the new property value after invalidation.
         // This turned out to be caused by us trying to grab a read lock on resource while holding
