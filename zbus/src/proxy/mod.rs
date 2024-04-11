@@ -305,11 +305,11 @@ impl PropertiesCache {
                 }
             };
 
-            if let Err(e) = cache_clone
+            if let Err(_e) = cache_clone
                 .keep_updated(prop_changes, interface, uncached_properties)
                 .await
             {
-                debug!("Error keeping properties cache updated: {e}");
+                debug!("Error keeping properties cache updated: {_e}");
             }
         };
         #[cfg(feature = "tracing")]
@@ -419,7 +419,7 @@ impl PropertiesCache {
         uncached_properties: &HashSet<Str<'_>>,
         changed: &HashMap<&str, Value<'_>>,
         invalidated: Vec<&str>,
-        interface: &InterfaceName<'_>,
+        _interface: &InterfaceName<'_>,
     ) {
         let mut values = self.values.write().expect("lock poisoned");
 
@@ -427,11 +427,11 @@ impl PropertiesCache {
             if uncached_properties.contains(&Str::from(inval)) {
                 debug!(
                     "Ignoring invalidation of uncached property `{}.{}`",
-                    interface, inval
+                    _interface, inval
                 );
                 continue;
             }
-            trace!("Property `{interface}.{inval}` invalidated");
+            trace!("Property `{_interface}.{inval}` invalidated");
 
             if let Some(entry) = values.get_mut(inval) {
                 entry.value = None;
@@ -443,19 +443,19 @@ impl PropertiesCache {
             if uncached_properties.contains(&Str::from(*property_name)) {
                 debug!(
                     "Ignoring update of uncached property `{}.{}`",
-                    interface, property_name
+                    _interface, property_name
                 );
                 continue;
             }
-            trace!("Property `{interface}.{property_name}` updated");
+            trace!("Property `{_interface}.{property_name}` updated");
 
             let entry = values.entry(property_name.to_string()).or_default();
 
             let value = match OwnedValue::try_from(value) {
                 Ok(value) => value,
-                Err(e) => {
+                Err(_e) => {
                     debug!(
-                        "Failed to convert property `{interface}.{property_name}` to OwnedValue: {e}"
+                        "Failed to convert property `{_interface}.{property_name}` to OwnedValue: {_e}"
                     );
                     continue;
                 }
@@ -1192,9 +1192,9 @@ impl<'a> SignalStream<'a> {
                         Some(Either::Right(Ok(response))) => {
                             break Some(response.body().deserialize::<UniqueName<'_>>()?.to_owned())
                         }
-                        Some(Either::Right(Err(e))) => {
+                        Some(Either::Right(Err(_e))) => {
                             // Probably the name is not owned. Not a problem but let's still log it.
-                            debug!("Failed to get owner of {name}: {e}");
+                            debug!("Failed to get owner of {name}: {_e}");
 
                             break None;
                         }

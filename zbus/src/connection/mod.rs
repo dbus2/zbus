@@ -283,7 +283,7 @@ impl Connection {
         if !data.fds().is_empty() && !self.inner.cap_unix_fd {
             return Err(Error::Unsupported);
         }
-        let serial = msg.primary_header().serial_num();
+        let _serial = msg.primary_header().serial_num();
 
         trace!("Sending message: {:?}", msg);
         self.inner.activity_event.notify(usize::MAX);
@@ -304,7 +304,7 @@ impl Connection {
                 )
                 .await?;
         }
-        trace!("Sent message with serial: {}", serial);
+        trace!("Sent message with serial: {}", _serial);
 
         Ok(())
     }
@@ -667,7 +667,7 @@ impl Connection {
                                 break;
                             }
                             Ok(_) => (),
-                            Err(e) => warning!("Failed to parse `NameLost` signal: {}", e),
+                            Err(_e) => warning!("Failed to parse `NameLost` signal: {}", _e),
                         },
                         None => {
                             trace!("`NameLost` signal stream closed");
@@ -719,8 +719,8 @@ impl Connection {
                                     // else the name was released in the meantime. :shrug:
                                 }
                                 Ok(_) => (),
-                                Err(e) => {
-                                    warning!("Failed to parse `NameAcquired` signal: {}", e)
+                                Err(_e) => {
+                                    warning!("Failed to parse `NameAcquired` signal: {}", _e)
                                 }
                             },
                             None => {
@@ -969,9 +969,9 @@ impl Connection {
                         let rule = builder.build();
                         match conn.add_match(rule.into(), None).await {
                             Ok(stream) => stream,
-                            Err(e) => {
+                            Err(_e) => {
                                 // Very unlikely but can happen I guess if connection is closed.
-                                debug!("Failed to create message stream: {}", e);
+                                debug!("Failed to create message stream: {}", _e);
 
                                 return;
                             }
@@ -989,8 +989,8 @@ impl Connection {
 
                 trace!("waiting for incoming method call messages..");
                 while let Some(msg) = stream.next().await.and_then(|m| {
-                    if let Err(e) = &m {
-                        debug!("Error while reading from object server stream: {:?}", e);
+                    if let Err(_e) = &m {
+                        debug!("Error while reading from object server stream: {:?}", _e);
                     }
                     m.ok()
                 }) {
@@ -1027,10 +1027,10 @@ impl Connection {
                         let dispatch_future = async move {
                             trace!("spawned a task to dispatch `{}`.", msg);
                             let server = conn.object_server();
-                            if let Err(e) = server.dispatch_message(&msg).await {
+                            if let Err(_e) = server.dispatch_message(&msg).await {
                                 debug!(
                                     "Error dispatching message. Message: {:?}, error: {:?}",
-                                    msg, e
+                                    msg, _e
                                 );
                             }
                         };

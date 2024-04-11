@@ -164,7 +164,7 @@ impl Handshake for Client {
                     break;
                 }
                 Command::Rejected(_) => debug!("{mechanism} rejected by the server"),
-                Command::Error(e) => debug!("Received error from server: {e}"),
+                Command::Error(_e) => debug!("Received error from server: {_e}"),
                 cmd => {
                     return Err(Error::Handshake(format!(
                         "Unexpected command from server: {cmd}"

@@ -361,8 +361,8 @@ mod tests {
 
         let body = reply.body();
         assert!(body.signature().map(|s| s == <&str>::signature()).unwrap());
-        let id: &str = body.deserialize().unwrap();
-        debug!("Unique ID of the bus: {}", id);
+        let _id: &str = body.deserialize().unwrap();
+        debug!("Unique ID of the bus: {}", _id);
 
         let reply = connection
             .call_method(
@@ -414,13 +414,13 @@ mod tests {
         assert!(body.signature().map(|s| s == "a{sv}").unwrap());
         let hashmap: HashMap<&str, OwnedValue> = body.deserialize().unwrap();
 
-        let pid: u32 = (&hashmap["ProcessID"]).try_into().unwrap();
-        debug!("DBus bus PID: {}", pid);
+        let _pid: u32 = (&hashmap["ProcessID"]).try_into().unwrap();
+        debug!("DBus bus PID: {}", _pid);
 
         #[cfg(unix)]
         {
-            let uid: u32 = (&hashmap["UnixUserID"]).try_into().unwrap();
-            debug!("DBus bus UID: {}", uid);
+            let _uid: u32 = (&hashmap["UnixUserID"]).try_into().unwrap();
+            debug!("DBus bus UID: {}", _uid);
         }
     }
 
@@ -466,8 +466,8 @@ mod tests {
 
         let body = reply.body();
         assert!(body.signature().map(|s| s == <&str>::signature()).unwrap());
-        let id: &str = body.deserialize().unwrap();
-        debug!("Unique ID of the bus: {}", id);
+        let _id: &str = body.deserialize().unwrap();
+        debug!("Unique ID of the bus: {}", _id);
 
         let reply = connection
             .call_method(
@@ -522,13 +522,13 @@ mod tests {
         assert!(body.signature().map(|s| s == "a{sv}").unwrap());
         let hashmap: HashMap<&str, OwnedValue> = body.deserialize().unwrap();
 
-        let pid: u32 = (&hashmap["ProcessID"]).try_into().unwrap();
-        debug!("DBus bus PID: {}", pid);
+        let _pid: u32 = (&hashmap["ProcessID"]).try_into().unwrap();
+        debug!("DBus bus PID: {}", _pid);
 
         #[cfg(unix)]
         {
-            let uid: u32 = (&hashmap["UnixUserID"]).try_into().unwrap();
-            debug!("DBus bus UID: {}", uid);
+            let _uid: u32 = (&hashmap["UnixUserID"]).try_into().unwrap();
+            debug!("DBus bus UID: {}", _uid);
         }
 
         Ok(())

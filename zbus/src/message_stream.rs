@@ -298,8 +298,8 @@ impl AsyncDrop for MessageStream {
         };
 
         if let Some(rule) = self.inner.match_rule.take() {
-            if let Err(e) = conn.remove_match(rule).await {
-                warning!("Failed to remove match rule: {}", e);
+            if let Err(_e) = conn.remove_match(rule).await {
+                warning!("Failed to remove match rule: {}", _e);
             }
         }
     }
