@@ -1,9 +1,10 @@
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
-    fmt::Write,
+    fmt::{self, Write},
     future::Future,
     pin::Pin,
+    sync::Arc,
 };
 
 use async_trait::async_trait;
@@ -12,7 +13,8 @@ use zbus_names::{InterfaceName, MemberName};
 use zvariant::{DynamicType, OwnedValue, Value};
 
 use crate::{
-    fdo, message::Message, object_server::SignalContext, Connection, ObjectServer, Result,
+    async_lock::RwLock, fdo, message::Message, object_server::SignalContext, Connection,
+    ObjectServer, Result,
 };
 use tracing::trace;
 
@@ -130,6 +132,17 @@ pub trait Interface: Any + Send + Sync {
 
     /// Write introspection XML to the writer, with the given indentation level.
     fn introspect_to_writer(&self, writer: &mut dyn Write, level: usize);
+}
+
+/// A newtype for a reference counted Interface trait-object, with a manual Debug impl.
+#[derive(Clone)]
+pub(crate) struct ArcInterface(pub(crate) Arc<RwLock<dyn Interface>>);
+
+impl fmt::Debug for ArcInterface {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Arc<RwLock<dyn Interface>>")
+            .finish_non_exhaustive()
+    }
 }
 
 // Note: while it is possible to implement this without `unsafe`, it currently requires a helper

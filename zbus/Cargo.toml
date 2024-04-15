@@ -47,7 +47,6 @@ zvariant = { path = "../zvariant", version = "4.0.0", default-features = false, 
 zbus_names = { path = "../zbus_names", version = "3.0" }
 zbus_macros = { path = "../zbus_macros", version = "=4.1.2" }
 enumflags2 = { version = "0.7.9", features = ["serde"] }
-derivative = "2.2"
 async-io = { version = "2.3.2", optional = true }
 futures-core = "0.3.30"
 futures-sink = "0.3.30"

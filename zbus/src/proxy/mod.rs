@@ -8,6 +8,7 @@ use ordered_stream::{join as join_streams, FromFuture, Join, OrderedStream, Poll
 use static_assertions::assert_impl_all;
 use std::{
     collections::{HashMap, HashSet},
+    fmt,
     future::Future,
     ops::Deref,
     pin::Pin,
@@ -74,12 +75,20 @@ assert_impl_all!(Proxy<'_>: Send, Sync, Unpin);
 
 /// This is required to avoid having the Drop impl extend the lifetime 'a, which breaks zbus_xmlgen
 /// (and possibly other crates).
-#[derive(derivative::Derivative)]
-#[derivative(Debug)]
 pub(crate) struct ProxyInnerStatic {
-    #[derivative(Debug = "ignore")]
     pub(crate) conn: Connection,
     dest_owner_change_match_rule: OnceLock<OwnedMatchRule>,
+}
+
+impl fmt::Debug for ProxyInnerStatic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ProxyInnerStatic")
+            .field(
+                "dest_owner_change_match_rule",
+                &self.dest_owner_change_match_rule,
+            )
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(Debug)]
@@ -203,8 +212,7 @@ where
 /// A [`stream::Stream`] implementation that yields property change notifications.
 ///
 /// Use [`Proxy::receive_property_changed`] to create an instance of this type.
-#[derive(derivative::Derivative)]
-#[derivative(Debug)]
+#[derive(Debug)]
 pub struct PropertyStream<'a, T> {
     name: &'a str,
     proxy: Proxy<'a>,

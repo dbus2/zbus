@@ -9,8 +9,7 @@ use crate::{
 ///
 /// Just like [`crate::MessageStream`] must be continuously polled, you must continuously iterate
 /// over this type until it's consumed or dropped.
-#[derive(derivative::Derivative, Clone)]
-#[derivative(Debug)]
+#[derive(Debug, Clone)]
 pub struct MessageIterator {
     // Wrap it in an `Option` to ensure the stream is dropped in a `block_on` call. This is needed
     // for tokio because the proxy spawns a task in its `Drop` impl and that needs a runtime
