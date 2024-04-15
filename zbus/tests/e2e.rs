@@ -5,13 +5,24 @@ use std::os::unix::net::UnixStream;
 #[cfg(all(unix, feature = "tokio", feature = "p2p"))]
 use tokio::net::UnixStream;
 
+#[cfg(feature = "tracing")]
+use tracing::debug;
+#[cfg(not(feature = "tracing"))]
+macro_rules! debug {
+    ($lit:literal) => {
+        println!($lit)
+    };
+    ($lit:literal $(, $arg:expr)+) => {
+        println!($lit $(, $arg)+)
+    };
+}
+
 use event_listener::Event;
 use futures_util::{StreamExt, TryStreamExt};
 use ntest::timeout;
 use serde::{Deserialize, Serialize};
 use test_log::test;
 use tokio::sync::mpsc::{channel, Sender};
-use tracing::{debug, instrument};
 use zbus::{
     block_on,
     fdo::{ObjectManager, ObjectManagerProxy},
@@ -199,7 +210,7 @@ enum MyIfaceError {
 
 #[interface(interface = "org.freedesktop.MyIface")]
 impl MyIfaceImpl {
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     async fn ping(&mut self, #[zbus(signal_context)] ctxt: SignalContext<'_>) -> u32 {
         self.count += 1;
         if self.count % 3 == 0 {
@@ -213,32 +224,32 @@ impl MyIfaceImpl {
         self.count
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     async fn quit(&self) {
         debug!("Client asked to quit.");
         self.next_tx.send(NextAction::Quit).await.unwrap();
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     fn test_header(&self, #[zbus(header)] header: Header<'_>) {
         debug!("`TestHeader` called.");
         assert_eq!(header.message_type(), message::Type::MethodCall);
         assert_eq!(header.member().unwrap(), "TestHeader");
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     fn test_error(&self) -> zbus::fdo::Result<()> {
         debug!("`TestError` called.");
         Err(zbus::fdo::Error::Failed("error raised".to_string()))
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     fn test_custom_error(&self) -> Result<(), MyIfaceError> {
         debug!("`TestCustomError` called.");
         Err(MyIfaceError::SomethingWentWrong("oops".to_string()))
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     fn test_single_struct_arg(
         &self,
         arg: ArgStructTest,
@@ -252,7 +263,7 @@ impl MyIfaceImpl {
         Ok(())
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     fn test_single_struct_ret(&self) -> zbus::fdo::Result<ArgStructTest> {
         debug!("`TestSingleStructRet` called.");
         Ok(ArgStructTest {
@@ -261,14 +272,14 @@ impl MyIfaceImpl {
         })
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     #[zbus(out_args("foo", "bar"))]
     fn test_multi_ret(&self) -> zbus::fdo::Result<(i32, String)> {
         debug!("`TestMultiRet` called.");
         Ok((42, String::from("Meaning of life")))
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     fn test_response_notify(
         &self,
         #[zbus(connection)] conn: &Connection,
@@ -294,7 +305,7 @@ impl MyIfaceImpl {
     #[zbus(signal)]
     async fn test_response_notified(ctxt: SignalContext<'_>) -> zbus::Result<()>;
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     async fn test_hashmap_return(&self) -> zbus::fdo::Result<HashMap<String, String>> {
         debug!("`TestHashmapReturn` called.");
         let mut map = HashMap::new();
@@ -304,13 +315,13 @@ impl MyIfaceImpl {
         Ok(map)
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     async fn create_obj(&self, key: String) {
         debug!("`CreateObj` called.");
         self.next_tx.send(NextAction::CreateObj(key)).await.unwrap();
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     async fn create_obj_inside(
         &self,
         #[zbus(object_server)] object_server: &ObjectServer,
@@ -326,7 +337,7 @@ impl MyIfaceImpl {
             .unwrap();
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     async fn destroy_obj(&self, key: String) {
         debug!("`DestroyObj` called.");
         self.next_tx
@@ -336,13 +347,13 @@ impl MyIfaceImpl {
     }
 
     #[cfg(feature = "option-as-array")]
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     async fn optional_args(&self, arg: Option<&str>) -> zbus::fdo::Result<Option<String>> {
         debug!("`OptionalArgs` called.");
         Ok(arg.map(|s| format!("Hello {}", s)))
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     #[zbus(property)]
     fn set_count(&mut self, val: u32) -> zbus::fdo::Result<()> {
         debug!("`Count` setter called.");
@@ -353,21 +364,21 @@ impl MyIfaceImpl {
         Ok(())
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     #[zbus(property)]
     fn count(&self) -> u32 {
         debug!("`Count` getter called.");
         self.count
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     #[zbus(property)]
     async fn hash_map(&self) -> HashMap<String, String> {
         debug!("`HashMap` getter called.");
         self.test_hashmap_return().await.unwrap()
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     #[zbus(property)]
     async fn fail_property(&self) -> zbus::fdo::Result<u32> {
         Err(zbus::fdo::Error::UnknownProperty(
@@ -375,14 +386,14 @@ impl MyIfaceImpl {
         ))
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     #[zbus(property)]
     fn optional_property(&self) -> Optional<u32> {
         debug!("`OptionalAsProp` getter called.");
         Some(42).into()
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     #[zbus(property)]
     fn address_data(&self) -> IP4Adress {
         debug!("`AddressData` getter called.");
@@ -392,7 +403,7 @@ impl MyIfaceImpl {
         }
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     #[zbus(property)]
     fn set_address_data(&self, addr: IP4Adress) {
         debug!("`AddressData` setter called with {:?}", addr);
@@ -400,7 +411,7 @@ impl MyIfaceImpl {
 
     // On the bus, this should return the same value as address_data above. We want to test if
     // this works both ways.
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     #[zbus(property)]
     fn address_data2(&self) -> HashMap<String, OwnedValue> {
         debug!("`AddressData2` getter called.");
@@ -414,19 +425,19 @@ impl MyIfaceImpl {
         map
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     #[zbus(property)]
     fn str_prop(&self) -> String {
         "Hello".to_string()
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     #[zbus(property)]
     fn set_str_prop(&self, str_prop: &str) {
         debug!("`SetStrRef` called with {:?}", str_prop);
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     #[zbus(property)]
     fn ref_prop(&self) -> RefType<'_> {
         RefType {
@@ -434,13 +445,13 @@ impl MyIfaceImpl {
         }
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     #[zbus(property)]
     fn set_ref_prop(&self, ref_type: RefType<'_>) {
         debug!("`SetRefType` called with {:?}", ref_type);
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     fn test_no_reply(&self, #[zbus(header)] header: Header<'_>) {
         debug!("`TestNoReply` called");
         assert_eq!(header.message_type(), zbus::message::Type::MethodCall);
@@ -450,7 +461,7 @@ impl MyIfaceImpl {
             .contains(zbus::message::Flags::NoReplyExpected));
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     fn test_no_autostart(&self, #[zbus(header)] header: Header<'_>) {
         debug!("`TestNoAutostart` called");
         assert_eq!(header.message_type(), zbus::message::Type::MethodCall);
@@ -460,7 +471,7 @@ impl MyIfaceImpl {
             .contains(zbus::message::Flags::NoAutoStart));
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     fn test_interactive_auth(&self, #[zbus(header)] header: Header<'_>) {
         debug!("`TestInteractiveAuth` called");
         assert_eq!(header.message_type(), zbus::message::Type::MethodCall);
@@ -473,14 +484,14 @@ impl MyIfaceImpl {
     #[zbus(signal)]
     async fn alert_count(ctxt: &SignalContext<'_>, val: u32) -> zbus::Result<()>;
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     #[zbus(property)]
     fn emits_changed_default(&self) -> u32 {
         debug!("`EmitsChangedDefault` getter called.");
         self.emits_changed_default
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     #[zbus(property)]
     fn set_emits_changed_default(&mut self, val: u32) -> zbus::fdo::Result<()> {
         debug!("`EmitsChangedDefault` setter called.");
@@ -488,14 +499,14 @@ impl MyIfaceImpl {
         Ok(())
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     #[zbus(property(emits_changed_signal = "true"))]
     fn emits_changed_true(&self) -> u32 {
         debug!("`EmitsChangedTrue` getter called.");
         self.emits_changed_true
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     #[zbus(property)]
     fn set_emits_changed_true(&mut self, val: u32) -> zbus::fdo::Result<()> {
         debug!("`EmitsChangedTrue` setter called.");
@@ -503,14 +514,14 @@ impl MyIfaceImpl {
         Ok(())
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     #[zbus(property(emits_changed_signal = "invalidates"))]
     fn emits_changed_invalidates(&self) -> u32 {
         debug!("`EmitsChangedInvalidates` getter called.");
         self.emits_changed_invalidates
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     #[zbus(property)]
     fn set_emits_changed_invalidates(&mut self, val: u32) -> zbus::fdo::Result<()> {
         debug!("`EmitsChangedInvalidates` setter called.");
@@ -518,14 +529,14 @@ impl MyIfaceImpl {
         Ok(())
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     #[zbus(property(emits_changed_signal = "const"))]
     fn emits_changed_const(&self) -> u32 {
         debug!("`EmitsChangedConst` getter called.");
         self.emits_changed_const
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     #[zbus(property)]
     fn set_emits_changed_const(&mut self, val: u32) -> zbus::fdo::Result<()> {
         debug!("`EmitsChangedConst` setter called.");
@@ -533,14 +544,14 @@ impl MyIfaceImpl {
         Ok(())
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     #[zbus(property(emits_changed_signal = "false"))]
     fn emits_changed_false(&self) -> u32 {
         debug!("`EmitsChangedFalse` getter called.");
         self.emits_changed_false
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
     #[zbus(property)]
     fn set_emits_changed_false(&mut self, val: u32) -> zbus::fdo::Result<()> {
         debug!("`EmitsChangedFalse` setter called.");
@@ -564,7 +575,7 @@ fn check_ipv4_address(address: IP4Adress) {
     );
 }
 
-#[instrument]
+#[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
 async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
     debug!("client side starting..");
     // Use low-level API for `TestResponseNotify` because we need to ensure that the signal is
@@ -926,7 +937,7 @@ fn iface_and_proxy_unix_p2p() {
     block_on(iface_and_proxy_(true));
 }
 
-#[instrument]
+#[cfg_attr(feature = "tracing", tracing::instrument(level = "info"))]
 async fn iface_and_proxy_(#[allow(unused)] p2p: bool) {
     let event = event_listener::Event::new();
     #[cfg(feature = "p2p")]

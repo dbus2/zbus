@@ -1,7 +1,7 @@
 use std::{fmt, path::PathBuf};
 
+use crate::abstractions::logging::trace;
 use futures_util::StreamExt;
-use tracing::trace;
 use xdg_home::home_dir;
 use zvariant::Str;
 

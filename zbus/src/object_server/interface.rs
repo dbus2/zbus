@@ -12,11 +12,11 @@ use zbus::message::Flags;
 use zbus_names::{InterfaceName, MemberName};
 use zvariant::{DynamicType, OwnedValue, Value};
 
+use crate::abstractions::logging::trace;
 use crate::{
     async_lock::RwLock, fdo, message::Message, object_server::SignalContext, Connection,
     ObjectServer, Result,
 };
-use tracing::trace;
 
 /// A helper type returned by [`Interface`] callbacks.
 pub enum DispatchResult<'a> {

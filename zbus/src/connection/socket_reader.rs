@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
+use crate::abstractions::logging::{debug, trace};
 use event_listener::Event;
-use tracing::{debug, instrument, trace};
 use zvariant::{
     serialized::{self, Context},
     Endian,
@@ -46,14 +46,17 @@ impl SocketReader {
     }
 
     // Keep receiving messages and put them on the queue.
-    #[instrument(name = "socket reader", skip(self))]
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(level = "trace", name = "socket reader", skip(self))
+    )]
     async fn receive_msg(mut self) {
         loop {
             trace!("Waiting for message on the socket..");
             let msg = self.read_socket().await;
             match &msg {
-                Ok(msg) => trace!("Message received on the socket: {:?}", msg),
-                Err(e) => trace!("Error reading from the socket: {:?}", e),
+                Ok(_msg) => trace!("Message received on the socket: {:?}", _msg),
+                Err(_e) => trace!("Error reading from the socket: {:?}", _e),
             };
 
             let mut senders = self.senders.lock().await;
@@ -63,8 +66,8 @@ impl SocketReader {
                         match rule.matches(msg) {
                             Ok(true) => (),
                             Ok(false) => continue,
-                            Err(e) => {
-                                debug!("Error matching message against rule: {:?}", e);
+                            Err(_e) => {
+                                debug!("Error matching message against rule: {:?}", _e);
 
                                 continue;
                             }
@@ -72,7 +75,7 @@ impl SocketReader {
                     }
                 }
 
-                if let Err(e) = sender.broadcast_direct(msg.clone()).await {
+                if let Err(_e) = sender.broadcast_direct(msg.clone()).await {
                     // An error would be due to either of these:
                     //
                     // 1. the channel is closed.
@@ -82,7 +85,7 @@ impl SocketReader {
                     trace!(
                         "Error broadcasting message to stream for `{:?}`: {:?}",
                         rule,
-                        e
+                        _e
                     );
                 }
             }
@@ -97,7 +100,7 @@ impl SocketReader {
         }
     }
 
-    #[instrument]
+    #[cfg_attr(feature = "tracing", tracing::instrument(level = "trace"))]
     async fn read_socket(&mut self) -> crate::Result<Message> {
         self.activity_event.notify(usize::MAX);
         let mut bytes = self
