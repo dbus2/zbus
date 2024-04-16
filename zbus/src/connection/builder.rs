@@ -2,14 +2,11 @@
 use async_io::Async;
 use event_listener::Event;
 use static_assertions::assert_impl_all;
+use std::collections::{HashMap, HashSet, VecDeque};
 #[cfg(not(feature = "tokio"))]
 use std::net::TcpStream;
 #[cfg(all(unix, not(feature = "tokio")))]
 use std::os::unix::net::UnixStream;
-use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    sync::Arc,
-};
 #[cfg(feature = "tokio")]
 use tokio::net::TcpStream;
 #[cfg(all(unix, feature = "tokio"))]
@@ -25,7 +22,6 @@ use zvariant::{ObjectPath, Str};
 
 use crate::{
     address::{self, Address},
-    async_lock::RwLock,
     names::{InterfaceName, WellKnownName},
     object_server::{ArcInterface, Interface},
     Connection, Error, Executor, Guid, OwnedGuid, Result,
@@ -312,8 +308,7 @@ impl<'a> Builder<'a> {
     {
         let path = path.try_into().map_err(Into::into)?;
         let entry = self.interfaces.entry(path).or_default();
-        entry.insert(I::name(), ArcInterface(Arc::new(RwLock::new(iface))));
-
+        entry.insert(I::name(), ArcInterface::new(iface));
         Ok(self)
     }
 
@@ -452,9 +447,11 @@ impl<'a> Builder<'a> {
             let object_server = conn.sync_object_server(false, None);
             for (path, interfaces) in self.interfaces {
                 for (name, iface) in interfaces {
-                    let future = object_server
-                        .inner()
-                        .at_ready(path.to_owned(), name, || iface.0);
+                    let iface = iface.clone();
+                    let future =
+                        object_server
+                            .inner()
+                            .at_ready(path.to_owned(), name.clone(), || iface);
                     let added = future.await?;
                     // Duplicates shouldn't happen.
                     assert!(added);

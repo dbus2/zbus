@@ -194,11 +194,9 @@ impl Node {
             path,
             ..Default::default()
         };
-        node.at(Peer::name(), || Arc::new(RwLock::new(Peer)));
-        node.at(Introspectable::name(), || {
-            Arc::new(RwLock::new(Introspectable))
-        });
-        node.at(Properties::name(), || Arc::new(RwLock::new(Properties)));
+        node.at(Peer::name(), || ArcInterface::new(Peer));
+        node.at(Introspectable::name(), || ArcInterface::new(Introspectable));
+        node.at(Properties::name(), || ArcInterface::new(Properties));
 
         node
     }
@@ -258,11 +256,8 @@ impl Node {
         (Some(node), obj_manager_path)
     }
 
-    pub(crate) fn interface_lock(
-        &self,
-        interface_name: InterfaceName<'_>,
-    ) -> Option<Arc<RwLock<dyn Interface>>> {
-        self.interfaces.get(&interface_name).map(|x| x.0.clone())
+    pub(crate) fn interface_lock(&self, interface_name: InterfaceName<'_>) -> Option<ArcInterface> {
+        self.interfaces.get(&interface_name).cloned()
     }
 
     fn remove_interface(&mut self, interface_name: InterfaceName<'static>) -> bool {
@@ -286,10 +281,10 @@ impl Node {
     // already added.
     fn at<F>(&mut self, name: InterfaceName<'static>, iface_creator: F) -> bool
     where
-        F: FnOnce() -> Arc<RwLock<dyn Interface>>,
+        F: FnOnce() -> ArcInterface,
     {
         match self.interfaces.entry(name) {
-            Entry::Vacant(e) => e.insert(ArcInterface(iface_creator())),
+            Entry::Vacant(e) => e.insert(iface_creator()),
             Entry::Occupied(_) => return false,
         };
 
@@ -352,7 +347,11 @@ impl Node {
                     }
 
                     for iface in node.interfaces.values() {
-                        iface.0.read().await.introspect_to_writer(writer, level + 2);
+                        iface
+                            .instance
+                            .read()
+                            .await
+                            .introspect_to_writer(writer, level + 2);
                     }
                 }
                 Fragment::End { level } => {
@@ -400,6 +399,7 @@ impl Node {
     ) -> fdo::Result<HashMap<String, OwnedValue>> {
         self.interface_lock(interface_name)
             .expect("Interface was added but not found")
+            .instance
             .read()
             .await
             .get_all()
@@ -499,7 +499,7 @@ impl ObjectServer {
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
     {
-        self.at_ready(path, I::name(), move || Arc::new(RwLock::new(iface)))
+        self.at_ready(path, I::name(), move || ArcInterface::new(iface))
             .await
     }
 
@@ -514,7 +514,7 @@ impl ObjectServer {
     where
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
-        F: FnOnce() -> Arc<RwLock<dyn Interface + 'static>>,
+        F: FnOnce() -> ArcInterface,
     {
         let path = path.try_into().map_err(Into::into)?;
         let mut root = self.root().write().await;
@@ -647,6 +647,7 @@ impl ObjectServer {
         let lock = node
             .interface_lock(I::name())
             .ok_or(Error::InterfaceNotFound)?
+            .instance
             .clone();
 
         // Ensure what we return can later be dowcasted safely.
@@ -737,22 +738,16 @@ impl ObjectServer {
 
         // Ensure the root lock isn't held while dispatching the message. That
         // way, the object server can be mutated during that time.
-        let iface = {
+        let (iface, with_spawn) = {
             let root = self.root.read().await;
             let node = root
                 .get_child(path)
                 .ok_or_else(|| fdo::Error::UnknownObject(format!("Unknown object '{path}'")))?;
 
-            node.interface_lock(iface_name.as_ref()).ok_or_else(|| {
+            let iface = node.interface_lock(iface_name.as_ref()).ok_or_else(|| {
                 fdo::Error::UnknownInterface(format!("Unknown interface '{iface_name}'"))
-            })?
-        };
-
-        let with_spawn = {
-            trace!("acquiring read lock on interface `{}`", iface_name);
-            let iface = iface.read().await;
-            trace!("acquired read lock on interface `{}`", iface_name);
-            iface.spawn_tasks_for_methods()
+            })?;
+            (iface.instance, iface.spawn_tasks_for_methods)
         };
 
         if with_spawn {
