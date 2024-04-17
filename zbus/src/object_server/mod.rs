@@ -194,9 +194,9 @@ impl Node {
             path,
             ..Default::default()
         };
-        node.at(Peer::name(), || ArcInterface::new(Peer));
-        node.at(Introspectable::name(), || ArcInterface::new(Introspectable));
-        node.at(Properties::name(), || ArcInterface::new(Properties));
+        debug_assert!(node.add_interface(Peer));
+        debug_assert!(node.add_interface(Introspectable));
+        debug_assert!(node.add_interface(Properties));
 
         node
     }
@@ -275,6 +275,23 @@ impl Node {
 
     fn remove_node(&mut self, node: &str) -> bool {
         self.children.remove(node).is_some()
+    }
+
+    fn add_arc_interface(&mut self, name: InterfaceName<'static>, arc_iface: ArcInterface) -> bool {
+        match self.interfaces.entry(name) {
+            Entry::Vacant(e) => {
+                e.insert(arc_iface);
+                true
+            }
+            Entry::Occupied(_) => false,
+        }
+    }
+
+    fn add_interface<I>(&mut self, iface: I) -> bool
+    where
+        I: Interface,
+    {
+        self.add_arc_interface(I::name(), ArcInterface::new(iface))
     }
 
     // Takes a closure so caller can avoid having to create an Arc & RwLock in case interface was
