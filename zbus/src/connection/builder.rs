@@ -300,6 +300,9 @@ impl<'a> Builder<'a> {
     /// interfaces available immediately after the connection is established. Typically, this is
     /// exactly what you'd want. Also in contrast to [`zbus::ObjectServer::at`], this method will
     /// replace any previously added interface with the same name at the same path.
+    ///
+    /// Standard interfaces (Peer, Introspectable, Properties) are added on your behalf. If you
+    /// attempt to add yours, [`Builder::build()`] will fail.
     pub fn serve_at<P, I>(mut self, path: P, iface: I) -> Result<Self>
     where
         I: Interface,
@@ -448,13 +451,13 @@ impl<'a> Builder<'a> {
             for (path, interfaces) in self.interfaces {
                 for (name, iface) in interfaces {
                     let iface = iface.clone();
-                    let future =
-                        object_server
-                            .inner()
-                            .at_ready(path.to_owned(), name.clone(), || iface);
-                    let added = future.await?;
-                    // Duplicates shouldn't happen.
-                    assert!(added);
+                    let added = object_server
+                        .inner()
+                        .at_ready(path.to_owned(), name.clone(), || iface)
+                        .await?;
+                    if !added {
+                        return Err(Error::InterfaceExists(name.clone(), path.to_owned()));
+                    }
                 }
             }
 

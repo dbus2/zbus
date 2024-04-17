@@ -1,7 +1,7 @@
 use static_assertions::assert_impl_all;
 use std::{convert::Infallible, error, fmt, io, sync::Arc};
-use zbus_names::{Error as NamesError, OwnedErrorName};
-use zvariant::Error as VariantError;
+use zbus_names::{Error as NamesError, InterfaceName, OwnedErrorName};
+use zvariant::{Error as VariantError, ObjectPath};
 
 use crate::{
     fdo,
@@ -59,6 +59,8 @@ pub enum Error {
     MissingParameter(&'static str),
     /// Serial number in the message header is 0 (which is invalid).
     InvalidSerial,
+    /// The given interface already exists at the given path.
+    InterfaceExists(InterfaceName<'static>, ObjectPath<'static>),
 }
 
 assert_impl_all!(Error: Send, Sync, Unpin);
@@ -85,6 +87,7 @@ impl PartialEq for Error {
             (Self::NameTaken, Self::NameTaken) => true,
             (Error::InputOutput(_), Self::InputOutput(_)) => false,
             (Self::Failure(s1), Self::Failure(s2)) => s1 == s2,
+            (Self::InterfaceExists(s1, s2), Self::InterfaceExists(o1, o2)) => s1 == o1 && s2 == o2,
             (_, _) => false,
         }
     }
@@ -113,6 +116,7 @@ impl error::Error for Error {
             Error::Failure(_) => None,
             Error::MissingParameter(_) => None,
             Error::InvalidSerial => None,
+            Error::InterfaceExists(_, _) => None,
         }
     }
 }
@@ -147,6 +151,7 @@ impl fmt::Display for Error {
                 write!(f, "Parameter `{}` was not specified but it is required", p)
             }
             Error::InvalidSerial => write!(f, "Serial number in the message header is 0"),
+            Error::InterfaceExists(i, p) => write!(f, "Interface `{i}` already exists at `{p}`"),
         }
     }
 }
@@ -176,6 +181,7 @@ impl Clone for Error {
             Error::Failure(e) => Error::Failure(e.clone()),
             Error::MissingParameter(p) => Error::MissingParameter(p),
             Error::InvalidSerial => Error::InvalidSerial,
+            Error::InterfaceExists(i, p) => Error::InterfaceExists(i.clone(), p.clone()),
         }
     }
 }
