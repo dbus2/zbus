@@ -450,10 +450,9 @@ impl<'a> Builder<'a> {
             let object_server = conn.sync_object_server(false, None);
             for (path, interfaces) in self.interfaces {
                 for (name, iface) in interfaces {
-                    let iface = iface.clone();
                     let added = object_server
                         .inner()
-                        .at_ready(path.to_owned(), name.clone(), || iface)
+                        .add_arc_interface(path.clone(), name.clone(), iface.clone())
                         .await?;
                     if !added {
                         return Err(Error::InterfaceExists(name.clone(), path.to_owned()));

@@ -294,20 +294,6 @@ impl Node {
         self.add_arc_interface(I::name(), ArcInterface::new(iface))
     }
 
-    // Takes a closure so caller can avoid having to create an Arc & RwLock in case interface was
-    // already added.
-    fn at<F>(&mut self, name: InterfaceName<'static>, iface_creator: F) -> bool
-    where
-        F: FnOnce() -> ArcInterface,
-    {
-        match self.interfaces.entry(name) {
-            Entry::Vacant(e) => e.insert(iface_creator()),
-            Entry::Occupied(_) => return false,
-        };
-
-        true
-    }
-
     async fn introspect_to_writer<W: Write + Send>(&self, writer: &mut W) {
         enum Fragment<'a> {
             /// Represent an unclosed node tree, could be further splitted into sub-`Fragment`s
@@ -516,28 +502,25 @@ impl ObjectServer {
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
     {
-        self.at_ready(path, I::name(), move || ArcInterface::new(iface))
+        self.add_arc_interface(path, I::name(), ArcInterface::new(iface))
             .await
     }
 
-    /// Same as `at` but expects an interface already in `Arc<RwLock<dyn Interface>>` form.
-    // FIXME: Better name?
-    pub(crate) async fn at_ready<'node, 'p, P, F>(
-        &'node self,
+    pub(crate) async fn add_arc_interface<'p, P>(
+        &self,
         path: P,
         name: InterfaceName<'static>,
-        iface_creator: F,
+        arc_iface: ArcInterface,
     ) -> Result<bool>
     where
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
-        F: FnOnce() -> ArcInterface,
     {
         let path = path.try_into().map_err(Into::into)?;
         let mut root = self.root().write().await;
         let (node, manager_path) = root.get_child_mut(&path, true);
         let node = node.unwrap();
-        let added = node.at(name.clone(), iface_creator);
+        let added = node.add_arc_interface(name.clone(), arc_iface);
         if added {
             if name == ObjectManager::name() {
                 // Just added an object manager. Need to signal all managed objects under it.
