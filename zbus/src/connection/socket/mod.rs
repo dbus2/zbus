@@ -1,3 +1,8 @@
+#[cfg(feature = "p2p")]
+pub mod channel;
+#[cfg(feature = "p2p")]
+pub use channel::Channel;
+
 mod split;
 pub use split::{BoxedSplit, Split};
 

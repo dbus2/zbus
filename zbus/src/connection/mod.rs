@@ -1691,4 +1691,37 @@ mod p2p_tests {
         )
         .map(|_| ())
     }
+
+    #[test]
+    #[timeout(15000)]
+    fn channel_pair() {
+        crate::utils::block_on(test_channel_pair()).unwrap();
+    }
+
+    async fn test_channel_pair() -> Result<()> {
+        let (server1, client1) = create_channel_pair().await;
+        let (server2, client2) = create_channel_pair().await;
+
+        test_p2p(server1, client1, server2, client2).await
+    }
+
+    async fn create_channel_pair() -> (Connection, Connection) {
+        let (a, b) = socket::Channel::pair();
+
+        let guid = crate::Guid::generate();
+        let conn1 = Builder::authenticated_socket(a, guid.clone())
+            .unwrap()
+            .p2p()
+            .build()
+            .await
+            .unwrap();
+        let conn2 = Builder::authenticated_socket(b, guid)
+            .unwrap()
+            .p2p()
+            .build()
+            .await
+            .unwrap();
+
+        (conn1, conn2)
+    }
 }
