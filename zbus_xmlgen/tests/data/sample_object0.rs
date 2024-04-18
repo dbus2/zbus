@@ -45,6 +45,12 @@ trait SampleInterface0 {
         calypso: &zbus::zvariant::Value<'_>,
     ) -> zbus::Result<()>;
 
+    /// SetWallMessage method
+    fn set_wall_message(&self) -> zbus::Result<()>;
+
+    /// State method
+    fn state(&self) -> zbus::Result<()>;
+
     /// Changed signal
     #[zbus(signal)]
     fn changed(&self, new_value: bool) -> zbus::Result<()>;
@@ -67,6 +73,10 @@ trait SampleInterface0 {
     /// SignalValue signal
     #[zbus(signal)]
     fn signal_value(&self, value: zbus::zvariant::Value<'_>) -> zbus::Result<()>;
+
+    /// State signal
+    #[zbus(signal)]
+    fn state_(&self) -> zbus::Result<()>;
 
     /// Bar property
     #[zbus(property)]
@@ -94,4 +104,16 @@ trait SampleInterface0 {
             std::collections::HashMap<String, zbus::zvariant::OwnedValue>,
         )>,
     >;
+
+    /// State property
+    #[zbus(property)]
+    fn state__(&self) -> zbus::Result<u8>;
+    #[zbus(property)]
+    fn set_state(&self, value: u8) -> zbus::Result<()>;
+
+    /// WallMessage property
+    #[zbus(property)]
+    fn wall_message(&self) -> zbus::Result<u8>;
+    #[zbus(property)]
+    fn set_wall_message_(&self, value: u8) -> zbus::Result<()>;
 }
