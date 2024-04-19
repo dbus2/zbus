@@ -23,14 +23,12 @@ use vsock::VsockStream;
 
 use zvariant::{ObjectPath, Str};
 
-#[cfg(feature = "p2p")]
-use crate::Guid;
 use crate::{
     address::{self, Address},
     async_lock::RwLock,
     names::{InterfaceName, WellKnownName},
     object_server::{ArcInterface, Interface},
-    Connection, Error, Executor, OwnedGuid, Result,
+    Connection, Error, Executor, Guid, OwnedGuid, Result,
 };
 
 use super::{
@@ -52,6 +50,7 @@ enum Target {
     VsockStream(VsockStream),
     Address(Address),
     Socket(Split<Box<dyn ReadHalf>, Box<dyn WriteHalf>>),
+    AuthenticatedSocket(Split<Box<dyn ReadHalf>, Box<dyn WriteHalf>>),
 }
 
 type Interfaces<'a> = HashMap<ObjectPath<'a>, HashMap<InterfaceName<'static>, ArcInterface>>;
@@ -62,8 +61,7 @@ type Interfaces<'a> = HashMap<ObjectPath<'a>, HashMap<InterfaceName<'static>, Ar
 pub struct Builder<'a> {
     target: Option<Target>,
     max_queued: Option<usize>,
-    // This is only set for p2p server case.
-    #[cfg(feature = "p2p")]
+    // This is only set for p2p server case or pre-authenticated sockets.
     guid: Option<Guid<'a>>,
     #[cfg(feature = "p2p")]
     p2p: bool,
@@ -173,6 +171,22 @@ impl<'a> Builder<'a> {
         Self::new(Target::Socket(socket.into()))
     }
 
+    /// Create a builder for a connection that will use the given pre-authenticated socket.
+    ///
+    /// This is similar to [`Builder::socket`], except that the socket is either already
+    /// authenticated or does not require authentication.
+    pub fn authenticated_socket<S, G>(socket: S, guid: G) -> Result<Self>
+    where
+        S: Into<BoxedSplit>,
+        G: TryInto<Guid<'a>>,
+        G::Error: Into<Error>,
+    {
+        let mut builder = Self::new(Target::AuthenticatedSocket(socket.into()));
+        builder.guid = Some(guid.try_into().map_err(Into::into)?);
+
+        Ok(builder)
+    }
+
     /// Specify the mechanisms to use during authentication.
     pub fn auth_mechanisms(mut self, auth_mechanisms: &[AuthMechanism]) -> Self {
         self.auth_mechanisms = Some(VecDeque::from(auth_mechanisms.to_vec()));
@@ -227,6 +241,10 @@ impl<'a> Builder<'a> {
     /// negotiation messages, for peer-to-peer communications after successful creation.
     ///
     /// This method is only available when the `p2p` feature is enabled.
+    ///
+    /// **NOTE:** This method is redundant when using [`Builder::authenticated_socket`] since the
+    /// latter already sets the GUID for the connection and zbus doesn't differentiate between a
+    /// server and a client connection, except for authentication.
     #[cfg(feature = "p2p")]
     pub fn server<G>(mut self, guid: G) -> Result<Self>
     where
@@ -361,41 +379,54 @@ impl<'a> Builder<'a> {
 
     async fn build_(mut self, executor: Executor<'static>) -> Result<Connection> {
         #[allow(unused_mut)]
-        let (mut stream, server_guid) = self.target_connect().await?;
-        #[cfg(feature = "p2p")]
-        let mut auth = match self.guid {
-            None => {
-                // SASL Handshake
-                Authenticated::client(stream, server_guid, self.auth_mechanisms).await?
-            }
-            Some(guid) => {
-                if !self.p2p {
-                    return Err(Error::Unsupported);
-                }
-
-                let creds = stream.read_mut().peer_credentials().await?;
+        let (mut stream, server_guid, authenticated) = self.target_connect().await?;
+        let mut auth = if authenticated {
+            let (socket_read, socket_write) = stream.take();
+            Authenticated {
                 #[cfg(unix)]
-                let client_uid = creds.unix_user_id();
-                #[cfg(windows)]
-                let client_sid = creds.into_windows_sid();
-
-                Authenticated::server(
-                    stream,
-                    guid.to_owned().into(),
-                    #[cfg(unix)]
-                    client_uid,
-                    #[cfg(windows)]
-                    client_sid,
-                    self.auth_mechanisms,
-                    self.cookie_id,
-                    self.cookie_context.unwrap_or_default(),
-                )
-                .await?
+                cap_unix_fd: socket_read.can_pass_unix_fd(),
+                socket_read: Some(socket_read),
+                socket_write,
+                // SAFETY: `server_guid` is provided as arg of `Builder::authenticated_socket`.
+                server_guid: server_guid.unwrap(),
+                already_received_bytes: Some(vec![]),
             }
-        };
+        } else {
+            #[cfg(feature = "p2p")]
+            match self.guid {
+                None => {
+                    // SASL Handshake
+                    Authenticated::client(stream, server_guid, self.auth_mechanisms).await?
+                }
+                Some(guid) => {
+                    if !self.p2p {
+                        return Err(Error::Unsupported);
+                    }
 
-        #[cfg(not(feature = "p2p"))]
-        let mut auth = Authenticated::client(stream, server_guid, self.auth_mechanisms).await?;
+                    let creds = stream.read_mut().peer_credentials().await?;
+                    #[cfg(unix)]
+                    let client_uid = creds.unix_user_id();
+                    #[cfg(windows)]
+                    let client_sid = creds.into_windows_sid();
+
+                    Authenticated::server(
+                        stream,
+                        guid.to_owned().into(),
+                        #[cfg(unix)]
+                        client_uid,
+                        #[cfg(windows)]
+                        client_sid,
+                        self.auth_mechanisms,
+                        self.cookie_id,
+                        self.cookie_context.unwrap_or_default(),
+                    )
+                    .await?
+                }
+            }
+
+            #[cfg(not(feature = "p2p"))]
+            Authenticated::client(stream, server_guid, self.auth_mechanisms).await?
+        };
 
         // SAFETY: `Authenticated` is always built with these fields set to `Some`.
         let socket_read = auth.socket_read.take().unwrap();
@@ -468,7 +499,6 @@ impl<'a> Builder<'a> {
             #[cfg(feature = "p2p")]
             p2p: false,
             max_queued: None,
-            #[cfg(feature = "p2p")]
             guid: None,
             internal_executor: true,
             interfaces: HashMap::new(),
@@ -481,7 +511,9 @@ impl<'a> Builder<'a> {
         }
     }
 
-    async fn target_connect(&mut self) -> Result<(BoxedSplit, Option<OwnedGuid>)> {
+    async fn target_connect(&mut self) -> Result<(BoxedSplit, Option<OwnedGuid>, bool)> {
+        let mut authenticated = false;
+        let mut guid = None;
         // SAFETY: `self.target` is always `Some` from the beginning and this method is only called
         // once.
         let split = match self.target.take().unwrap() {
@@ -498,8 +530,8 @@ impl<'a> Builder<'a> {
             #[cfg(feature = "tokio-vsock")]
             Target::VsockStream(stream) => stream.into(),
             Target::Address(address) => {
-                let guid = address.guid().map(|g| g.to_owned().into());
-                let split = match address.connect().await? {
+                guid = address.guid().map(|g| g.to_owned().into());
+                match address.connect().await? {
                     #[cfg(any(unix, not(feature = "tokio")))]
                     address::transport::Stream::Unix(stream) => stream.into(),
                     address::transport::Stream::Tcp(stream) => stream.into(),
@@ -508,13 +540,17 @@ impl<'a> Builder<'a> {
                         feature = "tokio-vsock"
                     ))]
                     address::transport::Stream::Vsock(stream) => stream.into(),
-                };
-                return Ok((split, guid));
+                }
             }
             Target::Socket(stream) => stream,
+            Target::AuthenticatedSocket(stream) => {
+                authenticated = true;
+                guid = self.guid.take().map(Into::into);
+                stream
+            }
         };
 
-        Ok((split, None))
+        Ok((split, guid, authenticated))
     }
 }
 

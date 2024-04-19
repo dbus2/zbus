@@ -1,3 +1,8 @@
+#[cfg(feature = "p2p")]
+pub mod channel;
+#[cfg(feature = "p2p")]
+pub use channel::Channel;
+
 mod split;
 pub use split::{BoxedSplit, Split};
 
@@ -10,10 +15,22 @@ use async_io::Async;
 use std::io;
 #[cfg(not(feature = "tokio"))]
 use std::sync::Arc;
+use tracing::trace;
 
-use crate::fdo::ConnectionCredentials;
+use crate::{
+    fdo::ConnectionCredentials,
+    message::{
+        header::{MAX_MESSAGE_SIZE, MIN_MESSAGE_SIZE},
+        PrimaryHeader,
+    },
+    padding_for_8_bytes, Message,
+};
 #[cfg(unix)]
-use std::os::fd::{BorrowedFd, OwnedFd};
+use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
+use zvariant::{
+    serialized::{self, Context},
+    Endian,
+};
 
 #[cfg(unix)]
 type RecvmsgResult = io::Result<(usize, Vec<OwnedFd>)>;
@@ -49,11 +66,124 @@ pub trait Socket {
 /// See [`Socket`] for more details.
 #[async_trait::async_trait]
 pub trait ReadHalf: std::fmt::Debug + Send + Sync + 'static {
-    /// Attempt to receive a message from the socket.
+    /// Receive a message on the socket.
+    ///
+    /// This is the higher-level method to receive a full D-Bus message.
+    ///
+    /// The default implementation uses `recvmsg` to receive the message. Implementers should
+    /// override either this or `recvmsg`. Note that if you override this method, zbus will not be
+    /// able perform an authentication handshake and hence will skip the handshake. Therefore your
+    /// implementation will only be useful for pre-authenticated connections or connections that do
+    /// not require authentication.
+    ///
+    /// # Parameters
+    ///
+    /// - `seq`: The sequence number of the message. The returned message should have this sequence.
+    /// - `already_received_bytes`: Sometimes, zbus already received some bytes from the socket
+    ///   belonging to the message (as part of the connection handshake process). This is the buffer
+    ///   containing those bytes (if any). If you're implementing this method, most likely you can
+    ///   safely ignore this parameter.
+    async fn receive_message(
+        &mut self,
+        seq: u64,
+        already_received_bytes: Option<Vec<u8>>,
+    ) -> crate::Result<Message> {
+        let mut bytes =
+            already_received_bytes.unwrap_or_else(|| Vec::with_capacity(MIN_MESSAGE_SIZE));
+        let mut pos = bytes.len();
+        #[cfg(unix)]
+        let mut fds = vec![];
+        if pos < MIN_MESSAGE_SIZE {
+            bytes.resize(MIN_MESSAGE_SIZE, 0);
+            // We don't have enough data to make a proper message header yet.
+            // Some partial read may be in raw_in_buffer, so we try to complete it
+            // until we have MIN_MESSAGE_SIZE bytes
+            //
+            // Given that MIN_MESSAGE_SIZE is 16, this codepath is actually extremely unlikely
+            // to be taken more than once
+            while pos < MIN_MESSAGE_SIZE {
+                let res = self.recvmsg(&mut bytes[pos..]).await?;
+                let len = {
+                    #[cfg(unix)]
+                    {
+                        fds.extend(res.1);
+                        res.0
+                    }
+                    #[cfg(not(unix))]
+                    {
+                        res
+                    }
+                };
+                pos += len;
+                if len == 0 {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::UnexpectedEof,
+                        "failed to receive message",
+                    )
+                    .into());
+                }
+            }
+        }
+
+        let (primary_header, fields_len) = PrimaryHeader::read(&bytes)?;
+        let header_len = MIN_MESSAGE_SIZE + fields_len as usize;
+        let body_padding = padding_for_8_bytes(header_len);
+        let body_len = primary_header.body_len() as usize;
+        let total_len = header_len + body_padding + body_len;
+        if total_len > MAX_MESSAGE_SIZE {
+            return Err(crate::Error::ExcessData);
+        }
+
+        // By this point we have a full primary header, so we know the exact length of the complete
+        // message.
+        bytes.resize(total_len, 0);
+
+        // Now we have an incomplete message; read the rest
+        while pos < total_len {
+            let res = self.recvmsg(&mut bytes[pos..]).await?;
+            let read = {
+                #[cfg(unix)]
+                {
+                    fds.extend(res.1);
+                    res.0
+                }
+                #[cfg(not(unix))]
+                {
+                    res
+                }
+            };
+            pos += read;
+            if read == 0 {
+                return Err(crate::Error::InputOutput(
+                    std::io::Error::new(
+                        std::io::ErrorKind::UnexpectedEof,
+                        "failed to receive message",
+                    )
+                    .into(),
+                ));
+            }
+        }
+
+        // If we reach here, the message is complete; return it
+        let endian = Endian::from(primary_header.endian_sig());
+        let ctxt = Context::new_dbus(endian, 0);
+        #[cfg(unix)]
+        let bytes = serialized::Data::new_fds(bytes, ctxt, fds);
+        #[cfg(not(unix))]
+        let bytes = serialized::Data::new(bytes, ctxt);
+        Message::from_raw_parts(bytes, seq)
+    }
+
+    /// Attempt to receive bytes from the socket.
     ///
     /// On success, returns the number of bytes read as well as a `Vec` containing
     /// any associated file descriptors.
-    async fn recvmsg(&mut self, buf: &mut [u8]) -> RecvmsgResult;
+    ///
+    /// The default implementation simply panics. Implementers must override either `read_message`
+    /// or this method.
+    async fn recvmsg(&mut self, _buf: &mut [u8]) -> RecvmsgResult {
+        unimplemented!("`ReadHalf` implementers must either override `read_message` or `recvmsg`");
+    }
 
     /// Supports passing file descriptors.
     ///
@@ -73,6 +203,38 @@ pub trait ReadHalf: std::fmt::Debug + Send + Sync + 'static {
 /// See [`Socket`] for more details.
 #[async_trait::async_trait]
 pub trait WriteHalf: std::fmt::Debug + Send + Sync + 'static {
+    /// Send a message on the socket.
+    ///
+    /// This is the higher-level method to send a full D-Bus message.
+    ///
+    /// The default implementation uses `sendmsg` to send the message. Implementers should override
+    /// either this or `sendmsg`.
+    async fn send_message(&mut self, msg: &Message) -> crate::Result<()> {
+        let data = msg.data();
+        let serial = msg.primary_header().serial_num();
+
+        trace!("Sending message: {:?}", msg);
+        let mut pos = 0;
+        while pos < data.len() {
+            #[cfg(unix)]
+            let fds = if pos == 0 {
+                data.fds().iter().map(|f| f.as_fd()).collect()
+            } else {
+                vec![]
+            };
+            pos += self
+                .sendmsg(
+                    &data[pos..],
+                    #[cfg(unix)]
+                    &fds,
+                )
+                .await?;
+        }
+        trace!("Sent message with serial: {}", serial);
+
+        Ok(())
+    }
+
     /// Attempt to send a message on the socket
     ///
     /// On success, return the number of bytes written. There may be a partial write, in
@@ -84,11 +246,16 @@ pub trait WriteHalf: std::fmt::Debug + Send + Sync + 'static {
     ///
     /// If the underlying transport does not support transmitting file descriptors, this
     /// will return `Err(ErrorKind::InvalidInput)`.
+    ///
+    /// The default implementation simply panics. Implementers must override either `send_message`
+    /// or this method.
     async fn sendmsg(
         &mut self,
-        buffer: &[u8],
-        #[cfg(unix)] fds: &[BorrowedFd<'_>],
-    ) -> io::Result<usize>;
+        _buffer: &[u8],
+        #[cfg(unix)] _fds: &[BorrowedFd<'_>],
+    ) -> io::Result<usize> {
+        unimplemented!("`WriteHalf` implementers must either override `send_message` or `sendmsg`");
+    }
 
     /// The dbus daemon on `freebsd` and `dragonfly` currently requires sending the zero byte
     /// as a separate message with SCM_CREDS, as part of the `EXTERNAL` authentication on unix
@@ -123,6 +290,14 @@ impl ReadHalf for Box<dyn ReadHalf> {
         (**self).can_pass_unix_fd()
     }
 
+    async fn receive_message(
+        &mut self,
+        seq: u64,
+        already_received_bytes: Option<Vec<u8>>,
+    ) -> crate::Result<Message> {
+        (**self).receive_message(seq, already_received_bytes).await
+    }
+
     async fn recvmsg(&mut self, buf: &mut [u8]) -> RecvmsgResult {
         (**self).recvmsg(buf).await
     }
@@ -134,6 +309,10 @@ impl ReadHalf for Box<dyn ReadHalf> {
 
 #[async_trait::async_trait]
 impl WriteHalf for Box<dyn WriteHalf> {
+    async fn send_message(&mut self, msg: &Message) -> crate::Result<()> {
+        (**self).send_message(msg).await
+    }
+
     async fn sendmsg(
         &mut self,
         buffer: &[u8],
