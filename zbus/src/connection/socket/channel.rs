@@ -120,7 +120,7 @@ async fn self_credentials() -> io::Result<ConnectionCredentials> {
     #[cfg(windows)]
     {
         let sid = crate::win32::ProcessToken::open(None)?.sid()?;
-        creds = creds.set_windows_session_id(sid);
+        creds = creds.set_windows_sid(sid);
     }
 
     Ok(creds)
