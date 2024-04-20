@@ -2,13 +2,16 @@ use std::{
     ffi::{CStr, OsStr},
     io::{Error, ErrorKind},
     net::SocketAddr,
-    os::windows::prelude::OsStrExt,
+    os::windows::{
+        io::{AsRawHandle, FromRawHandle, OwnedHandle, RawHandle},
+        prelude::OsStrExt,
+    },
     ptr,
 };
 
 use windows_sys::Win32::{
     Foundation::{
-        CloseHandle, LocalFree, ERROR_INSUFFICIENT_BUFFER, FALSE, HANDLE, NO_ERROR, WAIT_ABANDONED,
+        LocalFree, ERROR_INSUFFICIENT_BUFFER, FALSE, HANDLE, NO_ERROR, WAIT_ABANDONED,
         WAIT_OBJECT_0,
     },
     NetworkManagement::IpHelper::{GetTcpTable2, MIB_TCPTABLE2, MIB_TCP_STATE_ESTAB},
@@ -31,27 +34,6 @@ use crate::Address;
 #[cfg(not(feature = "tokio"))]
 use uds_windows::UnixStream;
 
-// An owned Windows handle
-pub struct OwnedHandle(HANDLE);
-
-impl OwnedHandle {
-    // SAFETY: since `handle` is just a pointer, it can be given to multiple `OwnedHandle`
-    pub unsafe fn new(handle: HANDLE) -> Self {
-        Self(handle)
-    }
-
-    #[inline]
-    pub fn get(&self) -> HANDLE {
-        self.0
-    }
-}
-
-impl Drop for OwnedHandle {
-    fn drop(&mut self) {
-        unsafe { CloseHandle(self.0) };
-    }
-}
-
 struct Mutex(OwnedHandle);
 
 impl Mutex {
@@ -64,11 +46,13 @@ impl Mutex {
         let handle = unsafe { CreateMutexW(ptr::null_mut(), FALSE, name_wide.as_ptr()) };
 
         // SAFETY: We have exclusive ownership over the mutex handle
-        Ok(Self(unsafe { OwnedHandle::new(handle) }))
+        Ok(Self(unsafe {
+            OwnedHandle::from_raw_handle(handle as RawHandle)
+        }))
     }
 
     pub fn lock(&self) -> MutexGuard<'_> {
-        match unsafe { WaitForSingleObject(self.0.get(), INFINITE) } {
+        match unsafe { WaitForSingleObject(self.0.as_raw_handle() as isize, INFINITE) } {
             WAIT_ABANDONED | WAIT_OBJECT_0 => MutexGuard(self),
             err => panic!("WaitForSingleObject() failed: return code {}", err),
         }
@@ -79,7 +63,7 @@ struct MutexGuard<'a>(&'a Mutex);
 
 impl Drop for MutexGuard<'_> {
     fn drop(&mut self) {
-        unsafe { ReleaseMutex(self.0 .0.get()) };
+        unsafe { ReleaseMutex(self.0 .0.as_raw_handle() as isize) };
     }
 }
 
@@ -102,7 +86,9 @@ impl ProcessHandle {
             Err(Error::last_os_error())
         } else {
             // SAFETY: We have exclusive ownership over the process handle
-            Ok(Self(unsafe { OwnedHandle::new(process) }))
+            Ok(Self(unsafe {
+                OwnedHandle::from_raw_handle(process as RawHandle)
+            }))
         }
     }
 }
@@ -123,7 +109,7 @@ impl ProcessToken {
 
         if unsafe {
             OpenProcessToken(
-                process.0.get(),
+                process.0.as_raw_handle() as isize,
                 TOKEN_QUERY,
                 ptr::addr_of_mut!(process_token),
             ) == 0
@@ -131,7 +117,9 @@ impl ProcessToken {
             Err(Error::last_os_error())
         } else {
             // SAFETY: We have exclusive ownership over the process handle
-            Ok(Self(unsafe { OwnedHandle::new(process_token) }))
+            Ok(Self(unsafe {
+                OwnedHandle::from_raw_handle(process_token as RawHandle)
+            }))
         }
     }
 
@@ -145,7 +133,7 @@ impl ProcessToken {
 
             let result = unsafe {
                 GetTokenInformation(
-                    self.0.get(),
+                    self.0.as_raw_handle() as isize,
                     TokenUser,
                     token_info.as_mut_ptr().cast(),
                     len,
@@ -299,7 +287,7 @@ fn read_shm(name: &str) -> Result<Vec<u8>, crate::Error> {
 
         if res != 0 {
             // SAFETY: We have exclusive ownership over the file mapping handle
-            unsafe { OwnedHandle::new(res) }
+            unsafe { OwnedHandle::from_raw_handle(res as RawHandle) }
         } else {
             return Err(crate::Error::Address(
                 "Unable to open shared memory".to_owned(),
@@ -307,7 +295,7 @@ fn read_shm(name: &str) -> Result<Vec<u8>, crate::Error> {
         }
     };
 
-    let addr = unsafe { MapViewOfFile(handle.get(), FILE_MAP_READ, 0, 0, 0) };
+    let addr = unsafe { MapViewOfFile(handle.as_raw_handle() as isize, FILE_MAP_READ, 0, 0, 0) };
 
     if addr.Value.is_null() {
         return Err(crate::Error::Address("MapViewOfFile() failed".to_owned()));
