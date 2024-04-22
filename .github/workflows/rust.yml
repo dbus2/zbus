@@ -113,25 +113,11 @@ jobs:
             c:/lib/*dbus*
             c:/bin/*pkg-config*
             c:/var/lib/*dbus*
-            c:/lib/*glib*
-            c:/lib/*gio*
-            c:/lib/*gobject*
-            c:/lib/*gmodule*
-            c:/lib/*gthread*
-            c:/lib/*gspawn*
-            c:/lib/*gresource*
             c:/lib/*pcre*
             c:/lib/*z*
             c:/lib/*ffi*
             c:/lib/*intl*
             c:/lib/*pkgconfig*
-            c:/bin/*glib*
-            c:/bin/*gio*
-            c:/bin/*gobject*
-            c:/bin/*gmodule*
-            c:/bin/*gthread*
-            c:/bin/*gspawn*
-            c:/bin/*gresource*
             c:/bin/*pcre*
             c:/bin/*z*
             c:/bin/*ffi*
@@ -154,17 +140,6 @@ jobs:
       - name: Setup MSVC Environment
         if: steps.cache-deps.outputs.cache-hit != 'true'
         uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Build & Install GLib
-        if: steps.cache-deps.outputs.cache-hit != 'true'
-        run: |
-          (New-Object System.Net.WebClient).DownloadString('https://wrapdb.mesonbuild.com/v2/pcre_8.37-2/get_patch') >$null
-          (New-Object System.Net.WebClient).DownloadString('https://zlib.net/fossils/') >$null
-          git clone --depth 1 --branch 2.74.1 https://gitlab.gnome.org/GNOME/glib.git \glib
-          cd -Path \glib
-          meson setup builddir
-          meson compile -C builddir
-          meson install --no-rebuild -C builddir
 
       - name: Build & Install libexpat
         if: steps.cache-deps.outputs.cache-hit != 'true'
