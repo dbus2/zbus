@@ -97,8 +97,6 @@ jobs:
       RUST_LOG: trace
       PKG_CONFIG: C:\bin\pkg-config.exe
       PKG_CONFIG_PATH: C:\lib\pkgconfig
-      DBUS_SESSION_BUS_ADDRESS: tcp:host=127.0.0.1,port=9876
-      ZBUS_GDBUS_TEST: 1
     steps:
       - uses: actions/checkout@v4
 
@@ -194,21 +192,10 @@ jobs:
       - name: Test
         run: |
           $env:PATH += ";C:\bin"
-          Start-Process dbus-daemon.exe --config-file=CI/win32-session.conf
+          Start-Process dbus-daemon.exe '--config-file=CI/win32-session.conf --address=autolaunch:'
           cargo --locked test
           # tokio feature
           cargo --locked test --no-default-features --features tokio
-
-      - name: Test gdbus feature
-        run: |
-          $env:DBUS_SESSION_BUS_ADDRESS = $null
-          $env:PATH += ";C:\bin"
-          # This is an undocumented implementation detail, but easier and faster than calling the gdbus C library
-          Start-Process gdbus.exe _win32_run_session_bus
-          # The gdbus process above will exit when idle for more than three seconds, usually right in the middle
-          # of the doc tests. This process will keep it alive.
-          Start-Process gdbus.exe 'monitor -e -d org.freedesktop.DBus'
-          cargo --locked test --features zbus/windows-gdbus
 
   zvariant_fuzz:
     runs-on: ubuntu-latest

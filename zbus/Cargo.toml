@@ -24,7 +24,6 @@ option-as-array = ["zvariant/option-as-array"]
 bus-impl = ["p2p"]
 # Enables API that is only needed for peer-to-peer (p2p) connections.
 p2p = []
-windows-gdbus = []
 async-io = [
   "dep:async-io",
   "async-executor",
