@@ -305,7 +305,7 @@ fn read_shm(name: &str) -> Result<Vec<u8>, crate::Error> {
     Ok(data.to_bytes().to_owned())
 }
 
-pub fn windows_autolaunch_bus_address() -> Result<Address, crate::Error> {
+pub fn autolaunch_bus_address() -> Result<Address, crate::Error> {
     let mutex = Mutex::new("DBusAutolaunchMutex")?;
     let _guard = mutex.lock();
 
