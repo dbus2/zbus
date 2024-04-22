@@ -130,10 +130,6 @@ tick any executors etc. 😼
 **Note**: On Windows, the `async-io` feature is currently required for UNIX domain socket support,
 see [the corresponding tokio issue on GitHub][tctiog].
 
-**Note:** On Windows, there is no standard implicit way to connect to a session bus. zbus provides
-opt-in compatibility to the GDBus session bus discovery mechanism via the `windows-gdbus` feature.
-This mechanism uses a machine-wide mutex however, so only one GDBus session bus can run at a time.
-
 [zbus]: https://github.com/dbus2/zbus\#readme
 [bw]: https://docs.rs/zbus/latest/zbus/blocking/index.html
 [iektc]: https://docs.rs/zbus/latest/zbus/connection/struct.Connection.html#examples-1

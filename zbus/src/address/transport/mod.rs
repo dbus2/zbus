@@ -3,7 +3,7 @@
 //! This module provides the trasport information for D-Bus addresses.
 
 #[cfg(windows)]
-use crate::win32::windows_autolaunch_bus_address;
+use crate::win32::autolaunch_bus_address;
 use crate::{Error, Result};
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
@@ -194,7 +194,7 @@ impl Transport {
                     "Autolaunch scopes are currently unsupported".to_owned(),
                 )),
                 None => {
-                    let addr = windows_autolaunch_bus_address()?;
+                    let addr = autolaunch_bus_address()?;
                     addr.connect().await
                 }
             },

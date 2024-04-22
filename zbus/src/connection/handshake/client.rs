@@ -177,19 +177,10 @@ impl Handshake for Client {
         if can_pass_fd {
             commands.push(Command::NegotiateUnixFD);
         };
+        commands.push(Command::Begin);
 
-        let expected_n_responses;
-        // `gdbus` is unable to handle multiple commands in a single message, it seems.
-        #[cfg(not(all(windows, feature = "windows-gdbus")))]
-        {
-            commands.push(Command::Begin);
-            // Server replies to all commands except `BEGIN`.
-            expected_n_responses = commands.len() - 1;
-        }
-        #[cfg(all(windows, feature = "windows-gdbus"))]
-        {
-            expected_n_responses = commands.len();
-        }
+        // Server replies to all commands except `BEGIN`.
+        let expected_n_responses = commands.len() - 1;
         self.common.write_commands(&commands).await?;
 
         if expected_n_responses > 0 {
@@ -214,9 +205,6 @@ impl Handshake for Client {
                 }
             }
         }
-
-        #[cfg(all(windows, feature = "windows-gdbus"))]
-        self.common.write_command(Command::Begin).await?;
 
         trace!("Handshake done");
         #[allow(unused_variables)]

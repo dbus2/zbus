@@ -18,10 +18,6 @@ more appropriate for your use case.
 all `session()` share the same underlying connection for example. At the time of this writing,
 zbus doesn't do that.
 
-**Note:** on Windows, there is no standard implicit way to connect to a session bus. zbus provides
-opt-in compatibility to the GDBus session bus discovery mechanism via the `windows-gdbus` feature.
-This mechanism uses a machine-wide mutex however, so only one GDBus session bus can run at a time.
-
 **Note:** on macOS, there is no standard implicit way to connect to a session bus. zbus provides
 opt-in compatibility to the Launchd session bus discovery mechanism via the `launchctl getenv` feature.
 The official dbus installation method via `Homebrew` provides a session bus installation,

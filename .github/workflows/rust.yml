@@ -97,8 +97,6 @@ jobs:
       RUST_LOG: trace
       PKG_CONFIG: C:\bin\pkg-config.exe
       PKG_CONFIG_PATH: C:\lib\pkgconfig
-      DBUS_SESSION_BUS_ADDRESS: tcp:host=127.0.0.1,port=9876
-      ZBUS_GDBUS_TEST: 1
     steps:
       - uses: actions/checkout@v4
 
@@ -115,25 +113,11 @@ jobs:
             c:/lib/*dbus*
             c:/bin/*pkg-config*
             c:/var/lib/*dbus*
-            c:/lib/*glib*
-            c:/lib/*gio*
-            c:/lib/*gobject*
-            c:/lib/*gmodule*
-            c:/lib/*gthread*
-            c:/lib/*gspawn*
-            c:/lib/*gresource*
             c:/lib/*pcre*
             c:/lib/*z*
             c:/lib/*ffi*
             c:/lib/*intl*
             c:/lib/*pkgconfig*
-            c:/bin/*glib*
-            c:/bin/*gio*
-            c:/bin/*gobject*
-            c:/bin/*gmodule*
-            c:/bin/*gthread*
-            c:/bin/*gspawn*
-            c:/bin/*gresource*
             c:/bin/*pcre*
             c:/bin/*z*
             c:/bin/*ffi*
@@ -156,17 +140,6 @@ jobs:
       - name: Setup MSVC Environment
         if: steps.cache-deps.outputs.cache-hit != 'true'
         uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Build & Install GLib
-        if: steps.cache-deps.outputs.cache-hit != 'true'
-        run: |
-          (New-Object System.Net.WebClient).DownloadString('https://wrapdb.mesonbuild.com/v2/pcre_8.37-2/get_patch') >$null
-          (New-Object System.Net.WebClient).DownloadString('https://zlib.net/fossils/') >$null
-          git clone --depth 1 --branch 2.74.1 https://gitlab.gnome.org/GNOME/glib.git \glib
-          cd -Path \glib
-          meson setup builddir
-          meson compile -C builddir
-          meson install --no-rebuild -C builddir
 
       - name: Build & Install libexpat
         if: steps.cache-deps.outputs.cache-hit != 'true'
@@ -194,21 +167,10 @@ jobs:
       - name: Test
         run: |
           $env:PATH += ";C:\bin"
-          Start-Process dbus-daemon.exe --config-file=CI/win32-session.conf
+          Start-Process dbus-daemon.exe '--config-file=CI/win32-session.conf --address=autolaunch:'
           cargo --locked test
           # tokio feature
           cargo --locked test --no-default-features --features tokio
-
-      - name: Test gdbus feature
-        run: |
-          $env:DBUS_SESSION_BUS_ADDRESS = $null
-          $env:PATH += ";C:\bin"
-          # This is an undocumented implementation detail, but easier and faster than calling the gdbus C library
-          Start-Process gdbus.exe _win32_run_session_bus
-          # The gdbus process above will exit when idle for more than three seconds, usually right in the middle
-          # of the doc tests. This process will keep it alive.
-          Start-Process gdbus.exe 'monitor -e -d org.freedesktop.DBus'
-          cargo --locked test --features zbus/windows-gdbus
 
   zvariant_fuzz:
     runs-on: ubuntu-latest

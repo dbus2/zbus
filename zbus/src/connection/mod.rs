@@ -1300,11 +1300,11 @@ mod tests {
     use ntest::timeout;
     use test_log::test;
 
-    #[cfg(all(windows, feature = "windows-gdbus"))]
+    #[cfg(windows)]
     #[test]
-    fn connect_gdbus_session_bus() {
-        let addr = crate::win32::windows_autolaunch_bus_address()
-            .expect("Unable to get GDBus session bus address");
+    fn connect_autolaunch_session_bus() {
+        let addr =
+            crate::win32::autolaunch_bus_address().expect("Unable to get session bus address");
 
         crate::block_on(async { addr.connect().await }).expect("Unable to connect to session bus");
     }
