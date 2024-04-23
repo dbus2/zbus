@@ -344,7 +344,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn interface(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr);
-    let input = syn::parse_macro_input!(item as ItemImpl);
+    let input = parse_macro_input!(item as ItemImpl);
     iface::expand::<iface::TraitAttributes, iface::MethodAttributes>(args, input)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
@@ -354,7 +354,7 @@ pub fn interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr);
-    let input = syn::parse_macro_input!(item as ItemImpl);
+    let input = parse_macro_input!(item as ItemImpl);
     iface::expand::<iface::old::TraitAttributes, iface::old::MethodAttributes>(args, input)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
