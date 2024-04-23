@@ -4,6 +4,8 @@ use tracing::{debug, instrument, trace};
 
 use sha1::{Digest, Sha1};
 
+use crate::Message;
+
 use super::{
     random_ascii, sasl_auth_id, AuthMechanism, Authenticated, BoxedSplit, Command, Common, Cookie,
     Error, Handshake, OwnedGuid, Result, Str,
@@ -17,6 +19,7 @@ use super::{
 pub struct Client {
     common: Common,
     server_guid: Option<OwnedGuid>,
+    bus: bool,
 }
 
 impl Client {
@@ -25,6 +28,7 @@ impl Client {
         socket: BoxedSplit,
         mechanisms: Option<VecDeque<AuthMechanism>>,
         server_guid: Option<OwnedGuid>,
+        bus: bool,
     ) -> Client {
         let mechanisms = mechanisms.unwrap_or_else(|| {
             let mut mechanisms = VecDeque::new();
@@ -37,6 +41,7 @@ impl Client {
         Client {
             common: Common::new(socket, mechanisms),
             server_guid,
+            bus,
         }
     }
 
@@ -178,10 +183,26 @@ impl Handshake for Client {
             commands.push(Command::NegotiateUnixFD);
         };
         commands.push(Command::Begin);
+        let hello_method = if self.bus {
+            Some(
+                Message::method("/org/freedesktop/DBus", "Hello")
+                    .unwrap()
+                    .destination("org.freedesktop.DBus")
+                    .unwrap()
+                    .interface("org.freedesktop.DBus")
+                    .unwrap()
+                    .build(&())
+                    .unwrap(),
+            )
+        } else {
+            None
+        };
 
         // Server replies to all commands except `BEGIN`.
         let expected_n_responses = commands.len() - 1;
-        self.common.write_commands(&commands).await?;
+        self.common
+            .write_commands(&commands, hello_method.as_ref().map(|m| &**m.data()))
+            .await?;
 
         if expected_n_responses > 0 {
             for response in self.common.read_commands(expected_n_responses).await? {
@@ -209,14 +230,31 @@ impl Handshake for Client {
         trace!("Handshake done");
         #[allow(unused_variables)]
         let (socket, recv_buffer, cap_unix_fd, _) = self.common.into_components();
-        let (read, write) = socket.take();
+        let (mut read, write) = socket.take();
+
+        // If we're a bus connection, we need to read the unique name from `Hello` response.
+        let (unique_name, already_received_bytes) = if self.bus {
+            use crate::message::Type;
+
+            let reply = read.receive_message(0, Some(recv_buffer)).await?;
+            let unique_name = match reply.message_type() {
+                Type::MethodReturn => reply.body().deserialize()?,
+                Type::Error => return Err(Error::from(reply)),
+                m => return Err(Error::Handshake(format!("Unexpected messgage `{m:?}`"))),
+            };
+            (Some(unique_name), None)
+        } else {
+            (None, Some(recv_buffer))
+        };
+
         Ok(Authenticated {
             socket_write: write,
             socket_read: Some(read),
             server_guid: self.server_guid.unwrap(),
             #[cfg(unix)]
             cap_unix_fd,
-            already_received_bytes: Some(recv_buffer),
+            already_received_bytes,
+            unique_name,
         })
     }
 }

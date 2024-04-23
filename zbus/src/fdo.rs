@@ -57,8 +57,7 @@ impl Introspectable {
         let path = header.path().ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
         let node = root
-            .get_child(path, false)
-            .0
+            .get_child(path)
             .ok_or_else(|| Error::UnknownObject(format!("Unknown object '{path}'")))?;
 
         Ok(node.introspect().await)
@@ -129,8 +128,7 @@ impl Properties {
         let path = header.path().ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
         let iface = root
-            .get_child(path, false)
-            .0
+            .get_child(path)
             .and_then(|node| node.interface_lock(interface_name.as_ref()))
             .ok_or_else(|| {
                 Error::UnknownInterface(format!("Unknown interface '{interface_name}'"))
@@ -156,8 +154,7 @@ impl Properties {
         let path = header.path().ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
         let iface = root
-            .get_child(path, false)
-            .0
+            .get_child(path)
             .and_then(|node| node.interface_lock(interface_name.as_ref()))
             .ok_or_else(|| {
                 Error::UnknownInterface(format!("Unknown interface '{interface_name}'"))
@@ -195,8 +192,7 @@ impl Properties {
         let path = header.path().ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
         let iface = root
-            .get_child(path, false)
-            .0
+            .get_child(path)
             .and_then(|node| node.interface_lock(interface_name.as_ref()))
             .ok_or_else(|| {
                 Error::UnknownInterface(format!("Unknown interface '{interface_name}'"))
@@ -297,8 +293,7 @@ impl ObjectManager {
         let path = header.path().ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
         let node = root
-            .get_child(path, false)
-            .0
+            .get_child(path)
             .ok_or_else(|| Error::UnknownObject(format!("Unknown object '{path}'")))?;
 
         node.get_managed_objects().await
@@ -1106,8 +1101,13 @@ mod tests {
         // Let's first create an interator to get the signals (it has to be another connection).
         let conn = blocking::Connection::session().unwrap();
         let mut iterator = blocking::MessageIterator::for_match_rule(
-            "type='signal',interface='org.freedesktop.DBus.ObjectManager',\
-            path='/org/zbus/NoObjectManagerSignalsBeforeHello'",
+            zbus::MatchRule::builder()
+                .msg_type(zbus::MessageType::Signal)
+                .interface("org.freedesktop.DBus.ObjectManager")
+                .unwrap()
+                .path("/org/zbus/NoObjectManagerSignalsBeforeHello")
+                .unwrap()
+                .build(),
             &conn,
             None,
         )

@@ -1,8 +1,9 @@
 use async_trait::async_trait;
+use sha1::{Digest, Sha1};
 use std::collections::VecDeque;
 use tracing::{instrument, trace};
 
-use sha1::{Digest, Sha1};
+use crate::names::OwnedUniqueName;
 
 use super::{
     random_ascii, sasl_auth_id, AuthMechanism, Authenticated, BoxedSplit, Command, Common, Cookie,
@@ -36,6 +37,7 @@ pub struct Server<'s> {
     client_sid: Option<String>,
     cookie_id: Option<usize>,
     cookie_context: CookieContext<'s>,
+    unique_name: Option<OwnedUniqueName>,
 }
 
 impl<'s> Server<'s> {
@@ -47,6 +49,7 @@ impl<'s> Server<'s> {
         mechanisms: Option<VecDeque<AuthMechanism>>,
         cookie_id: Option<usize>,
         cookie_context: CookieContext<'s>,
+        unique_name: Option<OwnedUniqueName>,
     ) -> Result<Server<'s>> {
         let mechanisms = match mechanisms {
             Some(mechanisms) => mechanisms,
@@ -68,6 +71,7 @@ impl<'s> Server<'s> {
             cookie_id,
             cookie_context,
             guid,
+            unique_name,
         })
     }
 
@@ -288,6 +292,7 @@ impl Handshake for Server<'_> {
                         #[cfg(unix)]
                         cap_unix_fd,
                         already_received_bytes: Some(recv_buffer),
+                        unique_name: self.unique_name,
                     });
                 }
             }

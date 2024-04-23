@@ -22,13 +22,13 @@ impl SocketReader {
     pub fn new(
         socket: Box<dyn ReadHalf>,
         senders: Arc<Mutex<HashMap<Option<OwnedMatchRule>, MsgBroadcaster>>>,
-        already_received_bytes: Vec<u8>,
+        already_received_bytes: Option<Vec<u8>>,
         activity_event: Arc<Event>,
     ) -> Self {
         Self {
             socket,
             senders,
-            already_received_bytes: Some(already_received_bytes),
+            already_received_bytes,
             prev_seq: 0,
             activity_event,
         }

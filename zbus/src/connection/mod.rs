@@ -794,10 +794,7 @@ impl Connection {
         U::Error: Into<Error>,
     {
         let name = unique_name.try_into().map_err(Into::into)?;
-        self.inner
-            .unique_name
-            .set(name)
-            .expect("unique name already set");
+        self.set_unique_name_(name);
 
         Ok(())
     }
@@ -1113,22 +1110,6 @@ impl Connection {
         self.inner.executor.spawn(remove_match, &task_name).detach()
     }
 
-    pub(crate) async fn hello_bus(&self) -> Result<()> {
-        let dbus_proxy = fdo::DBusProxy::builder(self)
-            .cache_properties(CacheProperties::No)
-            .build()
-            .await?;
-        let name = dbus_proxy.hello().await?;
-
-        self.inner
-            .unique_name
-            .set(name)
-            // programmer (probably our) error if this fails.
-            .expect("Attempted to set unique_name twice");
-
-        Ok(())
-    }
-
     pub(crate) async fn new(
         auth: Authenticated,
         #[allow(unused)] bus_connection: bool,
@@ -1186,6 +1167,10 @@ impl Connection {
             }),
         };
 
+        if let Some(unique_name) = auth.unique_name {
+            connection.set_unique_name_(unique_name);
+        }
+
         Ok(connection)
     }
 
@@ -1240,7 +1225,7 @@ impl Connection {
     pub(crate) fn init_socket_reader(
         &self,
         socket_read: Box<dyn socket::ReadHalf>,
-        already_read: Vec<u8>,
+        already_read: Option<Vec<u8>>,
     ) {
         let inner = &self.inner;
         inner
@@ -1255,6 +1240,14 @@ impl Connection {
                 .spawn(&inner.executor),
             )
             .expect("Attempted to set `socket_reader_task` twice");
+    }
+
+    fn set_unique_name_(&self, name: OwnedUniqueName) {
+        self.inner
+            .unique_name
+            .set(name)
+            // programmer (probably our) error if this fails.
+            .expect("unique name already set");
     }
 }
 
