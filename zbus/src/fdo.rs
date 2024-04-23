@@ -1101,8 +1101,13 @@ mod tests {
         // Let's first create an interator to get the signals (it has to be another connection).
         let conn = blocking::Connection::session().unwrap();
         let mut iterator = blocking::MessageIterator::for_match_rule(
-            "type='signal',interface='org.freedesktop.DBus.ObjectManager',\
-            path='/org/zbus/NoObjectManagerSignalsBeforeHello'",
+            zbus::MatchRule::builder()
+                .msg_type(zbus::MessageType::Signal)
+                .interface("org.freedesktop.DBus.ObjectManager")
+                .unwrap()
+                .path("/org/zbus/NoObjectManagerSignalsBeforeHello")
+                .unwrap()
+                .build(),
             &conn,
             None,
         )
