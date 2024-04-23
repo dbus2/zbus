@@ -204,30 +204,20 @@ impl Node {
     }
 
     // Get the child Node at path.
-    pub(crate) fn get_child(
-        &self,
-        path: &ObjectPath<'_>,
-        get_obj_manager_path: bool,
-    ) -> (Option<&Node>, Option<ObjectPath<'_>>) {
+    pub(crate) fn get_child(&self, path: &ObjectPath<'_>) -> Option<&Node> {
         let mut node = self;
-        let mut obj_manager_path = None;
 
         for i in path.split('/').skip(1) {
             if i.is_empty() {
                 continue;
             }
-
-            if get_obj_manager_path && node.interfaces.contains_key(&ObjectManager::name()) {
-                obj_manager_path = Some((*node.path).clone());
-            }
-
             match node.children.get(i) {
                 Some(n) => node = n,
-                None => return (None, obj_manager_path),
+                None => return None,
             }
         }
 
-        (Some(node), obj_manager_path)
+        Some(node)
     }
 
     // Get the child Node at path. Optionally create one if it doesn't exist.
@@ -509,80 +499,61 @@ impl ObjectServer {
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
     {
-        let path = path.try_into().map_err(Into::into)?;
-        let added = self
-            .at_ready(path.clone(), I::name(), move || {
-                Arc::new(RwLock::new(iface))
-            })
-            .await?;
-        if added {
-            self.emit_object_manager_signals(path, I::name()).await?;
-        }
-
-        Ok(added)
+        self.at_ready(path, I::name(), move || Arc::new(RwLock::new(iface)))
+            .await
     }
 
     /// Same as `at` but expects an interface already in `Arc<RwLock<dyn Interface>>` form.
-    ///
-    /// Also, doesn't emit `InterfacesAdded` signal.
     // FIXME: Better name?
-    pub(crate) async fn at_ready<'node, 'p, F>(
+    pub(crate) async fn at_ready<'node, 'p, P, F>(
         &'node self,
-        path: ObjectPath<'p>,
+        path: P,
         name: InterfaceName<'static>,
         iface_creator: F,
     ) -> Result<bool>
     where
+        P: TryInto<ObjectPath<'p>>,
+        P::Error: Into<Error>,
         F: FnOnce() -> Arc<RwLock<dyn Interface + 'static>>,
     {
+        let path = path.try_into().map_err(Into::into)?;
         let mut root = self.root().write().await;
-        let node = root.get_child_mut(&path, true).0;
+        let (node, manager_path) = root.get_child_mut(&path, true);
         let node = node.unwrap();
         let added = node.at(name.clone(), iface_creator);
-
-        Ok(added)
-    }
-
-    pub(crate) async fn emit_object_manager_signals<'node, 'p>(
-        &'node self,
-        path: ObjectPath<'p>,
-        name: InterfaceName<'static>,
-    ) -> Result<()> {
-        let root = self.root().read().await;
-        let (node, manager_path) = root.get_child(&path, true);
-        let node = node.unwrap();
-
-        if name == ObjectManager::name() {
-            // Just added an object manager. Need to signal all managed objects under it.
-            let ctxt = SignalContext::new(&self.connection(), path)?;
-            let objects = node.get_managed_objects().await?;
-            for (path, owned_interfaces) in objects {
-                let interfaces = owned_interfaces
+        if added {
+            if name == ObjectManager::name() {
+                // Just added an object manager. Need to signal all managed objects under it.
+                let ctxt = SignalContext::new(&self.connection(), path)?;
+                let objects = node.get_managed_objects().await?;
+                for (path, owned_interfaces) in objects {
+                    let interfaces = owned_interfaces
+                        .iter()
+                        .map(|(i, props)| {
+                            let props = props
+                                .iter()
+                                .map(|(k, v)| Ok((k.as_str(), Value::try_from(v)?)))
+                                .collect::<Result<_>>();
+                            Ok((i.into(), props?))
+                        })
+                        .collect::<Result<_>>()?;
+                    ObjectManager::interfaces_added(&ctxt, &path, &interfaces).await?;
+                }
+            } else if let Some(manager_path) = manager_path {
+                let ctxt = SignalContext::new(&self.connection(), manager_path.clone())?;
+                let mut interfaces = HashMap::new();
+                let owned_props = node.get_properties(name.clone()).await?;
+                let props = owned_props
                     .iter()
-                    .map(|(i, props)| {
-                        let props = props
-                            .iter()
-                            .map(|(k, v)| Ok((k.as_str(), Value::try_from(v)?)))
-                            .collect::<Result<_>>();
-                        Ok((i.into(), props?))
-                    })
+                    .map(|(k, v)| Ok((k.as_str(), Value::try_from(v)?)))
                     .collect::<Result<_>>()?;
+                interfaces.insert(name, props);
+
                 ObjectManager::interfaces_added(&ctxt, &path, &interfaces).await?;
             }
-        } else if let Some(manager_path) = manager_path {
-            let ctxt = SignalContext::new(&self.connection(), manager_path.clone())?;
-            let mut interfaces = HashMap::new();
-            let owned_props = node.get_properties(name.clone()).await?;
-            let props = owned_props
-                .iter()
-                .map(|(k, v)| Ok((k.as_str(), Value::try_from(v)?)))
-                .collect::<Result<_>>()?;
-            interfaces.insert(name, props);
-
-            ObjectManager::interfaces_added(&ctxt, &path, &interfaces).await?;
         }
 
-        Ok(())
+        Ok(added)
     }
 
     /// Unregister a D-Bus [`Interface`] at a given path.
@@ -671,10 +642,7 @@ impl ObjectServer {
     {
         let path = path.try_into().map_err(Into::into)?;
         let root = self.root().read().await;
-        let node = root
-            .get_child(&path, false)
-            .0
-            .ok_or(Error::InterfaceNotFound)?;
+        let node = root.get_child(&path).ok_or(Error::InterfaceNotFound)?;
 
         let lock = node
             .interface_lock(I::name())
@@ -725,8 +693,7 @@ impl ObjectServer {
         let iface = {
             let root = self.root.read().await;
             let node = root
-                .get_child(path, false)
-                .0
+                .get_child(path)
                 .ok_or_else(|| fdo::Error::UnknownObject(format!("Unknown object '{path}'")))?;
 
             node.interface_lock(iface_name.as_ref()).ok_or_else(|| {

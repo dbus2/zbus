@@ -450,13 +450,11 @@ impl<'a> Builder<'a> {
 
         if !self.interfaces.is_empty() {
             let object_server = conn.sync_object_server(false, None);
-            for (path, interfaces) in &self.interfaces {
+            for (path, interfaces) in self.interfaces {
                 for (name, iface) in interfaces {
-                    let iface = iface.clone();
-                    let future =
-                        object_server
-                            .inner()
-                            .at_ready(path.to_owned(), name.clone(), || iface.0);
+                    let future = object_server
+                        .inner()
+                        .at_ready(path.to_owned(), name, || iface.0);
                     let added = future.await?;
                     // Duplicates shouldn't happen.
                     assert!(added);
@@ -475,19 +473,6 @@ impl<'a> Builder<'a> {
 
         for name in self.names {
             conn.request_name(name).await?;
-        }
-
-        // Now that `Hello` is done, we can emit the ObjectManager signals.
-        if !self.interfaces.is_empty() {
-            let object_server = conn.sync_object_server(false, None);
-            for (path, interfaces) in self.interfaces {
-                for name in interfaces.into_keys() {
-                    let future = object_server
-                        .inner()
-                        .emit_object_manager_signals(path.to_owned(), name);
-                    future.await?;
-                }
-            }
         }
 
         Ok(conn)
