@@ -389,7 +389,7 @@ impl<'a> Builder<'a> {
                 socket_write,
                 // SAFETY: `server_guid` is provided as arg of `Builder::authenticated_socket`.
                 server_guid: server_guid.unwrap(),
-                already_received_bytes: Some(vec![]),
+                already_received_bytes: None,
             }
         } else {
             #[cfg(feature = "p2p")]
@@ -430,7 +430,7 @@ impl<'a> Builder<'a> {
 
         // SAFETY: `Authenticated` is always built with these fields set to `Some`.
         let socket_read = auth.socket_read.take().unwrap();
-        let already_received_bytes = auth.already_received_bytes.take().unwrap();
+        let already_received_bytes = auth.already_received_bytes.take();
 
         #[cfg(feature = "p2p")]
         let is_bus_conn = !self.p2p;

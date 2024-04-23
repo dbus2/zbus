@@ -1240,7 +1240,7 @@ impl Connection {
     pub(crate) fn init_socket_reader(
         &self,
         socket_read: Box<dyn socket::ReadHalf>,
-        already_read: Vec<u8>,
+        already_read: Option<Vec<u8>>,
     ) {
         let inner = &self.inner;
         inner
