@@ -1156,6 +1156,30 @@ mod tests {
         let map: BTreeMap<i64, String> = dict.try_into().unwrap();
         assert_eq!(map[&1], "123");
         assert_eq!(map[&2], "456");
+        // Use iterator
+        let mut dict = Dict::from(map);
+        let expect = vec![
+            (Value::from(1i64), Value::from("123")),
+            (Value::from(2i64), Value::from("456")),
+        ];
+        let expect_iter = expect.iter().map(|(k, v)| (k, v)).collect::<Vec<_>>();
+        let actual = dict.iter().collect::<Vec<_>>();
+        assert_eq!(actual, expect_iter);
+        let actual = (&dict).iter().collect::<Vec<_>>();
+        assert_eq!(actual, expect_iter);
+        let actual = (&mut dict).iter().collect::<Vec<_>>();
+        assert_eq!(actual, expect_iter);
+        for (_, v) in dict.iter_mut() {
+            if let Value::Str(vv) = v {
+                *vv = Str::from(vv.to_string() + "-hello");
+            }
+        }
+        let actual = dict.into_iter().collect::<Vec<_>>();
+        let expect = vec![
+            (Value::from(1i64), Value::from("123-hello")),
+            (Value::from(2i64), Value::from("456-hello")),
+        ];
+        assert_eq!(actual, expect);
 
         #[cfg(feature = "gvariant")]
         {

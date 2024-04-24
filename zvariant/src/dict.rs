@@ -151,12 +151,29 @@ impl<'k, 'v> Dict<'k, 'v> {
         }
     }
 
+    pub fn iter(&self) -> impl Iterator<Item = (&Value<'k>, &Value<'v>)> {
+        self.map.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&Value<'k>, &mut Value<'v>)> {
+        self.map.iter_mut()
+    }
+
     // TODO: Provide more API like https://docs.rs/toml/0.5.5/toml/map/struct.Map.html
 }
 
 impl Display for Dict<'_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         dict_display_fmt(self, f, true)
+    }
+}
+
+impl<'k, 'v> IntoIterator for Dict<'k, 'v> {
+    type Item = (Value<'k>, Value<'v>);
+    type IntoIter = <BTreeMap<Value<'k>, Value<'v>> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.map.into_iter()
     }
 }
 
