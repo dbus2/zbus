@@ -75,6 +75,7 @@ impl<'s> Server<'s> {
         })
     }
 
+    #[instrument(skip(self))]
     async fn auth_ok(&mut self) -> Result<()> {
         let guid = self.guid.clone();
         let cmd = Command::Ok(guid);
@@ -109,6 +110,7 @@ impl<'s> Server<'s> {
         }
     }
 
+    #[instrument(skip(self))]
     async fn check_cookie_auth(&mut self, sasl_id: &[u8]) -> Result<()> {
         let cookie = match self.cookie_id {
             Some(cookie_id) => Cookie::lookup(&self.cookie_context, cookie_id).await?,
@@ -157,6 +159,7 @@ impl<'s> Server<'s> {
         }
     }
 
+    #[instrument(skip(self))]
     async fn unsupported_command_error(&mut self) -> Result<()> {
         let cmd = Command::Error("Unsupported or misplaced command".to_string());
         self.common.write_command(cmd).await?;
@@ -164,6 +167,7 @@ impl<'s> Server<'s> {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     async fn rejected_error(&mut self) -> Result<()> {
         let mechanisms = self.common.mechanisms().iter().cloned().collect();
         let cmd = Command::Rejected(mechanisms);
