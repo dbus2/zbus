@@ -177,129 +177,133 @@ impl<'s> Server<'s> {
 
         Ok(())
     }
+
+    /// Perform the next step in the handshake.
+    #[instrument(skip(self))]
+    async fn next_step(&mut self) -> Result<bool> {
+        match self.step {
+            ServerHandshakeStep::WaitingForNull => {
+                trace!("Waiting for NULL");
+                let mut buffer = [0; 1];
+                let read = self
+                    .common
+                    .socket_mut()
+                    .read_mut()
+                    .recvmsg(&mut buffer)
+                    .await?;
+                #[cfg(unix)]
+                let read = read.0;
+                // recvmsg cannot return anything else than Ok(1) or Err
+                debug_assert!(read == 1);
+                if buffer[0] != 0 {
+                    return Err(Error::Handshake(
+                        "First client byte is not NUL!".to_string(),
+                    ));
+                }
+                trace!("Received NULL from client");
+                self.step = ServerHandshakeStep::WaitingForAuth;
+            }
+            ServerHandshakeStep::WaitingForAuth => {
+                trace!("Waiting for authentication");
+                let reply = self.common.read_command().await?;
+                match reply {
+                    Command::Auth(mech, resp) => {
+                        let mech = mech.filter(|m| self.common.mechanisms().contains(m));
+
+                        match (mech, &resp) {
+                            (Some(mech), None) => {
+                                trace!("Sending data request");
+                                self.common.write_command(Command::Data(None)).await?;
+                                self.step = ServerHandshakeStep::WaitingForData(mech);
+                            }
+                            (Some(AuthMechanism::Anonymous), Some(_)) => {
+                                self.auth_ok().await?;
+                            }
+                            (Some(AuthMechanism::External), Some(sasl_id)) => {
+                                self.check_external_auth(sasl_id).await?;
+                            }
+                            (Some(AuthMechanism::Cookie), Some(sasl_id)) => {
+                                self.check_cookie_auth(sasl_id).await?;
+                            }
+                            _ => self.rejected_error().await?,
+                        }
+                    }
+                    Command::Cancel | Command::Error(_) => {
+                        trace!("Received CANCEL or ERROR command from the client");
+                        self.rejected_error().await?;
+                    }
+                    _ => self.unsupported_command_error().await?,
+                }
+            }
+            ServerHandshakeStep::WaitingForData(mech) => {
+                trace!("Waiting for authentication");
+                let reply = self.common.read_command().await?;
+                match (mech, reply) {
+                    (AuthMechanism::External, Command::Data(None)) => self.auth_ok().await?,
+                    (AuthMechanism::External, Command::Data(Some(data))) => {
+                        self.check_external_auth(&data).await?;
+                    }
+                    (AuthMechanism::Anonymous, Command::Data(_)) => self.auth_ok().await?,
+                    (_, Command::Data(_)) => self.rejected_error().await?,
+                    (_, _) => self.unsupported_command_error().await?,
+                }
+            }
+            ServerHandshakeStep::WaitingForBegin => {
+                trace!("Waiting for Begin command from the client");
+                let reply = self.common.read_command().await?;
+                match reply {
+                    Command::Begin => {
+                        trace!("Received Begin command from the client");
+                        self.step = ServerHandshakeStep::Done;
+                    }
+                    Command::Cancel | Command::Error(_) => {
+                        trace!("Received CANCEL or ERROR command from the client");
+                        self.rejected_error().await?;
+                    }
+                    #[cfg(unix)]
+                    Command::NegotiateUnixFD => {
+                        trace!("Received NEGOTIATE_UNIX_FD command from the client");
+                        if self.common.socket().read().can_pass_unix_fd() {
+                            self.common.set_cap_unix_fd(true);
+                            trace!("Sending AGREE_UNIX_FD to the client");
+                            self.common.write_command(Command::AgreeUnixFD).await?;
+                        } else {
+                            trace!("FD transmission not possible on this socket type. Rejecting..");
+                            let cmd = Command::Error(
+                                "FD-passing not possible on this socket type".to_string(),
+                            );
+                            self.common.write_command(cmd).await?;
+                        }
+                        self.step = ServerHandshakeStep::WaitingForBegin;
+                    }
+                    _ => self.unsupported_command_error().await?,
+                }
+            }
+            ServerHandshakeStep::Done => return Ok(true),
+        }
+
+        Ok(false)
+    }
 }
 
 #[async_trait]
 impl Handshake for Server<'_> {
     #[instrument(skip(self))]
     async fn perform(mut self) -> Result<Authenticated> {
-        loop {
-            match self.step {
-                ServerHandshakeStep::WaitingForNull => {
-                    trace!("Waiting for NULL");
-                    let mut buffer = [0; 1];
-                    let read = self
-                        .common
-                        .socket_mut()
-                        .read_mut()
-                        .recvmsg(&mut buffer)
-                        .await?;
-                    #[cfg(unix)]
-                    let read = read.0;
-                    // recvmsg cannot return anything else than Ok(1) or Err
-                    debug_assert!(read == 1);
-                    if buffer[0] != 0 {
-                        return Err(Error::Handshake(
-                            "First client byte is not NUL!".to_string(),
-                        ));
-                    }
-                    trace!("Received NULL from client");
-                    self.step = ServerHandshakeStep::WaitingForAuth;
-                }
-                ServerHandshakeStep::WaitingForAuth => {
-                    trace!("Waiting for authentication");
-                    let reply = self.common.read_command().await?;
-                    match reply {
-                        Command::Auth(mech, resp) => {
-                            let mech = mech.filter(|m| self.common.mechanisms().contains(m));
+        while !self.next_step().await? {}
 
-                            match (mech, &resp) {
-                                (Some(mech), None) => {
-                                    trace!("Sending data request");
-                                    self.common.write_command(Command::Data(None)).await?;
-                                    self.step = ServerHandshakeStep::WaitingForData(mech);
-                                }
-                                (Some(AuthMechanism::Anonymous), Some(_)) => {
-                                    self.auth_ok().await?;
-                                }
-                                (Some(AuthMechanism::External), Some(sasl_id)) => {
-                                    self.check_external_auth(sasl_id).await?;
-                                }
-                                (Some(AuthMechanism::Cookie), Some(sasl_id)) => {
-                                    self.check_cookie_auth(sasl_id).await?;
-                                }
-                                _ => self.rejected_error().await?,
-                            }
-                        }
-                        Command::Cancel | Command::Error(_) => {
-                            trace!("Received CANCEL or ERROR command from the client");
-                            self.rejected_error().await?;
-                        }
-                        _ => self.unsupported_command_error().await?,
-                    }
-                }
-                ServerHandshakeStep::WaitingForData(mech) => {
-                    trace!("Waiting for authentication");
-                    let reply = self.common.read_command().await?;
-                    match (mech, reply) {
-                        (AuthMechanism::External, Command::Data(None)) => self.auth_ok().await?,
-                        (AuthMechanism::External, Command::Data(Some(data))) => {
-                            self.check_external_auth(&data).await?;
-                        }
-                        (AuthMechanism::Anonymous, Command::Data(_)) => self.auth_ok().await?,
-                        (_, Command::Data(_)) => self.rejected_error().await?,
-                        (_, _) => self.unsupported_command_error().await?,
-                    }
-                }
-                ServerHandshakeStep::WaitingForBegin => {
-                    trace!("Waiting for Begin command from the client");
-                    let reply = self.common.read_command().await?;
-                    match reply {
-                        Command::Begin => {
-                            trace!("Received Begin command from the client");
-                            self.step = ServerHandshakeStep::Done;
-                        }
-                        Command::Cancel | Command::Error(_) => {
-                            trace!("Received CANCEL or ERROR command from the client");
-                            self.rejected_error().await?;
-                        }
-                        #[cfg(unix)]
-                        Command::NegotiateUnixFD => {
-                            trace!("Received NEGOTIATE_UNIX_FD command from the client");
-                            if self.common.socket().read().can_pass_unix_fd() {
-                                self.common.set_cap_unix_fd(true);
-                                trace!("Sending AGREE_UNIX_FD to the client");
-                                self.common.write_command(Command::AgreeUnixFD).await?;
-                            } else {
-                                trace!(
-                                    "FD transmission not possible on this socket type. Rejecting.."
-                                );
-                                let cmd = Command::Error(
-                                    "FD-passing not possible on this socket type".to_string(),
-                                );
-                                self.common.write_command(cmd).await?;
-                            }
-                            self.step = ServerHandshakeStep::WaitingForBegin;
-                        }
-                        _ => self.unsupported_command_error().await?,
-                    }
-                }
-                ServerHandshakeStep::Done => {
-                    trace!("Handshake done");
-                    #[allow(unused_variables)]
-                    let (socket, recv_buffer, cap_unix_fd, _) = self.common.into_components();
-                    let (read, write) = socket.take();
-                    return Ok(Authenticated {
-                        socket_write: write,
-                        socket_read: Some(read),
-                        server_guid: self.guid,
-                        #[cfg(unix)]
-                        cap_unix_fd,
-                        already_received_bytes: Some(recv_buffer),
-                        unique_name: self.unique_name,
-                    });
-                }
-            }
-        }
+        trace!("Handshake done");
+        #[allow(unused_variables)]
+        let (socket, recv_buffer, cap_unix_fd, _) = self.common.into_components();
+        let (read, write) = socket.take();
+        Ok(Authenticated {
+            socket_write: write,
+            socket_read: Some(read),
+            server_guid: self.guid,
+            #[cfg(unix)]
+            cap_unix_fd,
+            already_received_bytes: Some(recv_buffer),
+            unique_name: self.unique_name,
+        })
     }
 }
