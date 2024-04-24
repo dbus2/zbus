@@ -4,7 +4,7 @@ use tracing::{debug, instrument, trace};
 
 use sha1::{Digest, Sha1};
 
-use crate::Message;
+use crate::{conn::socket::ReadHalf, names::OwnedUniqueName, Message};
 
 use super::{
     random_ascii, sasl_auth_id, AuthMechanism, Authenticated, BoxedSplit, Command, Common, Cookie,
@@ -89,13 +89,9 @@ impl Client {
 
         Ok(())
     }
-}
 
-#[async_trait]
-impl Handshake for Client {
     #[instrument(skip(self))]
-    async fn perform(mut self) -> Result<Authenticated> {
-        trace!("Initializing");
+    async fn send_zero_byte(&mut self) -> Result<()> {
         // The dbus daemon on some platforms requires sending the zero byte as a
         // separate message with SCM_CREDS.
         #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
@@ -134,7 +130,15 @@ impl Handshake for Client {
             ));
         }
 
-        let mut commands = Vec::with_capacity(4);
+        Ok(())
+    }
+
+    /// Perform the authentication handshake with the server.
+    ///
+    /// In case of cookie auth, it returns the challenge response to send to the server, so it can
+    /// be batched with rest of the commands.
+    #[instrument(skip(self))]
+    async fn authenticate(&mut self) -> Result<Option<Command>> {
         loop {
             let mechanism = self.common.next_mechanism()?;
             trace!("Trying {mechanism} mechanism");
@@ -155,7 +159,7 @@ impl Handshake for Client {
                     trace!("Received OK from server");
                     self.set_guid(guid)?;
 
-                    break;
+                    return Ok(None);
                 }
                 Command::Data(data) if mechanism == AuthMechanism::Cookie => {
                     let data = data.ok_or_else(|| {
@@ -163,9 +167,8 @@ impl Handshake for Client {
                     })?;
                     trace!("Received cookie challenge from server");
                     let response = self.handle_cookie_challenge(data).await?;
-                    commands.push(response);
 
-                    break;
+                    return Ok(Some(response));
                 }
                 Command::Rejected(_) => debug!("{mechanism} rejected by the server"),
                 Command::Error(e) => debug!("Received error from server: {e}"),
@@ -176,6 +179,21 @@ impl Handshake for Client {
                 }
             }
         }
+    }
+
+    /// Sends out all commands after authentication.
+    ///
+    /// This includes the challenge response for cookie auth, if any and returns the number of
+    /// responses expected from the server.
+    #[instrument(skip(self))]
+    async fn send_secondary_commands(
+        &mut self,
+        challenge_response: Option<Command>,
+    ) -> Result<usize> {
+        let mut commands = Vec::with_capacity(4);
+        if let Some(response) = challenge_response {
+            commands.push(response);
+        }
 
         let can_pass_fd = self.common.socket_mut().read_mut().can_pass_unix_fd();
         if can_pass_fd {
@@ -183,47 +201,60 @@ impl Handshake for Client {
         };
         commands.push(Command::Begin);
         let hello_method = if self.bus {
-            Some(
-                Message::method("/org/freedesktop/DBus", "Hello")
-                    .unwrap()
-                    .destination("org.freedesktop.DBus")
-                    .unwrap()
-                    .interface("org.freedesktop.DBus")
-                    .unwrap()
-                    .build(&())
-                    .unwrap(),
-            )
+            Some(create_hello_method_call())
         } else {
             None
         };
 
-        // Server replies to all commands except `BEGIN`.
-        let expected_n_responses = commands.len() - 1;
         self.common
             .write_commands(&commands, hello_method.as_ref().map(|m| &**m.data()))
             .await?;
 
-        if expected_n_responses > 0 {
-            for response in self.common.read_commands(expected_n_responses).await? {
-                match response {
-                    Command::Ok(guid) => {
-                        trace!("Received OK from server");
-                        self.set_guid(guid)?;
-                    }
-                    Command::AgreeUnixFD => self.common.set_cap_unix_fd(true),
-                    // This also covers "REJECTED" and "ERROR", which would mean that the server has
-                    // rejected the authentication challenge response (likely cookie) since it
-                    // already agreed to the mechanism. Theoretically we should
-                    // be just trying the next auth mechanism but this most
-                    // likely means something is very wrong and we're already
-                    // too deep into the handshake to recover.
-                    cmd => {
-                        return Err(Error::Handshake(format!(
-                            "Unexpected command from server: {cmd}"
-                        )))
-                    }
+        // Server replies to all commands except `BEGIN`.
+        Ok(commands.len() - 1)
+    }
+
+    #[instrument(skip(self))]
+    async fn receive_secondary_responses(&mut self, expected_n_responses: usize) -> Result<()> {
+        for response in self.common.read_commands(expected_n_responses).await? {
+            match response {
+                Command::Ok(guid) => {
+                    trace!("Received OK from server");
+                    self.set_guid(guid)?;
+                }
+                Command::AgreeUnixFD => self.common.set_cap_unix_fd(true),
+                // This also covers "REJECTED" and "ERROR", which would mean that the server has
+                // rejected the authentication challenge response (likely cookie) since it
+                // already agreed to the mechanism. Theoretically we should
+                // be just trying the next auth mechanism but this most
+                // likely means something is very wrong and we're already
+                // too deep into the handshake to recover.
+                cmd => {
+                    return Err(Error::Handshake(format!(
+                        "Unexpected command from server: {cmd}"
+                    )))
                 }
             }
+        }
+
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl Handshake for Client {
+    #[instrument(skip(self))]
+    async fn perform(mut self) -> Result<Authenticated> {
+        trace!("Initializing");
+
+        self.send_zero_byte().await?;
+
+        let challenge_response = self.authenticate().await?;
+        let expected_n_responses = self.send_secondary_commands(challenge_response).await?;
+
+        if expected_n_responses > 0 {
+            self.receive_secondary_responses(expected_n_responses)
+                .await?;
         }
 
         trace!("Handshake done");
@@ -233,14 +264,8 @@ impl Handshake for Client {
 
         // If we're a bus connection, we need to read the unique name from `Hello` response.
         let (unique_name, already_received_bytes) = if self.bus {
-            use crate::message::Type;
+            let unique_name = receive_hello_response(&mut read, recv_buffer).await?;
 
-            let reply = read.receive_message(0, Some(recv_buffer)).await?;
-            let unique_name = match reply.message_type() {
-                Type::MethodReturn => reply.body().deserialize()?,
-                Type::Error => return Err(Error::from(reply)),
-                m => return Err(Error::Handshake(format!("Unexpected messgage `{m:?}`"))),
-            };
             (Some(unique_name), None)
         } else {
             (None, Some(recv_buffer))
@@ -255,5 +280,30 @@ impl Handshake for Client {
             already_received_bytes,
             unique_name,
         })
+    }
+}
+
+fn create_hello_method_call() -> Message {
+    Message::method("/org/freedesktop/DBus", "Hello")
+        .unwrap()
+        .destination("org.freedesktop.DBus")
+        .unwrap()
+        .interface("org.freedesktop.DBus")
+        .unwrap()
+        .build(&())
+        .unwrap()
+}
+
+async fn receive_hello_response(
+    read: &mut Box<dyn ReadHalf>,
+    recv_buffer: Vec<u8>,
+) -> Result<OwnedUniqueName> {
+    use crate::message::Type;
+
+    let reply = read.receive_message(0, Some(recv_buffer)).await?;
+    match reply.message_type() {
+        Type::MethodReturn => reply.body().deserialize(),
+        Type::Error => Err(Error::from(reply)),
+        m => Err(Error::Handshake(format!("Unexpected messgage `{m:?}`"))),
     }
 }
