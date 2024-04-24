@@ -12,6 +12,7 @@ pub(super) struct Common {
     cap_unix_fd: bool,
     // the current AUTH mechanism is front, ordered by priority
     mechanisms: VecDeque<AuthMechanism>,
+    first_command: bool,
 }
 
 impl Common {
@@ -22,6 +23,7 @@ impl Common {
             recv_buffer: Vec::new(),
             cap_unix_fd: false,
             mechanisms,
+            first_command: true,
         }
     }
 
@@ -68,6 +70,13 @@ impl Common {
                 .iter()
                 .map(Vec::<u8>::from)
                 .fold(vec![], |mut acc, mut c| {
+                    if self.first_command {
+                        // The first command is sent by the client so we can assume it's the client.
+                        self.first_command = false;
+                        // leading 0 is sent separately for `freebsd` and `dragonfly`.
+                        #[cfg(not(any(target_os = "freebsd", target_os = "dragonfly")))]
+                        acc.push(b'\0');
+                    }
                     acc.append(&mut c);
                     acc.extend_from_slice(b"\r\n");
                     acc
@@ -108,8 +117,26 @@ impl Common {
                     return Err(Error::Handshake("Invalid line ending in handshake".into()));
                 }
 
+                #[allow(unused_mut)]
+                let mut start_index = 0;
+                if self.first_command {
+                    // The first command is sent by the client so we can assume it's the server.
+                    self.first_command = false;
+                    // leading 0 is sent separately for `freebsd` and `dragonfly`.
+                    #[cfg(not(any(target_os = "freebsd", target_os = "dragonfly")))]
+                    {
+                        if self.recv_buffer[0] != b'\0' {
+                            return Err(Error::Handshake(
+                                "First client byte is not NUL!".to_string(),
+                            ));
+                        }
+
+                        start_index = 1;
+                    }
+                };
+
                 let line_bytes = self.recv_buffer.drain(..=lf_index);
-                let line = std::str::from_utf8(line_bytes.as_slice())
+                let line = std::str::from_utf8(&line_bytes.as_slice()[start_index..])
                     .map_err(|e| Error::Handshake(e.to_string()))?;
 
                 trace!("Reading {line}");

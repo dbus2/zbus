@@ -16,7 +16,6 @@ use super::{
 #[derive(Debug)]
 #[allow(clippy::upper_case_acronyms)]
 enum ServerHandshakeStep {
-    WaitingForNull,
     WaitingForAuth,
     WaitingForData(AuthMechanism),
     WaitingForBegin,
@@ -63,7 +62,7 @@ impl<'s> Server<'s> {
 
         Ok(Server {
             common: Common::new(socket, mechanisms),
-            step: ServerHandshakeStep::WaitingForNull,
+            step: ServerHandshakeStep::WaitingForAuth,
             #[cfg(unix)]
             client_uid,
             #[cfg(windows)]
@@ -182,27 +181,6 @@ impl<'s> Server<'s> {
     #[instrument(skip(self))]
     async fn next_step(&mut self) -> Result<bool> {
         match self.step {
-            ServerHandshakeStep::WaitingForNull => {
-                trace!("Waiting for NULL");
-                let mut buffer = [0; 1];
-                let read = self
-                    .common
-                    .socket_mut()
-                    .read_mut()
-                    .recvmsg(&mut buffer)
-                    .await?;
-                #[cfg(unix)]
-                let read = read.0;
-                // recvmsg cannot return anything else than Ok(1) or Err
-                debug_assert!(read == 1);
-                if buffer[0] != 0 {
-                    return Err(Error::Handshake(
-                        "First client byte is not NUL!".to_string(),
-                    ));
-                }
-                trace!("Received NULL from client");
-                self.step = ServerHandshakeStep::WaitingForAuth;
-            }
             ServerHandshakeStep::WaitingForAuth => {
                 trace!("Waiting for authentication");
                 let reply = self.common.read_command().await?;

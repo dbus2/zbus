@@ -90,11 +90,11 @@ impl Client {
         Ok(())
     }
 
+    // The dbus daemon on some platforms requires sending the zero byte as a
+    // separate message with SCM_CREDS.
     #[instrument(skip(self))]
+    #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
     async fn send_zero_byte(&mut self) -> Result<()> {
-        // The dbus daemon on some platforms requires sending the zero byte as a
-        // separate message with SCM_CREDS.
-        #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
         let written = self
             .common
             .socket_mut()
@@ -110,19 +110,6 @@ impl Client {
                 )),
                 Some(n) => Ok(n),
             })?;
-
-        // leading 0 is sent separately already for `freebsd` and `dragonfly` above.
-        #[cfg(not(any(target_os = "freebsd", target_os = "dragonfly")))]
-        let written = self
-            .common
-            .socket_mut()
-            .write_mut()
-            .sendmsg(
-                &[b'\0'],
-                #[cfg(unix)]
-                &[],
-            )
-            .await?;
 
         if written != 1 {
             return Err(Error::Handshake(
@@ -247,6 +234,7 @@ impl Handshake for Client {
     async fn perform(mut self) -> Result<Authenticated> {
         trace!("Initializing");
 
+        #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
         self.send_zero_byte().await?;
 
         let challenge_response = self.authenticate().await?;
