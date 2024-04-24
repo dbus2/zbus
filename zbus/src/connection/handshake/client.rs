@@ -136,7 +136,6 @@ impl Handshake for Client {
 
         let mut commands = Vec::with_capacity(4);
         loop {
-            self.common.set_cap_unix_fd(false);
             let mechanism = self.common.next_mechanism()?;
             trace!("Trying {mechanism} mechanism");
             let auth_cmd = match mechanism {
