@@ -108,7 +108,7 @@ nix = { version = "0.28", default-features = false, features = [
 async-process = "2.2.2"
 
 [target.'cfg(any(target_os = "macos", windows))'.dependencies]
-async-recursion = "1.1.0"
+async-recursion = "1.1.1"
 
 [dev-dependencies]
 zbus_xml = { path = "../zbus_xml", version = "4.0.0" }
