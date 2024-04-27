@@ -214,7 +214,7 @@ impl<'s> Server<'s> {
                 }
             }
             ServerHandshakeStep::WaitingForData(mech) => {
-                trace!("Waiting for authentication");
+                trace!("Waiting for authentication data");
                 let reply = self.common.read_command().await?;
                 match (mech, reply) {
                     (AuthMechanism::External, Command::Data(None)) => self.auth_ok().await?,
