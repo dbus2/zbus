@@ -32,7 +32,7 @@ pub(super) enum FieldCode {
     ErrorName = 4,
     /// Code for [`Field::ReplySerial`](enum.Field.html#variant.ReplySerial)
     ReplySerial = 5,
-    /// Code for [`Field::Destinatione`](enum.Field.html#variant.Destination)
+    /// Code for [`Field::Destination`](enum.Field.html#variant.Destination)
     Destination = 6,
     /// Code for [`Field::Sender`](enum.Field.html#variant.Sender)
     Sender = 7,

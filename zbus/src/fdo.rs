@@ -134,7 +134,7 @@ impl Properties {
                 Error::UnknownInterface(format!("Unknown interface '{interface_name}'"))
             })?;
 
-        let res = iface.read().await.get(property_name).await;
+        let res = iface.instance.read().await.get(property_name).await;
         res.unwrap_or_else(|| {
             Err(Error::UnknownProperty(format!(
                 "Unknown property '{property_name}'"
@@ -160,7 +160,12 @@ impl Properties {
                 Error::UnknownInterface(format!("Unknown interface '{interface_name}'"))
             })?;
 
-        match iface.read().await.set(property_name, &value, &ctxt) {
+        match iface
+            .instance
+            .read()
+            .await
+            .set(property_name, &value, &ctxt)
+        {
             zbus::object_server::DispatchResult::RequiresMut => {}
             zbus::object_server::DispatchResult::NotFound => {
                 return Err(Error::UnknownProperty(format!(
@@ -172,6 +177,7 @@ impl Properties {
             }
         }
         let res = iface
+            .instance
             .write()
             .await
             .set_mut(property_name, &value, &ctxt)
@@ -198,7 +204,7 @@ impl Properties {
                 Error::UnknownInterface(format!("Unknown interface '{interface_name}'"))
             })?;
 
-        let res = iface.read().await.get_all().await?;
+        let res = iface.instance.read().await.get_all().await?;
         Ok(res)
     }
 

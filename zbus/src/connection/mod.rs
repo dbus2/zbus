@@ -971,41 +971,25 @@ impl Connection {
                                     // destination doesn't matter if no name has been registered
                                     // (probably means name it's registered through external means).
                                     if !names.is_empty() && !names.contains_key(dest) {
-                                        trace!("Got a method call for a different destination: {}", dest);
+                                        trace!(
+                                            "Got a method call for a different destination: {}",
+                                            dest
+                                        );
 
                                         continue;
                                     }
                                 }
                             }
-                            let member = match hdr.member() {
-                                Some(member) => member,
-                                None => {
-                                    warn!("Got a method call with no `MEMBER` field: {}", msg);
-
-                                    continue;
-                                }
-                            };
-                            trace!("Got `{}`. Will spawn a task for dispatch..", msg);
-                            let executor = conn.inner.executor.clone();
-                            let task_name = format!("`{member}` method dispatcher");
-                            executor
-                                .spawn(
-                                    async move {
-                                        trace!("spawned a task to dispatch `{}`.", msg);
-                                        let server = conn.object_server();
-                                        if let Err(e) = server.dispatch_message(&msg).await {
-                                            debug!(
-                                                "Error dispatching message. Message: {:?}, error: {:?}",
-                                                msg, e
-                                            );
-                                        }
-                                    }
-                                    .instrument(trace_span!("{}", task_name)),
-                                    &task_name,
-                                )
-                                .detach();
+                            let server = conn.object_server();
+                            if let Err(e) = server.dispatch_call(&msg, &hdr).await {
+                                debug!(
+                                    "Error dispatching message. Message: {:?}, error: {:?}",
+                                    msg, e
+                                );
+                            }
                         } else {
-                            // If connection is completely gone, no reason to keep running the task anymore.
+                            // If connection is completely gone, no reason to keep running the task
+                            // anymore.
                             trace!("Connection is gone, stopping associated object server task");
                             break;
                         }

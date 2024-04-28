@@ -9,7 +9,7 @@ use std::{
     ops::{Deref, DerefMut},
     sync::Arc,
 };
-use tracing::{debug, instrument, trace};
+use tracing::{debug, instrument, trace, trace_span, Instrument};
 
 use static_assertions::assert_impl_all;
 use zbus_names::InterfaceName;
@@ -20,7 +20,7 @@ use crate::{
     connection::WeakConnection,
     fdo,
     fdo::{Introspectable, ManagedObjects, ObjectManager, Peer, Properties},
-    message::Message,
+    message::{Header, Message},
     Connection, Error, Result,
 };
 
@@ -194,11 +194,9 @@ impl Node {
             path,
             ..Default::default()
         };
-        node.at(Peer::name(), || Arc::new(RwLock::new(Peer)));
-        node.at(Introspectable::name(), || {
-            Arc::new(RwLock::new(Introspectable))
-        });
-        node.at(Properties::name(), || Arc::new(RwLock::new(Properties)));
+        debug_assert!(node.add_interface(Peer));
+        debug_assert!(node.add_interface(Introspectable));
+        debug_assert!(node.add_interface(Properties));
 
         node
     }
@@ -258,11 +256,8 @@ impl Node {
         (Some(node), obj_manager_path)
     }
 
-    pub(crate) fn interface_lock(
-        &self,
-        interface_name: InterfaceName<'_>,
-    ) -> Option<Arc<RwLock<dyn Interface>>> {
-        self.interfaces.get(&interface_name).map(|x| x.0.clone())
+    pub(crate) fn interface_lock(&self, interface_name: InterfaceName<'_>) -> Option<ArcInterface> {
+        self.interfaces.get(&interface_name).cloned()
     }
 
     fn remove_interface(&mut self, interface_name: InterfaceName<'static>) -> bool {
@@ -282,18 +277,21 @@ impl Node {
         self.children.remove(node).is_some()
     }
 
-    // Takes a closure so caller can avoid having to create an Arc & RwLock in case interface was
-    // already added.
-    fn at<F>(&mut self, name: InterfaceName<'static>, iface_creator: F) -> bool
-    where
-        F: FnOnce() -> Arc<RwLock<dyn Interface>>,
-    {
+    fn add_arc_interface(&mut self, name: InterfaceName<'static>, arc_iface: ArcInterface) -> bool {
         match self.interfaces.entry(name) {
-            Entry::Vacant(e) => e.insert(ArcInterface(iface_creator())),
-            Entry::Occupied(_) => return false,
-        };
+            Entry::Vacant(e) => {
+                e.insert(arc_iface);
+                true
+            }
+            Entry::Occupied(_) => false,
+        }
+    }
 
-        true
+    fn add_interface<I>(&mut self, iface: I) -> bool
+    where
+        I: Interface,
+    {
+        self.add_arc_interface(I::name(), ArcInterface::new(iface))
     }
 
     async fn introspect_to_writer<W: Write + Send>(&self, writer: &mut W) {
@@ -352,7 +350,11 @@ impl Node {
                     }
 
                     for iface in node.interfaces.values() {
-                        iface.0.read().await.introspect_to_writer(writer, level + 2);
+                        iface
+                            .instance
+                            .read()
+                            .await
+                            .introspect_to_writer(writer, level + 2);
                     }
                 }
                 Fragment::End { level } => {
@@ -400,6 +402,7 @@ impl Node {
     ) -> fdo::Result<HashMap<String, OwnedValue>> {
         self.interface_lock(interface_name)
             .expect("Interface was added but not found")
+            .instance
             .read()
             .await
             .get_all()
@@ -499,28 +502,25 @@ impl ObjectServer {
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
     {
-        self.at_ready(path, I::name(), move || Arc::new(RwLock::new(iface)))
+        self.add_arc_interface(path, I::name(), ArcInterface::new(iface))
             .await
     }
 
-    /// Same as `at` but expects an interface already in `Arc<RwLock<dyn Interface>>` form.
-    // FIXME: Better name?
-    pub(crate) async fn at_ready<'node, 'p, P, F>(
-        &'node self,
+    pub(crate) async fn add_arc_interface<'p, P>(
+        &self,
         path: P,
         name: InterfaceName<'static>,
-        iface_creator: F,
+        arc_iface: ArcInterface,
     ) -> Result<bool>
     where
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
-        F: FnOnce() -> Arc<RwLock<dyn Interface + 'static>>,
     {
         let path = path.try_into().map_err(Into::into)?;
         let mut root = self.root().write().await;
         let (node, manager_path) = root.get_child_mut(&path, true);
         let node = node.unwrap();
-        let added = node.at(name.clone(), iface_creator);
+        let added = node.add_arc_interface(name.clone(), arc_iface);
         if added {
             if name == ObjectManager::name() {
                 // Just added an object manager. Need to signal all managed objects under it.
@@ -647,6 +647,7 @@ impl ObjectServer {
         let lock = node
             .interface_lock(I::name())
             .ok_or(Error::InterfaceNotFound)?
+            .instance
             .clone();
 
         // Ensure what we return can later be dowcasted safely.
@@ -666,40 +667,19 @@ impl ObjectServer {
         })
     }
 
-    #[instrument(skip(self, connection))]
-    async fn dispatch_method_call_try(
+    async fn dispatch_call_to_iface(
         &self,
+        iface: Arc<RwLock<dyn Interface>>,
         connection: &Connection,
         msg: &Message,
-    ) -> fdo::Result<Result<()>> {
-        let hdr = msg.header();
-        let path = hdr
-            .path()
-            .ok_or_else(|| fdo::Error::Failed("Missing object path".into()))?;
-        let iface_name = hdr
-            .interface()
-            // TODO: In the absence of an INTERFACE field, if two or more interfaces on the same
-            // object have a method with the same name, it is undefined which of those
-            // methods will be invoked. Implementations may choose to either return an
-            // error, or deliver the message as though it had an arbitrary one of those
-            // interfaces.
-            .ok_or_else(|| fdo::Error::Failed("Missing interface".into()))?;
+        hdr: &Header<'_>,
+    ) -> fdo::Result<()> {
         let member = hdr
             .member()
             .ok_or_else(|| fdo::Error::Failed("Missing member".into()))?;
-
-        // Ensure the root lock isn't held while dispatching the message. That
-        // way, the object server can be mutated during that time.
-        let iface = {
-            let root = self.root.read().await;
-            let node = root
-                .get_child(path)
-                .ok_or_else(|| fdo::Error::UnknownObject(format!("Unknown object '{path}'")))?;
-
-            node.interface_lock(iface_name.as_ref()).ok_or_else(|| {
-                fdo::Error::UnknownInterface(format!("Unknown interface '{iface_name}'"))
-            })?
-        };
+        let iface_name = hdr
+            .interface()
+            .ok_or_else(|| fdo::Error::Failed("Missing interface".into()))?;
 
         trace!("acquiring read lock on interface `{}`", iface_name);
         let read_lock = iface.read().await;
@@ -711,7 +691,10 @@ impl ObjectServer {
                 )));
             }
             DispatchResult::Async(f) => {
-                return Ok(f.await);
+                return f.await.map_err(|e| match e {
+                    Error::FDO(e) => *e,
+                    e => fdo::Error::Failed(format!("{e}")),
+                });
             }
             DispatchResult::RequiresMut => {}
         }
@@ -723,7 +706,10 @@ impl ObjectServer {
             DispatchResult::NotFound => {}
             DispatchResult::RequiresMut => {}
             DispatchResult::Async(f) => {
-                return Ok(f.await);
+                return f.await.map_err(|e| match e {
+                    Error::FDO(e) => *e,
+                    e => fdo::Error::Failed(format!("{e}")),
+                });
             }
         }
         drop(write_lock);
@@ -732,16 +718,67 @@ impl ObjectServer {
         )))
     }
 
-    #[instrument(skip(self, connection))]
-    async fn dispatch_method_call(&self, connection: &Connection, msg: &Message) -> Result<()> {
-        match self.dispatch_method_call_try(connection, msg).await {
-            Err(e) => {
-                let hdr = msg.header();
-                debug!("Returning error: {}", e);
-                connection.reply_dbus_error(&hdr, e).await?;
-                Ok(())
-            }
-            Ok(r) => r,
+    async fn dispatch_method_call_try(
+        &self,
+        connection: &Connection,
+        msg: &Message,
+        hdr: &Header<'_>,
+    ) -> fdo::Result<()> {
+        let path = hdr
+            .path()
+            .ok_or_else(|| fdo::Error::Failed("Missing object path".into()))?;
+        let iface_name = hdr
+            .interface()
+            // TODO: In the absence of an INTERFACE field, if two or more interfaces on the same
+            // object have a method with the same name, it is undefined which of those
+            // methods will be invoked. Implementations may choose to either return an
+            // error, or deliver the message as though it had an arbitrary one of those
+            // interfaces.
+            .ok_or_else(|| fdo::Error::Failed("Missing interface".into()))?;
+        // Check that the message has a member before spawning.
+        // Note that an unknown member will still spawn a task. We should instead gather
+        // all the details for the call before spawning.
+        // See also https://github.com/dbus2/zbus/issues/674 for future of Interface.
+        let _ = hdr
+            .member()
+            .ok_or_else(|| fdo::Error::Failed("Missing member".into()))?;
+
+        // Ensure the root lock isn't held while dispatching the message. That
+        // way, the object server can be mutated during that time.
+        let (iface, with_spawn) = {
+            let root = self.root.read().await;
+            let node = root
+                .get_child(path)
+                .ok_or_else(|| fdo::Error::UnknownObject(format!("Unknown object '{path}'")))?;
+
+            let iface = node.interface_lock(iface_name.as_ref()).ok_or_else(|| {
+                fdo::Error::UnknownInterface(format!("Unknown interface '{iface_name}'"))
+            })?;
+            (iface.instance, iface.spawn_tasks_for_methods)
+        };
+
+        if with_spawn {
+            let executor = connection.executor().clone();
+            let task_name = format!("`{msg}` method dispatcher");
+            let connection = connection.clone();
+            let msg = msg.clone();
+            executor
+                .spawn(
+                    async move {
+                        let server = connection.object_server();
+                        let hdr = msg.header();
+                        server
+                            .dispatch_call_to_iface(iface, &connection, &msg, &hdr)
+                            .await
+                    }
+                    .instrument(trace_span!("{}", task_name)),
+                    &task_name,
+                )
+                .detach();
+            Ok(())
+        } else {
+            self.dispatch_call_to_iface(iface, connection, msg, hdr)
+                .await
         }
     }
 
@@ -756,14 +793,18 @@ impl ObjectServer {
     /// - returning a message (responding to the caller with either a return or error message) to
     ///   the caller through the associated server connection.
     ///
-    /// Returns an error if the message is malformed, true if it's handled, false otherwise.
+    /// Returns an error if the message is malformed.
     #[instrument(skip(self))]
-    pub(crate) async fn dispatch_message(&self, msg: &Message) -> Result<bool> {
+    pub(crate) async fn dispatch_call(&self, msg: &Message, hdr: &Header<'_>) -> Result<()> {
         let conn = self.connection();
-        self.dispatch_method_call(&conn, msg).await?;
+
+        if let Err(e) = self.dispatch_method_call_try(&conn, msg, hdr).await {
+            debug!("Returning error: {}", e);
+            conn.reply_dbus_error(hdr, e).await?;
+        }
         trace!("Handled: {}", msg);
 
-        Ok(true)
+        Ok(())
     }
 
     pub(crate) fn connection(&self) -> Connection {

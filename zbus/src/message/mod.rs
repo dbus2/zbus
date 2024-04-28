@@ -295,6 +295,7 @@ impl fmt::Debug for Message {
         let mut msg = f.debug_struct("Msg");
         let h = self.header();
         msg.field("type", &h.message_type());
+        msg.field("serial", &self.primary_header().serial_num());
         if let Some(sender) = h.sender() {
             msg.field("sender", &sender);
         }

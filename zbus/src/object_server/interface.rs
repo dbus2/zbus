@@ -72,6 +72,14 @@ pub trait Interface: Any + Send + Sync {
     where
         Self: Sized;
 
+    /// Whether each method call will be handled from a different spawned task.
+    ///
+    /// Note: When methods are called from separate tasks, they may not be run in the order in which
+    /// they were called.
+    fn spawn_tasks_for_methods(&self) -> bool {
+        true
+    }
+
     /// Get a property value. Returns `None` if the property doesn't exist.
     async fn get(&self, property_name: &str) -> Option<fdo::Result<OwnedValue>>;
 
@@ -134,9 +142,26 @@ pub trait Interface: Any + Send + Sync {
     fn introspect_to_writer(&self, writer: &mut dyn Write, level: usize);
 }
 
-/// A newtype for a reference counted Interface trait-object, with a manual Debug impl.
+/// A type for a reference counted Interface trait-object, with associated run-time details and a
+/// manual Debug impl.
 #[derive(Clone)]
-pub(crate) struct ArcInterface(pub(crate) Arc<RwLock<dyn Interface>>);
+pub(crate) struct ArcInterface {
+    pub instance: Arc<RwLock<dyn Interface>>,
+    pub spawn_tasks_for_methods: bool,
+}
+
+impl ArcInterface {
+    pub fn new<I>(iface: I) -> Self
+    where
+        I: Interface,
+    {
+        let spawn_tasks_for_methods = iface.spawn_tasks_for_methods();
+        Self {
+            instance: Arc::new(RwLock::new(iface)),
+            spawn_tasks_for_methods,
+        }
+    }
+}
 
 impl fmt::Debug for ArcInterface {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
