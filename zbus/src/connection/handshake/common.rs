@@ -27,7 +27,7 @@ impl Common {
         }
     }
 
-    #[cfg(feature = "p2p")]
+    #[cfg(all(unix, feature = "p2p"))]
     pub fn socket(&self) -> &BoxedSplit {
         &self.socket
     }
