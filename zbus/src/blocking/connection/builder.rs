@@ -96,7 +96,9 @@ impl<'a> Builder<'a> {
     }
 
     /// Specify the mechanisms to use during authentication.
+    #[deprecated(since = "4.1.3", note = "Use `auth_mechanism` instead.")]
     pub fn auth_mechanisms(self, auth_mechanisms: &[AuthMechanism]) -> Self {
+        #[allow(deprecated)]
         Self(self.0.auth_mechanisms(auth_mechanisms))
     }
 
