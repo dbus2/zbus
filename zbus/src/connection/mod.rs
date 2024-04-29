@@ -1472,7 +1472,7 @@ mod p2p_tests {
                     .server(guid)
                     .unwrap()
                     .p2p()
-                    .auth_mechanisms(&[AuthMechanism::Anonymous]),
+                    .auth_mechanism(AuthMechanism::Anonymous),
                 Builder::tcp_stream(p1).p2p(),
             )
         };
@@ -1489,7 +1489,7 @@ mod p2p_tests {
                     .server(guid)
                     .unwrap()
                     .p2p()
-                    .auth_mechanisms(&[AuthMechanism::Anonymous]),
+                    .auth_mechanism(AuthMechanism::Anonymous),
                 Builder::tcp_stream(p1).p2p(),
             )
         };
@@ -1568,7 +1568,7 @@ mod p2p_tests {
                 .server(guid)
                 .unwrap()
                 .p2p()
-                .auth_mechanisms(&[AuthMechanism::Anonymous])
+                .auth_mechanism(AuthMechanism::Anonymous)
                 .build(),
             Builder::vsock_stream(client).p2p().build(),
         )
@@ -1587,7 +1587,7 @@ mod p2p_tests {
                 .server(guid)
                 .unwrap()
                 .p2p()
-                .auth_mechanisms(&[AuthMechanism::Anonymous])
+                .auth_mechanism(AuthMechanism::Anonymous)
                 .build(),
             Builder::vsock_stream(client).p2p().build(),
         )
@@ -1655,7 +1655,7 @@ mod p2p_tests {
             .server(guid)
             .unwrap()
             .p2p()
-            .auth_mechanisms(&[AuthMechanism::Cookie])
+            .auth_mechanism(AuthMechanism::Cookie)
             .cookie_context(cookie_context)
             .unwrap();
         if let Some(cookie_id) = cookie_id {

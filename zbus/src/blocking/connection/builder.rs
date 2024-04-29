@@ -90,8 +90,15 @@ impl<'a> Builder<'a> {
         Self(crate::connection::Builder::socket(socket))
     }
 
+    /// Specify the mechanism to use during authentication.
+    pub fn auth_mechanism(self, auth_mechanism: AuthMechanism) -> Self {
+        Self(self.0.auth_mechanism(auth_mechanism))
+    }
+
     /// Specify the mechanisms to use during authentication.
+    #[deprecated(since = "4.1.3", note = "Use `auth_mechanism` instead.")]
     pub fn auth_mechanisms(self, auth_mechanisms: &[AuthMechanism]) -> Self {
+        #[allow(deprecated)]
         Self(self.0.auth_mechanisms(auth_mechanisms))
     }
 
