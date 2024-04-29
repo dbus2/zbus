@@ -183,6 +183,11 @@ impl<'a> Builder<'a> {
         Ok(builder)
     }
 
+    /// Specify the mechanism to use during authentication.
+    pub fn auth_mechanism(self, auth_mechanism: AuthMechanism) -> Self {
+        self.auth_mechanisms(&[auth_mechanism])
+    }
+
     /// Specify the mechanisms to use during authentication.
     pub fn auth_mechanisms(mut self, auth_mechanisms: &[AuthMechanism]) -> Self {
         self.auth_mechanisms = Some(VecDeque::from(auth_mechanisms.to_vec()));
