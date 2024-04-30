@@ -2597,7 +2597,7 @@ dependencies = [
 
 [[package]]
 name = "zvariant"
-version = "4.0.2"
+version = "4.0.3"
 dependencies = [
  "arrayvec",
  "chrono",
@@ -2619,7 +2619,7 @@ dependencies = [
 
 [[package]]
 name = "zvariant_derive"
-version = "4.0.2"
+version = "4.0.3"
 dependencies = [
  "enumflags2",
  "proc-macro-crate",

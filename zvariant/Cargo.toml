@@ -1,6 +1,6 @@
 [package]
 name = "zvariant"
-version = "4.0.2"
+version = "4.0.3"
 authors = ["Zeeshan Ali Khan <zeeshanak@gnome.org>"]
 edition = "2021"
 rust-version = "1.75"
@@ -25,7 +25,7 @@ endi = "1.1.0"
 serde = { version = "1.0", features = ["derive"] }
 arrayvec = { version = "0.7.4", features = ["serde"], optional = true }
 enumflags2 = { version = "0.7.9", features = ["serde"], optional = true }
-zvariant_derive = { version = "=4.0.2", path = "../zvariant_derive" }
+zvariant_derive = { version = "=4.0.3", path = "../zvariant_derive" }
 serde_bytes = { version = "0.11", optional = true }
 static_assertions = "1.1.0"
 uuid = { version = "1.8.0", features = ["serde"], optional = true }
