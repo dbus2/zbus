@@ -266,9 +266,6 @@ more appropriate for your use case.</p>
 <p><strong>Note:</strong> it is common for a D-Bus library to provide a “shared” connection to a bus for a process:
 all <code>session()</code> share the same underlying connection for example. At the time of this writing,
 zbus doesn’t do that.</p>
-<p><strong>Note:</strong> on Windows, there is no standard implicit way to connect to a session bus. zbus provides
-opt-in compatibility to the GDBus session bus discovery mechanism via the <code>windows-gdbus</code> feature.
-This mechanism uses a machine-wide mutex however, so only one GDBus session bus can run at a time.</p>
 <p><strong>Note:</strong> on macOS, there is no standard implicit way to connect to a session bus. zbus provides
 opt-in compatibility to the Launchd session bus discovery mechanism via the <code>launchctl getenv</code> feature.
 The official dbus installation method via <code>Homebrew</code> provides a session bus installation,
