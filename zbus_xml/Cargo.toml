@@ -13,7 +13,7 @@ categories = ["parsing"]
 readme = "README.md"
 
 [dependencies]
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0.200", features = ["derive"] }
 zvariant = { path = "../zvariant", version = "4.0.0", default-features = false }
 zbus_names = { path = "../zbus_names", version = "3.0" }
 quick-xml = { version = "0.31", features = ["serialize", "overlapped-lists"] }

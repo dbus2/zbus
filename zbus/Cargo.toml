@@ -38,7 +38,7 @@ vsock = ["dep:vsock", "dep:async-io"]
 tokio-vsock = ["dep:tokio-vsock", "tokio"]
 
 [dependencies]
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0.200", features = ["derive"] }
 serde_repr = "0.1.19"
 zvariant = { path = "../zvariant", version = "4.0.0", default-features = false, features = [
   "enumflags2",
