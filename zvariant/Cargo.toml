@@ -26,7 +26,7 @@ serde = { version = "1.0", features = ["derive"] }
 arrayvec = { version = "0.7.4", features = ["serde"], optional = true }
 enumflags2 = { version = "0.7.9", features = ["serde"], optional = true }
 zvariant_derive = { version = "=4.0.3", path = "../zvariant_derive" }
-serde_bytes = { version = "0.11", optional = true }
+serde_bytes = { version = "0.11.14", optional = true }
 static_assertions = "1.1.0"
 uuid = { version = "1.8.0", features = ["serde"], optional = true }
 url = { version = "2.5.0", features = ["serde"], optional = true }
