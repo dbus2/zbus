@@ -36,7 +36,7 @@ chrono = { version = "0.4.38", features = [
 ], default-features = false, optional = true }
 
 [dev-dependencies]
-serde_json = "1.0"
+serde_json = "1.0.116"
 serde_repr = "0.1.19"
 # If you want to avoid compiling glib even when compiling tests or examples, comment out the glib
 # dev-dependency. Dev-dependencies can't be made optional, and hence can't be disabled with a
