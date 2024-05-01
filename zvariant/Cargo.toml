@@ -22,7 +22,7 @@ option-as-array = []
 
 [dependencies]
 endi = "1.1.0"
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0.200", features = ["derive"] }
 arrayvec = { version = "0.7.4", features = ["serde"], optional = true }
 enumflags2 = { version = "0.7.9", features = ["serde"], optional = true }
 zvariant_derive = { version = "=4.0.3", path = "../zvariant_derive" }
