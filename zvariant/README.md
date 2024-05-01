@@ -100,8 +100,11 @@ let encoded = to_bytes(ctxt, &e).unwrap();
 let decoded: Enum = encoded.deserialize().unwrap().0;
 assert_eq!(decoded, e);
 
-#[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
-// W/o `repr` spec, `u32` is assumed.
+// Enum encoding can be adjusted by using the `serde_repr` crate
+// and by annotating the representation of the enum with `repr`.
+use serde_repr::{Serialize_repr, Deserialize_repr};
+
+#[derive(Deserialize_repr, Serialize_repr, Type, PartialEq, Debug)]
 #[repr(u8)]
 enum UnitEnum {
     Variant1,
