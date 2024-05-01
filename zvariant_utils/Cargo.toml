@@ -16,6 +16,6 @@ categories = ["data-structures", "encoding", "parsing"]
 readme = "README.md"
 
 [dependencies]
-proc-macro2 = "1.0"
+proc-macro2 = "1.0.81"
 syn = { version = "1.0.109", features = ["extra-traits", "full"] }
 quote = "1.0.36"
