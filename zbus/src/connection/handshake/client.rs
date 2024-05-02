@@ -95,21 +95,16 @@ impl Client {
     #[instrument(skip(self))]
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
     async fn send_zero_byte(&mut self) -> Result<()> {
-        let written = self
-            .common
-            .socket_mut()
-            .write_mut()
-            .send_zero_byte()
-            .await
-            .map_err(|e| {
-                Error::Handshake(format!("Could not send zero byte with credentials: {}", e))
-            })
-            .and_then(|n| match n {
-                None => Err(Error::Handshake(
-                    "Could not send zero byte with credentials".to_string(),
-                )),
-                Some(n) => Ok(n),
-            })?;
+        let write = self.common.socket_mut().write_mut();
+
+        let written = match write.send_zero_byte().await.map_err(|e| {
+            Error::Handshake(format!("Could not send zero byte with credentials: {}", e))
+        })? {
+            // This likely means that the socket type is unable to send SCM_CREDS.
+            // Let's try to send the 0 byte as a regular message.
+            None => write.sendmsg(&[0], &[]).await?,
+            Some(n) => n,
+        };
 
         if written != 1 {
             return Err(Error::Handshake(
