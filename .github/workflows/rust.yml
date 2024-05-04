@@ -55,10 +55,17 @@ jobs:
   linux_test:
     runs-on: ubuntu-latest
     needs: [fmt, clippy]
+    strategy:
+      matrix:
+        # Test in both debug and release mode
+        env:
+          - PROFILE: dev
+          - PROFILE: release
     env:
       RUSTFLAGS: -D warnings
       RUST_BACKTRACE: full
       RUST_LOG: trace
+      PROFILE: ${{ matrix.env.PROFILE }}
     steps:
       - uses: actions/checkout@v4
       - name: Setup
@@ -73,20 +80,20 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build and Test
         run: |
-          dbus-run-session --config-file /tmp/dbus-session-abstract.conf -- cargo --locked test --verbose -- basic_connection
+          dbus-run-session --config-file /tmp/dbus-session-abstract.conf -- cargo --locked test --profile "$PROFILE" --verbose -- basic_connection
           # All features except tokio.
           dbus-run-session --config-file /tmp/dbus-session.conf -- \
-            cargo --locked test --verbose --features uuid,url,time,chrono,option-as-array,vsock,bus-impl \
+            cargo --locked test --profile "$PROFILE" --verbose --features uuid,url,time,chrono,option-as-array,vsock,bus-impl \
               -- --skip fdpass_systemd
           # check cookie-sha1 auth against dbus-daemon
           sed -i s/EXTERNAL/DBUS_COOKIE_SHA1/g /tmp/dbus-session.conf
-          dbus-run-session --config-file /tmp/dbus-session.conf -- cargo --locked test --verbose -- basic_connection
+          dbus-run-session --config-file /tmp/dbus-session.conf -- cargo --locked test --profile "$PROFILE" --verbose -- basic_connection
           # Test tokio support.
           dbus-run-session --config-file /tmp/dbus-session.conf -- \
-            cargo --locked test --verbose --tests -p zbus --no-default-features \
+            cargo --locked test --profile "$PROFILE" --verbose --tests -p zbus --no-default-features \
               --features tokio-vsock -- --skip fdpass_systemd
           dbus-run-session --config-file /tmp/dbus-session.conf -- \
-            cargo --locked test --verbose --doc --no-default-features connection::Connection::executor
+            cargo --locked test --profile "$PROFILE" --verbose --doc --no-default-features connection::Connection::executor
 
   windows_test:
     runs-on: windows-latest

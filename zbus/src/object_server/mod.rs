@@ -194,9 +194,9 @@ impl Node {
             path,
             ..Default::default()
         };
-        debug_assert!(node.add_interface(Peer));
-        debug_assert!(node.add_interface(Introspectable));
-        debug_assert!(node.add_interface(Properties));
+        assert!(node.add_interface(Peer));
+        assert!(node.add_interface(Introspectable));
+        assert!(node.add_interface(Properties));
 
         node
     }
