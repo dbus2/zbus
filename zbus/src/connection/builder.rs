@@ -2,11 +2,14 @@
 use async_io::Async;
 use event_listener::Event;
 use static_assertions::assert_impl_all;
-use std::collections::{HashMap, HashSet, VecDeque};
 #[cfg(not(feature = "tokio"))]
 use std::net::TcpStream;
 #[cfg(all(unix, not(feature = "tokio")))]
 use std::os::unix::net::UnixStream;
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    vec,
+};
 #[cfg(feature = "tokio")]
 use tokio::net::TcpStream;
 #[cfg(all(unix, feature = "tokio"))]
@@ -404,7 +407,7 @@ impl<'a> Builder<'a> {
                 socket_write,
                 // SAFETY: `server_guid` is provided as arg of `Builder::authenticated_socket`.
                 server_guid: server_guid.unwrap(),
-                already_received_bytes: None,
+                already_received_bytes: vec![],
                 unique_name,
             }
         } else {
@@ -448,7 +451,7 @@ impl<'a> Builder<'a> {
 
         // SAFETY: `Authenticated` is always built with these fields set to `Some`.
         let socket_read = auth.socket_read.take().unwrap();
-        let already_received_bytes = auth.already_received_bytes.take();
+        let already_received_bytes = auth.already_received_bytes.drain(..).collect();
 
         let mut conn = Connection::new(auth, is_bus_conn, executor).await?;
         conn.set_max_queued(self.max_queued.unwrap_or(DEFAULT_MAX_QUEUED));

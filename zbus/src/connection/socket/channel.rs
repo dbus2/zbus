@@ -61,7 +61,7 @@ impl super::ReadHalf for Reader {
     async fn receive_message(
         &mut self,
         _seq: u64,
-        _already_received_bytes: Option<Vec<u8>>,
+        _already_received_bytes: &mut Vec<u8>,
     ) -> crate::Result<Message> {
         self.0.recv().await.map_err(|e| {
             crate::Error::InputOutput(io::Error::new(io::ErrorKind::BrokenPipe, e).into())

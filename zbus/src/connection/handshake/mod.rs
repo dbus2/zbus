@@ -44,7 +44,7 @@ pub struct Authenticated {
     pub(crate) cap_unix_fd: bool,
 
     pub(crate) socket_read: Option<Box<dyn ReadHalf>>,
-    pub(crate) already_received_bytes: Option<Vec<u8>>,
+    pub(crate) already_received_bytes: Vec<u8>,
     pub(crate) unique_name: Option<OwnedUniqueName>,
 }
 

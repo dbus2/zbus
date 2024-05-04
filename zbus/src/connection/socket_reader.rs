@@ -13,7 +13,7 @@ use super::socket::ReadHalf;
 pub(crate) struct SocketReader {
     socket: Box<dyn ReadHalf>,
     senders: Arc<Mutex<HashMap<Option<OwnedMatchRule>, MsgBroadcaster>>>,
-    already_received_bytes: Option<Vec<u8>>,
+    already_received_bytes: Vec<u8>,
     prev_seq: u64,
     activity_event: Arc<Event>,
 }
@@ -22,7 +22,7 @@ impl SocketReader {
     pub fn new(
         socket: Box<dyn ReadHalf>,
         senders: Arc<Mutex<HashMap<Option<OwnedMatchRule>, MsgBroadcaster>>>,
-        already_received_bytes: Option<Vec<u8>>,
+        already_received_bytes: Vec<u8>,
         activity_event: Arc<Event>,
     ) -> Self {
         Self {
@@ -96,7 +96,7 @@ impl SocketReader {
         let seq = self.prev_seq + 1;
         let msg = self
             .socket
-            .receive_message(seq, self.already_received_bytes.take())
+            .receive_message(seq, &mut self.already_received_bytes)
             .await?;
         self.prev_seq = seq;
 
