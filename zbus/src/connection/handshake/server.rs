@@ -302,7 +302,7 @@ impl Handshake for Server<'_> {
             server_guid: self.guid,
             #[cfg(unix)]
             cap_unix_fd,
-            already_received_bytes: Some(recv_buffer),
+            already_received_bytes: recv_buffer,
             unique_name: self.unique_name,
         })
     }

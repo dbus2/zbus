@@ -242,16 +242,16 @@ impl Handshake for Client {
 
         trace!("Handshake done");
         #[allow(unused_variables)]
-        let (socket, recv_buffer, cap_unix_fd, _) = self.common.into_components();
+        let (socket, mut recv_buffer, cap_unix_fd, _) = self.common.into_components();
         let (mut read, write) = socket.take();
 
         // If we're a bus connection, we need to read the unique name from `Hello` response.
-        let (unique_name, already_received_bytes) = if self.bus {
-            let unique_name = receive_hello_response(&mut read, recv_buffer).await?;
+        let unique_name = if self.bus {
+            let unique_name = receive_hello_response(&mut read, &mut recv_buffer).await?;
 
-            (Some(unique_name), None)
+            Some(unique_name)
         } else {
-            (None, Some(recv_buffer))
+            None
         };
 
         Ok(Authenticated {
@@ -260,7 +260,7 @@ impl Handshake for Client {
             server_guid: self.server_guid.unwrap(),
             #[cfg(unix)]
             cap_unix_fd,
-            already_received_bytes,
+            already_received_bytes: recv_buffer,
             unique_name,
         })
     }
@@ -279,11 +279,11 @@ fn create_hello_method_call() -> Message {
 
 async fn receive_hello_response(
     read: &mut Box<dyn ReadHalf>,
-    recv_buffer: Vec<u8>,
+    recv_buffer: &mut Vec<u8>,
 ) -> Result<OwnedUniqueName> {
     use crate::message::Type;
 
-    let reply = read.receive_message(0, Some(recv_buffer)).await?;
+    let reply = read.receive_message(0, recv_buffer).await?;
     match reply.message_type() {
         Type::MethodReturn => reply.body().deserialize(),
         Type::Error => Err(Error::from(reply)),

@@ -86,14 +86,16 @@ pub trait ReadHalf: std::fmt::Debug + Send + Sync + 'static {
     async fn receive_message(
         &mut self,
         seq: u64,
-        already_received_bytes: Option<Vec<u8>>,
+        already_received_bytes: &mut Vec<u8>,
     ) -> crate::Result<Message> {
-        let mut bytes =
-            already_received_bytes.unwrap_or_else(|| Vec::with_capacity(MIN_MESSAGE_SIZE));
-        let mut pos = bytes.len();
         #[cfg(unix)]
         let mut fds = vec![];
-        if pos < MIN_MESSAGE_SIZE {
+        let mut bytes = if already_received_bytes.len() < MIN_MESSAGE_SIZE {
+            let mut bytes = vec![];
+            if !already_received_bytes.is_empty() {
+                std::mem::swap(already_received_bytes, &mut bytes);
+            }
+            let mut pos = bytes.len();
             bytes.resize(MIN_MESSAGE_SIZE, 0);
             // We don't have enough data to make a proper message header yet.
             // Some partial read may be in raw_in_buffer, so we try to complete it
@@ -123,7 +125,11 @@ pub trait ReadHalf: std::fmt::Debug + Send + Sync + 'static {
                     .into());
                 }
             }
-        }
+
+            bytes
+        } else {
+            already_received_bytes.drain(..MIN_MESSAGE_SIZE).collect()
+        };
 
         let (primary_header, fields_len) = PrimaryHeader::read(&bytes)?;
         let header_len = MIN_MESSAGE_SIZE + fields_len as usize;
@@ -136,9 +142,16 @@ pub trait ReadHalf: std::fmt::Debug + Send + Sync + 'static {
 
         // By this point we have a full primary header, so we know the exact length of the complete
         // message.
+        if !already_received_bytes.is_empty() {
+            // still have some bytes buffered.
+            let pending = total_len - bytes.len();
+            let to_take = std::cmp::min(pending, already_received_bytes.len());
+            bytes.extend(already_received_bytes.drain(..to_take));
+        }
+        let mut pos = bytes.len();
         bytes.resize(total_len, 0);
 
-        // Now we have an incomplete message; read the rest
+        // Read the rest, if any
         while pos < total_len {
             let res = self.recvmsg(&mut bytes[pos..]).await?;
             let read = {
@@ -293,7 +306,7 @@ impl ReadHalf for Box<dyn ReadHalf> {
     async fn receive_message(
         &mut self,
         seq: u64,
-        already_received_bytes: Option<Vec<u8>>,
+        already_received_bytes: &mut Vec<u8>,
     ) -> crate::Result<Message> {
         (**self).receive_message(seq, already_received_bytes).await
     }
