@@ -1,3 +1,4 @@
+pub mod de;
 pub mod parsed_signature;
 pub mod ser;
 
@@ -12,8 +13,8 @@ use core::{
 
 use serde::{
     de::{
-        Deserialize, DeserializeSeed, Deserializer, Error, MapAccess, SeqAccess, Unexpected,
-        Visitor,
+        Deserialize, DeserializeSeed, Deserializer, Error, IntoDeserializer, MapAccess, SeqAccess,
+        Unexpected, Visitor,
     },
     ser::{Serialize, SerializeSeq, SerializeStruct, SerializeTupleStruct, Serializer},
 };
@@ -29,6 +30,17 @@ use crate::{maybe_display_fmt, Maybe};
 
 #[cfg(unix)]
 use crate::Fd;
+
+use self::de::ValueDeserializer;
+
+pub fn from_value<'a, T, V>(value: V) -> Result<T, crate::Error>
+where
+    T: ?Sized + Deserialize<'a>,
+    V: Into<Value<'a>>,
+{
+    let deserializer = value.into().into_deserializer();
+    T::deserialize(deserializer).map_err(Into::into)
+}
 
 /// A generic container, in the form of an enum that holds exactly one value of any of the other
 /// types.
@@ -965,6 +977,14 @@ impl<'a> TryFrom<&Value<'a>> for Value<'a> {
 
     fn try_from(value: &Value<'a>) -> crate::Result<Value<'a>> {
         value.try_clone()
+    }
+}
+
+impl<'a> IntoDeserializer<'a, crate::Error> for Value<'a> {
+    type Deserializer = ValueDeserializer<'a>;
+
+    fn into_deserializer(self) -> Self::Deserializer {
+        ValueDeserializer::<'a>::new(self)
     }
 }
 
