@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use std::collections::VecDeque;
-use tracing::{debug, instrument, trace};
+use tracing::{debug, instrument, trace, warn};
 
 use sha1::{Digest, Sha1};
 
@@ -179,7 +179,23 @@ impl Client {
 
         let can_pass_fd = self.common.socket_mut().read_mut().can_pass_unix_fd();
         if can_pass_fd {
-            commands.push(Command::NegotiateUnixFD);
+            // xdg-dbus-proxy can't handle pipelining, hence this special handling.
+            // FIXME: Remove this as soon as flatpak is fixed and fix is available in major distros.
+            // See https://github.com/flatpak/xdg-dbus-proxy/issues/21
+            if is_flatpak() {
+                self.common.write_command(Command::NegotiateUnixFD).await?;
+                match self.common.read_command().await? {
+                    Command::AgreeUnixFD => self.common.set_cap_unix_fd(true),
+                    Command::Error(e) => warn!("UNIX file descriptor passing rejected: {e}"),
+                    cmd => {
+                        return Err(Error::Handshake(format!(
+                            "Unexpected command from server: {cmd}"
+                        )))
+                    }
+                }
+            } else {
+                commands.push(Command::NegotiateUnixFD);
+            }
         };
         commands.push(Command::Begin);
         let hello_method = if self.bus {
@@ -205,12 +221,12 @@ impl Client {
                     self.set_guid(guid)?;
                 }
                 Command::AgreeUnixFD => self.common.set_cap_unix_fd(true),
-                // This also covers "REJECTED" and "ERROR", which would mean that the server has
-                // rejected the authentication challenge response (likely cookie) since it
-                // already agreed to the mechanism. Theoretically we should
-                // be just trying the next auth mechanism but this most
-                // likely means something is very wrong and we're already
-                // too deep into the handshake to recover.
+                Command::Error(e) => warn!("UNIX file descriptor passing rejected: {e}"),
+                // This also covers "REJECTED", which would mean that the server has rejected the
+                // authentication challenge response (likely cookie) since it already agreed to the
+                // mechanism. Theoretically we should be just trying the next auth mechanism but
+                // this most likely means something is very wrong and we're already too deep into
+                // the handshake to recover.
                 cmd => {
                     return Err(Error::Handshake(format!(
                         "Unexpected command from server: {cmd}"
@@ -289,4 +305,8 @@ async fn receive_hello_response(
         Type::Error => Err(Error::from(reply)),
         m => Err(Error::Handshake(format!("Unexpected messgage `{m:?}`"))),
     }
+}
+
+fn is_flatpak() -> bool {
+    std::env::var("FLATPAK_ID").is_ok()
 }
