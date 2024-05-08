@@ -223,7 +223,7 @@ impl<'a> Serialize for ObjectPath<'a> {
     where
         S: Serializer,
     {
-        serializer.serialize_str(self.as_str())
+        serializer.serialize_newtype_struct("zvariant::ObjectPath", self.as_str())
     }
 }
 
@@ -232,9 +232,7 @@ impl<'de: 'a, 'a> Deserialize<'de> for ObjectPath<'a> {
     where
         D: Deserializer<'de>,
     {
-        let visitor = ObjectPathVisitor;
-
-        deserializer.deserialize_str(visitor)
+        deserializer.deserialize_newtype_struct("zvariant::ObjectPath", ObjectPathVisitor)
     }
 }
 
@@ -253,6 +251,28 @@ impl<'de> Visitor<'de> for ObjectPathVisitor {
         E: serde::de::Error,
     {
         ObjectPath::try_from(value).map_err(serde::de::Error::custom)
+    }
+
+    fn visit_str<E>(self, value: &str) -> std::prelude::v1::Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        self.visit_string(value.to_string())
+    }
+
+    fn visit_string<E>(self, value: String) -> std::prelude::v1::Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        ObjectPath::try_from(value).map_err(de::Error::custom)
+    }
+
+    fn visit_newtype_struct<D>(self, deserializer: D) -> core::result::Result<Self::Value, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let path = String::deserialize(deserializer)?;
+        ObjectPath::try_from(path).map_err(de::Error::custom)
     }
 }
 
@@ -301,7 +321,7 @@ fn ensure_correct_object_path_str(path: &[u8]) -> Result<()> {
 }
 
 /// Owned [`ObjectPath`](struct.ObjectPath.html)
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, serde::Serialize, Type)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, Type)]
 pub struct OwnedObjectPath(ObjectPath<'static>);
 
 assert_impl_all!(OwnedObjectPath: Send, Sync, Unpin);
@@ -369,6 +389,15 @@ impl TryFrom<String> for OwnedObjectPath {
     }
 }
 
+impl Serialize for OwnedObjectPath {
+    fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
 impl<'de> Deserialize<'de> for OwnedObjectPath {
     fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
     where
@@ -389,11 +418,58 @@ impl std::fmt::Display for OwnedObjectPath {
 #[cfg(test)]
 mod unit {
     use super::*;
+    use crate::serialized::{Context, Data};
+    use endi::LE;
 
     #[test]
     fn owned_from_reader() {
         // See https://github.com/dbus2/zbus/issues/287
         let json_str = "\"/some/path\"";
         serde_json::de::from_reader::<_, OwnedObjectPath>(json_str.as_bytes()).unwrap();
+    }
+
+    #[test]
+    fn serialize_path_json() {
+        let path = ObjectPath::try_from("/some/path").unwrap();
+        let serialized = serde_json::to_value(&path).unwrap();
+        assert_eq!(serialized, serde_json::json!("/some/path"));
+    }
+
+    #[test]
+    fn deserialize_path_json() {
+        let json = serde_json::json!("/some/path");
+        let path: OwnedObjectPath = serde_json::from_value(json).unwrap();
+        assert_eq!(path.as_str(), "/some/path");
+    }
+
+    #[test]
+    fn serialize_path_dbus() {
+        let path = ObjectPath::try_from("/some/path").unwrap();
+        let context = Context::new_dbus(LE, 0);
+        let serialized = zvariant::to_bytes(context, &path).unwrap();
+
+        let bytes: &[u8] = serialized.bytes();
+
+        // uint32 encoded string length
+        assert_eq!(bytes[0], 10);
+        assert_eq!(bytes[1], 0);
+        assert_eq!(bytes[2], 0);
+        assert_eq!(bytes[3], 0);
+
+        // string
+        assert_eq!(&bytes[4..], b"/some/path\0");
+    }
+
+    #[test]
+    fn deserialize_path_dbus() {
+        let bytes: Vec<u8> = vec![
+            10, 0, 0, 0, // uint32 encoded string length
+            b'/', b's', b'o', b'm', b'e', b'/', b'p', b'a', b't', b'h', 0, // string
+        ];
+
+        let context = Context::new_dbus(LE, 0);
+        let data = Data::new(&bytes, context);
+        let path: ObjectPath<'_> = data.deserialize().unwrap().0;
+        assert_eq!(path.as_str(), "/some/path");
     }
 }
