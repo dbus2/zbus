@@ -490,7 +490,7 @@ impl<'a> Serialize for Signature<'a> {
     where
         S: Serializer,
     {
-        serializer.serialize_str(self.as_str())
+        serializer.serialize_newtype_struct("zvariant::Signature", self.as_str())
     }
 }
 
@@ -499,14 +499,54 @@ impl<'de: 'a, 'a> Deserialize<'de> for Signature<'a> {
     where
         D: Deserializer<'de>,
     {
-        let val = <std::borrow::Cow<'a, str>>::deserialize(deserializer)?;
+        struct SignatureVisitor;
 
-        Self::try_from(val).map_err(serde::de::Error::custom)
+        impl<'de> serde::de::Visitor<'de> for SignatureVisitor {
+            type Value = Signature<'static>;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("a string representing a valid D-Bus signature")
+            }
+
+            fn visit_str<E>(self, value: &str) -> core::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Signature::try_from(value.to_string()).map_err(serde::de::Error::custom)
+            }
+
+            fn visit_string<E>(self, value: String) -> core::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Signature::try_from(value).map_err(serde::de::Error::custom)
+            }
+
+            fn visit_borrowed_str<E>(self, v: &'de str) -> std::prelude::v1::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Signature::try_from(v.to_string()).map_err(serde::de::Error::custom)
+            }
+
+            fn visit_newtype_struct<D>(
+                self,
+                deserializer: D,
+            ) -> std::prelude::v1::Result<Self::Value, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                let val = String::deserialize(deserializer)?;
+                Signature::try_from(val).map_err(serde::de::Error::custom)
+            }
+        }
+
+        deserializer.deserialize_newtype_struct("zvariant::Signature", SignatureVisitor)
     }
 }
 
 /// Owned [`Signature`](struct.Signature.html)
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, Type)]
+#[derive(Debug, Clone, PartialEq, Eq, Type)]
 pub struct OwnedSignature(Signature<'static>);
 
 assert_impl_all!(OwnedSignature: Send, Sync, Unpin);
@@ -560,14 +600,22 @@ impl TryFrom<String> for OwnedSignature {
     }
 }
 
+impl Serialize for OwnedSignature {
+    fn serialize<S>(&self, serializer: S) -> std::prelude::v1::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
 impl<'de> Deserialize<'de> for OwnedSignature {
     fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let val = String::deserialize(deserializer)?;
-
-        OwnedSignature::try_from(val).map_err(serde::de::Error::custom)
+        let val = Signature::deserialize(deserializer)?;
+        Ok(OwnedSignature(val.to_owned()))
     }
 }
 
@@ -580,6 +628,11 @@ impl std::fmt::Display for OwnedSignature {
 #[cfg(test)]
 mod tests {
     use super::{Bytes, Signature};
+    use crate::{
+        serialized::{Context, Data},
+        OwnedSignature,
+    };
+    use endi::LE;
     use std::sync::Arc;
 
     #[test]
@@ -635,5 +688,47 @@ mod tests {
         let sig_a = Signature::from_str_unchecked("(so)i");
         let sig_b = Signature::from_str_unchecked("(so)u");
         assert_ne!(sig_a, sig_b);
+    }
+
+    #[test]
+    fn serialize_signature_json() {
+        let path = Signature::try_from("a{sv}").unwrap();
+        let serialized = serde_json::to_value(&path).unwrap();
+        assert_eq!(serialized, serde_json::json!("a{sv}"));
+    }
+
+    #[test]
+    fn deserialize_signature_json() {
+        let json = serde_json::json!("a{sv}");
+        let path: OwnedSignature = serde_json::from_value(json).unwrap();
+        assert_eq!(path.as_str(), "a{sv}");
+    }
+
+    #[test]
+    fn serialize_signature_dbus() {
+        let path = Signature::try_from("a{sv}").unwrap();
+        let context = Context::new_dbus(LE, 0);
+        let serialized = zvariant::to_bytes(context, &path).unwrap();
+
+        let bytes: &[u8] = serialized.bytes();
+
+        // uint8 encoded string length
+        assert_eq!(bytes[0], 5);
+
+        // string
+        assert_eq!(&bytes[1..], b"a{sv}\0");
+    }
+
+    #[test]
+    fn deserialize_signature_dbus() {
+        let bytes: Vec<u8> = vec![
+            5, // uint8 encoded string length
+            b'a', b'{', b's', b'v', b'}', 0, // string
+        ];
+
+        let context = Context::new_dbus(LE, 0);
+        let data = Data::new(&bytes, context);
+        let path: Signature<'_> = data.deserialize().unwrap().0;
+        assert_eq!(path.as_str(), "a{sv}");
     }
 }
