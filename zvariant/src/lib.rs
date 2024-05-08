@@ -73,7 +73,7 @@ mod optional;
 pub use crate::optional::*;
 
 mod value;
-pub use value::*;
+pub use value::{from_value, Value};
 
 mod serialize_value;
 pub use serialize_value::*;

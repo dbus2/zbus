@@ -227,6 +227,12 @@ impl<'a> From<&SignatureEntry> for Signature<'a> {
     }
 }
 
+impl<'a> From<&mut SignatureEntry> for Signature<'a> {
+    fn from(parsed: &mut SignatureEntry) -> Self {
+        signature_string!(&parsed.to_string())
+    }
+}
+
 impl std::fmt::Display for SignatureEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

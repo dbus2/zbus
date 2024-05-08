@@ -38,7 +38,6 @@ impl fmt::Display for MaxDepthExceeded {
 pub enum Error {
     /// Generic error. All serde errors gets transformed into this variant.
     Message(String),
-
     /// Wrapper for [`std::io::Error`](https://doc.rust-lang.org/std/io/struct.Error.html)
     InputOutput(Arc<io::Error>),
     /// Type conversions errors.
@@ -60,6 +59,8 @@ pub enum Error {
     OutOfBounds,
     /// The maximum allowed depth for containers in encoding was exceeded.
     MaxDepthExceeded(MaxDepthExceeded),
+    /// An unexpected value with no corresponding signature was encountered.
+    UnexpectedValue(String)
 }
 
 assert_impl_all!(Error: Send, Sync, Unpin);
@@ -74,6 +75,7 @@ impl PartialEq for Error {
             (Error::PaddingNot0(p), Error::PaddingNot0(other)) => p == other,
             (Error::UnknownFd, Error::UnknownFd) => true,
             (Error::MaxDepthExceeded(max1), Error::MaxDepthExceeded(max2)) => max1 == max2,
+            (Error::UnexpectedValue(left), Error::UnexpectedValue(right)) => left == right,
             (_, _) => false,
         }
     }
@@ -115,6 +117,7 @@ impl fmt::Display for Error {
                 "Out of bounds range specified",
             ),
             Error::MaxDepthExceeded(max) => write!(f, "{max}"),
+            Error::UnexpectedValue(s) => write!(f, "Unexpected value: {s}"),
         }
     }
 }
@@ -137,6 +140,7 @@ impl Clone for Error {
             }
             Error::OutOfBounds => Error::OutOfBounds,
             Error::MaxDepthExceeded(max) => Error::MaxDepthExceeded(*max),
+            Error::UnexpectedValue(s) => Error::UnexpectedValue(s.clone()),
         }
     }
 }
