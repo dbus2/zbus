@@ -12,7 +12,8 @@ use crate::{
     serialized::{Context, Data, Format, Size, Written},
     signature_parser::SignatureParser,
     utils::*,
-    Basic, DynamicType, Error, Result, Signature, WriteBytes,
+    value::ser::ValueSerializer,
+    Basic, DynamicType, Error, OwnedValue, Result, Signature, WriteBytes,
 };
 
 struct NullWriteSeek;
@@ -237,6 +238,56 @@ where
     };
 
     Ok(encoded)
+}
+
+/// Serialize `T` to an `OwnedValue`.
+///
+/// # Examples
+///
+/// ```
+/// use zvariant::{to_value, OwnedValue};
+///
+/// let input: u32 = 42;
+/// let value: OwnedValue = to_value(&input).unwrap();
+/// let output: &u32 = value.downcast_ref().unwrap();
+/// assert_eq!(*output, 42);
+/// ```
+pub fn to_value<T>(value: &T) -> Result<OwnedValue>
+where
+    T: ?Sized + Serialize + DynamicType,
+{
+    let signature = value.dynamic_signature();
+    to_value_for_signature(signature, value)
+}
+
+/// Serialize `T` to an `OwnedValue` using the given
+/// signature.
+///
+/// Use this function instead of [`to_value`] if the
+/// value being serialized does not implement [`DynamicType`].
+///
+/// # Examples
+///
+/// ```
+/// use zvariant::{to_value_for_signature, OwnedValue};
+///
+/// let input: u32 = 42;
+/// let value: OwnedValue = to_value_for_signature("u", &input).unwrap();
+/// let output: &u32 = value.downcast_ref().unwrap();
+/// assert_eq!(*output, 42);
+/// ```
+///
+/// [`to_value`]: fn.to_value.html
+pub fn to_value_for_signature<'s, S, T>(signature: S, value: &T) -> Result<OwnedValue>
+where
+    S: TryInto<Signature<'s>>,
+    S::Error: Into<Error>,
+    T: ?Sized + Serialize,
+{
+    let signature: Signature<'_> = signature.try_into().map_err(Into::into)?;
+    let serializer = ValueSerializer::new(signature);
+    let value = value.serialize(serializer)?;
+    value.try_to_owned()
 }
 
 /// Context for all our serializers and provides shared functionality.

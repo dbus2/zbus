@@ -1,4 +1,5 @@
 pub mod parsed_signature;
+pub mod ser;
 
 use core::{
     cmp::Ordering,

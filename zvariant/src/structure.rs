@@ -7,8 +7,9 @@ use static_assertions::assert_impl_all;
 use std::fmt::{Display, Write};
 
 use crate::{
-    signature_parser::SignatureParser, value::SignatureSeed, value_display_fmt, DynamicDeserialize,
-    DynamicType, OwnedValue, Signature, Value,
+    signature_parser::SignatureParser,
+    value::{value_display_fmt, SignatureSeed},
+    DynamicDeserialize, DynamicType, OwnedValue, Signature, Value,
 };
 
 /// Use this to efficiently build a [`Structure`].

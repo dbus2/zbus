@@ -2,7 +2,7 @@ use serde::ser::{Serialize, Serializer};
 use static_assertions::assert_impl_all;
 use std::fmt::Display;
 
-use crate::{value_display_fmt, Error, Signature, Type, Value};
+use crate::{value::value_display_fmt, Error, Signature, Type, Value};
 
 /// A helper type to wrap `Option<T>` (GVariant's Maybe type) in [`Value`].
 ///
