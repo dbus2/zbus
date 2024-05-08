@@ -4,7 +4,10 @@ use serde::{
     ser::{Serialize, SerializeSeq, Serializer},
 };
 use static_assertions::assert_impl_all;
-use std::fmt::{Display, Write};
+use std::{
+    collections::VecDeque,
+    fmt::{Display, Write},
+};
 
 use crate::{
     value::{value_display_fmt, SignatureSeed},
@@ -20,7 +23,7 @@ use crate::{
 #[derive(Debug, Hash, PartialEq, PartialOrd, Eq, Ord)]
 pub struct Array<'a> {
     element_signature: Signature<'a>,
-    elements: Vec<Value<'a>>,
+    elements: VecDeque<Value<'a>>,
     signature: Signature<'a>,
 }
 
@@ -32,7 +35,7 @@ impl<'a> Array<'a> {
         let signature = create_signature(&element_signature);
         Array {
             element_signature,
-            elements: vec![],
+            elements: VecDeque::new(),
             signature,
         }
     }
@@ -41,7 +44,7 @@ impl<'a> Array<'a> {
         let element_signature = signature.slice(1..);
         Array {
             element_signature,
-            elements: vec![],
+            elements: VecDeque::new(),
             signature,
         }
     }
@@ -54,13 +57,18 @@ impl<'a> Array<'a> {
     pub fn append<'e: 'a>(&mut self, element: Value<'e>) -> Result<()> {
         check_child_value_signature!(self.element_signature, element.value_signature(), "element");
 
-        self.elements.push(element);
+        self.elements.push_back(element);
 
         Ok(())
     }
 
+    /// Remove the first element from the array
+    pub fn remove(&mut self) -> Option<Value<'a>> {
+        self.elements.pop_front()
+    }
+
     /// Get all the elements.
-    pub fn inner(&self) -> &[Value<'a>] {
+    pub fn inner(&self) -> &VecDeque<Value<'a>> {
         &self.elements
     }
 
@@ -124,7 +132,7 @@ impl<'a> Array<'a> {
             .elements
             .iter()
             .map(|v| v.try_clone())
-            .collect::<crate::Result<Vec<_>>>()?;
+            .collect::<crate::Result<VecDeque<_>>>()?;
 
         Ok(Self {
             element_signature: self.element_signature.clone(),
@@ -146,10 +154,20 @@ pub(crate) fn array_display_fmt(
     type_annotate: bool,
 ) -> std::fmt::Result {
     // Print as string if it is a bytestring (i.e., first nul character is the last byte)
-    if let [leading @ .., Value::U8(b'\0')] = array.as_ref() {
-        if !leading.contains(&Value::U8(b'\0')) {
-            let bytes = leading
+    if let Some(Value::U8(b'\0')) = array.elements.back() {
+        let string_len = array.elements.len() - 1;
+
+        let contains_inner_terminator: bool = array
+            .elements
+            .iter()
+            .take(string_len)
+            .any(|c| c == &Value::U8(b'\0'));
+
+        if !contains_inner_terminator {
+            let bytes = array
+                .elements
                 .iter()
+                .take(string_len)
                 .map(|v| {
                     v.downcast_ref::<u8>()
                         .expect("item must have a signature of a byte")
@@ -241,7 +259,7 @@ impl<'a> DynamicDeserialize<'a> for Array<'a> {
 }
 
 impl<'a> std::ops::Deref for Array<'a> {
-    type Target = [Value<'a>];
+    type Target = VecDeque<Value<'a>>;
 
     fn deref(&self) -> &Self::Target {
         self.inner()
@@ -372,4 +390,90 @@ impl<'de> Visitor<'de> for ArrayVisitor<'de> {
 
 fn create_signature(element_signature: &Signature<'_>) -> Signature<'static> {
     Signature::from_string_unchecked(format!("a{element_signature}"))
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn array_inner() {
+        let mut array = Array::new(signature_string!("i"));
+        array.append(Value::I32(1)).unwrap();
+        array.append(Value::I32(2)).unwrap();
+        array.append(Value::I32(3)).unwrap();
+
+        let inner: &VecDeque<Value<'_>> = array.inner();
+        assert_eq!(inner.len(), 3);
+        assert_eq!(inner[0], Value::I32(1));
+        assert_eq!(inner[1], Value::I32(2));
+        assert_eq!(inner[2], Value::I32(3));
+    }
+
+    #[test]
+    fn array_append() {
+        let mut array = Array::new(signature_string!("i"));
+        array.append(Value::I32(1)).unwrap();
+        array.append(Value::I32(2)).unwrap();
+        array.append(Value::I32(3)).unwrap();
+
+        assert_eq!(array.len(), 3);
+        assert_eq!(array.elements[0], Value::I32(1));
+        assert_eq!(array.elements[1], Value::I32(2));
+        assert_eq!(array.elements[2], Value::I32(3));
+    }
+
+    #[test]
+    fn array_remove() {
+        let mut array = Array::new(signature_string!("i"));
+        array.append(Value::I32(1)).unwrap();
+        array.append(Value::I32(2)).unwrap();
+        array.append(Value::I32(3)).unwrap();
+
+        assert_eq!(array.len(), 3);
+
+        let removed = array.remove();
+        assert_eq!(removed, Some(Value::I32(1)));
+        assert_eq!(array.len(), 2);
+
+        let removed = array.remove();
+        assert_eq!(removed, Some(Value::I32(2)));
+        assert_eq!(array.len(), 1);
+
+        let removed = array.remove();
+        assert_eq!(removed, Some(Value::I32(3)));
+        assert_eq!(array.len(), 0);
+
+        let removed = array.remove();
+        assert_eq!(removed, None);
+        assert_eq!(array.len(), 0);
+    }
+
+    #[test]
+    fn array_display_fmt() {
+        let array = Array::new(signature_string!("i"));
+        assert_eq!(format!("{}", array), "@ai []");
+
+        let mut array = Array::new(signature_string!("i"));
+        array.append(Value::I32(1)).unwrap();
+        assert_eq!(format!("{}", array), "[1]");
+
+        let mut array = Array::new(signature_string!("i"));
+        array.append(Value::I32(1)).unwrap();
+        array.append(Value::I32(2)).unwrap();
+        assert_eq!(format!("{}", array), "[1, 2]");
+
+        let mut array = Array::new(signature_string!("i"));
+        array.append(Value::I32(1)).unwrap();
+        array.append(Value::I32(2)).unwrap();
+        array.append(Value::I32(3)).unwrap();
+        assert_eq!(format!("{}", array), "[1, 2, 3]");
+
+        let mut array = Array::new(signature_string!("y"));
+        array.append(Value::U8(b'a')).unwrap();
+        array.append(Value::U8(b'b')).unwrap();
+        array.append(Value::U8(b'c')).unwrap();
+        array.append(Value::U8(b'\0')).unwrap();
+        assert_eq!(format!("{}", array), "b\"abc\"");
+    }
 }
