@@ -840,6 +840,7 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
         <&Value as TryInto<u32>>::try_into(changed_value).unwrap(),
         expected_property_value
     );
+    assert!(args.invalidated_properties().is_empty());
 
     proxy
         .set_emits_changed_true(expected_property_value)
@@ -857,6 +858,7 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
         <&Value as TryInto<u32>>::try_into(changed_value).unwrap(),
         expected_property_value
     );
+    assert!(args.invalidated_properties().is_empty());
 
     proxy
         .set_emits_changed_invalidates(expected_property_value)
@@ -887,6 +889,8 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
         args.invalidated_properties(),
         &vec![unexpected_property_key.to_string()]
     );
+    assert!(!args.changed_properties().is_empty());
+    assert!(args.invalidated_properties().is_empty());
 
     proxy
         .set_emits_changed_false(expected_property_value)
@@ -901,6 +905,8 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
         args.invalidated_properties(),
         &vec![unexpected_property_key.to_string()]
     );
+    assert!(!args.changed_properties().is_empty());
+    assert!(args.invalidated_properties().is_empty());
 
     proxy.quit().await?;
     Ok(val)
