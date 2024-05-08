@@ -632,7 +632,7 @@ pub fn expand<T: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>
                                 signal_context,
                                 #zbus::names::InterfaceName::from_static_str_unchecked(#iface_name),
                                 &changed,
-                                &[#member_name],
+                                &[],
                             ).await
                         }
                     );
