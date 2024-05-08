@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use std::collections::VecDeque;
-use tracing::{debug, instrument, trace};
+use tracing::{debug, instrument, trace, warn};
 
 use sha1::{Digest, Sha1};
 
@@ -205,12 +205,12 @@ impl Client {
                     self.set_guid(guid)?;
                 }
                 Command::AgreeUnixFD => self.common.set_cap_unix_fd(true),
-                // This also covers "REJECTED" and "ERROR", which would mean that the server has
-                // rejected the authentication challenge response (likely cookie) since it
-                // already agreed to the mechanism. Theoretically we should
-                // be just trying the next auth mechanism but this most
-                // likely means something is very wrong and we're already
-                // too deep into the handshake to recover.
+                Command::Error(e) => warn!("UNIX file descriptor passing rejected: {e}"),
+                // This also covers "REJECTED", which would mean that the server has rejected the
+                // authentication challenge response (likely cookie) since it already agreed to the
+                // mechanism. Theoretically we should be just trying the next auth mechanism but
+                // this most likely means something is very wrong and we're already too deep into
+                // the handshake to recover.
                 cmd => {
                     return Err(Error::Handshake(format!(
                         "Unexpected command from server: {cmd}"
