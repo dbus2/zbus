@@ -223,7 +223,7 @@ impl<'a> Serialize for ObjectPath<'a> {
     where
         S: Serializer,
     {
-        serializer.serialize_str(self.as_str())
+        serializer.serialize_newtype_struct("zvariant::ObjectPath", self.as_str())
     }
 }
 
@@ -232,9 +232,7 @@ impl<'de: 'a, 'a> Deserialize<'de> for ObjectPath<'a> {
     where
         D: Deserializer<'de>,
     {
-        let visitor = ObjectPathVisitor;
-
-        deserializer.deserialize_str(visitor)
+        deserializer.deserialize_newtype_struct("zvariant::ObjectPath", ObjectPathVisitor)
     }
 }
 
@@ -253,6 +251,25 @@ impl<'de> Visitor<'de> for ObjectPathVisitor {
         E: serde::de::Error,
     {
         ObjectPath::try_from(value).map_err(serde::de::Error::custom)
+    }
+
+    fn visit_str<E>(self, value: &str) -> std::prelude::v1::Result<Self::Value, E>
+        where
+            E: de::Error, {
+        self.visit_string(value.to_string())
+    }
+
+    fn visit_string<E>(self, value: String) -> std::prelude::v1::Result<Self::Value, E>
+        where
+            E: de::Error, {
+        ObjectPath::try_from(value).map_err(de::Error::custom)
+    }
+
+    fn visit_newtype_struct<D>(self, deserializer: D) -> core::result::Result<Self::Value, D::Error>
+        where
+            D: Deserializer<'de>, {
+        let path = String::deserialize(deserializer)?;
+        ObjectPath::try_from(path).map_err(de::Error::custom)
     }
 }
 

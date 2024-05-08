@@ -4,7 +4,7 @@ use serde::{
     ser::{Serialize, SerializeSeq, Serializer},
 };
 use static_assertions::assert_impl_all;
-use std::fmt::{Display, Write};
+use std::{collections::VecDeque, fmt::{Display, Write}};
 
 use crate::{
     value::{value_display_fmt, SignatureSeed},
@@ -20,7 +20,7 @@ use crate::{
 #[derive(Debug, Hash, PartialEq, PartialOrd, Eq, Ord)]
 pub struct Array<'a> {
     element_signature: Signature<'a>,
-    elements: Vec<Value<'a>>,
+    elements: VecDeque<Value<'a>>,
     signature: Signature<'a>,
 }
 
@@ -32,7 +32,7 @@ impl<'a> Array<'a> {
         let signature = create_signature(&element_signature);
         Array {
             element_signature,
-            elements: vec![],
+            elements: VecDeque::new(),
             signature,
         }
     }
@@ -41,7 +41,7 @@ impl<'a> Array<'a> {
         let element_signature = signature.slice(1..);
         Array {
             element_signature,
-            elements: vec![],
+            elements: VecDeque::new(),
             signature,
         }
     }
@@ -54,13 +54,18 @@ impl<'a> Array<'a> {
     pub fn append<'e: 'a>(&mut self, element: Value<'e>) -> Result<()> {
         check_child_value_signature!(self.element_signature, element.value_signature(), "element");
 
-        self.elements.push(element);
+        self.elements.push_back(element);
 
         Ok(())
     }
 
+    /// Remove the first element from the array
+    pub fn remove(&mut self) -> Option<Value<'a>> {
+        self.elements.pop_front()
+    }
+
     /// Get all the elements.
-    pub fn inner(&self) -> &[Value<'a>] {
+    pub fn inner(&self) -> &VecDeque<Value<'a>> {
         &self.elements
     }
 
@@ -124,7 +129,7 @@ impl<'a> Array<'a> {
             .elements
             .iter()
             .map(|v| v.try_clone())
-            .collect::<crate::Result<Vec<_>>>()?;
+            .collect::<crate::Result<VecDeque<_>>>()?;
 
         Ok(Self {
             element_signature: self.element_signature.clone(),
@@ -146,10 +151,19 @@ pub(crate) fn array_display_fmt(
     type_annotate: bool,
 ) -> std::fmt::Result {
     // Print as string if it is a bytestring (i.e., first nul character is the last byte)
-    if let [leading @ .., Value::U8(b'\0')] = array.as_ref() {
-        if !leading.contains(&Value::U8(b'\0')) {
-            let bytes = leading
+    if let Some(Value::U8(b'\0')) = array.elements.back() {
+
+        let string_len = array.elements.len() - 1;
+
+        let contains_inner_terminator: bool = array.elements
+            .iter()
+            .take(string_len)
+            .any(|c| c == &Value::U8(b'\0'));
+
+        if !contains_inner_terminator {
+            let bytes = array.elements
                 .iter()
+                .take(string_len)
                 .map(|v| {
                     v.downcast_ref::<u8>()
                         .expect("item must have a signature of a byte")
@@ -241,7 +255,7 @@ impl<'a> DynamicDeserialize<'a> for Array<'a> {
 }
 
 impl<'a> std::ops::Deref for Array<'a> {
-    type Target = [Value<'a>];
+    type Target = VecDeque<Value<'a>>;
 
     fn deref(&self) -> &Self::Target {
         self.inner()

@@ -490,7 +490,7 @@ impl<'a> Serialize for Signature<'a> {
     where
         S: Serializer,
     {
-        serializer.serialize_str(self.as_str())
+        serializer.serialize_newtype_struct("zvariant::Signature", self.as_str())
     }
 }
 
@@ -499,9 +499,44 @@ impl<'de: 'a, 'a> Deserialize<'de> for Signature<'a> {
     where
         D: Deserializer<'de>,
     {
-        let val = <std::borrow::Cow<'a, str>>::deserialize(deserializer)?;
+        struct SignatureVisitor;
 
-        Self::try_from(val).map_err(serde::de::Error::custom)
+        impl<'de> serde::de::Visitor<'de> for SignatureVisitor {
+            type Value = Signature<'static>;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("a string representing a valid D-Bus signature")
+            }
+
+            fn visit_str<E>(self, value: &str) -> core::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Signature::try_from(value.to_string()).map_err(serde::de::Error::custom)
+            }
+
+            fn visit_string<E>(self, value: String) -> core::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Signature::try_from(value).map_err(serde::de::Error::custom)
+            }
+
+            fn visit_borrowed_str<E>(self, v: &'de str) -> std::prelude::v1::Result<Self::Value, E>
+                where
+                    E: serde::de::Error, {
+                Signature::try_from(v.to_string()).map_err(serde::de::Error::custom)
+            }
+
+            fn visit_newtype_struct<D>(self, deserializer: D) -> std::prelude::v1::Result<Self::Value, D::Error>
+                where
+                    D: Deserializer<'de>, {
+                let val = String::deserialize(deserializer)?;
+                Signature::try_from(val).map_err(serde::de::Error::custom)
+            }
+        }
+
+        deserializer.deserialize_newtype_struct("zvariant::Signature", SignatureVisitor)
     }
 }
 
@@ -565,9 +600,8 @@ impl<'de> Deserialize<'de> for OwnedSignature {
     where
         D: Deserializer<'de>,
     {
-        let val = String::deserialize(deserializer)?;
-
-        OwnedSignature::try_from(val).map_err(serde::de::Error::custom)
+        let val = Signature::deserialize(deserializer)?;
+        Ok(OwnedSignature(val.to_owned()))
     }
 }
 

@@ -164,6 +164,11 @@ pub struct Structure<'a> {
 assert_impl_all!(Structure<'_>: Send, Sync, Unpin);
 
 impl<'a> Structure<'a> {
+    pub fn new(fields: Vec<Value<'a>>) -> Self {
+        let signature = create_signature_from_fields(&fields);
+        Self { fields, signature }
+    }
+
     /// Get a reference to all the fields of `self`.
     pub fn fields(&self) -> &[Value<'a>] {
         &self.fields

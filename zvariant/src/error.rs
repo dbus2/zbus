@@ -38,7 +38,6 @@ impl fmt::Display for MaxDepthExceeded {
 pub enum Error {
     /// Generic error. All serde errors gets transformed into this variant.
     Message(String),
-
     /// Wrapper for [`std::io::Error`](https://doc.rust-lang.org/std/io/struct.Error.html)
     InputOutput(Arc<io::Error>),
     /// Type conversions errors.

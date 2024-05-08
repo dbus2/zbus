@@ -75,6 +75,11 @@ impl<'k, 'v> Dict<'k, 'v> {
         Ok(())
     }
 
+    /// Remove the first entry
+    pub fn remove(&mut self) -> Option<(Value<'k>, Value<'v>)> {
+        self.map.pop_first()
+    }
+
     /// Get the value for the given key.
     pub fn get<'d, K, V>(&'d self, key: &'k K) -> Result<Option<V>, Error>
     where

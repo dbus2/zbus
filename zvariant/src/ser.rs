@@ -7,12 +7,7 @@ use std::os::fd::OwnedFd;
 #[cfg(feature = "gvariant")]
 use crate::gvariant::Serializer as GVSerializer;
 use crate::{
-    container_depths::ContainerDepths,
-    dbus::Serializer as DBusSerializer,
-    serialized::{Context, Data, Format, Size, Written},
-    signature_parser::SignatureParser,
-    utils::*,
-    Basic, DynamicType, Error, Result, Signature, WriteBytes,
+    container_depths::ContainerDepths, dbus::Serializer as DBusSerializer, serialized::{Context, Data, Format, Size, Written}, signature_parser::SignatureParser, utils::*, value_ser::ValueSerializer, Basic, DynamicType, Error, OwnedValue, Result, Signature, Value, WriteBytes
 };
 
 struct NullWriteSeek;
@@ -237,6 +232,25 @@ where
     };
 
     Ok(encoded)
+}
+
+pub fn to_value<T>(value: &T) -> Result<OwnedValue>
+where
+    T: ?Sized + Serialize + DynamicType,
+{
+    let signature = value.dynamic_signature();
+    to_value_for_signature(signature, value)
+}
+
+pub fn to_value_for_signature<'s, S, T>(signature: S, value: &T) -> Result<OwnedValue>
+where
+    S: TryInto<Signature<'s>>,
+    S::Error: Into<Error>,
+    T: ?Sized + Serialize,
+{
+    let serializer = ValueSerializer::new(signature.try_into().map_err(Into::into)?);
+    let value = value.serialize(serializer)?;
+    value.try_to_owned()
 }
 
 /// Context for all our serializers and provides shared functionality.
