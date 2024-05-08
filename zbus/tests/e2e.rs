@@ -830,10 +830,7 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
     let changed = props_changed.next().await.unwrap();
     let expected_property_key = "EmitsChangedDefault";
     let args = changed.args()?;
-    assert_eq!(
-        args.invalidated_properties(),
-        &vec![expected_property_key.to_string()]
-    );
+    assert!(args.invalidated_properties().is_empty());
 
     let changed_prop_key = *args.changed_properties().keys().next().unwrap();
     assert_eq!(changed_prop_key, expected_property_key);
@@ -850,10 +847,7 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
     let changed = props_changed.next().await.unwrap();
     let expected_property_key = "EmitsChangedTrue";
     let args = changed.args()?;
-    assert_eq!(
-        args.invalidated_properties(),
-        &vec![expected_property_key.to_string()]
-    );
+    assert!(args.invalidated_properties().is_empty());
 
     let changed_prop_key = *args.changed_properties().keys().next().unwrap();
     assert_eq!(changed_prop_key, expected_property_key);
