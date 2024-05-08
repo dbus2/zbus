@@ -24,6 +24,12 @@ impl<'a> Maybe<'a> {
         &self.value
     }
 
+    /// Transform this into an `Option<Value>` consuming
+    /// the `Maybe` in the process.
+    pub fn into_inner(mut self) -> Option<Value<'a>> {
+        self.value.take()
+    }
+
     /// Create a new Just (Some) `Maybe`.
     pub fn just(value: Value<'a>) -> Self {
         let value_signature = value.value_signature().to_owned();
@@ -205,4 +211,20 @@ impl<'a> Serialize for Maybe<'a> {
 
 fn create_signature(value_signature: &Signature<'_>) -> Signature<'static> {
     Signature::from_string_unchecked(format!("m{value_signature}"))
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn into_inner() {
+        let maybe = Maybe::just(Value::new(42));
+        let value = maybe.into_inner();
+        assert_eq!(value, Some(Value::new(42)));
+
+        let maybe = Maybe::nothing(signature_string!("i"));
+        let value = maybe.into_inner();
+        assert_eq!(value, None);
+    }
 }
