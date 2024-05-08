@@ -75,6 +75,11 @@ impl<'k, 'v> Dict<'k, 'v> {
         Ok(())
     }
 
+    /// Remove the first entry
+    pub fn remove(&mut self) -> Option<(Value<'k>, Value<'v>)> {
+        self.map.pop_first()
+    }
+
     /// Get the value for the given key.
     pub fn get<'d, K, V>(&'d self, key: &'k K) -> Result<Option<V>, Error>
     where
@@ -322,4 +327,22 @@ fn create_signature(
     value_signature: &Signature<'_>,
 ) -> Signature<'static> {
     Signature::from_string_unchecked(format!("a{{{key_signature}{value_signature}}}",))
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn remove() {
+        let mut dict = Dict::new(signature_string!("s"), signature_string!("i"));
+        dict.add("a", 1).unwrap();
+        dict.add("b", 2).unwrap();
+        dict.add("c", 3).unwrap();
+
+        assert_eq!(dict.remove(), Some((Value::new("a"), Value::new(1))));
+        assert_eq!(dict.remove(), Some((Value::new("b"), Value::new(2))));
+        assert_eq!(dict.remove(), Some((Value::new("c"), Value::new(3))));
+        assert_eq!(dict.remove(), None);
+    }
 }
