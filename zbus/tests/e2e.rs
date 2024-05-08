@@ -868,7 +868,7 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
         args.invalidated_properties(),
         &vec![expected_property_key.to_string()]
     );
-    assert_eq!(args.changed_properties().keys().len(), 0);
+    assert!(args.changed_properties().is_empty());
 
     // First set a property for which we don't expect a signal
     // then set a property for which we do (and we checked above
