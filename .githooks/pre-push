@@ -1,0 +1,9 @@
+#!/bin/bash
+GITHOOKS_DIR=$( cd -- "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd )
+source $GITHOOKS_DIR/util.sh
+
+ensure_rustup_installed
+ensure_clippy_installed
+
+check_build
+check_clippy
