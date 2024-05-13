@@ -29,7 +29,7 @@ Same rules apply here as for bug reports and feature requests. Plus:
 * Please try your best to follow [these guidelines](https://wiki.gnome.org/Git/CommitMessages) for
   commit messages.
 * We also prefer adding [emoji prefixes to commit messages](https://gitmoji.carloscuesta.me/). Since
-  the the `gitmoji` CLI tool can be very [slow](https://github.com/zeenix/gimoji#rationale), we
+  the `gitmoji` CLI tool can be very [slow](https://github.com/zeenix/gimoji#rationale), we
   recommend using [`gimoji`](https://github.com/zeenix/gimoji) instead.
 * Add a prefix indicating the packages being changed. Use either the package name or an abbreviation.
   
@@ -89,7 +89,8 @@ Please note that there are times when clippy is wrong and you know what you are 
 cases, it's acceptable to tell clippy to
 [ignore the specific error or warning in the code](https://github.com/rust-lang/rust-clippy#allowingdenying-lints).
 
-You can automate these checks by using this repository git hook scripts. You can enable them with:
+If you intend to contribute often or think that's very likely, we recommend you setup the git hook
+scripts contained within this repository. You can enable them with:
 
 ```sh
 git config --local core.hooksPath .githooks/

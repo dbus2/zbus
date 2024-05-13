@@ -926,8 +926,8 @@ fn gen_proxy_signal(
     ) = if *blocking {
         (
             "zbus::blocking::Proxy",
-            "https://docs.rs/zbus/latest/zbus/blocking/struct.Proxy.html#method.receive_signal",
-            "https://docs.rs/zbus/latest/zbus/blocking/struct.Proxy.html#method.receive_signal_with_args",
+            "https://docs.rs/zbus/latest/zbus/blocking/proxy/struct.Proxy.html#method.receive_signal",
+            "https://docs.rs/zbus/latest/zbus/blocking/proxy/struct.Proxy.html#method.receive_signal_with_args",
             "Iterator",
             "https://doc.rust-lang.org/std/iter/trait.Iterator.html",
             quote! { blocking::proxy::SignalIterator },
@@ -935,8 +935,8 @@ fn gen_proxy_signal(
     } else {
         (
             "zbus::Proxy",
-            "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.receive_signal",
-            "https://docs.rs/zbus/latest/zbus/struct.Proxy.html#method.receive_signal_with_args",
+            "https://docs.rs/zbus/latest/zbus/proxy/struct.Proxy.html#method.receive_signal",
+            "https://docs.rs/zbus/latest/zbus/proxy/struct.Proxy.html#method.receive_signal_with_args",
             "Stream",
             "https://docs.rs/futures/0.3.15/futures/stream/trait.Stream.html",
             quote! { proxy::SignalStream },

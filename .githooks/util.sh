@@ -1,42 +1,44 @@
 #!/bin/bash
+#
+# Utility functions for git hook scripts.
 
 if test -t 1 && test -n "$(tput colors)" && test "$(tput colors)" -ge 8; then
-	bold="$(tput bold)"
-	normal="$(tput sgr0)"
-	green="$(tput setaf 2)"
-	red="$(tput setaf 1)"
-	blue="$(tput setaf 4)"
+    bold="$(tput bold)"
+    normal="$(tput sgr0)"
+    green="$(tput setaf 2)"
+    red="$(tput setaf 1)"
+    blue="$(tput setaf 4)"
 
-	function hook_failure {
-		echo "${red}${bold}FAILED:${normal} ${1}${normal}"
-		exit 1
-	}
+    function hook_failure {
+        echo "${red}${bold}FAILED:${normal} ${1}${normal}"
+        exit 1
+    }
 
-	function hook_info {
-		echo "${blue}${1}${normal}"
-	}
+    function hook_info {
+        echo "${blue}${1}${normal}"
+    }
 
-	function hook_success {
-		echo "${green}${bold}SUCCESS:${normal} ${1}${normal}"
-		echo
-		echo
-	}
+    function hook_success {
+        echo "${green}${bold}SUCCESS:${normal} ${1}${normal}"
+        echo
+        echo
+    }
 
 else
-	function hook_failure {
-		echo "FAILED: ${1}"
-		exit 1
-	}
+    function hook_failure {
+        echo "FAILED: ${1}"
+        exit 1
+    }
 
-	function hook_info {
-		echo "{$1}"
-	}
+    function hook_info {
+        echo "{$1}"
+    }
 
-	function hook_success {
-		echo "SUCCESS: ${1}"
-		echo
-		echo
-	}
+    function hook_success {
+        echo "SUCCESS: ${1}"
+        echo
+        echo
+    }
 fi
 
 function ensure_rustup_installed() {
@@ -72,13 +74,6 @@ function ensure_clippy_installed() {
     else
         hook_success "clippy is already installed."
     fi
-}
-
-function check_build() {
-    hook_info "👷 Running 'cargo build --locked --all-features'"
-    cargo build --locked --all-features \
-        && hook_success "Project builds" \
-        || hook_failure "Cargo could not build the project."
 }
 
 function check_formatting() {
