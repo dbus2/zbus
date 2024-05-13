@@ -29,7 +29,7 @@ Same rules apply here as for bug reports and feature requests. Plus:
 * Please try your best to follow [these guidelines](https://wiki.gnome.org/Git/CommitMessages) for
   commit messages.
 * We also prefer adding [emoji prefixes to commit messages](https://gitmoji.carloscuesta.me/). Since
-  the the `gitmoji` CLI tool can be very [slow](https://github.com/zeenix/gimoji#rationale), we
+  the `gitmoji` CLI tool can be very [slow](https://github.com/zeenix/gimoji#rationale), we
   recommend using [`gimoji`](https://github.com/zeenix/gimoji) instead.
 * Add a prefix indicating the packages being changed. Use either the package name or an abbreviation.
   
