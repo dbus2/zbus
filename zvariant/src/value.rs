@@ -1,3 +1,5 @@
+pub mod parsed_signature;
+
 use core::{
     cmp::Ordering,
     fmt::{Display, Write},
