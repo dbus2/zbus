@@ -451,6 +451,31 @@ impl<'a> Value<'a> {
         }
         .map_err(Into::into)
     }
+
+    pub(crate) fn unexpected(&'a self) -> Unexpected<'a> {
+        match self {
+            Value::Str(str) => Unexpected::Str(str.as_str()),
+            Value::U8(v) => Unexpected::Unsigned(*v as u64),
+            Value::U16(v) => Unexpected::Unsigned(*v as u64),
+            Value::U32(v) => Unexpected::Unsigned(*v as u64),
+            Value::U64(v) => Unexpected::Unsigned(*v),
+            Value::I16(v) => Unexpected::Signed(*v as i64),
+            Value::I32(v) => Unexpected::Signed(*v as i64),
+            Value::I64(v) => Unexpected::Signed(*v),
+            Value::Bool(v) => Unexpected::Bool(*v),
+            Value::F64(v) => Unexpected::Float(*v),
+            Value::Signature(_) => Unexpected::Other("Signature"),
+            Value::ObjectPath(_) => Unexpected::Other("ObjectPath"),
+            Value::Value(_) => Unexpected::Other("Variant"),
+            Value::Array(_) => Unexpected::Other("Array"),
+            Value::Dict(_) => Unexpected::Other("Dict"),
+            Value::Structure(_) => Unexpected::Other("Struct"),
+            Value::Fd(_) => Unexpected::Other("Fd"),
+
+            #[cfg(feature = "gvariant")]
+            Value::Maybe(_) => Unexpected::Other("Maybe"),
+        }
+    }
 }
 
 impl Display for Value<'_> {
@@ -944,9 +969,109 @@ impl<'a> TryFrom<&Value<'a>> for Value<'a> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use std::collections::HashMap;
 
-    use super::*;
+    #[test]
+    fn unexpected_bool() {
+        assert_eq!(Value::Bool(true).unexpected(), Unexpected::Bool(true));
+        assert_eq!(Value::Bool(false).unexpected(), Unexpected::Bool(false));
+    }
+
+    #[test]
+    fn unexpected_unsigned() {
+        assert_eq!(Value::U8(10).unexpected(), Unexpected::Unsigned(10));
+        assert_eq!(Value::U16(10).unexpected(), Unexpected::Unsigned(10));
+        assert_eq!(Value::U32(10).unexpected(), Unexpected::Unsigned(10));
+        assert_eq!(Value::U64(10).unexpected(), Unexpected::Unsigned(10));
+    }
+
+    #[test]
+    fn unexpected_signed() {
+        assert_eq!(Value::I16(10).unexpected(), Unexpected::Signed(10));
+        assert_eq!(Value::I32(10).unexpected(), Unexpected::Signed(10));
+        assert_eq!(Value::I64(10).unexpected(), Unexpected::Signed(10));
+    }
+
+    #[test]
+    fn unexpected_float() {
+        assert_eq!(Value::F64(10.0).unexpected(), Unexpected::Float(10.0));
+    }
+
+    #[test]
+    fn unexpected_str() {
+        assert_eq!(
+            Value::Str("hello".into()).unexpected(),
+            Unexpected::Str("hello")
+        );
+    }
+
+    #[test]
+    fn unexpected_object_path() {
+        assert_eq!(
+            Value::ObjectPath(ObjectPath::from_static_str_unchecked("/hello")).unexpected(),
+            Unexpected::Other("ObjectPath")
+        );
+    }
+
+    #[test]
+    fn unexpected_signature() {
+        assert_eq!(
+            Value::Signature(signature_string!("ai")).unexpected(),
+            Unexpected::Other("Signature")
+        );
+    }
+
+    #[test]
+    fn unexpected_variant() {
+        assert_eq!(
+            Value::Value(Box::new(Value::U32(10))).unexpected(),
+            Unexpected::Other("Variant")
+        );
+    }
+
+    #[test]
+    fn unexpected_array() {
+        assert_eq!(
+            Value::Array(Array::new(signature_string!("i"))).unexpected(),
+            Unexpected::Other("Array")
+        );
+    }
+
+    #[test]
+    fn unexpected_dict() {
+        assert_eq!(
+            Value::Dict(Dict::new(signature_string!("i"), signature_string!("s"))).unexpected(),
+            Unexpected::Other("Dict")
+        );
+    }
+
+    #[test]
+    fn unexpected_struct() {
+        assert_eq!(
+            Value::Structure(StructureBuilder::new().build()).unexpected(),
+            Unexpected::Other("Struct")
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "gvariant")]
+    fn unexpected_maybe() {
+        assert_eq!(
+            Value::Maybe(Maybe::nothing(signature_string!("i"))).unexpected(),
+            Unexpected::Other("Maybe")
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn unexpected_fd() {
+        use std::os::fd::AsFd;
+        let stdout = std::io::stdout();
+        let fd = stdout.as_fd();
+        let fd = Fd::from(fd);
+        assert_eq!(Value::Fd(fd).unexpected(), Unexpected::Other("Fd"));
+    }
 
     #[test]
     fn value_display() {
