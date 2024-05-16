@@ -7,13 +7,11 @@ use std::os::fd::OwnedFd;
 #[cfg(feature = "gvariant")]
 use crate::gvariant::Serializer as GVSerializer;
 use crate::{
-    container_depths::ContainerDepths,
     dbus::Serializer as DBusSerializer,
     serialized::{Context, Data, Format, Size, Written},
-    signature_parser::SignatureParser,
     utils::*,
     value::ser::ValueSerializer,
-    Basic, DynamicType, Error, OwnedValue, Result, Signature, WriteBytes,
+    DynamicType, Error, OwnedValue, Result, Signature,
 };
 
 struct NullWriteSeek;
@@ -67,7 +65,7 @@ where
                 ctxt,
             )?;
             value.serialize(&mut ser)?;
-            ser.0.bytes_written
+            ser.bytes_written()
         }
         #[cfg(feature = "gvariant")]
         Format::GVariant => {
@@ -79,7 +77,7 @@ where
                 ctxt,
             )?;
             value.serialize(&mut ser)?;
-            ser.0.bytes_written
+            ser.common.bytes_written
         }
     };
 
@@ -173,15 +171,16 @@ where
 
     let len = match ctxt.format() {
         Format::DBus => {
-            let mut ser = DBusSerializer::<W>::new(
+            let mut ser = DBusSerializer::new(
                 signature,
                 writer,
                 #[cfg(unix)]
                 &mut fds,
                 ctxt,
             )?;
+
             value.serialize(&mut ser)?;
-            ser.0.bytes_written
+            ser.bytes_written()
         }
         #[cfg(feature = "gvariant")]
         Format::GVariant => {
@@ -193,7 +192,7 @@ where
                 ctxt,
             )?;
             value.serialize(&mut ser)?;
-            ser.0.bytes_written
+            ser.common.bytes_written
         }
     };
 
@@ -291,18 +290,12 @@ where
 }
 
 /// Context for all our serializers and provides shared functionality.
-pub(crate) struct SerializerCommon<'ser, 'sig, W> {
+pub(crate) struct SerializerCommon<'ser, W> {
     pub(crate) ctxt: Context,
     pub(crate) writer: &'ser mut W,
     pub(crate) bytes_written: usize,
     #[cfg(unix)]
     pub(crate) fds: &'ser mut FdList,
-
-    pub(crate) sig_parser: SignatureParser<'sig>,
-
-    pub(crate) value_sign: Option<Signature<'static>>,
-
-    pub(crate) container_depths: ContainerDepths,
 }
 
 #[cfg(unix)]
@@ -311,7 +304,7 @@ pub(crate) enum FdList {
     Number(u32),
 }
 
-impl<'ser, 'sig, W> SerializerCommon<'ser, 'sig, W>
+impl<'ser, W> SerializerCommon<'ser, W>
 where
     W: Write + Seek,
 {
@@ -354,48 +347,12 @@ where
         Ok(padding)
     }
 
-    pub(crate) fn prep_serialize_basic<T>(&mut self) -> Result<()>
-    where
-        T: Basic,
-    {
-        self.sig_parser.skip_char()?;
-        self.add_padding(T::alignment(self.ctxt.format()))?;
-
-        Ok(())
-    }
-
-    /// This starts the enum serialization.
-    ///
-    /// It's up to the caller to do the rest: serialize the variant payload and skip the `).
-    pub(crate) fn prep_serialize_enum_variant(&mut self, variant_index: u32) -> Result<()> {
-        // Encode enum variants as a struct with first field as variant index
-        let signature = self.sig_parser.next_signature()?;
-        if self.sig_parser.next_char()? != STRUCT_SIG_START_CHAR {
-            return Err(Error::SignatureMismatch(
-                signature.to_owned(),
-                format!("expected `{STRUCT_SIG_START_CHAR}`"),
-            ));
-        }
-
-        let alignment = alignment_for_signature(&signature, self.ctxt.format())?;
-        self.add_padding(alignment)?;
-
-        // Now serialize the veriant index.
-        self.write_u32(self.ctxt.endian(), variant_index)
-            .map_err(|e| Error::InputOutput(e.into()))?;
-
-        // Skip the `(`, `u`.
-        self.sig_parser.skip_chars(2)?;
-
-        Ok(())
-    }
-
     fn abs_pos(&self) -> usize {
         self.ctxt.position() + self.bytes_written
     }
 }
 
-impl<'ser, 'sig, W> Write for SerializerCommon<'ser, 'sig, W>
+impl<'ser, W> Write for SerializerCommon<'ser, W>
 where
     W: Write + Seek,
 {

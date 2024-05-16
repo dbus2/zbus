@@ -7,18 +7,23 @@ use std::{ffi::CStr, marker::PhantomData, str};
 use std::os::fd::AsFd;
 
 use crate::{
-    de::{DeserializerCommon, ValueParseStage},
+    container_depths::ContainerDepths,
+    de::DeserializerCommon,
     framing_offset_size::FramingOffsetSize,
     framing_offsets::FramingOffsets,
     serialized::{Context, Format},
     signature_parser::SignatureParser,
     utils::*,
-    Basic, Error, Result, Signature,
+    Basic, Error, Fd, ObjectPath, Result, Signature,
 };
 
 /// Our GVariant deserialization implementation.
 #[derive(Debug)]
-pub struct Deserializer<'de, 'sig, 'f, F>(pub(crate) DeserializerCommon<'de, 'sig, 'f, F>);
+pub struct Deserializer<'de, 'sig, 'f, F> {
+    sig_parser: SignatureParser<'sig>,
+    container_depths: ContainerDepths,
+    pub(crate) common: DeserializerCommon<'de, 'f, F>,
+}
 
 assert_impl_all!(Deserializer<'_, '_,'_, ()>: Send, Sync, Unpin);
 
@@ -40,43 +45,36 @@ impl<'de, 'sig, 'f, F> Deserializer<'de, 'sig, 'f, F> {
 
         let signature = signature.try_into().map_err(Into::into)?;
         let sig_parser = SignatureParser::new(signature);
-        Ok(Self(DeserializerCommon {
-            ctxt,
+        Ok(Self {
             sig_parser,
-            bytes,
-            #[cfg(unix)]
-            fds,
-            #[cfg(not(unix))]
-            fds: PhantomData,
-            pos: 0,
             container_depths: Default::default(),
-        }))
+            common: DeserializerCommon {
+                ctxt,
+                bytes,
+                #[cfg(unix)]
+                fds,
+                #[cfg(not(unix))]
+                fds: PhantomData,
+                pos: 0,
+            },
+        })
     }
 }
 
 macro_rules! deserialize_basic {
-    ($method:ident) => {
+    ($method:ident $read_method:ident $visitor_method:ident($type:ty)) => {
         fn $method<V>(self, visitor: V) -> Result<V::Value>
         where
             V: Visitor<'de>,
         {
-            let ctxt = Context::new_dbus(self.0.ctxt.endian(), self.0.ctxt.position() + self.0.pos);
+            self.sig_parser.skip_char()?;
+            let v = self
+                .common
+                .ctxt
+                .endian()
+                .$read_method(self.common.next_const_size_slice::<$type>()?);
 
-            let mut dbus_de = crate::dbus::Deserializer::<F>(DeserializerCommon::<F> {
-                ctxt,
-                sig_parser: self.0.sig_parser.clone(),
-                bytes: subslice(self.0.bytes, self.0.pos..)?,
-                fds: self.0.fds,
-                pos: 0,
-                container_depths: self.0.container_depths,
-            });
-
-            let v = dbus_de.$method(visitor)?;
-            self.0.sig_parser = dbus_de.0.sig_parser;
-            self.0.pos += dbus_de.0.pos;
-            // Basic types don't have anything to do with container depths so not updating it here.
-
-            Ok(v)
+            visitor.$visitor_method(v)
         }
     };
 }
@@ -93,7 +91,7 @@ macro_rules! deserialize_as {
         {
             self.$as($($as_arg,)* visitor)
         }
-    }
+    };
 }
 
 impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deserializer<'de>
@@ -105,23 +103,70 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
     where
         V: Visitor<'de>,
     {
-        let c = self.0.sig_parser.next_char()?;
-
-        crate::de::deserialize_any::<Self, V>(self, c, visitor)
+        match self.sig_parser.next_char()? {
+            u8::SIGNATURE_CHAR => self.deserialize_u8(visitor),
+            bool::SIGNATURE_CHAR => self.deserialize_bool(visitor),
+            i16::SIGNATURE_CHAR => self.deserialize_i16(visitor),
+            u16::SIGNATURE_CHAR => self.deserialize_u16(visitor),
+            i32::SIGNATURE_CHAR => self.deserialize_i32(visitor),
+            #[cfg(unix)]
+            Fd::SIGNATURE_CHAR => self.deserialize_i32(visitor),
+            u32::SIGNATURE_CHAR => self.deserialize_u32(visitor),
+            i64::SIGNATURE_CHAR => self.deserialize_i64(visitor),
+            u64::SIGNATURE_CHAR => self.deserialize_u64(visitor),
+            f64::SIGNATURE_CHAR => self.deserialize_f64(visitor),
+            <&str>::SIGNATURE_CHAR | ObjectPath::SIGNATURE_CHAR | Signature::SIGNATURE_CHAR => {
+                self.deserialize_str(visitor)
+            }
+            VARIANT_SIGNATURE_CHAR => self.deserialize_seq(visitor),
+            ARRAY_SIGNATURE_CHAR => self.deserialize_seq(visitor),
+            STRUCT_SIG_START_CHAR => self.deserialize_seq(visitor),
+            MAYBE_SIGNATURE_CHAR => self.deserialize_option(visitor),
+            c => Err(de::Error::invalid_value(
+                de::Unexpected::Char(c),
+                &"a valid signature character",
+            )),
+        }
     }
 
-    deserialize_basic!(deserialize_bool);
-    deserialize_basic!(deserialize_i8);
-    deserialize_basic!(deserialize_i16);
-    deserialize_basic!(deserialize_i32);
-    deserialize_basic!(deserialize_i64);
-    deserialize_basic!(deserialize_u8);
-    deserialize_basic!(deserialize_u16);
-    deserialize_basic!(deserialize_u32);
-    deserialize_basic!(deserialize_u64);
-    deserialize_basic!(deserialize_f32);
-    deserialize_basic!(deserialize_f64);
-    deserialize_basic!(deserialize_identifier);
+    fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        self.sig_parser.skip_char()?;
+        let v = self
+            .common
+            .ctxt
+            .endian()
+            .read_u32(self.common.next_const_size_slice::<bool>()?);
+        let b = match v {
+            1 => true,
+            0 => false,
+            // As per D-Bus spec, only 0 and 1 values are allowed
+            _ => {
+                return Err(de::Error::invalid_value(
+                    de::Unexpected::Unsigned(v as u64),
+                    &"0 or 1",
+                ))
+            }
+        };
+
+        visitor.visit_bool(b)
+    }
+
+    fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_i16(visitor)
+    }
+
+    deserialize_basic!(deserialize_i16 read_i16 visit_i16(i16));
+    deserialize_basic!(deserialize_i64 read_i64 visit_i64(i64));
+    deserialize_basic!(deserialize_u16 read_u16 visit_u16(u16));
+    deserialize_basic!(deserialize_u32 read_u32 visit_u32(u32));
+    deserialize_basic!(deserialize_u64 read_u64 visit_u64(u64));
+    deserialize_basic!(deserialize_f64 read_f64 visit_f64(f64));
 
     fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value>
     where
@@ -147,12 +192,69 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
     deserialize_as!(deserialize_map => deserialize_seq);
     deserialize_as!(deserialize_ignored_any => deserialize_any);
 
+    fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        let v = match self.sig_parser.next_char()? {
+            #[cfg(unix)]
+            Fd::SIGNATURE_CHAR => {
+                self.sig_parser.skip_char()?;
+                let alignment = u32::alignment(Format::DBus);
+                self.common.parse_padding(alignment)?;
+                let idx = self
+                    .common
+                    .ctxt
+                    .endian()
+                    .read_u32(self.common.next_slice(alignment)?);
+                self.common.get_fd(idx)?
+            }
+            _ => {
+                self.sig_parser.skip_char()?;
+
+                self.common
+                    .ctxt
+                    .endian()
+                    .read_i32(self.common.next_const_size_slice::<i32>()?)
+            }
+        };
+
+        visitor.visit_i32(v)
+    }
+
+    fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        // Endianness is irrelevant for single bytes.
+        self.sig_parser.skip_char()?;
+        visitor.visit_u8(
+            self.common
+                .next_const_size_slice::<u8>()
+                .map(|bytes| bytes[0])?,
+        )
+    }
+
+    fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        self.sig_parser.skip_char()?;
+        let v = self
+            .common
+            .ctxt
+            .endian()
+            .read_f64(self.common.next_const_size_slice::<f64>()?);
+
+        visitor.visit_f32(f64_to_f32(v))
+    }
+
     fn deserialize_str<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        let slice = subslice(self.0.bytes, self.0.pos..)?;
-        let s = if self.0.sig_parser.next_char()? == VARIANT_SIGNATURE_CHAR {
+        let slice = subslice(self.common.bytes, self.common.pos..)?;
+        let s = if self.sig_parser.next_char()? == VARIANT_SIGNATURE_CHAR {
             if slice.contains(&0) {
                 return Err(serde::de::Error::invalid_value(
                     serde::de::Unexpected::Char('\0'),
@@ -164,21 +266,21 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
             str::from_utf8(slice).map_err(Error::Utf8)?
         } else {
             let cstr = CStr::from_bytes_with_nul(slice).map_err(|_| -> Error {
-                let unexpected = if self.0.bytes.is_empty() {
+                let unexpected = if self.common.bytes.is_empty() {
                     de::Unexpected::Other("end of byte stream")
                 } else {
-                    let c = self.0.bytes[self.0.bytes.len() - 1] as char;
+                    let c = self.common.bytes[self.common.bytes.len() - 1] as char;
                     de::Unexpected::Char(c)
                 };
 
                 de::Error::invalid_value(unexpected, &"nul byte expected at the end of strings")
             })?;
             let s = cstr.to_str().map_err(Error::Utf8)?;
-            self.0.pos += s.len() + 1; // string and trailing null byte
+            self.common.pos += s.len() + 1; // string and trailing null byte
 
             s
         };
-        self.0.sig_parser.skip_char()?;
+        self.sig_parser.skip_char()?;
 
         visitor.visit_borrowed_str(s)
     }
@@ -196,48 +298,50 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
     where
         V: Visitor<'de>,
     {
-        let signature = self.0.sig_parser.next_signature()?;
-        let alignment = alignment_for_signature(&signature, self.0.ctxt.format())?;
-        let child_sig_parser = self.0.sig_parser.slice(1..);
+        let signature = self.sig_parser.next_signature()?;
+        let alignment = alignment_for_signature(&signature, self.common.ctxt.format())?;
+        let child_sig_parser = self.sig_parser.slice(1..);
         let child_signature = child_sig_parser.next_signature()?;
         let child_sig_len = child_signature.len();
         let fixed_sized_child = crate::utils::is_fixed_sized_signature(&child_signature)?;
 
-        self.0.sig_parser.skip_char()?;
-        self.0.parse_padding(alignment)?;
+        self.sig_parser.skip_char()?;
+        self.common.parse_padding(alignment)?;
 
-        if self.0.pos == self.0.bytes.len() {
+        if self.common.pos == self.common.bytes.len() {
             // Empty sequence means None
-            self.0.sig_parser.skip_chars(child_sig_len)?;
+            self.sig_parser.skip_chars(child_sig_len)?;
 
             visitor.visit_none()
         } else {
             let ctxt = Context::new(
-                self.0.ctxt.format(),
-                self.0.ctxt.endian(),
-                self.0.ctxt.position() + self.0.pos,
+                self.common.ctxt.format(),
+                self.common.ctxt.endian(),
+                self.common.ctxt.position() + self.common.pos,
             );
             let end = if fixed_sized_child {
-                self.0.bytes.len()
+                self.common.bytes.len()
             } else {
-                self.0.bytes.len() - 1
+                self.common.bytes.len() - 1
             };
 
-            let mut de = Deserializer::<F>(DeserializerCommon {
-                ctxt,
-                sig_parser: self.0.sig_parser.clone(),
-                bytes: subslice(self.0.bytes, self.0.pos..end)?,
-                fds: self.0.fds,
-                pos: 0,
-                container_depths: self.0.container_depths.inc_maybe()?,
-            });
+            let mut de = Deserializer::<F> {
+                sig_parser: self.sig_parser.clone(),
+                container_depths: self.container_depths.inc_maybe()?,
+                common: DeserializerCommon {
+                    ctxt,
+                    bytes: subslice(self.common.bytes, self.common.pos..end)?,
+                    fds: self.common.fds,
+                    pos: 0,
+                },
+            };
 
             let v = visitor.visit_some(&mut de)?;
-            self.0.pos += de.0.pos;
+            self.common.pos += de.common.pos;
             // No need for retaking the container depths as the underlying type can't be incomplete.
 
             if !fixed_sized_child {
-                let byte = *subslice(self.0.bytes, self.0.pos)?;
+                let byte = *subslice(self.common.bytes, self.common.pos)?;
                 if byte != 0 {
                     return Err(de::Error::invalid_value(
                         de::Unexpected::Bytes(&byte.to_le_bytes()),
@@ -245,9 +349,9 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
                     ));
                 }
 
-                self.0.pos += 1;
+                self.common.pos += 1;
             }
-            self.0.sig_parser = de.0.sig_parser;
+            self.sig_parser = de.sig_parser;
 
             Ok(v)
         }
@@ -257,7 +361,7 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
     where
         V: Visitor<'de>,
     {
-        let byte = *subslice(self.0.bytes, self.0.pos)?;
+        let byte = *subslice(self.common.bytes, self.common.pos)?;
         if byte != 0 {
             return Err(de::Error::invalid_value(
                 de::Unexpected::Bytes(&byte.to_le_bytes()),
@@ -265,7 +369,7 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
             ));
         }
 
-        self.0.pos += 1;
+        self.common.pos += 1;
 
         visitor.visit_unit()
     }
@@ -288,17 +392,17 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
     where
         V: Visitor<'de>,
     {
-        match self.0.sig_parser.next_char()? {
+        match self.sig_parser.next_char()? {
             VARIANT_SIGNATURE_CHAR => {
-                self.0.sig_parser.skip_char()?;
-                self.0.parse_padding(VARIANT_ALIGNMENT_GVARIANT)?;
+                self.sig_parser.skip_char()?;
+                self.common.parse_padding(VARIANT_ALIGNMENT_GVARIANT)?;
                 let value_de = ValueDeserializer::new(self)?;
 
                 visitor.visit_seq(value_de)
             }
             ARRAY_SIGNATURE_CHAR => {
-                self.0.sig_parser.skip_char()?;
-                let next_signature_char = self.0.sig_parser.next_char()?;
+                self.sig_parser.skip_char()?;
+                let next_signature_char = self.sig_parser.next_char()?;
                 let array_de = ArrayDeserializer::new(self)?;
 
                 if next_signature_char == DICT_ENTRY_SIG_START_CHAR {
@@ -308,16 +412,16 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
                 }
             }
             STRUCT_SIG_START_CHAR => {
-                let signature = self.0.sig_parser.next_signature()?;
-                let alignment = alignment_for_signature(&signature, self.0.ctxt.format())?;
-                self.0.parse_padding(alignment)?;
+                let signature = self.sig_parser.next_signature()?;
+                let alignment = alignment_for_signature(&signature, self.common.ctxt.format())?;
+                self.common.parse_padding(alignment)?;
 
-                self.0.sig_parser.skip_char()?;
+                self.sig_parser.skip_char()?;
 
-                let start = self.0.pos;
-                let end = self.0.bytes.len();
+                let start = self.common.pos;
+                let end = self.common.bytes.len();
                 let offset_size = FramingOffsetSize::for_encoded_container(end - start);
-                self.0.container_depths = self.0.container_depths.inc_structure()?;
+                self.container_depths = self.container_depths.inc_structure()?;
                 let v = visitor.visit_seq(StructureDeserializer {
                     de: self,
                     start,
@@ -325,7 +429,7 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
                     offsets_len: 0,
                     offset_size,
                 });
-                self.0.container_depths = self.0.container_depths.dec_structure();
+                self.container_depths = self.container_depths.dec_structure();
 
                 v
             }
@@ -333,8 +437,8 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
                 // Empty struct: encoded as a `0u8`.
                 let _: u8 = serde::Deserialize::deserialize(&mut *self)?;
 
-                let start = self.0.pos;
-                let end = self.0.bytes.len();
+                let start = self.common.pos;
+                let end = self.common.bytes.len();
                 visitor.visit_seq(StructureDeserializer {
                     de: self,
                     start,
@@ -362,13 +466,13 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
     where
         V: Visitor<'de>,
     {
-        let signature = self.0.sig_parser.next_signature()?;
-        let alignment = alignment_for_signature(&signature, self.0.ctxt.format())?;
-        self.0.parse_padding(alignment)?;
+        let signature = self.sig_parser.next_signature()?;
+        let alignment = alignment_for_signature(&signature, self.common.ctxt.format())?;
+        self.common.parse_padding(alignment)?;
 
-        let non_unit = if self.0.sig_parser.next_char()? == STRUCT_SIG_START_CHAR {
+        let non_unit = if self.sig_parser.next_char()? == STRUCT_SIG_START_CHAR {
             // This means we've a non-unit enum. Let's skip the `(`.
-            self.0.sig_parser.skip_char()?;
+            self.sig_parser.skip_char()?;
 
             true
         } else {
@@ -383,10 +487,21 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
 
         if non_unit {
             // For non-unit enum, we need to skip the closing paren.
-            self.0.sig_parser.skip_char()?;
+            self.sig_parser.skip_char()?;
         }
 
         Ok(v)
+    }
+
+    fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        if self.sig_parser.next_char()? == <&str>::SIGNATURE_CHAR {
+            self.deserialize_str(visitor)
+        } else {
+            self.deserialize_u32(visitor)
+        }
     }
 
     fn is_human_readable(&self) -> bool {
@@ -397,14 +512,14 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
 fn deserialize_ay<'de, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F>(
     de: &mut Deserializer<'de, '_, '_, F>,
 ) -> Result<&'de [u8]> {
-    if de.0.sig_parser.next_signature()? != "ay" {
+    if de.sig_parser.next_signature()? != "ay" {
         return Err(de::Error::invalid_type(de::Unexpected::Seq, &"ay"));
     }
 
-    de.0.sig_parser.skip_char()?;
+    de.sig_parser.skip_char()?;
     let ad = ArrayDeserializer::new(de)?;
     let len = dbg!(ad.len);
-    de.0.next_slice(len)
+    de.common.next_slice(len)
 }
 
 struct ArrayDeserializer<'d, 'de, 'sig, 'f, F> {
@@ -427,14 +542,15 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F>
     ArrayDeserializer<'d, 'de, 'sig, 'f, F>
 {
     fn new(de: &'d mut Deserializer<'de, 'sig, 'f, F>) -> Result<Self> {
-        de.0.container_depths = de.0.container_depths.inc_array()?;
-        let mut len = de.0.bytes.len() - de.0.pos;
+        de.container_depths = de.container_depths.inc_array()?;
+        let mut len = de.common.bytes.len() - de.common.pos;
 
-        let element_signature = de.0.sig_parser.next_signature()?;
-        let element_alignment = alignment_for_signature(&element_signature, de.0.ctxt.format())?;
+        let element_signature = de.sig_parser.next_signature()?;
+        let element_alignment =
+            alignment_for_signature(&element_signature, de.common.ctxt.format())?;
         let element_signature_len = element_signature.len();
         let fixed_sized_child = crate::utils::is_fixed_sized_signature(&element_signature)?;
-        let fixed_sized_key = if de.0.sig_parser.next_char()? == DICT_ENTRY_SIG_START_CHAR {
+        let fixed_sized_key = if de.sig_parser.next_char()? == DICT_ENTRY_SIG_START_CHAR {
             // Key signature can only be 1 char
             let key_signature = Signature::from_str_unchecked(&element_signature[1..2]);
 
@@ -446,12 +562,12 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F>
         // D-Bus requires padding for the first element even when there is no first element
         // (i-e empty array) so we parse padding already. In case of GVariant this is just
         // the padding of the array itself since array starts with first element.
-        let padding = de.0.parse_padding(element_alignment)?;
+        let padding = de.common.parse_padding(element_alignment)?;
         len -= padding;
 
         let (offsets, offsets_len, key_offset_size) = if !fixed_sized_child {
             let (array_offsets, offsets_len) =
-                FramingOffsets::from_encoded_array(subslice(de.0.bytes, de.0.pos..)?)?;
+                FramingOffsets::from_encoded_array(subslice(de.common.bytes, de.common.pos..)?)?;
             len -= offsets_len;
             let key_offset_size = if !fixed_sized_key {
                 // The actual offset for keys is calculated per key later, this is just to
@@ -466,10 +582,10 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F>
         } else {
             (None, 0, None)
         };
-        let start = de.0.pos;
+        let start = de.common.pos;
 
-        if de.0.sig_parser.next_char()? == DICT_ENTRY_SIG_START_CHAR {
-            de.0.sig_parser.skip_char()?;
+        if de.sig_parser.next_char()? == DICT_ENTRY_SIG_START_CHAR {
+            de.sig_parser.skip_char()?;
         }
 
         Ok(Self {
@@ -487,7 +603,7 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F>
     fn element_end(&mut self, pop: bool) -> Result<usize> {
         match self.offsets.as_mut() {
             Some(offsets) => {
-                assert_eq!(self.de.0.ctxt.format(), Format::GVariant);
+                assert_eq!(self.de.common.ctxt.format(), Format::GVariant);
 
                 let offset = if pop { offsets.pop() } else { offsets.peek() };
                 match offset {
@@ -503,7 +619,7 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F>
         match self.offsets.as_ref() {
             // If all offsets have been popped/used, we're already at the end
             Some(offsets) => offsets.is_empty(),
-            None => self.de.0.pos == self.start + self.len,
+            None => self.de.common.pos == self.start + self.len,
         }
     }
 }
@@ -518,40 +634,39 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de
         T: DeserializeSeed<'de>,
     {
         if self.done() {
-            self.de
-                .0
-                .sig_parser
-                .skip_chars(self.element_signature_len)?;
-            self.de.0.pos += self.offsets_len;
-            self.de.0.container_depths = self.de.0.container_depths.dec_array();
+            self.de.sig_parser.skip_chars(self.element_signature_len)?;
+            self.de.common.pos += self.offsets_len;
+            self.de.container_depths = self.de.container_depths.dec_array();
 
             return Ok(None);
         }
 
         let ctxt = Context::new(
-            self.de.0.ctxt.format(),
-            self.de.0.ctxt.endian(),
-            self.de.0.ctxt.position() + self.de.0.pos,
+            self.de.common.ctxt.format(),
+            self.de.common.ctxt.endian(),
+            self.de.common.ctxt.position() + self.de.common.pos,
         );
         let end = self.element_end(true)?;
 
-        let mut de = Deserializer::<F>(DeserializerCommon {
-            ctxt,
-            sig_parser: self.de.0.sig_parser.clone(),
-            bytes: subslice(self.de.0.bytes, self.de.0.pos..end)?,
-            fds: self.de.0.fds,
-            pos: 0,
-            container_depths: self.de.0.container_depths,
-        });
+        let mut de = Deserializer::<F> {
+            sig_parser: self.de.sig_parser.clone(),
+            container_depths: self.de.container_depths,
+            common: DeserializerCommon {
+                ctxt,
+                bytes: subslice(self.de.common.bytes, self.de.common.pos..end)?,
+                fds: self.de.common.fds,
+                pos: 0,
+            },
+        };
 
         let v = seed.deserialize(&mut de).map(Some);
-        self.de.0.pos += de.0.pos;
+        self.de.common.pos += de.common.pos;
         // No need for retaking the container depths as the child can't be incomplete.
 
-        if self.de.0.pos > self.start + self.len {
+        if self.de.common.pos > self.start + self.len {
             return Err(serde::de::Error::invalid_length(
                 self.len,
-                &format!(">= {}", self.de.0.pos - self.start).as_str(),
+                &format!(">= {}", self.de.common.pos - self.start).as_str(),
             ));
         }
 
@@ -571,52 +686,54 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> MapAccess<'de
         if self.done() {
             // Starting bracket was already skipped
             self.de
-                .0
                 .sig_parser
                 .skip_chars(self.element_signature_len - 1)?;
-            self.de.0.pos += self.offsets_len;
+            self.de.common.pos += self.offsets_len;
 
             return Ok(None);
         }
 
-        self.de.0.parse_padding(self.element_alignment)?;
+        self.de.common.parse_padding(self.element_alignment)?;
 
         let ctxt = Context::new(
-            self.de.0.ctxt.format(),
-            self.de.0.ctxt.endian(),
-            self.de.0.ctxt.position() + self.de.0.pos,
+            self.de.common.ctxt.format(),
+            self.de.common.ctxt.endian(),
+            self.de.common.ctxt.position() + self.de.common.pos,
         );
         let element_end = self.element_end(false)?;
 
         let key_end = match self.key_offset_size {
             Some(_) => {
                 let offset_size =
-                    FramingOffsetSize::for_encoded_container(element_end - self.de.0.pos);
+                    FramingOffsetSize::for_encoded_container(element_end - self.de.common.pos);
                 self.key_offset_size.replace(offset_size);
 
-                self.de.0.pos
-                    + offset_size
-                        .read_last_offset_from_buffer(&self.de.0.bytes[self.de.0.pos..element_end])
+                self.de.common.pos
+                    + offset_size.read_last_offset_from_buffer(
+                        &self.de.common.bytes[self.de.common.pos..element_end],
+                    )
             }
             None => element_end,
         };
 
-        let mut de = Deserializer::<F>(DeserializerCommon {
-            ctxt,
-            sig_parser: self.de.0.sig_parser.clone(),
-            bytes: subslice(self.de.0.bytes, self.de.0.pos..key_end)?,
-            fds: self.de.0.fds,
-            pos: 0,
-            container_depths: self.de.0.container_depths,
-        });
+        let mut de = Deserializer::<F> {
+            sig_parser: self.de.sig_parser.clone(),
+            container_depths: self.de.container_depths,
+            common: DeserializerCommon {
+                ctxt,
+                bytes: subslice(self.de.common.bytes, self.de.common.pos..key_end)?,
+                fds: self.de.common.fds,
+                pos: 0,
+            },
+        };
         let v = seed.deserialize(&mut de).map(Some);
-        self.de.0.pos += de.0.pos;
+        self.de.common.pos += de.common.pos;
         // No need for retaking the container depths as the key can't be incomplete.
 
-        if self.de.0.pos > self.start + self.len {
+        if self.de.common.pos > self.start + self.len {
             return Err(serde::de::Error::invalid_length(
                 self.len,
-                &format!(">= {}", self.de.0.pos - self.start).as_str(),
+                &format!(">= {}", self.de.common.pos - self.start).as_str(),
             ));
         }
 
@@ -628,39 +745,41 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> MapAccess<'de
         V: DeserializeSeed<'de>,
     {
         let ctxt = Context::new(
-            self.de.0.ctxt.format(),
-            self.de.0.ctxt.endian(),
-            self.de.0.ctxt.position() + self.de.0.pos,
+            self.de.common.ctxt.format(),
+            self.de.common.ctxt.endian(),
+            self.de.common.ctxt.position() + self.de.common.pos,
         );
         let element_end = self.element_end(true)?;
         let value_end = match self.key_offset_size {
             Some(key_offset_size) => element_end - key_offset_size as usize,
             None => element_end,
         };
-        let mut sig_parser = self.de.0.sig_parser.clone();
+        let mut sig_parser = self.de.sig_parser.clone();
         // Skip key signature (always 1 char)
         sig_parser.skip_char()?;
 
-        let mut de = Deserializer::<F>(DeserializerCommon {
-            ctxt,
+        let mut de = Deserializer::<F> {
             sig_parser,
-            bytes: subslice(self.de.0.bytes, self.de.0.pos..value_end)?,
-            fds: self.de.0.fds,
-            pos: 0,
-            container_depths: self.de.0.container_depths,
-        });
+            container_depths: self.de.container_depths,
+            common: DeserializerCommon {
+                ctxt,
+                bytes: subslice(self.de.common.bytes, self.de.common.pos..value_end)?,
+                fds: self.de.common.fds,
+                pos: 0,
+            },
+        };
         let v = seed.deserialize(&mut de);
-        self.de.0.pos += de.0.pos;
+        self.de.common.pos += de.common.pos;
         // No need for retaking the container depths as the value can't be incomplete.
 
         if let Some(key_offset_size) = self.key_offset_size {
-            self.de.0.pos += key_offset_size as usize;
+            self.de.common.pos += key_offset_size as usize;
         }
 
-        if self.de.0.pos > self.start + self.len {
+        if self.de.common.pos > self.start + self.len {
             return Err(serde::de::Error::invalid_length(
                 self.len,
-                &format!(">= {}", self.de.0.pos - self.start).as_str(),
+                &format!(">= {}", self.de.common.pos - self.start).as_str(),
             ));
         }
 
@@ -689,24 +808,24 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de
         T: DeserializeSeed<'de>,
     {
         let ctxt = Context::new(
-            self.de.0.ctxt.format(),
-            self.de.0.ctxt.endian(),
-            self.de.0.ctxt.position() + self.de.0.pos,
+            self.de.common.ctxt.format(),
+            self.de.common.ctxt.endian(),
+            self.de.common.ctxt.position() + self.de.common.pos,
         );
-        let element_signature = self.de.0.sig_parser.next_signature()?;
+        let element_signature = self.de.sig_parser.next_signature()?;
         let fixed_sized_element = crate::utils::is_fixed_sized_signature(&element_signature)?;
         let element_end = if !fixed_sized_element {
             let next_sig_pos = element_signature.len();
-            let parser = self.de.0.sig_parser.slice(next_sig_pos..);
+            let parser = self.de.sig_parser.slice(next_sig_pos..);
             if !parser.done() && parser.next_char()? == STRUCT_SIG_END_CHAR {
                 // This is the last item then and in GVariant format, we don't have offset for it
                 // even if it's non-fixed-sized.
                 self.end
             } else {
-                let end = self
-                    .offset_size
-                    .read_last_offset_from_buffer(subslice(self.de.0.bytes, self.start..self.end)?)
-                    + self.start;
+                let end = self.offset_size.read_last_offset_from_buffer(subslice(
+                    self.de.common.bytes,
+                    self.start..self.end,
+                )?) + self.start;
                 let offset_size = self.offset_size as usize;
                 if offset_size > self.end {
                     return Err(serde::de::Error::invalid_length(
@@ -724,31 +843,40 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de
             self.end
         };
 
-        let sig_parser = self.de.0.sig_parser.clone();
-        let mut de = Deserializer::<F>(DeserializerCommon {
-            ctxt,
+        let sig_parser = self.de.sig_parser.clone();
+        let mut de = Deserializer::<F> {
             sig_parser,
-            bytes: subslice(self.de.0.bytes, self.de.0.pos..element_end)?,
-            fds: self.de.0.fds,
-            pos: 0,
-            container_depths: self.de.0.container_depths,
-        });
+            container_depths: self.de.container_depths,
+            common: DeserializerCommon {
+                ctxt,
+                bytes: subslice(self.de.common.bytes, self.de.common.pos..element_end)?,
+                fds: self.de.common.fds,
+                pos: 0,
+            },
+        };
         let v = seed.deserialize(&mut de).map(Some);
-        self.de.0.pos += de.0.pos;
+        self.de.common.pos += de.common.pos;
         // No need for retaking the container depths as the field can't be incomplete.
 
-        if de.0.sig_parser.next_char()? == STRUCT_SIG_END_CHAR {
+        if de.sig_parser.next_char()? == STRUCT_SIG_END_CHAR {
             // Last item in the struct
-            de.0.sig_parser.skip_char()?;
+            de.sig_parser.skip_char()?;
 
             // Skip over the framing offsets (if any)
-            self.de.0.pos += self.offsets_len;
+            self.de.common.pos += self.offsets_len;
         }
 
-        self.de.0.sig_parser = de.0.sig_parser;
+        self.de.sig_parser = de.sig_parser;
 
         v
     }
+}
+
+#[derive(Debug)]
+enum ValueParseStage {
+    Signature,
+    Value,
+    Done,
 }
 
 #[derive(Debug)]
@@ -768,7 +896,7 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F>
         // GVariant format has signature at the end
         let mut separator_pos = None;
 
-        if de.0.bytes.is_empty() {
+        if de.common.bytes.is_empty() {
             return Err(de::Error::invalid_value(
                 de::Unexpected::Other("end of byte stream"),
                 &"nul byte separator between Variant's value & signature",
@@ -776,8 +904,8 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F>
         }
 
         // Search for the nul byte separator
-        for i in (de.0.pos..de.0.bytes.len() - 1).rev() {
-            if de.0.bytes[i] == b'\0' {
+        for i in (de.common.pos..de.common.bytes.len() - 1).rev() {
+            if de.common.bytes[i] == b'\0' {
                 separator_pos = Some(i);
 
                 break;
@@ -787,11 +915,16 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F>
         let (sig_start, sig_end, value_start, value_end) = match separator_pos {
             None => {
                 return Err(de::Error::invalid_value(
-                    de::Unexpected::Bytes(&de.0.bytes[de.0.pos..]),
+                    de::Unexpected::Bytes(&de.common.bytes[de.common.pos..]),
                     &"nul byte separator between Variant's value & signature",
                 ));
             }
-            Some(separator_pos) => (separator_pos + 1, de.0.bytes.len(), de.0.pos, separator_pos),
+            Some(separator_pos) => (
+                separator_pos + 1,
+                de.common.bytes.len(),
+                de.common.pos,
+                separator_pos,
+            ),
         };
 
         Ok(ValueDeserializer::<F> {
@@ -821,43 +954,47 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de
                 let signature = Signature::from_static_str_unchecked(VARIANT_SIGNATURE_STR);
                 let sig_parser = SignatureParser::new(signature);
 
-                let mut de = Deserializer::<F>(DeserializerCommon {
-                    // No padding in signatures so just pass the same context
-                    ctxt: self.de.0.ctxt,
+                let mut de = Deserializer::<F> {
                     sig_parser,
-                    bytes: subslice(self.de.0.bytes, self.sig_start..self.sig_end)?,
-                    fds: self.de.0.fds,
-                    pos: 0,
-                    container_depths: self.de.0.container_depths,
-                });
+                    container_depths: self.de.container_depths,
+                    common: DeserializerCommon {
+                        // No padding in signatures so just pass the same context
+                        ctxt: self.de.common.ctxt,
+                        bytes: subslice(self.de.common.bytes, self.sig_start..self.sig_end)?,
+                        fds: self.de.common.fds,
+                        pos: 0,
+                    },
+                };
 
                 seed.deserialize(&mut de).map(Some)
             }
             ValueParseStage::Value => {
                 self.stage = ValueParseStage::Done;
 
-                let slice = subslice(self.de.0.bytes, self.sig_start..self.sig_end)?;
+                let slice = subslice(self.de.common.bytes, self.sig_start..self.sig_end)?;
                 // FIXME: Can we just use `Signature::from_bytes_unchecked`?
                 let signature = Signature::try_from(slice)?;
                 let sig_parser = SignatureParser::new(signature);
 
                 let ctxt = Context::new(
-                    self.de.0.ctxt.format(),
-                    self.de.0.ctxt.endian(),
-                    self.de.0.ctxt.position() + self.value_start,
+                    self.de.common.ctxt.format(),
+                    self.de.common.ctxt.endian(),
+                    self.de.common.ctxt.position() + self.value_start,
                 );
-                let mut de = Deserializer::<F>(DeserializerCommon {
-                    ctxt,
+                let mut de = Deserializer::<F> {
                     sig_parser,
-                    bytes: subslice(self.de.0.bytes, self.value_start..self.value_end)?,
-                    fds: self.de.0.fds,
-                    pos: 0,
-                    container_depths: self.de.0.container_depths.inc_variant()?,
-                });
+                    container_depths: self.de.container_depths.inc_variant()?,
+                    common: DeserializerCommon {
+                        ctxt,
+                        bytes: subslice(self.de.common.bytes, self.value_start..self.value_end)?,
+                        fds: self.de.common.fds,
+                        pos: 0,
+                    },
+                };
 
                 let v = seed.deserialize(&mut de).map(Some);
 
-                self.de.0.pos = self.sig_end;
+                self.de.common.pos = self.sig_end;
 
                 v
             }

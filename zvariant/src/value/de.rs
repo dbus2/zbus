@@ -107,7 +107,10 @@ impl<'de> Deserializer<'de> for ValueDeserializer<'de> {
     deserialize_method!(deserialize_identifier());
     deserialize_method!(deserialize_ignored_any());
 
-    fn deserialize_option<V>(self, #[allow(unused_variables)] visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_option<V>(
+        self,
+        #[allow(unused_variables)] visitor: V,
+    ) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
@@ -438,26 +441,36 @@ impl<'de> VariantAccess<'de> for StructureEnumAccess<'de> {
         if let Some(field) = self.fields.pop_front() {
             seed.deserialize(field.into_deserializer())
         } else {
+            Err(crate::Error::missing_field(
+                "expected enum data for newtype variant seed",
+            ))
+        }
+    }
+
+    fn tuple_variant<V>(mut self, _len: usize, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        if let Some(Value::Structure(inner_fields)) = self.fields.pop_front() {
+            visitor.visit_seq(StructureAccess::new(inner_fields.into_fields().into()))
+        } else {
             Err(crate::Error::missing_field("expected enum data"))
         }
     }
 
-    fn tuple_variant<V>(self, _len: usize, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        visitor.visit_seq(StructureAccess::new(self.fields))
-    }
-
     fn struct_variant<V>(
-        self,
+        mut self,
         _fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        visitor.visit_seq(StructureAccess::new(self.fields))
+        if let Some(Value::Structure(inner_fields)) = self.fields.pop_front() {
+            visitor.visit_seq(StructureAccess::new(inner_fields.into_fields().into()))
+        } else {
+            Err(crate::Error::missing_field("expected enum data"))
+        }
     }
 }
 
@@ -466,7 +479,7 @@ mod test {
     use std::collections::HashMap;
 
     use super::*;
-    use crate::{ObjectPath, OwnedObjectPath, OwnedSignature, Signature, StructureBuilder};
+    use crate::{ObjectPath, OwnedObjectPath, OwnedSignature, Signature, StructureBuilder, Type};
     use serde::Deserialize;
 
     #[test]
@@ -700,6 +713,104 @@ mod test {
             let output: MyEnum = MyEnum::deserialize(de).unwrap();
 
             assert_eq!(output, MyEnum::B);
+        }
+    }
+
+    #[test]
+    fn deserialize_tuple_variant() {
+        #[derive(Deserialize, PartialEq, Debug, Type)]
+        enum MyEnum {
+            A(i32, u32),
+            B(i32, u32),
+        }
+
+        {
+            let structure = StructureBuilder::new()
+                .add_field(0u32)
+                .append_field(Value::Structure(
+                    StructureBuilder::new()
+                        .add_field(-10i32)
+                        .add_field(10u32)
+                        .build(),
+                ))
+                .build();
+
+            let input = Value::Structure(structure);
+
+            assert_eq!(input.value_signature(), MyEnum::signature());
+
+            let de = input.into_deserializer();
+            let output: MyEnum = MyEnum::deserialize(de).unwrap();
+
+            assert_eq!(output, MyEnum::A(-10, 10));
+        }
+
+        {
+            let structure = StructureBuilder::new()
+                .add_field(1u32)
+                .append_field(Value::Structure(
+                    StructureBuilder::new()
+                        .add_field(-10i32)
+                        .add_field(10u32)
+                        .build(),
+                ))
+                .build();
+
+            let input = Value::Structure(structure);
+
+            let de = input.into_deserializer();
+            let output: MyEnum = MyEnum::deserialize(de).unwrap();
+
+            assert_eq!(output, MyEnum::B(-10, 10));
+        }
+    }
+
+    #[test]
+    fn deserialize_struct_variant() {
+        #[derive(Deserialize, PartialEq, Debug, Type)]
+        enum MyEnum {
+            A { a: i32, b: u32 },
+            B { a: i32, b: u32 },
+        }
+
+        {
+            let structure = StructureBuilder::new()
+                .add_field(0u32)
+                .append_field(Value::Structure(
+                    StructureBuilder::new()
+                        .add_field(-10i32)
+                        .add_field(10u32)
+                        .build(),
+                ))
+                .build();
+
+            let input = Value::Structure(structure);
+
+            assert_eq!(input.value_signature(), MyEnum::signature());
+
+            let de = input.into_deserializer();
+            let output: MyEnum = MyEnum::deserialize(de).unwrap();
+
+            assert_eq!(output, MyEnum::A { a: -10, b: 10 });
+        }
+
+        {
+            let structure = StructureBuilder::new()
+                .add_field(1u32)
+                .append_field(Value::Structure(
+                    StructureBuilder::new()
+                        .add_field(-10i32)
+                        .add_field(10u32)
+                        .build(),
+                ))
+                .build();
+
+            let input = Value::Structure(structure);
+
+            let de = input.into_deserializer();
+            let output: MyEnum = MyEnum::deserialize(de).unwrap();
+
+            assert_eq!(output, MyEnum::B { a: -10, b: 10 });
         }
     }
 

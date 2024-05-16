@@ -9,12 +9,12 @@ use std::collections::VecDeque;
 
 use nom::{
     branch::alt, bytes::complete::tag, character::complete::anychar, combinator::all_consuming,
-    multi::many1, IResult,
+    multi::many0, IResult,
 };
 
 use crate::{
-    Basic, Fd, ObjectPath, Signature, Type, ARRAY_SIGNATURE_STR, STRUCT_SIG_END_STR,
-    STRUCT_SIG_START_STR, VARIANT_SIGNATURE_CHAR, VARIANT_SIGNATURE_STR,
+    serialized::Format, Basic, Fd, ObjectPath, Signature, Type, ARRAY_SIGNATURE_STR,
+    STRUCT_SIG_END_STR, STRUCT_SIG_START_STR, VARIANT_SIGNATURE_CHAR, VARIANT_SIGNATURE_STR,
 };
 
 /// A parsed DBus/GVariant type signature.
@@ -22,16 +22,11 @@ use crate::{
 pub struct ParsedSignature(VecDeque<SignatureEntry>);
 
 impl ParsedSignature {
-    /// Get the next entry in the signature to
-    /// be processed.
-    pub fn next(&mut self) -> Option<SignatureEntry> {
-        self.0.pop_front()
-    }
-
-    /// Check if the signature matches a given
-    /// type `T`.
-    pub fn matches<T: Type>(&self) -> bool {
-        T::signature() == signature_string!(&self.to_string())
+    pub fn new(signature: &Signature<'_>) -> Self {
+        match Self::parse_str(signature.as_str()) {
+            Ok(sig) => sig,
+            Err(err) => panic!("A `Signature` should always produce a valid parseable signature string - signature: {:?}, error: {:?}", signature, err)
+        }
     }
 
     /// Parse a byte slice into a `ParsedSignature`. If the entire
@@ -50,6 +45,24 @@ impl ParsedSignature {
     /// string is not consumed by the parsing, an error is returned.
     pub fn parse_str(input: &str) -> crate::Result<ParsedSignature> {
         Self::parse_bytes(input.as_bytes())
+    }
+
+    /// Get the next entry in the signature to
+    /// be processed.
+    pub fn next(&mut self) -> Option<SignatureEntry> {
+        self.0.pop_front()
+    }
+
+    /// Peek at the next signature entry without
+    /// removing it from the queue.
+    pub fn peek(&self) -> Option<&SignatureEntry> {
+        self.0.front()
+    }
+
+    /// Check if the signature matches a given
+    /// type `T`.
+    pub fn matches<T: Type>(&self) -> bool {
+        T::signature() == signature_string!(&self.to_string())
     }
 }
 
@@ -78,6 +91,18 @@ impl<'a> From<&ParsedSignature> for Signature<'a> {
 impl From<SignatureEntry> for ParsedSignature {
     fn from(entry: SignatureEntry) -> Self {
         ParsedSignature(vec![entry].into())
+    }
+}
+
+impl From<Box<SignatureEntry>> for ParsedSignature {
+    fn from(entry: Box<SignatureEntry>) -> Self {
+        ParsedSignature(vec![*entry].into())
+    }
+}
+
+impl From<VecDeque<SignatureEntry>> for ParsedSignature {
+    fn from(entries: VecDeque<SignatureEntry>) -> Self {
+        ParsedSignature(entries)
     }
 }
 
@@ -110,6 +135,34 @@ pub enum SignatureEntry {
 impl SignatureEntry {
     pub fn matches<T: Type>(&self) -> bool {
         T::signature() == signature_string!(&self.to_string())
+    }
+
+    pub fn alignment(&self, format: Format) -> usize {
+        match self {
+            SignatureEntry::U8 => u8::alignment(format),
+            SignatureEntry::U16 => u16::alignment(format),
+            SignatureEntry::U32 => u32::alignment(format),
+            SignatureEntry::U64 => u64::alignment(format),
+            SignatureEntry::I16 => i16::alignment(format),
+            SignatureEntry::I32 => i32::alignment(format),
+            SignatureEntry::I64 => i64::alignment(format),
+            SignatureEntry::F64 => f64::alignment(format),
+            SignatureEntry::Bool => bool::alignment(format),
+            SignatureEntry::Str => String::alignment(format),
+            SignatureEntry::ObjectPath => ObjectPath::alignment(format),
+            SignatureEntry::Signature => Signature::alignment(format),
+            SignatureEntry::Variant => 1,
+            SignatureEntry::Array(_) => u32::alignment(format), // Array length alignment
+            SignatureEntry::Struct(_) => 8,                     /* Structs always start at an */
+            // 8-byte boundary
+            SignatureEntry::DictEntry(_, _) => 8, // Same behavior as structs
+
+            #[cfg(unix)]
+            SignatureEntry::Fd => Fd::alignment(format),
+
+            #[cfg(feature = "gvariant")]
+            SignatureEntry::Maybe(sig) => sig.alignment(format),
+        }
     }
 
     pub fn parse(input: &[u8]) -> crate::Result<VecDeque<SignatureEntry>> {
@@ -200,13 +253,14 @@ impl SignatureEntry {
             Self::basic,
             Self::container_array,
             Self::container_struct,
+            Self::container_dict_entry,
             #[cfg(feature = "gvariant")]
             Self::maybe,
         ))(input)
     }
 
     fn parse_many(input: &[u8]) -> IResult<&[u8], VecDeque<SignatureEntry>> {
-        let (input, entries) = many1(Self::parse_one)(input)?;
+        let (input, entries) = many0(Self::parse_one)(input)?;
         Ok((input, entries.into()))
     }
 
@@ -471,11 +525,6 @@ mod test {
     }
 
     #[test]
-    fn fails_parse_lone_dictentry() {
-        assert!(ParsedSignature::parse_str("{is}").is_err());
-    }
-
-    #[test]
     fn fails_parse_unclosed_dict() {
         assert!(ParsedSignature::parse_str("a{is").is_err());
     }
@@ -630,7 +679,8 @@ mod test {
     }
 
     #[test]
-    #[cfg(all(feature = "gvariant", not(feature = "option-as_array")))]
+    #[cfg(feature = "gvariant")]
+    #[cfg(not(feature = "option-as-array"))]
     fn matches_maybe() {
         let parsed = ParsedSignature::parse_str("ms").unwrap();
         assert_eq!(Option::<String>::signature().as_str(), "ms");
@@ -641,7 +691,8 @@ mod test {
     }
 
     #[test]
-    #[cfg(all(feature = "option-as-array", not(feature = "gvariant")))]
+    #[cfg(feature = "option-as-array")]
+    #[cfg(not(feature = "gvariant"))]
     fn matches_maybe() {
         let parsed = ParsedSignature::parse_str("as").unwrap();
         assert!(parsed.matches::<Option<String>>());

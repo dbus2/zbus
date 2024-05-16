@@ -1,10 +1,11 @@
 use std::slice::SliceIndex;
 
 #[cfg(feature = "gvariant")]
-use crate::signature_parser::SignatureParser;
-use crate::{serialized::Format, Basic, Error, ObjectPath, Result, Signature};
+use crate::{serialized::Format, signature_parser::SignatureParser, Basic, ObjectPath, Signature};
+use crate::{Error, Result};
 
 #[cfg(unix)]
+#[cfg(feature = "gvariant")]
 use crate::Fd;
 
 /// The prefix of ARRAY type signature, as a character. Provided for manual signature creation.
@@ -33,6 +34,8 @@ pub const DICT_ENTRY_SIG_START_STR: &str = "{";
 /// The closing character of DICT_ENTRY type signature, as a string. Provided for manual signature
 /// creation.
 pub const DICT_ENTRY_SIG_END_STR: &str = "}";
+
+#[cfg(feature = "gvariant")]
 pub(crate) const DICT_ENTRY_ALIGNMENT_DBUS: usize = 8;
 /// The VARIANT type signature. Provided for manual signature creation.
 pub const VARIANT_SIGNATURE_CHAR: char = 'v';
@@ -76,6 +79,7 @@ pub(crate) fn usize_to_u8(value: usize) -> u8 {
     value as u8
 }
 
+#[cfg(feature = "gvariant")]
 pub(crate) fn f64_to_f32(value: f64) -> f32 {
     assert!(
         value <= (std::f32::MAX as f64),
@@ -87,6 +91,7 @@ pub(crate) fn f64_to_f32(value: f64) -> f32 {
 }
 
 // `signature` must be **one** complete and correct signature. Expect panics otherwise!
+#[cfg(feature = "gvariant")]
 pub(crate) fn alignment_for_signature(signature: &Signature<'_>, format: Format) -> Result<usize> {
     let alignment = match signature
         .as_bytes()
@@ -166,7 +171,7 @@ macro_rules! signature_string {
 
 macro_rules! check_child_value_signature {
     ($expected_signature:expr, $child_signature:expr, $child_name:literal) => {{
-        if $child_signature != $expected_signature {
+        if $child_signature != $expected_signature && $expected_signature.as_str() != "v" {
             let unexpected = format!("{} with signature `{}`", $child_name, $child_signature,);
             let expected = format!("{} with signature `{}`", $child_name, $expected_signature);
 
@@ -178,6 +183,7 @@ macro_rules! check_child_value_signature {
     }};
 }
 
+#[cfg(feature = "gvariant")]
 fn alignment_for_single_child_type_signature(
     #[allow(unused)] signature: &Signature<'_>,
     format: Format,
@@ -194,6 +200,7 @@ fn alignment_for_single_child_type_signature(
     }
 }
 
+#[cfg(feature = "gvariant")]
 fn alignment_for_array_signature(signature: &Signature<'_>, format: Format) -> Result<usize> {
     alignment_for_single_child_type_signature(signature, format, ARRAY_ALIGNMENT_DBUS)
 }
@@ -203,6 +210,7 @@ fn alignment_for_maybe_signature(signature: &Signature<'_>, format: Format) -> R
     alignment_for_single_child_type_signature(signature, format, 1)
 }
 
+#[cfg(feature = "gvariant")]
 fn alignment_for_struct_signature(
     #[allow(unused)] signature: &Signature<'_>,
     format: Format,
@@ -240,6 +248,7 @@ fn alignment_for_struct_signature(
     }
 }
 
+#[cfg(feature = "gvariant")]
 fn alignment_for_dict_entry_signature(
     #[allow(unused)] signature: &Signature<'_>,
     format: Format,

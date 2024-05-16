@@ -14,7 +14,9 @@ use std::{collections::VecDeque, marker::PhantomData};
 #[cfg(feature = "gvariant")]
 use crate::Maybe;
 use crate::{
-    basic::Basic, value::parsed_signature::{ParsedSignature, SignatureEntry}, Array, Dict, ObjectPath, Signature, Str, StructureBuilder, Value
+    basic::Basic,
+    value::parsed_signature::{ParsedSignature, SignatureEntry},
+    Array, Dict, ObjectPath, Signature, Str, StructureBuilder, Value,
 };
 use serde::{
     de::Error,
@@ -43,7 +45,7 @@ macro_rules! serialize_basic_type {
                         ))
                     }
                 }
-                None => Err(crate::Error::UnexpectedValue(value.to_string()))
+                None => Err(crate::Error::UnexpectedValue(value.to_string())),
             }
         }
     };
@@ -62,8 +64,8 @@ macro_rules! serialize_basic_type {
                         ))
                     }
                 }
-                
-                None => Err(crate::Error::UnexpectedValue(value.to_string()))
+
+                None => Err(crate::Error::UnexpectedValue(value.to_string())),
             }
         }
     };
@@ -127,7 +129,7 @@ impl<'a> Serializer for ValueSerializer<'a> {
                 signature.into(),
                 String::SIGNATURE_STR.to_string(),
             )),
-            None => Err(crate::Error::UnexpectedValue(v.to_string()))
+            None => Err(crate::Error::UnexpectedValue(v.to_string())),
         }
     }
 
@@ -144,7 +146,9 @@ impl<'a> Serializer for ValueSerializer<'a> {
                 signature.into(),
                 "ay".to_string(),
             )),
-            None => Err(crate::Error::UnexpectedValue("No signature provided for serialized bytes".to_string()))
+            None => Err(crate::Error::UnexpectedValue(
+                "No signature provided for serialized bytes".to_string(),
+            )),
         }
     }
 
@@ -297,8 +301,8 @@ impl<'a> Serializer for ValueSerializer<'a> {
                 "a valid newtype variant signature".to_string(),
             )),
             None => Err(crate::Error::UnexpectedValue(
-                "No signature found for serialized newtype variant".to_string()
-            ))
+                "No signature found for serialized newtype variant".to_string(),
+            )),
         }
     }
 
@@ -310,8 +314,8 @@ impl<'a> Serializer for ValueSerializer<'a> {
                 "an array".to_string(),
             )),
             None => Err(crate::Error::UnexpectedValue(
-                "No signature found for serialized sequence".to_string()
-            ))
+                "No signature found for serialized sequence".to_string(),
+            )),
         }
     }
 
@@ -323,8 +327,8 @@ impl<'a> Serializer for ValueSerializer<'a> {
                 "a valid tuple signature".to_string(),
             )),
             None => Err(crate::Error::UnexpectedValue(
-                "No signature found for serialized tuple".to_string()
-            ))
+                "No signature found for serialized tuple".to_string(),
+            )),
         }
     }
 
@@ -342,8 +346,8 @@ impl<'a> Serializer for ValueSerializer<'a> {
                 "a valid tuple-struct signature".to_string(),
             )),
             None => Err(crate::Error::UnexpectedValue(
-                "No signature found for serialized tuple-struct".to_string()
-            ))
+                "No signature found for serialized tuple-struct".to_string(),
+            )),
         }
     }
 
@@ -381,8 +385,8 @@ impl<'a> Serializer for ValueSerializer<'a> {
                         "a valid tuple-variant inner value signature".to_string(),
                     )),
                     None => Err(crate::Error::UnexpectedValue(
-                        "No signature found for serialized tuple-variant inner content".to_string()
-                    ))
+                        "No signature found for serialized tuple-variant inner content".to_string(),
+                    )),
                 }
             }
             Some(signature) => Err(crate::Error::SignatureMismatch(
@@ -391,8 +395,8 @@ impl<'a> Serializer for ValueSerializer<'a> {
             )),
 
             None => Err(crate::Error::UnexpectedValue(
-                "No signature found for serialized tuple-variant".to_string()
-            ))
+                "No signature found for serialized tuple-variant".to_string(),
+            )),
         }
     }
 
@@ -410,8 +414,8 @@ impl<'a> Serializer for ValueSerializer<'a> {
                 "a Dictionary of the form a{kv}".to_string(),
             )),
             None => Err(crate::Error::UnexpectedValue(
-                "No signature found for serialized map".to_string()
-            ))
+                "No signature found for serialized map".to_string(),
+            )),
         }
     }
 
@@ -429,8 +433,8 @@ impl<'a> Serializer for ValueSerializer<'a> {
             )),
 
             None => Err(crate::Error::UnexpectedValue(
-                "No signature found for serialized struct".to_string()
-            ))
+                "No signature found for serialized struct".to_string(),
+            )),
         }
     }
 
@@ -470,8 +474,9 @@ impl<'a> Serializer for ValueSerializer<'a> {
                     )),
 
                     None => Err(crate::Error::UnexpectedValue(
-                        "No signature found for serialized struct-variant inner content".to_string()
-                    ))
+                        "No signature found for serialized struct-variant inner content"
+                            .to_string(),
+                    )),
                 }
             }
 
@@ -481,8 +486,8 @@ impl<'a> Serializer for ValueSerializer<'a> {
             )),
 
             None => Err(crate::Error::UnexpectedValue(
-                "No signature found for serialized struct-variant".to_string()
-            ))
+                "No signature found for serialized struct-variant".to_string(),
+            )),
         }
     }
 }
@@ -616,6 +621,7 @@ impl<'a> SerializeTupleStruct for ValueTupleStructSerializer<'a> {
 /// Serialize a tuple variant (of the form `enum MyEnum { A(u32, String) }`)
 /// into a `Structure` with the discriminant as the first field.
 pub struct ValueTupleVariantSerializer<'a> {
+    discriminant: Value<'a>,
     signature_entries: VecDeque<SignatureEntry>,
     fields: Vec<Value<'a>>,
 }
@@ -623,8 +629,9 @@ pub struct ValueTupleVariantSerializer<'a> {
 impl<'a> ValueTupleVariantSerializer<'a> {
     pub fn new(discriminant: Value<'a>, signature_entries: VecDeque<SignatureEntry>) -> Self {
         Self {
+            discriminant,
             signature_entries,
-            fields: vec![discriminant],
+            fields: vec![],
         }
     }
 }
@@ -649,13 +656,17 @@ impl<'a> SerializeTupleVariant for ValueTupleVariantSerializer<'a> {
     }
 
     fn end(mut self) -> Result<Self::Ok, Self::Error> {
-        let mut builder = StructureBuilder::new();
+        let mut inner_builder = StructureBuilder::new();
 
         for field in self.fields.drain(..) {
-            builder.push_value(field);
+            inner_builder.push_value(field);
         }
 
-        Ok(Value::Structure(builder.build()))
+        let mut outer_builder = StructureBuilder::new();
+        outer_builder.push_value(self.discriminant);
+        outer_builder.push_value(Value::Structure(inner_builder.build()));
+
+        Ok(Value::Structure(outer_builder.build()))
     }
 }
 
@@ -761,6 +772,7 @@ impl<'a> SerializeStruct for ValueStructSerializer<'a> {
 /// Serialize a struct variant (of the form `enum MyEnum { A { a: u32, b: String } }`)
 /// into a `Structure` with the discriminant as the first field.
 pub struct ValueStructVariantSerializer<'a> {
+    discriminant: Value<'a>,
     fields: Vec<Value<'a>>,
     signature_entries: VecDeque<SignatureEntry>,
 }
@@ -768,7 +780,8 @@ pub struct ValueStructVariantSerializer<'a> {
 impl<'a> ValueStructVariantSerializer<'a> {
     pub fn new(discriminant: Value<'a>, signature_entries: VecDeque<SignatureEntry>) -> Self {
         Self {
-            fields: vec![discriminant],
+            discriminant,
+            fields: vec![],
             signature_entries,
         }
     }
@@ -794,13 +807,16 @@ impl<'a> SerializeStructVariant for ValueStructVariantSerializer<'a> {
     }
 
     fn end(mut self) -> Result<Self::Ok, Self::Error> {
-        let mut builder = StructureBuilder::new();
+        let mut inner_builder = StructureBuilder::new();
 
         for field in self.fields.drain(..) {
-            builder.push_value(field);
+            inner_builder.push_value(field);
         }
 
-        Ok(Value::Structure(builder.build()))
+        let mut outer_builder = StructureBuilder::new();
+        outer_builder.push_value(self.discriminant);
+        outer_builder.push_value(Value::Structure(inner_builder.build()));
+        Ok(Value::Structure(outer_builder.build()))
     }
 }
 
@@ -1106,11 +1122,17 @@ mod test {
 
             let expected = StructureBuilder::new()
                 .add_field(0u32)
-                .add_field(1i32)
-                .add_field("hello")
+                .append_field(Value::Structure(
+                    StructureBuilder::new()
+                        .add_field(1i32)
+                        .add_field("hello")
+                        .build(),
+                ))
                 .build();
 
-            assert_eq!(output, Value::Structure(expected));
+            let expected = Value::Structure(expected);
+            assert_eq!(expected.value_signature(), "(u(is))");
+            assert_eq!(output, expected);
         }
 
         {
@@ -1124,8 +1146,12 @@ mod test {
 
             let expected = StructureBuilder::new()
                 .add_field(1u32)
-                .add_field(2i32)
-                .add_field("goodbye")
+                .append_field(Value::Structure(
+                    StructureBuilder::new()
+                        .add_field(2i32)
+                        .add_field("goodbye")
+                        .build(),
+                ))
                 .build();
 
             assert_eq!(output, Value::Structure(expected));
@@ -1150,8 +1176,12 @@ mod test {
 
             let expected = StructureBuilder::new()
                 .add_field(0u32)
-                .add_field(1i32)
-                .add_field("hello")
+                .append_field(Value::Structure(
+                    StructureBuilder::new()
+                        .add_field(1i32)
+                        .add_field("hello")
+                        .build(),
+                ))
                 .build();
 
             assert_eq!(output, Value::Structure(expected));
@@ -1165,8 +1195,12 @@ mod test {
 
             let expected = StructureBuilder::new()
                 .add_field(1u32)
-                .add_field(2i32)
-                .add_field("goodbye")
+                .append_field(Value::Structure(
+                    StructureBuilder::new()
+                        .add_field(2i32)
+                        .add_field("goodbye")
+                        .build(),
+                ))
                 .build();
 
             assert_eq!(output, Value::Structure(expected));

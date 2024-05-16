@@ -9,16 +9,12 @@ use std::os::fd::{AsFd, AsRawFd};
 #[cfg(feature = "gvariant")]
 use crate::gvariant::Deserializer as GVDeserializer;
 use crate::{
-    container_depths::ContainerDepths, dbus::Deserializer as DBusDeserializer, serialized::Context,
-    signature_parser::SignatureParser, utils::*, Basic, Error, ObjectPath, Result, Signature,
+    dbus::Deserializer as DBusDeserializer, serialized::Context, utils::*, Basic, Error, Result,
 };
-
-#[cfg(unix)]
-use crate::Fd;
 
 /// Our deserialization implementation.
 #[derive(Debug)]
-pub(crate) struct DeserializerCommon<'de, 'sig, 'f, F> {
+pub(crate) struct DeserializerCommon<'de, 'f, F> {
     pub(crate) ctxt: Context,
     pub(crate) bytes: &'de [u8],
 
@@ -28,10 +24,6 @@ pub(crate) struct DeserializerCommon<'de, 'sig, 'f, F> {
     pub(crate) fds: PhantomData<&'f F>,
 
     pub(crate) pos: usize,
-
-    pub(crate) sig_parser: SignatureParser<'sig>,
-
-    pub(crate) container_depths: ContainerDepths,
 }
 
 /// Our deserialization implementation.
@@ -40,7 +32,7 @@ pub(crate) struct DeserializerCommon<'de, 'sig, 'f, F> {
 /// to use the serialization functions, e.g [`crate::to_bytes`] or specific serializers,
 /// [`crate::dbus::Deserializer`] or [`crate::zvariant::Deserializer`].
 pub(crate) enum Deserializer<'ser, 'sig, 'f, F> {
-    DBus(DBusDeserializer<'ser, 'sig, 'f, F>),
+    DBus(DBusDeserializer<'ser, 'f, F>, PhantomData<&'sig ()>),
     #[cfg(feature = "gvariant")]
     GVariant(GVDeserializer<'ser, 'sig, 'f, F>),
 }
@@ -48,7 +40,7 @@ pub(crate) enum Deserializer<'ser, 'sig, 'f, F> {
 assert_impl_all!(Deserializer<'_, '_, '_, ()>: Send, Sync, Unpin);
 
 #[cfg(unix)]
-impl<'de, 'sig, 'f, F> DeserializerCommon<'de, 'sig, 'f, F>
+impl<'de, 'f, F> DeserializerCommon<'de, 'f, F>
 where
     F: AsFd,
 {
@@ -59,7 +51,7 @@ where
     }
 }
 
-impl<'de, 'sig, 'f, F> DeserializerCommon<'de, 'sig, 'f, F> {
+impl<'de, 'f, F> DeserializerCommon<'de, 'f, F> {
     pub fn parse_padding(&mut self, alignment: usize) -> Result<usize> {
         let padding = padding_for_n_bytes(self.abs_pos(), alignment);
         if padding > 0 {
@@ -82,16 +74,6 @@ impl<'de, 'sig, 'f, F> DeserializerCommon<'de, 'sig, 'f, F> {
         Ok(padding)
     }
 
-    pub fn prep_deserialize_basic<T>(&mut self) -> Result<()>
-    where
-        T: Basic,
-    {
-        self.sig_parser.skip_char()?;
-        self.parse_padding(T::alignment(self.ctxt.format()))?;
-
-        Ok(())
-    }
-
     pub fn next_slice(&mut self, len: usize) -> Result<&'de [u8]> {
         if self.pos + len > self.bytes.len() {
             return Err(serde::de::Error::invalid_length(
@@ -110,8 +92,7 @@ impl<'de, 'sig, 'f, F> DeserializerCommon<'de, 'sig, 'f, F> {
     where
         T: Basic,
     {
-        self.prep_deserialize_basic::<T>()?;
-
+        self.parse_padding(T::alignment(self.ctxt.format()))?;
         self.next_slice(T::alignment(self.ctxt.format()))
     }
 
@@ -132,7 +113,7 @@ macro_rules! deserialize_method {
                 Deserializer::GVariant(de) => {
                     de.$method($($arg,)* visitor)
                 }
-                Deserializer::DBus(de) => {
+                Deserializer::DBus(de, _) => {
                     de.$method($($arg,)* visitor)
                 }
             }
@@ -183,49 +164,6 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
 
     fn is_human_readable(&self) -> bool {
         false
-    }
-}
-
-#[derive(Debug)]
-pub(crate) enum ValueParseStage {
-    Signature,
-    Value,
-    Done,
-}
-
-pub(crate) fn deserialize_any<'de, 'sig, 'f, D, V>(
-    de: D,
-    next_char: char,
-    visitor: V,
-) -> Result<V::Value>
-where
-    D: de::Deserializer<'de, Error = Error>,
-    V: Visitor<'de>,
-{
-    match next_char {
-        u8::SIGNATURE_CHAR => de.deserialize_u8(visitor),
-        bool::SIGNATURE_CHAR => de.deserialize_bool(visitor),
-        i16::SIGNATURE_CHAR => de.deserialize_i16(visitor),
-        u16::SIGNATURE_CHAR => de.deserialize_u16(visitor),
-        i32::SIGNATURE_CHAR => de.deserialize_i32(visitor),
-        #[cfg(unix)]
-        Fd::SIGNATURE_CHAR => de.deserialize_i32(visitor),
-        u32::SIGNATURE_CHAR => de.deserialize_u32(visitor),
-        i64::SIGNATURE_CHAR => de.deserialize_i64(visitor),
-        u64::SIGNATURE_CHAR => de.deserialize_u64(visitor),
-        f64::SIGNATURE_CHAR => de.deserialize_f64(visitor),
-        <&str>::SIGNATURE_CHAR | ObjectPath::SIGNATURE_CHAR | Signature::SIGNATURE_CHAR => {
-            de.deserialize_str(visitor)
-        }
-        VARIANT_SIGNATURE_CHAR => de.deserialize_seq(visitor),
-        ARRAY_SIGNATURE_CHAR => de.deserialize_seq(visitor),
-        STRUCT_SIG_START_CHAR => de.deserialize_seq(visitor),
-        #[cfg(feature = "gvariant")]
-        MAYBE_SIGNATURE_CHAR => de.deserialize_option(visitor),
-        c => Err(de::Error::invalid_value(
-            de::Unexpected::Char(c),
-            &"a valid signature character",
-        )),
     }
 }
 

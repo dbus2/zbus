@@ -1,7 +1,7 @@
 use core::str;
 use std::marker::PhantomData;
 
-use serde::de::{Deserialize, Deserializer, SeqAccess, Visitor};
+use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Unexpected, Visitor};
 use static_assertions::assert_impl_all;
 
 use crate::{Signature, Type, Value};
@@ -72,6 +72,27 @@ impl<'de, T: Type + Deserialize<'de>> Visitor<'de> for DeserializeValueVisitor<T
 
         seq.next_element()?
             .ok_or_else(|| serde::de::Error::invalid_length(1, &self))
+    }
+
+    fn visit_map<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>
+    where
+        V: MapAccess<'de>,
+    {
+        let (_, sig) = visitor
+            .next_entry::<String, Signature<'_>>()?
+            .ok_or_else(|| {
+                serde::de::Error::invalid_value(Unexpected::Other("nothing"), &"a Value signature")
+            })?;
+
+        if sig != T::signature() {
+            return Err(serde::de::Error::invalid_value(
+                serde::de::Unexpected::Str(&sig),
+                &"the value signature",
+            ));
+        }
+
+        let _ = visitor.next_key::<String>()?;
+        visitor.next_value::<Self::Value>()
     }
 }
 

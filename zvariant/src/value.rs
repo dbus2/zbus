@@ -25,6 +25,7 @@ use crate::{
     utils::*, Array, Basic, Dict, DynamicType, ObjectPath, OwnedValue, Signature, Str, Structure,
     StructureBuilder, Type,
 };
+
 #[cfg(feature = "gvariant")]
 use crate::{maybe_display_fmt, Maybe};
 
@@ -618,8 +619,11 @@ impl<'de: 'a, 'a> Deserialize<'de> for Value<'a> {
         D: Deserializer<'de>,
     {
         let visitor = ValueVisitor;
-
-        deserializer.deserialize_any(visitor)
+        deserializer.deserialize_struct(
+            "zvariant::Value",
+            &["zvariant::Value::Signature", "zvariant::Value::Value"],
+            visitor,
+        )
     }
 }
 
@@ -658,11 +662,11 @@ impl<'de> Visitor<'de> for ValueVisitor {
         V: MapAccess<'de>,
     {
         let (_, signature) = visitor
-            .next_entry::<&str, Signature<'_>>()?
+            .next_entry::<String, Signature<'_>>()?
             .ok_or_else(|| {
                 Error::invalid_value(Unexpected::Other("nothing"), &"a Value signature")
             })?;
-        let _ = visitor.next_key::<&str>()?;
+        let _ = visitor.next_key::<String>()?;
 
         let seed = ValueSeed::<Value<'_>> {
             signature,
@@ -883,31 +887,46 @@ where
     where
         V: MapAccess<'de>,
     {
-        if self.signature.len() < 5 {
-            return Err(serde::de::Error::invalid_length(
+        if self.signature.as_str() == "v" {
+            let (_, signature) =
+                visitor
+                    .next_entry::<String, Signature<'_>>()?
+                    .ok_or_else(|| {
+                        Error::invalid_value(Unexpected::Other("nothing"), &"a Value signature")
+                    })?;
+            let _ = visitor.next_key::<String>()?;
+
+            let seed = ValueSeed::<Value<'_>> {
+                signature,
+                phantom: PhantomData,
+            };
+            visitor.next_value_seed(seed)
+        } else if self.signature.len() < 5 {
+            Err(serde::de::Error::invalid_length(
                 self.signature.len(),
                 &">= 5 characters in dict entry signature",
-            ));
-        }
-        let key_signature = self.signature.slice(2..3);
-        let signature_end = self.signature.len() - 1;
-        let value_signature = self.signature.slice(3..signature_end);
-        let mut dict = Dict::new_full_signature(self.signature.clone());
+            ))
+        } else {
+            let key_signature = self.signature.slice(2..3);
+            let signature_end = self.signature.len() - 1;
+            let value_signature = self.signature.slice(3..signature_end);
+            let mut dict = Dict::new_full_signature(self.signature.clone());
 
-        while let Some((key, value)) = visitor.next_entry_seed(
-            ValueSeed::<Value<'_>> {
-                signature: key_signature.clone(),
-                phantom: PhantomData,
-            },
-            ValueSeed::<Value<'_>> {
-                signature: value_signature.clone(),
-                phantom: PhantomData,
-            },
-        )? {
-            dict.append(key, value).map_err(Error::custom)?;
-        }
+            while let Some((key, value)) = visitor.next_entry_seed(
+                ValueSeed::<Value<'_>> {
+                    signature: key_signature.clone(),
+                    phantom: PhantomData,
+                },
+                ValueSeed::<Value<'_>> {
+                    signature: value_signature.clone(),
+                    phantom: PhantomData,
+                },
+            )? {
+                dict.append(key, value).map_err(Error::custom)?;
+            }
 
-        Ok(Value::Dict(dict))
+            Ok(Value::Dict(dict))
+        }
     }
 
     #[cfg(feature = "gvariant")]

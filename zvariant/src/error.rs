@@ -60,7 +60,9 @@ pub enum Error {
     /// The maximum allowed depth for containers in encoding was exceeded.
     MaxDepthExceeded(MaxDepthExceeded),
     /// An unexpected value with no corresponding signature was encountered.
-    UnexpectedValue(String)
+    UnexpectedValue(String),
+    /// A value was requested but no signature is available
+    MissingSignature,
 }
 
 assert_impl_all!(Error: Send, Sync, Unpin);
@@ -76,6 +78,7 @@ impl PartialEq for Error {
             (Error::UnknownFd, Error::UnknownFd) => true,
             (Error::MaxDepthExceeded(max1), Error::MaxDepthExceeded(max2)) => max1 == max2,
             (Error::UnexpectedValue(left), Error::UnexpectedValue(right)) => left == right,
+            (Error::MissingSignature, Error::MissingSignature) => true,
             (_, _) => false,
         }
     }
@@ -118,6 +121,9 @@ impl fmt::Display for Error {
             ),
             Error::MaxDepthExceeded(max) => write!(f, "{max}"),
             Error::UnexpectedValue(s) => write!(f, "Unexpected value: {s}"),
+            Error::MissingSignature => {
+                write!(f, "A value was requested but no signature is available")
+            }
         }
     }
 }
@@ -141,6 +147,7 @@ impl Clone for Error {
             Error::OutOfBounds => Error::OutOfBounds,
             Error::MaxDepthExceeded(max) => Error::MaxDepthExceeded(*max),
             Error::UnexpectedValue(s) => Error::UnexpectedValue(s.clone()),
+            Error::MissingSignature => Error::MissingSignature,
         }
     }
 }

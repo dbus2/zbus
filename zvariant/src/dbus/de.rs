@@ -1,33 +1,41 @@
-use serde::de::{self, DeserializeSeed, EnumAccess, MapAccess, SeqAccess, Visitor};
+use serde::{
+    de::{
+        self, DeserializeSeed, EnumAccess, IntoDeserializer, MapAccess, SeqAccess, VariantAccess,
+        Visitor,
+    },
+    forward_to_deserialize_any,
+};
 use static_assertions::assert_impl_all;
 
-use std::{marker::PhantomData, str};
+use std::{collections::VecDeque, str};
 
 #[cfg(unix)]
 use std::os::fd::AsFd;
 
 use crate::{
-    de::{DeserializerCommon, ValueParseStage},
+    container_depths::ContainerDepths,
+    de::DeserializerCommon,
     serialized::{Context, Format},
-    signature_parser::SignatureParser,
     utils::*,
+    value::parsed_signature::{ParsedSignature, SignatureEntry},
     Basic, Error, ObjectPath, Result, Signature,
 };
 
-#[cfg(unix)]
-use crate::Fd;
-
 /// Our D-Bus deserialization implementation.
 #[derive(Debug)]
-pub(crate) struct Deserializer<'de, 'sig, 'f, F>(pub(crate) DeserializerCommon<'de, 'sig, 'f, F>);
+pub(crate) struct Deserializer<'de, 'f, F> {
+    parsed_signature: ParsedSignature,
+    container_depths: ContainerDepths,
+    pub(crate) common: DeserializerCommon<'de, 'f, F>,
+}
 
-assert_impl_all!(Deserializer<'_, '_, '_, ()>: Send, Sync, Unpin);
+assert_impl_all!(Deserializer<'_, '_, ()>: Send, Sync, Unpin);
 
-impl<'de, 'sig, 'f, F> Deserializer<'de, 'sig, 'f, F> {
+impl<'de, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> Deserializer<'de, 'f, F> {
     /// Create a Deserializer struct instance.
     ///
     /// On Windows, there is no `fds` argument.
-    pub fn new<'r: 'de, S>(
+    pub fn new<'r: 'de, 'sig: 'de, S>(
         bytes: &'r [u8],
         #[cfg(unix)] fds: Option<&'f [F]>,
         signature: S,
@@ -40,18 +48,113 @@ impl<'de, 'sig, 'f, F> Deserializer<'de, 'sig, 'f, F> {
         assert_eq!(ctxt.format(), Format::DBus);
 
         let signature = signature.try_into().map_err(Into::into)?;
-        let sig_parser = SignatureParser::new(signature);
-        Ok(Self(DeserializerCommon {
-            ctxt,
-            sig_parser,
-            bytes,
-            #[cfg(unix)]
-            fds,
-            #[cfg(not(unix))]
-            fds: PhantomData,
-            pos: 0,
-            container_depths: Default::default(),
-        }))
+        let parsed_signature = ParsedSignature::new(&signature);
+
+        Ok(Self {
+            parsed_signature,
+            container_depths: ContainerDepths::default(),
+            common: DeserializerCommon {
+                ctxt,
+                bytes,
+                #[cfg(unix)]
+                fds,
+                #[cfg(not(unix))]
+                fds: PhantomData,
+                pos: 0,
+            },
+        })
+    }
+
+    fn inner_array<'sig: 'de, S, V>(&mut self, signature: S, seed: V) -> Result<(usize, V::Value)>
+    where
+        S: TryInto<Signature<'sig>>,
+        S::Error: Into<Error>,
+        V: DeserializeSeed<'de>,
+    {
+        self.inner_seed(signature, seed, self.container_depths.inc_array()?)
+    }
+
+    fn inner_struct<'sig: 'de, S, V>(&mut self, signature: S, seed: V) -> Result<(usize, V::Value)>
+    where
+        S: TryInto<Signature<'sig>>,
+        S::Error: Into<Error>,
+        V: DeserializeSeed<'de>,
+    {
+        self.inner_seed(signature, seed, self.container_depths.inc_structure()?)
+    }
+
+    fn inner_variant<'sig: 'de, S, V>(&mut self, signature: S, seed: V) -> Result<(usize, V::Value)>
+    where
+        S: TryInto<Signature<'sig>>,
+        S::Error: Into<Error>,
+        V: DeserializeSeed<'de>,
+    {
+        self.inner_seed(signature, seed, self.container_depths.inc_variant()?)
+    }
+
+    #[cfg(feature = "option-as-array")]
+    fn inner_some_visitor<'sig: 'de, S, V>(
+        &mut self,
+        signature: S,
+        visitor: V,
+        container_depths: ContainerDepths,
+    ) -> Result<V::Value>
+    where
+        S: TryInto<Signature<'sig>>,
+        S::Error: Into<Error>,
+        V: Visitor<'de>,
+    {
+        let inner_context = Context::new_dbus(
+            self.common.ctxt.endian(),
+            self.common.ctxt.position() + self.common.pos,
+        );
+
+        let mut de = Deserializer {
+            common: DeserializerCommon {
+                ctxt: inner_context,
+                bytes: subslice(self.common.bytes, self.common.pos..)?,
+                fds: self.common.fds,
+                pos: 0,
+            },
+            parsed_signature: ParsedSignature::new(&signature.try_into().map_err(Into::into)?),
+            container_depths,
+        };
+
+        let result = visitor.visit_some(&mut de)?;
+        self.common.pos += de.common.pos;
+        Ok(result)
+    }
+
+    fn inner_seed<'sig: 'de, S, V>(
+        &mut self,
+        signature: S,
+        seed: V,
+        container_depths: ContainerDepths,
+    ) -> Result<(usize, V::Value)>
+    where
+        S: TryInto<Signature<'sig>>,
+        S::Error: Into<Error>,
+        V: DeserializeSeed<'de>,
+    {
+        let inner_context = Context::new_dbus(
+            self.common.ctxt.endian(),
+            self.common.ctxt.position() + self.common.pos,
+        );
+
+        let mut de = Deserializer {
+            common: DeserializerCommon {
+                ctxt: inner_context,
+                bytes: subslice(self.common.bytes, self.common.pos..)?,
+                fds: self.common.fds,
+                pos: 0,
+            },
+            parsed_signature: ParsedSignature::new(&signature.try_into().map_err(Into::into)?),
+            container_depths,
+        };
+
+        let result = seed.deserialize(&mut de)?;
+        self.common.pos += de.common.pos;
+        Ok((de.common.pos, result))
     }
 }
 
@@ -61,13 +164,28 @@ macro_rules! deserialize_basic {
         where
             V: Visitor<'de>,
         {
-            let v = self
-                .0
-                .ctxt
-                .endian()
-                .$read_method(self.0.next_const_size_slice::<$type>()?);
+            match self.parsed_signature.next() {
+                Some(signature) => {
+                    if signature.matches::<$type>() {
+                        self.common
+                            .parse_padding(<$type>::alignment(Format::DBus))?;
 
-            visitor.$visitor_method(v)
+                        let v = self
+                            .common
+                            .ctxt
+                            .endian()
+                            .$read_method(self.common.next_const_size_slice::<$type>()?);
+
+                        visitor.$visitor_method(v)
+                    } else {
+                        Err(Error::SignatureMismatch(
+                            signature.into(),
+                            format!("`{}`", <$type>::SIGNATURE_STR),
+                        ))
+                    }
+                }
+                None => Err(Error::MissingSignature),
+            }
         }
     };
 }
@@ -87,8 +205,8 @@ macro_rules! deserialize_as {
     }
 }
 
-impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deserializer<'de>
-    for &'d mut Deserializer<'de, 'sig, 'f, F>
+impl<'de, 'd, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deserializer<'de>
+    for &'d mut Deserializer<'de, 'f, F>
 {
     type Error = Error;
 
@@ -96,9 +214,36 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
     where
         V: Visitor<'de>,
     {
-        let c = self.0.sig_parser.next_char()?;
+        match self.parsed_signature.peek() {
+            Some(SignatureEntry::Bool) => self.deserialize_bool(visitor),
+            Some(SignatureEntry::U8) => self.deserialize_u8(visitor),
+            Some(SignatureEntry::U16) => self.deserialize_u16(visitor),
+            Some(SignatureEntry::U32) => self.deserialize_u32(visitor),
+            Some(SignatureEntry::U64) => self.deserialize_u64(visitor),
+            Some(SignatureEntry::I16) => self.deserialize_i16(visitor),
+            Some(SignatureEntry::I32) => self.deserialize_i32(visitor),
+            Some(SignatureEntry::I64) => self.deserialize_i64(visitor),
+            Some(SignatureEntry::F64) => self.deserialize_f64(visitor),
+            Some(SignatureEntry::Str) => self.deserialize_str(visitor),
+            Some(SignatureEntry::ObjectPath) => self.deserialize_str(visitor),
+            Some(SignatureEntry::Signature) => self.deserialize_str(visitor),
+            Some(SignatureEntry::Array(inner_signature)) => match **inner_signature {
+                SignatureEntry::DictEntry(_, _) => self.deserialize_map(visitor),
+                _ => self.deserialize_seq(visitor),
+            },
+            Some(SignatureEntry::Struct(_)) => self.deserialize_seq(visitor),
+            Some(SignatureEntry::Variant) => self.deserialize_seq(visitor),
 
-        crate::de::deserialize_any::<Self, V>(self, c, visitor)
+            #[cfg(unix)]
+            Some(SignatureEntry::Fd) => self.deserialize_i32(visitor),
+
+            Some(signature) => Err(Error::SignatureMismatch(
+                signature.into(),
+                "a signature that can be directly deserialized".into(),
+            )),
+
+            None => Err(Error::MissingSignature),
+        }
     }
 
     fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value>
@@ -106,10 +251,10 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
         V: Visitor<'de>,
     {
         let v = self
-            .0
+            .common
             .ctxt
             .endian()
-            .read_u32(self.0.next_const_size_slice::<bool>()?);
+            .read_u32(self.common.next_const_size_slice::<bool>()?);
         let b = match v {
             1 => true,
             0 => false,
@@ -138,117 +283,147 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
     deserialize_basic!(deserialize_u32 read_u32 visit_u32(u32));
     deserialize_basic!(deserialize_u64 read_u64 visit_u64(u64));
     deserialize_basic!(deserialize_f64 read_f64 visit_f64(f64));
-
-    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        let bytes = deserialize_ay(self)?;
-        visitor.visit_byte_buf(bytes.into())
-    }
-
-    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        let bytes = deserialize_ay(self)?;
-        visitor.visit_borrowed_bytes(bytes)
-    }
-
     deserialize_as!(deserialize_char => deserialize_str);
     deserialize_as!(deserialize_string => deserialize_str);
     deserialize_as!(deserialize_tuple(_l: usize) => deserialize_struct("", &[]));
-    deserialize_as!(deserialize_tuple_struct(n: &'static str, _l: usize) => deserialize_struct(n, &[]));
     deserialize_as!(deserialize_struct(_n: &'static str, _f: &'static [&'static str]) => deserialize_seq());
-    deserialize_as!(deserialize_map => deserialize_seq);
     deserialize_as!(deserialize_ignored_any => deserialize_any);
 
     fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        let v = match self.0.sig_parser.next_char()? {
-            #[cfg(unix)]
-            Fd::SIGNATURE_CHAR => {
-                self.0.sig_parser.skip_char()?;
-                let alignment = u32::alignment(Format::DBus);
-                self.0.parse_padding(alignment)?;
-                let idx = self.0.ctxt.endian().read_u32(self.0.next_slice(alignment)?);
-                self.0.get_fd(idx)?
-            }
-            _ => self
-                .0
-                .ctxt
-                .endian()
-                .read_i32(self.0.next_const_size_slice::<i32>()?),
-        };
+        self.common.parse_padding(i32::alignment(Format::DBus))?;
 
-        visitor.visit_i32(v)
+        match self.parsed_signature.next() {
+            Some(SignatureEntry::I32) => {
+                let v = self
+                    .common
+                    .ctxt
+                    .endian()
+                    .read_i32(self.common.next_const_size_slice::<i32>()?);
+
+                visitor.visit_i32(v)
+            }
+
+            #[cfg(unix)]
+            Some(SignatureEntry::Fd) => {
+                let idx = self
+                    .common
+                    .ctxt
+                    .endian()
+                    .read_u32(self.common.next_const_size_slice::<u32>()?);
+                let v = self.common.get_fd(idx)?;
+
+                visitor.visit_i32(v)
+            }
+
+            Some(signature) => Err(Error::SignatureMismatch(
+                signature.into(),
+                format!("`{}`", i32::SIGNATURE_STR),
+            )),
+            None => Err(Error::MissingSignature),
+        }
     }
 
     fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        // Endianness is irrelevant for single bytes.
-        visitor.visit_u8(self.0.next_const_size_slice::<u8>().map(|bytes| bytes[0])?)
+        match self.parsed_signature.next() {
+            Some(SignatureEntry::U8) => visitor.visit_u8(
+                self.common
+                    .ctxt
+                    .endian()
+                    .read_u8(self.common.next_const_size_slice::<u8>()?),
+            ),
+            Some(signature) => Err(Error::SignatureMismatch(
+                signature.into(),
+                format!("`{}`", u8::SIGNATURE_STR),
+            )),
+            None => Err(Error::MissingSignature),
+        }
     }
 
     fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        let v = self
-            .0
-            .ctxt
-            .endian()
-            .read_f64(self.0.next_const_size_slice::<f64>()?);
+        match self.parsed_signature.next() {
+            Some(SignatureEntry::F64) => {
+                self.common.parse_padding(f64::alignment(Format::DBus))?;
 
-        visitor.visit_f32(f64_to_f32(v))
+                let v = self
+                    .common
+                    .ctxt
+                    .endian()
+                    .read_f64(self.common.next_const_size_slice::<f64>()?);
+
+                visitor.visit_f32(v as f32)
+            }
+            Some(signature) => Err(Error::SignatureMismatch(
+                signature.into(),
+                "a valid floating point signature".into(),
+            )),
+            None => Err(Error::MissingSignature),
+        }
+    }
+
+    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        self.common.parse_padding(u32::alignment(Format::DBus))?;
+
+        let length = self.common.next_slice(4)?;
+        let length = self.common.ctxt.endian().read_u32(length) as usize;
+        let slice = self.common.next_slice(length)?;
+
+        visitor.visit_borrowed_bytes(slice)
+    }
+
+    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_bytes(visitor)
     }
 
     fn deserialize_str<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        let len = match self.0.sig_parser.next_char()? {
-            Signature::SIGNATURE_CHAR | VARIANT_SIGNATURE_CHAR => {
-                let len_slice = self.0.next_slice(1)?;
-
+        let len = match self.parsed_signature.next() {
+            Some(SignatureEntry::Signature) => {
+                let len_slice = self.common.next_slice(1)?;
                 len_slice[0] as usize
             }
-            <&str>::SIGNATURE_CHAR | ObjectPath::SIGNATURE_CHAR => {
-                let alignment = u32::alignment(Format::DBus);
-                self.0.parse_padding(alignment)?;
-                let len_slice = self.0.next_slice(alignment)?;
 
-                self.0.ctxt.endian().read_u32(len_slice) as usize
+            Some(SignatureEntry::Str) | Some(SignatureEntry::ObjectPath) => {
+                let alignment = u32::alignment(Format::DBus);
+                self.common.parse_padding(alignment)?;
+                let len_slice = self.common.next_slice(alignment)?;
+                self.common.ctxt.endian().read_u32(len_slice) as usize
             }
-            c => {
-                let expected = format!(
-                    "`{}`, `{}`, `{}` or `{}`",
-                    <&str>::SIGNATURE_STR,
-                    Signature::SIGNATURE_STR,
-                    ObjectPath::SIGNATURE_STR,
-                    VARIANT_SIGNATURE_CHAR,
-                );
-                return Err(de::Error::invalid_type(
-                    de::Unexpected::Char(c),
-                    &expected.as_str(),
-                ));
+
+            Some(signature) => {
+                return Err(Error::SignatureMismatch(
+                    signature.into(),
+                    "A string-like signature".into(),
+                ))
             }
+
+            None => return Err(Error::MissingSignature),
         };
-        let slice = self.0.next_slice(len)?;
+        let slice = self.common.next_slice(len)?;
         if slice.contains(&0) {
             return Err(serde::de::Error::invalid_value(
                 serde::de::Unexpected::Char('\0'),
                 &"D-Bus string type must not contain interior null bytes",
             ));
         }
-        self.0.pos += 1; // skip trailing null byte
+        self.common.pos += 1; // skip trailing null byte
         let s = str::from_utf8(slice).map_err(Error::Utf8)?;
-        self.0.sig_parser.skip_char()?;
-
         visitor.visit_borrowed_str(s)
     }
 
@@ -258,36 +433,215 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
     {
         #[cfg(feature = "option-as-array")]
         {
-            let c = self.0.sig_parser.next_char()?;
-            if c != ARRAY_SIGNATURE_CHAR {
-                return Err(de::Error::invalid_type(
-                    de::Unexpected::Char(c),
-                    &ARRAY_SIGNATURE_STR,
-                ));
-            }
-            self.0.sig_parser.skip_char()?;
-            // This takes care of parsing all the padding and getting the byte length.
-            let len = ArrayDeserializer::new(self)?.len;
-            if len == 0 {
-                self.0.sig_parser.parse_next_signature()?;
-
-                visitor.visit_none()
-            } else {
-                visitor.visit_some(self)
+            match self.parsed_signature.next() {
+                Some(SignatureEntry::Array(inner_signature)) => {
+                    let inner_signature = *inner_signature;
+                    let array_access = ArrayAccess::new(inner_signature.clone(), self)?;
+                    if array_access.is_empty() {
+                        visitor.visit_none()
+                    } else {
+                        self.inner_some_visitor(
+                            inner_signature,
+                            visitor,
+                            self.container_depths.inc_array()?,
+                        )
+                    }
+                }
+                Some(signature) => Err(Error::SignatureMismatch(
+                    signature.into(),
+                    "Expected an array signature for Option<T>".into(),
+                )),
+                None => Err(Error::MissingSignature),
             }
         }
 
         #[cfg(not(feature = "option-as-array"))]
-        Err(de::Error::custom(
-            "Can only decode Option<T> from D-Bus format if `option-as-array` feature is enabled",
+        Err(Error::Message(
+            "Can only decode Option<T> from D-Bus format if `option-as-array` feature is enabled"
+                .into(),
         ))
+    }
+
+    fn deserialize_newtype_struct<V>(self, name: &'static str, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        match name {
+            "zvariant::ObjectPath" => match self.parsed_signature.next() {
+                Some(SignatureEntry::ObjectPath) => {
+                    self.common
+                        .parse_padding(ObjectPath::alignment(Format::DBus))?;
+                    let len = self.common.next_slice(4)?;
+                    let len = self.common.ctxt.endian().read_u32(len) as usize;
+                    let path = self.common.next_slice(len)?;
+                    let _ = self.common.next_slice(1)?[0];
+                    let path = str::from_utf8(path).map_err(Error::Utf8)?;
+                    visitor.visit_borrowed_str(path)
+                }
+                Some(signature) => Err(Error::SignatureMismatch(
+                    signature.into(),
+                    "Expected an object path signature".into(),
+                )),
+                None => Err(Error::MissingSignature),
+            },
+            "zvariant::Signature" => match self.parsed_signature.next() {
+                Some(SignatureEntry::Signature) => {
+                    let len = self.common.next_slice(1)?[0];
+                    let sig = self.common.next_slice(len as usize)?;
+                    let _ = self.common.next_slice(1)?[0];
+                    let sig = str::from_utf8(sig).map_err(Error::Utf8)?;
+                    visitor.visit_borrowed_str(sig)
+                }
+                Some(signature) => Err(Error::SignatureMismatch(
+                    signature.into(),
+                    "Expected an object path signature".into(),
+                )),
+                None => Err(Error::MissingSignature),
+            },
+            _ => visitor.visit_newtype_struct(self),
+        }
+    }
+
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        match self.parsed_signature.next() {
+            Some(SignatureEntry::Struct(fields)) => {
+                self.common.parse_padding(STRUCT_ALIGNMENT_DBUS)?;
+
+                let fields = fields.into_iter().collect();
+                let struct_access = StructureAccess::new(fields, self)?;
+                visitor.visit_seq(struct_access)
+            }
+            Some(SignatureEntry::Array(field)) => {
+                let array_access = ArrayAccess::new(*field, self)?;
+                visitor.visit_seq(array_access)
+            }
+            Some(SignatureEntry::Variant) => {
+                let value_access = ValueAccess::new(self);
+                visitor.visit_map(value_access)
+            }
+            Some(SignatureEntry::U8) => {
+                let _ = self.common.next_slice(1)?[0];
+                let struct_access = StructureAccess::new(VecDeque::new(), self)?;
+                visitor.visit_seq(struct_access)
+            }
+            Some(signature) => Err(Error::SignatureMismatch(
+                signature.into(),
+                "Expected a struct, array, or variant signature for seq".into(),
+            )),
+            None => Err(Error::MissingSignature),
+        }
+    }
+
+    fn deserialize_map<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        match self.parsed_signature.next() {
+            Some(SignatureEntry::Array(inner_signature)) => match *inner_signature {
+                SignatureEntry::DictEntry(key_sig, value_sig) => {
+                    let dict_access = DictAccess::new(*key_sig, *value_sig, self)?;
+                    visitor.visit_map(dict_access)
+                }
+                sig => Err(Error::SignatureMismatch(
+                    sig.into(),
+                    "Expected a dict entry signature".into(),
+                )),
+            },
+            Some(signature) => Err(Error::SignatureMismatch(
+                signature.into(),
+                "Expected an array signature".into(),
+            )),
+            None => Err(Error::MissingSignature),
+        }
+    }
+
+    fn deserialize_enum<V>(
+        self,
+        _name: &'static str,
+        _variants: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        match self.parsed_signature.next() {
+            Some(SignatureEntry::Struct(fields)) => {
+                self.common.parse_padding(STRUCT_ALIGNMENT_DBUS)?;
+
+                let fields = fields.into_iter().collect();
+                let enum_access = StructureEnumAccess::new(fields, self)?;
+                visitor.visit_enum(enum_access)
+            }
+            Some(SignatureEntry::U32) => {
+                let enum_access =
+                    StructureEnumAccess::new(VecDeque::from([SignatureEntry::U32]), self)?;
+                visitor.visit_enum(enum_access)
+            }
+            Some(SignatureEntry::U8) => {
+                let enum_access =
+                    StructureEnumAccess::new(VecDeque::from([SignatureEntry::U8]), self)?;
+                visitor.visit_enum(enum_access)
+            }
+            Some(SignatureEntry::Str) => {
+                let enum_access =
+                    StructureEnumAccess::new(VecDeque::from([SignatureEntry::Str]), self)?;
+                visitor.visit_enum(enum_access)
+            }
+            Some(signature) => Err(Error::SignatureMismatch(
+                signature.into(),
+                "Expected a struct or discriminant signature for enum".into(),
+            )),
+            None => Err(Error::MissingSignature),
+        }
+    }
+
+    fn deserialize_tuple_struct<V>(
+        self,
+        _name: &'static str,
+        _len: usize,
+        visitor: V,
+    ) -> std::prelude::v1::Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        match self.parsed_signature.next() {
+            Some(SignatureEntry::Struct(fields)) => {
+                self.common.parse_padding(STRUCT_ALIGNMENT_DBUS)?;
+
+                let fields = fields.into_iter().collect();
+                let struct_access = StructureAccess::new(fields, self)?;
+                visitor.visit_seq(struct_access)
+            }
+            Some(SignatureEntry::Array(field)) => {
+                let array_access = ArrayAccess::new(*field, self)?;
+                visitor.visit_seq(array_access)
+            }
+            Some(signature) => Err(Error::SignatureMismatch(
+                signature.into(),
+                "Expected a struct signature for tuple-struct".into(),
+            )),
+            None => Err(Error::MissingSignature),
+        }
     }
 
     fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        visitor.visit_unit()
+        match self.parsed_signature.next() {
+            Some(SignatureEntry::U8) => {
+                let _ = self.common.next_slice(1)?;
+                visitor.visit_unit()
+            }
+            Some(signature) => Err(Error::SignatureMismatch(
+                signature.into(),
+                "Expected a unit signature".into(),
+            )),
+            None => visitor.visit_unit(),
+        }
     }
 
     fn deserialize_unit_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value>
@@ -297,379 +651,327 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
         visitor.visit_unit()
     }
 
-    fn deserialize_newtype_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        visitor.visit_newtype_struct(self)
-    }
-
-    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        match self.0.sig_parser.next_char()? {
-            VARIANT_SIGNATURE_CHAR => {
-                let value_de = ValueDeserializer::new(self);
-
-                visitor.visit_seq(value_de)
-            }
-            ARRAY_SIGNATURE_CHAR => {
-                self.0.sig_parser.skip_char()?;
-                let next_signature_char = self.0.sig_parser.next_char()?;
-                let array_de = ArrayDeserializer::new(self)?;
-
-                if next_signature_char == DICT_ENTRY_SIG_START_CHAR {
-                    visitor.visit_map(ArrayMapDeserializer(array_de))
-                } else {
-                    visitor.visit_seq(ArraySeqDeserializer(array_de))
-                }
-            }
-            STRUCT_SIG_START_CHAR => {
-                let signature = self.0.sig_parser.next_signature()?;
-                let alignment = alignment_for_signature(&signature, Format::DBus)?;
-                self.0.parse_padding(alignment)?;
-
-                self.0.sig_parser.skip_char()?;
-
-                self.0.container_depths = self.0.container_depths.inc_structure()?;
-                let v = visitor.visit_seq(StructureDeserializer { de: self });
-                self.0.container_depths = self.0.container_depths.dec_structure();
-
-                v
-            }
-            u8::SIGNATURE_CHAR => {
-                // Empty struct: encoded as a `0u8`.
-                let _: u8 = serde::Deserialize::deserialize(&mut *self)?;
-
-                visitor.visit_seq(StructureDeserializer { de: self })
-            }
-            c => Err(de::Error::invalid_type(
-                de::Unexpected::Char(c),
-                &format!(
-                    "`{VARIANT_SIGNATURE_CHAR}`, `{ARRAY_SIGNATURE_CHAR}` or `{STRUCT_SIG_START_CHAR}`",
-                )
-                .as_str(),
-            )),
-        }
-    }
-
-    fn deserialize_enum<V>(
-        self,
-        name: &'static str,
-        _variants: &'static [&'static str],
-        visitor: V,
-    ) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        let signature = self.0.sig_parser.next_signature()?;
-        let alignment = alignment_for_signature(&signature, self.0.ctxt.format())?;
-        self.0.parse_padding(alignment)?;
-
-        let non_unit = if self.0.sig_parser.next_char()? == STRUCT_SIG_START_CHAR {
-            // This means we've a non-unit enum. Let's skip the `(`.
-            self.0.sig_parser.skip_char()?;
-
-            true
-        } else {
-            false
-        };
-
-        let v = visitor.visit_enum(crate::de::Enum {
-            de: &mut *self,
-            name,
-            _phantom: PhantomData,
-        })?;
-
-        if non_unit {
-            // For non-unit enum, we need to skip the closing paren.
-            self.0.sig_parser.skip_char()?;
-        }
-
-        Ok(v)
-    }
-
-    fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        if self.0.sig_parser.next_char()? == <&str>::SIGNATURE_CHAR {
-            self.deserialize_str(visitor)
-        } else {
-            self.deserialize_u32(visitor)
-        }
-    }
-
     fn is_human_readable(&self) -> bool {
         false
     }
+
+    forward_to_deserialize_any! {
+        identifier
+    }
 }
 
-struct ArrayDeserializer<'d, 'de, 'sig, 'f, F> {
-    de: &'d mut Deserializer<'de, 'sig, 'f, F>,
-    len: usize,
-    start: usize,
-    // alignment of element
-    element_alignment: usize,
-    // where value signature starts
-    element_signature_len: usize,
+/// The internal state of a `ValueAccess`
+enum ValueAccessState {
+    /// The signature is being read
+    ReadingSignature,
+
+    /// The value is being read
+    ReadingValue,
+
+    /// The deserialization is done and
+    /// there are no more values to read
+    Done,
 }
 
-impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F>
-    ArrayDeserializer<'d, 'de, 'sig, 'f, F>
-{
-    fn new(de: &'d mut Deserializer<'de, 'sig, 'f, F>) -> Result<Self> {
-        de.0.parse_padding(ARRAY_ALIGNMENT_DBUS)?;
-        de.0.container_depths = de.0.container_depths.inc_array()?;
+/// Deserialize a `Value` from a DBus/GVariant variant.
+struct ValueAccess<'d, 'de, 'f, #[cfg(unix)] F: AsFd> {
+    de: &'d mut Deserializer<'de, 'f, F>,
+    state: ValueAccessState,
+    sig: Option<ParsedSignature>,
+}
 
-        let len = de.0.ctxt.endian().read_u32(de.0.next_slice(4)?) as usize;
-        let element_signature = de.0.sig_parser.next_signature()?;
-        let element_alignment = alignment_for_signature(&element_signature, Format::DBus)?;
-        let mut element_signature_len = element_signature.len();
-
-        // D-Bus requires padding for the first element even when there is no first element
-        // (i-e empty array) so we parse padding already.
-        de.0.parse_padding(element_alignment)?;
-        let start = de.0.pos;
-
-        if de.0.sig_parser.next_char()? == DICT_ENTRY_SIG_START_CHAR {
-            de.0.sig_parser.skip_char()?;
-            element_signature_len -= 1;
-        }
-
-        Ok(Self {
+impl<'d, 'de, 'f, #[cfg(unix)] F: AsFd> ValueAccess<'d, 'de, 'f, F> {
+    pub fn new(de: &'d mut Deserializer<'de, 'f, F>) -> Self {
+        Self {
             de,
-            len,
-            start,
-            element_alignment,
-            element_signature_len,
-        })
-    }
-
-    fn next<T>(&mut self, seed: T, sig_parser: SignatureParser<'_>) -> Result<T::Value>
-    where
-        T: DeserializeSeed<'de>,
-    {
-        let ctxt = Context::new_dbus(
-            self.de.0.ctxt.endian(),
-            self.de.0.ctxt.position() + self.de.0.pos,
-        );
-
-        let mut de = Deserializer::<F>(DeserializerCommon {
-            ctxt,
-            sig_parser,
-            bytes: subslice(self.de.0.bytes, self.de.0.pos..)?,
-            fds: self.de.0.fds,
-            pos: 0,
-            container_depths: self.de.0.container_depths,
-        });
-        let v = seed.deserialize(&mut de);
-        self.de.0.pos += de.0.pos;
-        // No need for retaking the container depths as the child can't be incomplete.
-
-        if self.de.0.pos > self.start + self.len {
-            return Err(serde::de::Error::invalid_length(
-                self.len,
-                &format!(">= {}", self.de.0.pos - self.start).as_str(),
-            ));
+            state: ValueAccessState::ReadingSignature,
+            sig: None,
         }
-
-        v
-    }
-
-    fn next_element<T>(
-        &mut self,
-        seed: T,
-        sig_parser: SignatureParser<'_>,
-    ) -> Result<Option<T::Value>>
-    where
-        T: DeserializeSeed<'de>,
-    {
-        if self.done() {
-            self.de
-                .0
-                .sig_parser
-                .skip_chars(self.element_signature_len)?;
-            self.de.0.container_depths = self.de.0.container_depths.dec_array();
-
-            return Ok(None);
-        }
-
-        self.de.0.parse_padding(self.element_alignment)?;
-
-        self.next(seed, sig_parser).map(Some)
-    }
-
-    fn done(&self) -> bool {
-        self.de.0.pos == self.start + self.len
     }
 }
 
-fn deserialize_ay<'de, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F>(
-    de: &mut Deserializer<'de, '_, '_, F>,
-) -> Result<&'de [u8]> {
-    if de.0.sig_parser.next_signature()? != "ay" {
-        return Err(de::Error::invalid_type(de::Unexpected::Seq, &"ay"));
-    }
-
-    de.0.sig_parser.skip_char()?;
-    let ad = ArrayDeserializer::new(de)?;
-    let len = ad.len;
-    de.0.sig_parser.skip_char()?;
-    de.0.next_slice(len)
-}
-
-struct ArraySeqDeserializer<'d, 'de, 'sig, 'f, F>(ArrayDeserializer<'d, 'de, 'sig, 'f, F>);
-
-impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de>
-    for ArraySeqDeserializer<'d, 'de, 'sig, 'f, F>
-{
-    type Error = Error;
-
-    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
-    where
-        T: DeserializeSeed<'de>,
-    {
-        let sig_parser = self.0.de.0.sig_parser.clone();
-        self.0.next_element(seed, sig_parser)
-    }
-}
-
-struct ArrayMapDeserializer<'d, 'de, 'sig, 'f, F>(ArrayDeserializer<'d, 'de, 'sig, 'f, F>);
-
-impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> MapAccess<'de>
-    for ArrayMapDeserializer<'d, 'de, 'sig, 'f, F>
-{
-    type Error = Error;
+impl<'d, 'de, 'f, #[cfg(unix)] F: AsFd> MapAccess<'de> for ValueAccess<'d, 'de, 'f, F> {
+    type Error = crate::Error;
 
     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
     where
-        K: DeserializeSeed<'de>,
+        K: serde::de::DeserializeSeed<'de>,
     {
-        let sig_parser = self.0.de.0.sig_parser.clone();
-        self.0.next_element(seed, sig_parser)
+        match self.state {
+            ValueAccessState::ReadingSignature => seed
+                .deserialize("zvariant::Value::Signature".into_deserializer())
+                .map(Some),
+            ValueAccessState::ReadingValue => seed
+                .deserialize("zvariant::Value::Value".into_deserializer())
+                .map(Some),
+            ValueAccessState::Done => Ok(None),
+        }
     }
 
     fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
     where
-        V: DeserializeSeed<'de>,
+        V: serde::de::DeserializeSeed<'de>,
     {
-        let mut sig_parser = self.0.de.0.sig_parser.clone();
-        // Skip key signature (always 1 char)
-        sig_parser.skip_char()?;
-        self.0.next(seed, sig_parser)
-    }
-}
+        match self.state {
+            ValueAccessState::ReadingSignature => {
+                self.state = ValueAccessState::ReadingValue;
 
-#[derive(Debug)]
-struct StructureDeserializer<'d, 'de, 'sig, 'f, F> {
-    de: &'d mut Deserializer<'de, 'sig, 'f, F>,
-}
+                let len = self.de.common.next_slice(1)?[0];
+                let sig = self.de.common.next_slice(len as usize)?;
+                let _ = self.de.common.next_slice(1)?[0];
 
-impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de>
-    for StructureDeserializer<'d, 'de, 'sig, 'f, F>
-{
-    type Error = Error;
+                let sig = ParsedSignature::parse_bytes(sig)?;
+                let result = seed.deserialize(sig.to_string().into_deserializer());
+                self.sig = Some(sig);
+                result
+            }
+            ValueAccessState::ReadingValue => {
+                self.state = ValueAccessState::Done;
 
-    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
-    where
-        T: DeserializeSeed<'de>,
-    {
-        let v = seed.deserialize(&mut *self.de).map(Some);
-
-        if self.de.0.sig_parser.next_char()? == STRUCT_SIG_END_CHAR {
-            // Last item in the struct
-            self.de.0.sig_parser.skip_char()?;
+                let sig = self.sig.take().expect("Should have a signature by now");
+                let (_, result) = self.de.inner_variant(sig, seed)?;
+                Ok(result)
+            }
+            ValueAccessState::Done => unreachable!(),
         }
-
-        v
     }
 }
 
-#[derive(Debug)]
-struct ValueDeserializer<'d, 'de, 'sig, 'f, F> {
-    de: &'d mut Deserializer<'de, 'sig, 'f, F>,
-    stage: ValueParseStage,
-    sig_start: usize,
+/// Deserialize a sequence of values from a given `Array`.
+struct ArrayAccess<'d, 'de, 'f, #[cfg(unix)] F: AsFd> {
+    item_sig: SignatureEntry,
+    de: &'d mut Deserializer<'de, 'f, F>,
+    count: i64,
 }
 
-impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F>
-    ValueDeserializer<'d, 'de, 'sig, 'f, F>
-{
-    fn new(de: &'d mut Deserializer<'de, 'sig, 'f, F>) -> Self {
-        let sig_start = de.0.pos;
-        ValueDeserializer::<F> {
+impl<'d, 'de, 'f, #[cfg(unix)] F: AsFd> ArrayAccess<'d, 'de, 'f, F> {
+    pub fn new(item_sig: SignatureEntry, de: &'d mut Deserializer<'de, 'f, F>) -> Result<Self> {
+        de.common.parse_padding(u32::alignment(Format::DBus))?;
+        let count = de.common.next_slice(4)?;
+        let count = de.common.ctxt.endian().read_u32(count) as i64;
+
+        de.common.parse_padding(item_sig.alignment(Format::DBus))?;
+
+        Ok(Self {
+            item_sig,
             de,
-            stage: ValueParseStage::Signature,
-            sig_start,
-        }
+            count,
+        })
+    }
+
+    #[cfg(feature = "option-as-array")]
+    pub fn is_empty(&self) -> bool {
+        self.count == 0
     }
 }
 
-impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de>
-    for ValueDeserializer<'d, 'de, 'sig, 'f, F>
-{
-    type Error = Error;
+impl<'d, 'de, 'f, #[cfg(unix)] F: AsFd> SeqAccess<'de> for ArrayAccess<'d, 'de, 'f, F> {
+    type Error = crate::Error;
 
     fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
     where
-        T: DeserializeSeed<'de>,
+        T: serde::de::DeserializeSeed<'de>,
     {
-        match self.stage {
-            ValueParseStage::Signature => {
-                self.stage = ValueParseStage::Value;
-
-                seed.deserialize(&mut *self.de).map(Some)
-            }
-            ValueParseStage::Value => {
-                self.stage = ValueParseStage::Done;
-
-                let sig_len = self.de.0.bytes[self.sig_start] as usize;
-                // skip length byte
-                let sig_start = self.sig_start + 1;
-                let sig_end = sig_start + sig_len;
-                // Skip trailing nul byte
-                let value_start = sig_end + 1;
-
-                let slice = subslice(self.de.0.bytes, sig_start..sig_end)?;
-                let signature = Signature::try_from(slice)?;
-                let sig_parser = SignatureParser::new(signature);
-
-                let ctxt = Context::new(
-                    Format::DBus,
-                    self.de.0.ctxt.endian(),
-                    self.de.0.ctxt.position() + value_start,
-                );
-                let mut de = Deserializer::<F>(DeserializerCommon {
-                    ctxt,
-                    sig_parser,
-                    bytes: subslice(self.de.0.bytes, value_start..)?,
-                    fds: self.de.0.fds,
-                    pos: 0,
-                    container_depths: self.de.0.container_depths.inc_variant()?,
-                });
-
-                let v = seed.deserialize(&mut de).map(Some);
-                self.de.0.pos += de.0.pos;
-
-                v
-            }
-            ValueParseStage::Done => Ok(None),
+        if self.count > 0 {
+            let (len, result) = self.de.inner_array(self.item_sig.clone(), seed)?;
+            self.count -= len as i64;
+            Ok(Some(result))
+        } else {
+            Ok(None)
         }
     }
 }
 
-impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> EnumAccess<'de>
-    for crate::de::Enum<&'d mut Deserializer<'de, 'sig, 'f, F>, F>
-{
-    type Error = Error;
+/// Deserialize a map of values from a given `Dict`
+struct DictAccess<'d, 'de, 'f, #[cfg(unix)] F: AsFd> {
+    key_sig: SignatureEntry,
+    value_sig: SignatureEntry,
+    de: &'d mut Deserializer<'de, 'f, F>,
+    count: i64,
+}
+
+impl<'d, 'de, 'f, #[cfg(unix)] F: AsFd> DictAccess<'d, 'de, 'f, F> {
+    pub fn new(
+        key_sig: SignatureEntry,
+        value_sig: SignatureEntry,
+        de: &'d mut Deserializer<'de, 'f, F>,
+    ) -> Result<Self> {
+        de.common.parse_padding(u32::alignment(Format::DBus))?;
+
+        let count = de.common.next_slice(4)?;
+        let count = de.common.ctxt.endian().read_u32(count) as i64;
+
+        de.common.parse_padding(STRUCT_ALIGNMENT_DBUS)?;
+
+        Ok(Self {
+            key_sig,
+            value_sig,
+            de,
+            count,
+        })
+    }
+}
+
+impl<'d, 'de, 'f, #[cfg(unix)] F: AsFd> MapAccess<'de> for DictAccess<'d, 'de, 'f, F> {
+    type Error = crate::Error;
+
+    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
+    where
+        K: serde::de::DeserializeSeed<'de>,
+    {
+        if self.count > 0 {
+            self.count -= self.de.common.parse_padding(STRUCT_ALIGNMENT_DBUS)? as i64;
+            let (len, result) = self.de.inner_array(self.key_sig.clone(), seed)?;
+            self.count -= len as i64;
+            Ok(Some(result))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
+    where
+        V: serde::de::DeserializeSeed<'de>,
+    {
+        if self.count > 0 {
+            self.count -=
+                self.de
+                    .common
+                    .parse_padding(self.value_sig.alignment(Format::DBus))? as i64;
+
+            let (len, result) = self.de.inner_array(self.value_sig.clone(), seed)?;
+            self.count -= len as i64;
+            Ok(result)
+        } else {
+            unreachable!("next_value_seed should not be called when count is 0")
+        }
+    }
+}
+
+/// Deserialize a given sequence of field signatures taken
+/// from a `Structure` into a rust sequence
+struct StructureAccess<'d, 'de, 'f, #[cfg(unix)] F: AsFd> {
+    fields: VecDeque<SignatureEntry>,
+    de: &'d mut Deserializer<'de, 'f, F>,
+}
+
+impl<'d, 'de, 'f, #[cfg(unix)] F: AsFd> StructureAccess<'d, 'de, 'f, F> {
+    pub fn new(
+        fields: VecDeque<SignatureEntry>,
+        de: &'d mut Deserializer<'de, 'f, F>,
+    ) -> Result<Self> {
+        Ok(Self { fields, de })
+    }
+}
+
+impl<'d, 'de, 'f, #[cfg(unix)] F: AsFd> SeqAccess<'de> for StructureAccess<'d, 'de, 'f, F> {
+    type Error = crate::Error;
+
+    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
+    where
+        T: serde::de::DeserializeSeed<'de>,
+    {
+        if let Some(item) = self.fields.pop_front() {
+            let (_, result) = self.de.inner_struct(item, seed)?;
+            Ok(Some(result))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+/// Deserialize a given sequence of field signatures from the stream
+/// and provide them to a rust enum
+struct StructureEnumAccess<'d, 'de, 'f, #[cfg(unix)] F: AsFd> {
+    fields: VecDeque<SignatureEntry>,
+    de: &'d mut Deserializer<'de, 'f, F>,
+}
+
+impl<'d, 'de, 'f, #[cfg(unix)] F: AsFd> StructureEnumAccess<'d, 'de, 'f, F> {
+    pub fn new(
+        fields: VecDeque<SignatureEntry>,
+        de: &'d mut Deserializer<'de, 'f, F>,
+    ) -> Result<Self> {
+        Ok(Self { fields, de })
+    }
+}
+
+impl<'d, 'de, 'f, #[cfg(unix)] F: AsFd> EnumAccess<'de> for StructureEnumAccess<'d, 'de, 'f, F> {
+    type Error = crate::Error;
     type Variant = Self;
 
-    fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant)>
+    fn variant_seed<V>(mut self, seed: V) -> Result<(V::Value, Self)>
     where
         V: DeserializeSeed<'de>,
     {
-        seed.deserialize(&mut *self.de).map(|v| (v, self))
+        if let Some(name_field) = self.fields.pop_front() {
+            let (_, result) = self.de.inner_struct(name_field, seed)?;
+            Ok((result, self))
+        } else {
+            Err(crate::Error::MissingSignature)
+        }
+    }
+}
+
+impl<'d, 'de, 'f, #[cfg(unix)] F: AsFd> VariantAccess<'de> for StructureEnumAccess<'d, 'de, 'f, F> {
+    type Error = crate::Error;
+
+    fn unit_variant(mut self) -> Result<()> {
+        if let Some(field) = self.fields.pop_front() {
+            Err(crate::Error::SignatureMismatch(
+                field.into(),
+                "Expected a unit variant".into(),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn newtype_variant_seed<T>(mut self, seed: T) -> Result<T::Value>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        if let Some(field) = self.fields.pop_front() {
+            let (_, result) = self.de.inner_struct(field, seed)?;
+            Ok(result)
+        } else {
+            Err(crate::Error::MissingSignature)
+        }
+    }
+
+    fn tuple_variant<V>(mut self, _len: usize, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        if let Some(SignatureEntry::Struct(fields)) = self.fields.pop_front() {
+            let fields = fields.into_iter().collect();
+            self.de.common.parse_padding(STRUCT_ALIGNMENT_DBUS)?;
+            self.de.container_depths = self.de.container_depths.inc_structure()?;
+            let result = visitor.visit_seq(StructureAccess::new(fields, self.de)?)?;
+            self.de.container_depths = self.de.container_depths.dec_structure();
+            Ok(result)
+        } else {
+            Err(crate::Error::MissingSignature)
+        }
+    }
+
+    fn struct_variant<V>(
+        mut self,
+        _fields: &'static [&'static str],
+        visitor: V,
+    ) -> std::prelude::v1::Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        if let Some(SignatureEntry::Struct(fields)) = self.fields.pop_front() {
+            let fields = fields.into_iter().collect();
+            self.de.common.parse_padding(STRUCT_ALIGNMENT_DBUS)?;
+            self.de.container_depths = self.de.container_depths.inc_structure()?;
+            let result = visitor.visit_seq(StructureAccess::new(fields, self.de)?)?;
+            self.de.container_depths = self.de.container_depths.dec_structure();
+            Ok(result)
+        } else {
+            Err(crate::Error::MissingSignature)
+        }
     }
 }

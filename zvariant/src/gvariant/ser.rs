@@ -1,3 +1,4 @@
+use endi::WriteBytes;
 use serde::{ser, ser::SerializeSeq, Serialize};
 use static_assertions::assert_impl_all;
 use std::{
@@ -12,11 +13,16 @@ use crate::{
     serialized::{Context, Format},
     signature_parser::SignatureParser,
     utils::*,
-    Basic, Error, Result, Signature,
+    Basic, Error, Fd, Result, Signature,
 };
 
 /// Our serialization implementation.
-pub(crate) struct Serializer<'ser, 'sig, W>(pub(crate) crate::SerializerCommon<'ser, 'sig, W>);
+pub(crate) struct Serializer<'ser, 'sig, W> {
+    sig_parser: SignatureParser<'sig>,
+    value_sign: Option<Signature<'sig>>,
+    container_depths: ContainerDepths,
+    pub(crate) common: crate::SerializerCommon<'ser, W>,
+}
 
 assert_impl_all!(Serializer<'_, '_, i32>: Send, Sync, Unpin);
 
@@ -41,16 +47,18 @@ where
 
         let signature = signature.try_into().map_err(Into::into)?;
         let sig_parser = SignatureParser::new(signature);
-        Ok(Self(crate::SerializerCommon {
-            ctxt,
+        Ok(Self {
             sig_parser,
-            writer,
-            #[cfg(unix)]
-            fds,
-            bytes_written: 0,
             value_sign: None,
             container_depths: Default::default(),
-        }))
+            common: crate::SerializerCommon {
+                ctxt,
+                writer,
+                #[cfg(unix)]
+                fds,
+                bytes_written: 0,
+            },
+        })
     }
 
     #[cfg(not(feature = "option-as-array"))]
@@ -58,60 +66,84 @@ where
     where
         T: ?Sized + Serialize,
     {
-        let signature = self.0.sig_parser.next_signature()?;
-        let alignment = alignment_for_signature(&signature, self.0.ctxt.format())?;
-        let child_sig_parser = self.0.sig_parser.slice(1..);
+        let signature = self.sig_parser.next_signature()?;
+        let alignment = alignment_for_signature(&signature, self.common.ctxt.format())?;
+        let child_sig_parser = self.sig_parser.slice(1..);
         let child_signature = child_sig_parser.next_signature()?;
         let child_sig_len = child_signature.len();
         let fixed_sized_child = crate::utils::is_fixed_sized_signature(&child_signature)?;
 
-        self.0.sig_parser.skip_char()?;
+        self.sig_parser.skip_char()?;
 
-        self.0.add_padding(alignment)?;
+        self.common.add_padding(alignment)?;
 
         match value {
             Some(value) => {
-                self.0.container_depths = self.0.container_depths.inc_maybe()?;
+                self.container_depths = self.container_depths.inc_maybe()?;
                 value.serialize(&mut *self)?;
-                self.0.container_depths = self.0.container_depths.dec_maybe();
+                self.container_depths = self.container_depths.dec_maybe();
 
                 if !fixed_sized_child {
-                    self.0
+                    self.common
                         .write_all(&b"\0"[..])
                         .map_err(|e| Error::InputOutput(e.into()))?;
                 }
             }
             None => {
-                self.0.sig_parser.skip_chars(child_sig_len)?;
+                self.sig_parser.skip_chars(child_sig_len)?;
             }
         }
+
+        Ok(())
+    }
+
+    fn prep_serialize_basic<T>(&mut self) -> Result<()>
+    where
+        T: Basic,
+    {
+        self.sig_parser.skip_char()?;
+        self.common
+            .add_padding(T::alignment(self.common.ctxt.format()))?;
+
+        Ok(())
+    }
+
+    /// This starts the enum serialization.
+    ///
+    /// It's up to the caller to do the rest: serialize the variant payload and skip the `).
+    fn prep_serialize_enum_variant(&mut self, variant_index: u32) -> Result<()> {
+        // Encode enum variants as a struct with first field as variant index
+        let signature = self.sig_parser.next_signature()?;
+        if self.sig_parser.next_char()? != STRUCT_SIG_START_CHAR {
+            return Err(Error::SignatureMismatch(
+                signature.to_owned(),
+                format!("expected `{STRUCT_SIG_START_CHAR}`"),
+            ));
+        }
+
+        let alignment = alignment_for_signature(&signature, self.common.ctxt.format())?;
+        self.common.add_padding(alignment)?;
+
+        // Now serialize the veriant index.
+        self.common
+            .write_u32(self.common.ctxt.endian(), variant_index)
+            .map_err(|e| Error::InputOutput(e.into()))?;
+
+        // Skip the `(`, `u`.
+        self.sig_parser.skip_chars(2)?;
 
         Ok(())
     }
 }
 
 macro_rules! serialize_basic {
-    ($method:ident, $type:ty) => {
+    ($method:ident($type:ty) $write_method:ident) => {
+        serialize_basic!($method($type) $write_method($type));
+    };
+    ($method:ident($type:ty) $write_method:ident($as:ty)) => {
         fn $method(self, v: $type) -> Result<()> {
-            let ctxt = Context::new_dbus(self.0.ctxt.endian(), self.0.ctxt.position());
-            let bytes_written = self.0.bytes_written;
-            let mut dbus_ser = crate::dbus::Serializer(crate::SerializerCommon::<W> {
-                ctxt,
-                sig_parser: self.0.sig_parser.clone(),
-                writer: &mut self.0.writer,
-                #[cfg(unix)]
-                fds: self.0.fds,
-                bytes_written,
-                value_sign: None,
-                container_depths: self.0.container_depths,
-            });
-
-            dbus_ser.$method(v)?;
-
-            self.0.bytes_written = dbus_ser.0.bytes_written;
-            self.0.sig_parser = dbus_ser.0.sig_parser;
-
-            Ok(())
+            self.prep_serialize_basic::<$type>()?;
+            self.common.$write_method(self.common.ctxt.endian(), v as $as).map_err(|e| Error::InputOutput(e.into()))
         }
     };
 }
@@ -131,30 +163,49 @@ where
     type SerializeStruct = StructSeqSerializer<'ser, 'sig, 'b, W>;
     type SerializeStructVariant = StructSeqSerializer<'ser, 'sig, 'b, W>;
 
-    serialize_basic!(serialize_bool, bool);
-    serialize_basic!(serialize_i16, i16);
-    serialize_basic!(serialize_i32, i32);
-    serialize_basic!(serialize_i64, i64);
+    serialize_basic!(serialize_bool(bool) write_u32(u32));
+    // No i8 type in D-Bus/GVariant, let's pretend it's i16
+    serialize_basic!(serialize_i8(i8) write_i16(i16));
+    serialize_basic!(serialize_i16(i16) write_i16);
+    serialize_basic!(serialize_i64(i64) write_i64);
 
-    serialize_basic!(serialize_u8, u8);
-    serialize_basic!(serialize_u16, u16);
-    serialize_basic!(serialize_u32, u32);
-    serialize_basic!(serialize_u64, u64);
-
-    serialize_basic!(serialize_f64, f64);
-
-    fn serialize_i8(self, v: i8) -> Result<()> {
-        // No i8 type in GVariant, let's pretend it's i16
-        self.serialize_i16(v as i16)
+    fn serialize_i32(self, v: i32) -> Result<()> {
+        match self.sig_parser.next_char()? {
+            #[cfg(unix)]
+            Fd::SIGNATURE_CHAR => {
+                self.sig_parser.skip_char()?;
+                self.common.add_padding(u32::alignment(Format::DBus))?;
+                let idx = self.common.add_fd(v)?;
+                self.common
+                    .write_u32(self.common.ctxt.endian(), idx)
+                    .map_err(|e| Error::InputOutput(e.into()))
+            }
+            _ => {
+                self.prep_serialize_basic::<i32>()?;
+                self.common
+                    .write_i32(self.common.ctxt.endian(), v)
+                    .map_err(|e| Error::InputOutput(e.into()))
+            }
+        }
     }
 
-    fn serialize_f32(self, v: f32) -> Result<()> {
-        // No f32 type in GVariant, let's pretend it's f64
-        self.serialize_f64(v as f64)
+    fn serialize_u8(self, v: u8) -> Result<()> {
+        self.prep_serialize_basic::<u8>()?;
+        // Endianness is irrelevant for single bytes.
+        self.common
+            .write_u8(self.common.ctxt.endian(), v)
+            .map_err(|e| Error::InputOutput(e.into()))
     }
+
+    serialize_basic!(serialize_u16(u16) write_u16);
+    serialize_basic!(serialize_u32(u32) write_u32);
+    serialize_basic!(serialize_u64(u64) write_u64);
+    // No f32 type in D-Bus/GVariant, let's pretend it's f64
+    serialize_basic!(serialize_f32(f32) write_f64(f64));
+    serialize_basic!(serialize_f64(f64) write_f64);
 
     fn serialize_char(self, v: char) -> Result<()> {
-        // No char type in GVariant, let's pretend it's a string
+        // No char type in D-Bus, let's pretend it's a string
         self.serialize_str(&v.to_string())
     }
 
@@ -166,9 +217,9 @@ where
             ));
         }
 
-        let c = self.0.sig_parser.next_char()?;
+        let c = self.sig_parser.next_char()?;
         if c == VARIANT_SIGNATURE_CHAR {
-            self.0.value_sign = Some(signature_string!(v));
+            self.value_sign = Some(signature_string!(v));
 
             // signature is serialized after the value in GVariant
             return Ok(());
@@ -176,11 +227,11 @@ where
 
         // Strings in GVariant format require no alignment.
 
-        self.0.sig_parser.skip_char()?;
-        self.0
+        self.sig_parser.skip_char()?;
+        self.common
             .write_all(v.as_bytes())
             .map_err(|e| Error::InputOutput(e.into()))?;
-        self.0
+        self.common
             .write_all(&b"\0"[..])
             .map_err(|e| Error::InputOutput(e.into()))?;
 
@@ -190,7 +241,7 @@ where
     fn serialize_bytes(self, v: &[u8]) -> Result<()> {
         let seq = self.serialize_seq(Some(v.len()))?;
         seq.ser
-            .0
+            .common
             .write(v)
             .map_err(|e| Error::InputOutput(e.into()))?;
         seq.end()
@@ -223,7 +274,7 @@ where
     }
 
     fn serialize_unit(self) -> Result<()> {
-        self.0
+        self.common
             .write_all(&b"\0"[..])
             .map_err(|e| Error::InputOutput(e.into()))
     }
@@ -238,7 +289,7 @@ where
         variant_index: u32,
         variant: &'static str,
     ) -> Result<()> {
-        if self.0.sig_parser.next_char()? == <&str>::SIGNATURE_CHAR {
+        if self.sig_parser.next_char()? == <&str>::SIGNATURE_CHAR {
             variant.serialize(self)
         } else {
             variant_index.serialize(self)
@@ -264,30 +315,31 @@ where
     where
         T: ?Sized + Serialize,
     {
-        self.0.prep_serialize_enum_variant(variant_index)?;
+        self.prep_serialize_enum_variant(variant_index)?;
 
         value.serialize(self)
     }
 
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
-        self.0.sig_parser.skip_char()?;
-        let element_signature = self.0.sig_parser.next_signature()?;
+        self.sig_parser.skip_char()?;
+        let element_signature = self.sig_parser.next_signature()?;
         let element_signature_len = element_signature.len();
-        let element_alignment = alignment_for_signature(&element_signature, self.0.ctxt.format())?;
+        let element_alignment =
+            alignment_for_signature(&element_signature, self.common.ctxt.format())?;
 
         let fixed_sized_child = crate::utils::is_fixed_sized_signature(&element_signature)?;
         let offsets = (!fixed_sized_child).then(FramingOffsets::new);
 
-        let key_start = if self.0.sig_parser.next_char()? == DICT_ENTRY_SIG_START_CHAR {
+        let key_start = if self.sig_parser.next_char()? == DICT_ENTRY_SIG_START_CHAR {
             let key_signature = Signature::from_str_unchecked(&element_signature[1..2]);
             (!crate::utils::is_fixed_sized_signature(&key_signature)?).then_some(0)
         } else {
             None
         };
-        self.0.add_padding(element_alignment)?;
-        self.0.container_depths = self.0.container_depths.inc_array()?;
+        self.common.add_padding(element_alignment)?;
+        self.container_depths = self.container_depths.inc_array()?;
 
-        let start = self.0.bytes_written;
+        let start = self.common.bytes_written;
 
         Ok(SeqSerializer {
             ser: self,
@@ -318,7 +370,7 @@ where
         _variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleVariant> {
-        self.0.prep_serialize_enum_variant(variant_index)?;
+        self.prep_serialize_enum_variant(variant_index)?;
 
         StructSerializer::enum_variant(self).map(StructSeqSerializer::Struct)
     }
@@ -332,7 +384,7 @@ where
             return StructSerializer::unit(self).map(StructSeqSerializer::Struct);
         }
 
-        match self.0.sig_parser.next_char()? {
+        match self.sig_parser.next_char()? {
             VARIANT_SIGNATURE_CHAR => {
                 StructSerializer::variant(self).map(StructSeqSerializer::Struct)
             }
@@ -348,7 +400,7 @@ where
         _variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStructVariant> {
-        self.0.prep_serialize_enum_variant(variant_index)?;
+        self.prep_serialize_enum_variant(variant_index)?;
 
         StructSerializer::enum_variant(self).map(StructSeqSerializer::Struct)
     }
@@ -377,23 +429,20 @@ where
     W: Write + Seek,
 {
     pub(self) fn end_seq(self) -> Result<()> {
-        self.ser
-            .0
-            .sig_parser
-            .skip_chars(self.element_signature_len)?;
-        self.ser.0.container_depths = self.ser.0.container_depths.dec_array();
+        self.ser.sig_parser.skip_chars(self.element_signature_len)?;
+        self.ser.container_depths = self.ser.container_depths.dec_array();
 
         let offsets = match self.offsets {
             Some(offsets) => offsets,
             None => return Ok(()),
         };
-        let array_len = self.ser.0.bytes_written - self.start;
+        let array_len = self.ser.common.bytes_written - self.start;
         if array_len == 0 {
             // Empty sequence
             return Ok(());
         }
 
-        offsets.write_all(&mut self.ser.0, array_len)?;
+        offsets.write_all(&mut self.ser.common, array_len)?;
 
         Ok(())
     }
@@ -412,14 +461,14 @@ where
     {
         // We want to keep parsing the same signature repeatedly for each element so we use a
         // disposable clone.
-        let sig_parser = self.ser.0.sig_parser.clone();
-        self.ser.0.sig_parser = sig_parser.clone();
+        let sig_parser = self.ser.sig_parser.clone();
+        self.ser.sig_parser = sig_parser.clone();
 
         value.serialize(&mut *self.ser)?;
-        self.ser.0.sig_parser = sig_parser;
+        self.ser.sig_parser = sig_parser;
 
         if let Some(ref mut offsets) = self.offsets {
-            let offset = self.ser.0.bytes_written - self.start;
+            let offset = self.ser.common.bytes_written - self.start;
 
             offsets.push(offset);
         }
@@ -449,15 +498,15 @@ where
     W: Write + Seek,
 {
     fn variant(ser: &'b mut Serializer<'ser, 'sig, W>) -> Result<Self> {
-        ser.0.add_padding(VARIANT_ALIGNMENT_GVARIANT)?;
-        let offsets = if ser.0.sig_parser.next_char()? == STRUCT_SIG_START_CHAR {
+        ser.common.add_padding(VARIANT_ALIGNMENT_GVARIANT)?;
+        let offsets = if ser.sig_parser.next_char()? == STRUCT_SIG_START_CHAR {
             Some(FramingOffsets::new())
         } else {
             None
         };
-        let start = ser.0.bytes_written;
-        let container_depths = ser.0.container_depths;
-        ser.0.container_depths = ser.0.container_depths.inc_variant()?;
+        let start = ser.common.bytes_written;
+        let container_depths = ser.container_depths;
+        ser.container_depths = ser.container_depths.inc_variant()?;
 
         Ok(Self {
             ser,
@@ -469,7 +518,7 @@ where
     }
 
     fn structure(ser: &'b mut Serializer<'ser, 'sig, W>) -> Result<Self> {
-        let c = ser.0.sig_parser.next_char()?;
+        let c = ser.sig_parser.next_char()?;
         if c != STRUCT_SIG_START_CHAR && c != DICT_ENTRY_SIG_START_CHAR {
             let expected = format!("`{STRUCT_SIG_START_STR}` or `{DICT_ENTRY_SIG_START_STR}`",);
 
@@ -479,20 +528,20 @@ where
             ));
         }
 
-        let signature = ser.0.sig_parser.next_signature()?;
+        let signature = ser.sig_parser.next_signature()?;
         let alignment = alignment_for_signature(&signature, Format::GVariant)?;
-        ser.0.add_padding(alignment)?;
+        ser.common.add_padding(alignment)?;
 
-        ser.0.sig_parser.skip_char()?;
+        ser.sig_parser.skip_char()?;
 
         let offsets = if c == STRUCT_SIG_START_CHAR {
             Some(FramingOffsets::new())
         } else {
             None
         };
-        let start = ser.0.bytes_written;
-        let container_depths = ser.0.container_depths;
-        ser.0.container_depths = ser.0.container_depths.inc_structure()?;
+        let start = ser.common.bytes_written;
+        let container_depths = ser.container_depths;
+        ser.container_depths = ser.container_depths.inc_structure()?;
 
         Ok(Self {
             ser,
@@ -507,8 +556,8 @@ where
         // serialize as a `0u8`
         serde::Serializer::serialize_u8(&mut *ser, 0)?;
 
-        let start = ser.0.bytes_written;
-        let container_depths = ser.0.container_depths;
+        let start = ser.common.bytes_written;
+        let container_depths = ser.container_depths;
         Ok(Self {
             ser,
             end_parens: 0,
@@ -535,39 +584,40 @@ where
                 // already, and also put aside for us to be picked here.
                 let signature = self
                     .ser
-                    .0
                     .value_sign
                     .take()
                     .expect("Incorrect Value encoding");
 
                 let sig_parser = SignatureParser::new(signature.clone());
-                let bytes_written = self.ser.0.bytes_written;
-                let mut ser = Serializer(crate::SerializerCommon::<W> {
-                    ctxt: self.ser.0.ctxt,
+                let bytes_written = self.ser.common.bytes_written;
+                let mut ser = Serializer {
                     sig_parser,
-                    writer: self.ser.0.writer,
-                    #[cfg(unix)]
-                    fds: self.ser.0.fds,
-                    bytes_written,
                     value_sign: None,
-                    container_depths: self.ser.0.container_depths,
-                });
+                    container_depths: self.ser.container_depths,
+                    common: crate::SerializerCommon::<W> {
+                        ctxt: self.ser.common.ctxt,
+                        writer: self.ser.common.writer,
+                        #[cfg(unix)]
+                        fds: self.ser.common.fds,
+                        bytes_written,
+                    },
+                };
                 value.serialize(&mut ser)?;
-                self.ser.0.bytes_written = ser.0.bytes_written;
+                self.ser.common.bytes_written = ser.common.bytes_written;
 
                 self.ser
-                    .0
+                    .common
                     .write_all(&b"\0"[..])
                     .map_err(|e| Error::InputOutput(e.into()))?;
                 self.ser
-                    .0
+                    .common
                     .write_all(signature.as_bytes())
                     .map_err(|e| Error::InputOutput(e.into()))?;
 
                 Ok(())
             }
             _ => {
-                let element_signature = self.ser.0.sig_parser.next_signature()?;
+                let element_signature = self.ser.sig_parser.next_signature()?;
                 let fixed_sized_element =
                     crate::utils::is_fixed_sized_signature(&element_signature)?;
 
@@ -575,7 +625,7 @@ where
 
                 if let Some(ref mut offsets) = self.offsets {
                     if !fixed_sized_element {
-                        offsets.push_front(self.ser.0.bytes_written - self.start);
+                        offsets.push_front(self.ser.common.bytes_written - self.start);
                     }
                 }
 
@@ -586,16 +636,16 @@ where
 
     fn end_struct(self) -> Result<()> {
         if self.end_parens > 0 {
-            self.ser.0.sig_parser.skip_chars(self.end_parens as usize)?;
+            self.ser.sig_parser.skip_chars(self.end_parens as usize)?;
         }
         // Restore the original container depths.
-        self.ser.0.container_depths = self.container_depths;
+        self.ser.container_depths = self.container_depths;
 
         let mut offsets = match self.offsets {
             Some(offsets) => offsets,
             None => return Ok(()),
         };
-        let struct_len = self.ser.0.bytes_written - self.start;
+        let struct_len = self.ser.common.bytes_written - self.start;
         if struct_len == 0 {
             // Empty sequence
             return Ok(());
@@ -605,7 +655,7 @@ where
             offsets.pop();
         }
 
-        offsets.write_all(&mut self.ser.0, struct_len)?;
+        offsets.write_all(&mut self.ser.common, struct_len)?;
 
         Ok(())
     }
@@ -680,22 +730,22 @@ where
     where
         T: ?Sized + Serialize,
     {
-        self.ser.0.add_padding(self.element_alignment)?;
+        self.ser.common.add_padding(self.element_alignment)?;
 
         if self.key_start.is_some() {
-            self.key_start.replace(self.ser.0.bytes_written);
+            self.key_start.replace(self.ser.common.bytes_written);
         }
 
         // We want to keep parsing the same signature repeatedly for each key so we use a
         // disposable clone.
-        let sig_parser = self.ser.0.sig_parser.clone();
-        self.ser.0.sig_parser = sig_parser.clone();
+        let sig_parser = self.ser.sig_parser.clone();
+        self.ser.sig_parser = sig_parser.clone();
 
         // skip `{`
-        self.ser.0.sig_parser.skip_char()?;
+        self.ser.sig_parser.skip_char()?;
 
         key.serialize(&mut *self.ser)?;
-        self.ser.0.sig_parser = sig_parser;
+        self.ser.sig_parser = sig_parser;
 
         Ok(())
     }
@@ -705,29 +755,31 @@ where
         T: ?Sized + Serialize,
     {
         // For non-fixed-sized keys, we must add the key offset after the value
-        let key_offset = self.key_start.map(|start| self.ser.0.bytes_written - start);
+        let key_offset = self
+            .key_start
+            .map(|start| self.ser.common.bytes_written - start);
 
         // We want to keep parsing the same signature repeatedly for each key so we use a
         // disposable clone.
-        let sig_parser = self.ser.0.sig_parser.clone();
-        self.ser.0.sig_parser = sig_parser.clone();
+        let sig_parser = self.ser.sig_parser.clone();
+        self.ser.sig_parser = sig_parser.clone();
 
         // skip `{` and key char
-        self.ser.0.sig_parser.skip_chars(2)?;
+        self.ser.sig_parser.skip_chars(2)?;
 
         value.serialize(&mut *self.ser)?;
         // Restore the original parser
-        self.ser.0.sig_parser = sig_parser;
+        self.ser.sig_parser = sig_parser;
 
         if let Some(key_offset) = key_offset {
-            let entry_size = self.ser.0.bytes_written - self.key_start.unwrap_or(0);
+            let entry_size = self.ser.common.bytes_written - self.key_start.unwrap_or(0);
             let offset_size = FramingOffsetSize::for_encoded_container(entry_size);
-            offset_size.write_offset(&mut self.ser.0, key_offset)?;
+            offset_size.write_offset(&mut self.ser.common, key_offset)?;
         }
 
         // And now the offset of the array element end (which is encoded later)
         if let Some(ref mut offsets) = self.offsets {
-            let offset = self.ser.0.bytes_written - self.start;
+            let offset = self.ser.common.bytes_written - self.start;
 
             offsets.push(offset);
         }

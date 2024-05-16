@@ -37,6 +37,7 @@ impl ContainerDepths {
         self.check()
     }
 
+    #[cfg(feature = "gvariant")]
     pub fn dec_array(mut self) -> Self {
         self.array -= 1;
         self

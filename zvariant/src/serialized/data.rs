@@ -2,6 +2,7 @@
 use crate::{Fd, OwnedFd};
 use std::{
     borrow::Cow,
+    marker::PhantomData,
     ops::{Bound, Deref, Range, RangeBounds},
     sync::Arc,
 };
@@ -251,13 +252,13 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
                     crate::dbus::Deserializer::<()>::new(self.bytes(), signature, self.context)
                 }
             }
-            .map(Deserializer::DBus)?,
+            .map(|de| Deserializer::DBus(de, PhantomData))?,
         };
 
         T::deserialize(&mut de).map(|t| match de {
             #[cfg(feature = "gvariant")]
-            Deserializer::GVariant(de) => (t, de.0.pos),
-            Deserializer::DBus(de) => (t, de.0.pos),
+            Deserializer::GVariant(de) => (t, de.common.pos),
+            Deserializer::DBus(de, _) => (t, de.common.pos),
         })
     }
 
@@ -318,13 +319,13 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
                     crate::dbus::Deserializer::<()>::new(self.bytes(), signature, self.context)
                 }
             }
-            .map(Deserializer::DBus)?,
+            .map(|de| Deserializer::DBus(de, PhantomData))?,
         };
 
         seed.deserialize(&mut de).map(|t| match de {
             #[cfg(feature = "gvariant")]
-            Deserializer::GVariant(de) => (t, de.0.pos),
-            Deserializer::DBus(de) => (t, de.0.pos),
+            Deserializer::GVariant(de) => (t, de.common.pos),
+            Deserializer::DBus(de, _) => (t, de.common.pos),
         })
     }
 }
