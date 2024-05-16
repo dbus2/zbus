@@ -60,7 +60,7 @@ pub enum Error {
     /// The maximum allowed depth for containers in encoding was exceeded.
     MaxDepthExceeded(MaxDepthExceeded),
     /// An unexpected value with no corresponding signature was encountered.
-    UnexpectedValue(String)
+    UnexpectedValue(String),
 }
 
 assert_impl_all!(Error: Send, Sync, Unpin);

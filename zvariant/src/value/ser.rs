@@ -14,7 +14,9 @@ use std::{collections::VecDeque, marker::PhantomData};
 #[cfg(feature = "gvariant")]
 use crate::Maybe;
 use crate::{
-    basic::Basic, value::parsed_signature::{ParsedSignature, SignatureEntry}, Array, Dict, ObjectPath, Signature, Str, StructureBuilder, Value
+    basic::Basic,
+    value::parsed_signature::{ParsedSignature, SignatureEntry},
+    Array, Dict, ObjectPath, Signature, Str, StructureBuilder, Value,
 };
 use serde::{
     de::Error,
@@ -43,7 +45,7 @@ macro_rules! serialize_basic_type {
                         ))
                     }
                 }
-                None => Err(crate::Error::UnexpectedValue(value.to_string()))
+                None => Err(crate::Error::UnexpectedValue(value.to_string())),
             }
         }
     };
@@ -62,8 +64,8 @@ macro_rules! serialize_basic_type {
                         ))
                     }
                 }
-                
-                None => Err(crate::Error::UnexpectedValue(value.to_string()))
+
+                None => Err(crate::Error::UnexpectedValue(value.to_string())),
             }
         }
     };
@@ -127,7 +129,7 @@ impl<'a> Serializer for ValueSerializer<'a> {
                 signature.into(),
                 String::SIGNATURE_STR.to_string(),
             )),
-            None => Err(crate::Error::UnexpectedValue(v.to_string()))
+            None => Err(crate::Error::UnexpectedValue(v.to_string())),
         }
     }
 
@@ -144,7 +146,9 @@ impl<'a> Serializer for ValueSerializer<'a> {
                 signature.into(),
                 "ay".to_string(),
             )),
-            None => Err(crate::Error::UnexpectedValue("No signature provided for serialized bytes".to_string()))
+            None => Err(crate::Error::UnexpectedValue(
+                "No signature provided for serialized bytes".to_string(),
+            )),
         }
     }
 
@@ -297,8 +301,8 @@ impl<'a> Serializer for ValueSerializer<'a> {
                 "a valid newtype variant signature".to_string(),
             )),
             None => Err(crate::Error::UnexpectedValue(
-                "No signature found for serialized newtype variant".to_string()
-            ))
+                "No signature found for serialized newtype variant".to_string(),
+            )),
         }
     }
 
@@ -310,8 +314,8 @@ impl<'a> Serializer for ValueSerializer<'a> {
                 "an array".to_string(),
             )),
             None => Err(crate::Error::UnexpectedValue(
-                "No signature found for serialized sequence".to_string()
-            ))
+                "No signature found for serialized sequence".to_string(),
+            )),
         }
     }
 
@@ -323,8 +327,8 @@ impl<'a> Serializer for ValueSerializer<'a> {
                 "a valid tuple signature".to_string(),
             )),
             None => Err(crate::Error::UnexpectedValue(
-                "No signature found for serialized tuple".to_string()
-            ))
+                "No signature found for serialized tuple".to_string(),
+            )),
         }
     }
 
@@ -342,8 +346,8 @@ impl<'a> Serializer for ValueSerializer<'a> {
                 "a valid tuple-struct signature".to_string(),
             )),
             None => Err(crate::Error::UnexpectedValue(
-                "No signature found for serialized tuple-struct".to_string()
-            ))
+                "No signature found for serialized tuple-struct".to_string(),
+            )),
         }
     }
 
@@ -381,8 +385,8 @@ impl<'a> Serializer for ValueSerializer<'a> {
                         "a valid tuple-variant inner value signature".to_string(),
                     )),
                     None => Err(crate::Error::UnexpectedValue(
-                        "No signature found for serialized tuple-variant inner content".to_string()
-                    ))
+                        "No signature found for serialized tuple-variant inner content".to_string(),
+                    )),
                 }
             }
             Some(signature) => Err(crate::Error::SignatureMismatch(
@@ -391,8 +395,8 @@ impl<'a> Serializer for ValueSerializer<'a> {
             )),
 
             None => Err(crate::Error::UnexpectedValue(
-                "No signature found for serialized tuple-variant".to_string()
-            ))
+                "No signature found for serialized tuple-variant".to_string(),
+            )),
         }
     }
 
@@ -410,8 +414,8 @@ impl<'a> Serializer for ValueSerializer<'a> {
                 "a Dictionary of the form a{kv}".to_string(),
             )),
             None => Err(crate::Error::UnexpectedValue(
-                "No signature found for serialized map".to_string()
-            ))
+                "No signature found for serialized map".to_string(),
+            )),
         }
     }
 
@@ -429,8 +433,8 @@ impl<'a> Serializer for ValueSerializer<'a> {
             )),
 
             None => Err(crate::Error::UnexpectedValue(
-                "No signature found for serialized struct".to_string()
-            ))
+                "No signature found for serialized struct".to_string(),
+            )),
         }
     }
 
@@ -470,8 +474,9 @@ impl<'a> Serializer for ValueSerializer<'a> {
                     )),
 
                     None => Err(crate::Error::UnexpectedValue(
-                        "No signature found for serialized struct-variant inner content".to_string()
-                    ))
+                        "No signature found for serialized struct-variant inner content"
+                            .to_string(),
+                    )),
                 }
             }
 
@@ -481,8 +486,8 @@ impl<'a> Serializer for ValueSerializer<'a> {
             )),
 
             None => Err(crate::Error::UnexpectedValue(
-                "No signature found for serialized struct-variant".to_string()
-            ))
+                "No signature found for serialized struct-variant".to_string(),
+            )),
         }
     }
 }

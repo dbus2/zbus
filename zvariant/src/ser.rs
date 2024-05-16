@@ -67,7 +67,7 @@ where
                 ctxt,
             )?;
             value.serialize(&mut ser)?;
-            ser.0.bytes_written
+            ser.common.bytes_written
         }
         #[cfg(feature = "gvariant")]
         Format::GVariant => {
@@ -181,7 +181,7 @@ where
                 ctxt,
             )?;
             value.serialize(&mut ser)?;
-            ser.0.bytes_written
+            ser.common.bytes_written
         }
         #[cfg(feature = "gvariant")]
         Format::GVariant => {

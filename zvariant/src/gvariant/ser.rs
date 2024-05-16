@@ -95,21 +95,23 @@ macro_rules! serialize_basic {
         fn $method(self, v: $type) -> Result<()> {
             let ctxt = Context::new_dbus(self.0.ctxt.endian(), self.0.ctxt.position());
             let bytes_written = self.0.bytes_written;
-            let mut dbus_ser = crate::dbus::Serializer(crate::SerializerCommon::<W> {
-                ctxt,
-                sig_parser: self.0.sig_parser.clone(),
-                writer: &mut self.0.writer,
-                #[cfg(unix)]
-                fds: self.0.fds,
-                bytes_written,
-                value_sign: None,
-                container_depths: self.0.container_depths,
-            });
+            let mut dbus_ser = crate::dbus::Serializer {
+                common: crate::SerializerCommon::<W> {
+                    ctxt,
+                    sig_parser: self.0.sig_parser.clone(),
+                    writer: &mut self.0.writer,
+                    #[cfg(unix)]
+                    fds: self.0.fds,
+                    bytes_written,
+                    value_sign: None,
+                    container_depths: self.0.container_depths,
+                },
+            };
 
             dbus_ser.$method(v)?;
 
-            self.0.bytes_written = dbus_ser.0.bytes_written;
-            self.0.sig_parser = dbus_ser.0.sig_parser;
+            self.0.bytes_written = dbus_ser.common.bytes_written;
+            self.0.sig_parser = dbus_ser.common.sig_parser;
 
             Ok(())
         }

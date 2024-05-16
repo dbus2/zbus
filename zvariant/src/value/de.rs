@@ -107,7 +107,10 @@ impl<'de> Deserializer<'de> for ValueDeserializer<'de> {
     deserialize_method!(deserialize_identifier());
     deserialize_method!(deserialize_ignored_any());
 
-    fn deserialize_option<V>(self, #[allow(unused_variables)] visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_option<V>(
+        self,
+        #[allow(unused_variables)] visitor: V,
+    ) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
