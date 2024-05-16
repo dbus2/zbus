@@ -166,7 +166,7 @@ macro_rules! signature_string {
 
 macro_rules! check_child_value_signature {
     ($expected_signature:expr, $child_signature:expr, $child_name:literal) => {{
-        if $child_signature != $expected_signature {
+        if $expected_signature.as_str() != "v" && $child_signature != $expected_signature {
             let unexpected = format!("{} with signature `{}`", $child_name, $child_signature,);
             let expected = format!("{} with signature `{}`", $child_name, $expected_signature);
 

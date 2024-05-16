@@ -257,7 +257,7 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
         T::deserialize(&mut de).map(|t| match de {
             #[cfg(feature = "gvariant")]
             Deserializer::GVariant(de) => (t, de.0.pos),
-            Deserializer::DBus(de) => (t, de.0.pos),
+            Deserializer::DBus(de) => (t, de.common.pos),
         })
     }
 
@@ -324,7 +324,7 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
         seed.deserialize(&mut de).map(|t| match de {
             #[cfg(feature = "gvariant")]
             Deserializer::GVariant(de) => (t, de.0.pos),
-            Deserializer::DBus(de) => (t, de.0.pos),
+            Deserializer::DBus(de) => (t, de.common.pos),
         })
     }
 }

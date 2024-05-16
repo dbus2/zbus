@@ -9,8 +9,8 @@ use std::os::fd::{AsFd, AsRawFd};
 #[cfg(feature = "gvariant")]
 use crate::gvariant::Deserializer as GVDeserializer;
 use crate::{
-    container_depths::ContainerDepths, dbus::Deserializer as DBusDeserializer, serialized::Context,
-    signature_parser::SignatureParser, utils::*, Basic, Error, ObjectPath, Result, Signature,
+    dbus::Deserializer as DBusDeserializer, serialized::Context, utils::*, Basic, Error,
+    ObjectPath, Result, Signature,
 };
 
 #[cfg(unix)]
@@ -18,7 +18,7 @@ use crate::Fd;
 
 /// Our deserialization implementation.
 #[derive(Debug)]
-pub(crate) struct DeserializerCommon<'de, 'sig, 'f, F> {
+pub(crate) struct DeserializerCommon<'de, 'f, F> {
     pub(crate) ctxt: Context,
     pub(crate) bytes: &'de [u8],
 
@@ -28,10 +28,6 @@ pub(crate) struct DeserializerCommon<'de, 'sig, 'f, F> {
     pub(crate) fds: PhantomData<&'f F>,
 
     pub(crate) pos: usize,
-
-    pub(crate) sig_parser: SignatureParser<'sig>,
-
-    pub(crate) container_depths: ContainerDepths,
 }
 
 /// Our deserialization implementation.
@@ -39,16 +35,16 @@ pub(crate) struct DeserializerCommon<'de, 'sig, 'f, F> {
 /// Using this deserializer involves an redirection to the actual deserializer. It's best
 /// to use the serialization functions, e.g [`crate::to_bytes`] or specific serializers,
 /// [`crate::dbus::Deserializer`] or [`crate::zvariant::Deserializer`].
-pub(crate) enum Deserializer<'ser, 'sig, 'f, F> {
-    DBus(DBusDeserializer<'ser, 'sig, 'f, F>),
+pub(crate) enum Deserializer<'ser, 'f, F> {
+    DBus(DBusDeserializer<'ser, 'f, F>),
     #[cfg(feature = "gvariant")]
     GVariant(GVDeserializer<'ser, 'sig, 'f, F>),
 }
 
-assert_impl_all!(Deserializer<'_, '_, '_, ()>: Send, Sync, Unpin);
+assert_impl_all!(Deserializer<'_, '_, ()>: Send, Sync, Unpin);
 
 #[cfg(unix)]
-impl<'de, 'sig, 'f, F> DeserializerCommon<'de, 'sig, 'f, F>
+impl<'de, 'f, F> DeserializerCommon<'de, 'f, F>
 where
     F: AsFd,
 {
@@ -59,7 +55,7 @@ where
     }
 }
 
-impl<'de, 'sig, 'f, F> DeserializerCommon<'de, 'sig, 'f, F> {
+impl<'de, 'f, F> DeserializerCommon<'de, 'f, F> {
     pub fn parse_padding(&mut self, alignment: usize) -> Result<usize> {
         let padding = padding_for_n_bytes(self.abs_pos(), alignment);
         if padding > 0 {
@@ -82,16 +78,6 @@ impl<'de, 'sig, 'f, F> DeserializerCommon<'de, 'sig, 'f, F> {
         Ok(padding)
     }
 
-    pub fn prep_deserialize_basic<T>(&mut self) -> Result<()>
-    where
-        T: Basic,
-    {
-        self.sig_parser.skip_char()?;
-        self.parse_padding(T::alignment(self.ctxt.format()))?;
-
-        Ok(())
-    }
-
     pub fn next_slice(&mut self, len: usize) -> Result<&'de [u8]> {
         if self.pos + len > self.bytes.len() {
             return Err(serde::de::Error::invalid_length(
@@ -110,8 +96,7 @@ impl<'de, 'sig, 'f, F> DeserializerCommon<'de, 'sig, 'f, F> {
     where
         T: Basic,
     {
-        self.prep_deserialize_basic::<T>()?;
-
+        self.parse_padding(T::alignment(self.ctxt.format()))?;
         self.next_slice(T::alignment(self.ctxt.format()))
     }
 
@@ -140,8 +125,8 @@ macro_rules! deserialize_method {
     }
 }
 
-impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deserializer<'de>
-    for &'d mut Deserializer<'de, 'sig, 'f, F>
+impl<'de, 'd, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deserializer<'de>
+    for &'d mut Deserializer<'de, 'f, F>
 {
     type Error = Error;
 

@@ -9,7 +9,7 @@
 //! by this create. This deserializer can also be constructed
 //! by calling `Value::into_deserializer`.
 
-use crate::{Array, Dict, Value};
+use crate::{Array, Dict, DynamicType, Value};
 use serde::{
     de::{
         EnumAccess, Error, IntoDeserializer, MapAccess, SeqAccess, Unexpected, VariantAccess,
@@ -441,7 +441,9 @@ impl<'de> VariantAccess<'de> for StructureEnumAccess<'de> {
         if let Some(field) = self.fields.pop_front() {
             seed.deserialize(field.into_deserializer())
         } else {
-            Err(crate::Error::missing_field("expected enum data"))
+            Err(crate::Error::missing_field(
+                "expected enum data for newtype variant seed",
+            ))
         }
     }
 
@@ -469,7 +471,7 @@ mod test {
     use std::collections::HashMap;
 
     use super::*;
-    use crate::{ObjectPath, OwnedObjectPath, OwnedSignature, Signature, StructureBuilder};
+    use crate::{ObjectPath, OwnedObjectPath, OwnedSignature, Signature, StructureBuilder, Type};
     use serde::Deserialize;
 
     #[test]
@@ -703,6 +705,104 @@ mod test {
             let output: MyEnum = MyEnum::deserialize(de).unwrap();
 
             assert_eq!(output, MyEnum::B);
+        }
+    }
+
+    #[test]
+    fn deserialize_tuple_variant() {
+        #[derive(Deserialize, PartialEq, Debug, Type)]
+        enum MyEnum {
+            A(i32, u32),
+            B(i32, u32),
+        }
+
+        {
+            let structure = StructureBuilder::new()
+                .add_field(0u32)
+                .append_field(Value::Structure(
+                    StructureBuilder::new()
+                        .add_field(-10i32)
+                        .add_field(10u32)
+                        .build(),
+                ))
+                .build();
+
+            let input = Value::Structure(structure);
+
+            assert_eq!(input.value_signature(), MyEnum::signature());
+
+            let de = input.into_deserializer();
+            let output: MyEnum = MyEnum::deserialize(de).unwrap();
+
+            assert_eq!(output, MyEnum::A(-10, 10));
+        }
+
+        {
+            let structure = StructureBuilder::new()
+                .add_field(1u32)
+                .append_field(Value::Structure(
+                    StructureBuilder::new()
+                        .add_field(-10i32)
+                        .add_field(10u32)
+                        .build(),
+                ))
+                .build();
+
+            let input = Value::Structure(structure);
+
+            let de = input.into_deserializer();
+            let output: MyEnum = MyEnum::deserialize(de).unwrap();
+
+            assert_eq!(output, MyEnum::B(-10, 10));
+        }
+    }
+
+    #[test]
+    fn deserialize_struct_variant() {
+        #[derive(Deserialize, PartialEq, Debug, Type)]
+        enum MyEnum {
+            A { a: i32, b: u32 },
+            B { a: i32, b: u32 },
+        }
+
+        {
+            let structure = StructureBuilder::new()
+                .add_field(0u32)
+                .append_field(Value::Structure(
+                    StructureBuilder::new()
+                        .add_field(-10i32)
+                        .add_field(10u32)
+                        .build(),
+                ))
+                .build();
+
+            let input = Value::Structure(structure);
+
+            assert_eq!(input.value_signature(), MyEnum::signature());
+
+            let de = input.into_deserializer();
+            let output: MyEnum = MyEnum::deserialize(de).unwrap();
+
+            assert_eq!(output, MyEnum::A { a: -10, b: 10 });
+        }
+
+        {
+            let structure = StructureBuilder::new()
+                .add_field(1u32)
+                .append_field(Value::Structure(
+                    StructureBuilder::new()
+                        .add_field(-10i32)
+                        .add_field(10u32)
+                        .build(),
+                ))
+                .build();
+
+            let input = Value::Structure(structure);
+
+            let de = input.into_deserializer();
+            let output: MyEnum = MyEnum::deserialize(de).unwrap();
+
+            assert_eq!(output, MyEnum::B { a: -10, b: 10 });
         }
     }
 

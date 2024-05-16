@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use zvariant::{ObjectPath, OwnedValue, Signature, Type};
+use zvariant::{DynamicType, ObjectPath, OwnedValue, Signature, Type};
 
 #[test]
 fn serde_i8() {
@@ -191,6 +191,8 @@ fn serde_tuple_variant() {
         B(i32, i32),
     }
     let value = TupleVariant::A(1, 2);
+
+    assert_eq!(value.dynamic_signature(), "(u(ii))");
     let serialized: OwnedValue = zvariant::to_value(&value).unwrap();
     let deserialized: TupleVariant = zvariant::from_value(serialized).unwrap();
     assert_eq!(value, deserialized);
@@ -264,5 +266,16 @@ fn test_maybe() {
     let value: Option<i32> = Some(42);
     let serialized: OwnedValue = zvariant::to_value(&value).unwrap();
     let deserialized: Option<i32> = zvariant::from_value(serialized).unwrap();
+    assert_eq!(value, deserialized);
+}
+
+#[test]
+fn serde_newtype_struct_inner_vec() {
+    #[derive(Serialize, Deserialize, Type, Debug, PartialEq)]
+    struct MyStruct(Vec<(i32, i32)>);
+
+    let value = MyStruct(vec![]);
+    let serialized = zvariant::to_value(&value).unwrap();
+    let deserialized: MyStruct = zvariant::from_value(serialized).unwrap();
     assert_eq!(value, deserialized);
 }
