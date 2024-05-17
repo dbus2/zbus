@@ -447,22 +447,30 @@ impl<'de> VariantAccess<'de> for StructureEnumAccess<'de> {
         }
     }
 
-    fn tuple_variant<V>(self, _len: usize, visitor: V) -> Result<V::Value, Self::Error>
+    fn tuple_variant<V>(mut self, _len: usize, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        visitor.visit_seq(StructureAccess::new(self.fields))
+        if let Some(Value::Structure(inner_fields)) = self.fields.pop_front() {
+            visitor.visit_seq(StructureAccess::new(inner_fields.into_fields().into()))
+        } else {
+            Err(crate::Error::missing_field("expected enum data"))
+        }
     }
 
     fn struct_variant<V>(
-        self,
+        mut self,
         _fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        visitor.visit_seq(StructureAccess::new(self.fields))
+        if let Some(Value::Structure(inner_fields)) = self.fields.pop_front() {
+            visitor.visit_seq(StructureAccess::new(inner_fields.into_fields().into()))
+        } else {
+            Err(crate::Error::missing_field("expected enum data"))
+        }
     }
 }
 
