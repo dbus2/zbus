@@ -59,6 +59,27 @@ impl<'s> SignatureParser<'s> {
     }
 
     #[inline]
+    #[cfg(feature = "gvariant")]
+    pub fn skip_char(&mut self) -> Result<()> {
+        self.skip_chars(1)
+    }
+
+    #[cfg(feature = "gvariant")]
+    pub fn skip_chars(&mut self, num_chars: usize) -> Result<()> {
+        self.pos += num_chars;
+
+        // We'll be going one char beyond at the end of parsing but not beyond that.
+        if self.pos > self.end {
+            return Err(serde::de::Error::invalid_length(
+                self.signature.len(),
+                &format!(">= {} characters", self.pos).as_str(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    #[inline]
     pub fn len(&self) -> usize {
         self.end - self.pos
     }

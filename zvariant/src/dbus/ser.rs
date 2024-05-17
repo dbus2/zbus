@@ -21,7 +21,7 @@ use crate::{
 
 /// Our D-Bus serialization implementation.
 pub(crate) struct Serializer<'ser, W> {
-    pub(crate) common: crate::SerializerCommon<'ser, W>,
+    common: crate::SerializerCommon<'ser, W>,
     parsed_signature: ParsedSignature,
 }
 
@@ -59,6 +59,10 @@ where
             },
             parsed_signature,
         })
+    }
+
+    pub fn bytes_written(&self) -> usize {
+        self.common.bytes_written
     }
 }
 

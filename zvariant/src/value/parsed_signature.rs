@@ -161,7 +161,7 @@ impl SignatureEntry {
             SignatureEntry::Fd => Fd::alignment(format),
 
             #[cfg(feature = "gvariant")]
-            SignatureEntry::Maybe(sig) => sig.alignment(),
+            SignatureEntry::Maybe(sig) => sig.alignment(format),
         }
     }
 

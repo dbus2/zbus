@@ -25,6 +25,7 @@ use crate::{
     utils::*, Array, Basic, Dict, DynamicType, ObjectPath, OwnedValue, Signature, Str, Structure,
     StructureBuilder, Type,
 };
+
 #[cfg(feature = "gvariant")]
 use crate::{maybe_display_fmt, Maybe};
 

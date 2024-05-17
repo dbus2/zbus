@@ -23,6 +23,9 @@ pub use array::*;
 mod basic;
 pub use basic::*;
 
+#[cfg(feature = "gvariant")]
+mod container_depths;
+
 mod dict;
 pub use dict::*;
 
@@ -102,6 +105,7 @@ pub use owned_value::*;
 mod framing_offset_size;
 #[cfg(feature = "gvariant")]
 mod framing_offsets;
+
 mod signature_parser;
 
 pub use zvariant_derive::{DeserializeDict, OwnedValue, SerializeDict, Type, Value};

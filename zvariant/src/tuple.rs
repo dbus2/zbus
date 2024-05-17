@@ -1,11 +1,11 @@
-use crate::{
-    signature_parser::SignatureParser, utils::*, DynamicDeserialize, DynamicType, Signature,
-};
+use crate::{utils::*, DynamicDeserialize, DynamicType, Signature};
 use serde::{
     de::{Deserialize, DeserializeSeed, Deserializer, Error, Visitor},
     Serialize, Serializer,
 };
 use std::marker::PhantomData;
+
+use crate::signature_parser::SignatureParser;
 
 /// A helper type to serialize or deserialize a tuple whose elements implement [DynamicType] but
 /// not [Type].
