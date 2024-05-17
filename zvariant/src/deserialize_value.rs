@@ -9,7 +9,7 @@ use crate::{Signature, Type, Value};
 /// A wrapper to deserialize a value to `T: Type + Deserialize`.
 ///
 /// When the type of a value is well-known, you may avoid the cost and complexity of wrapping to a
-/// generic [`Value`] and instead usfe this wrapper.
+/// generic [`Value`] and instead use this wrapper.
 ///
 /// ```
 /// # use zvariant::{to_bytes, serialized::Context, DeserializeValue, SerializeValue, LE};

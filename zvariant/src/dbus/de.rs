@@ -525,7 +525,7 @@ impl<'de, 'd, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deserializer<'d
     where
         V: Visitor<'de>,
     {
-        self.deserialize_unit(visitor)
+        visitor.visit_unit()
     }
 
     fn is_human_readable(&self) -> bool {

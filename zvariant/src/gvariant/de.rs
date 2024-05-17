@@ -67,6 +67,7 @@ macro_rules! deserialize_basic {
         where
             V: Visitor<'de>,
         {
+            self.sig_parser.skip_char()?;
             let v = self
                 .common
                 .ctxt
@@ -132,6 +133,7 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
     where
         V: Visitor<'de>,
     {
+        self.sig_parser.skip_char()?;
         let v = self
             .common
             .ctxt
@@ -207,11 +209,14 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
                     .read_u32(self.common.next_slice(alignment)?);
                 self.common.get_fd(idx)?
             }
-            _ => self
-                .common
-                .ctxt
-                .endian()
-                .read_i32(self.common.next_const_size_slice::<i32>()?),
+            _ => {
+                self.sig_parser.skip_char()?;
+
+                self.common
+                    .ctxt
+                    .endian()
+                    .read_i32(self.common.next_const_size_slice::<i32>()?)
+            }
         };
 
         visitor.visit_i32(v)
@@ -222,6 +227,7 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
         V: Visitor<'de>,
     {
         // Endianness is irrelevant for single bytes.
+        self.sig_parser.skip_char()?;
         visitor.visit_u8(
             self.common
                 .next_const_size_slice::<u8>()
@@ -233,6 +239,7 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
     where
         V: Visitor<'de>,
     {
+        self.sig_parser.skip_char()?;
         let v = self
             .common
             .ctxt

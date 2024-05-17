@@ -178,8 +178,13 @@ fn serde_unit_struct() {
         let value: UnitStruct = UnitStruct;
         let serialized: Data<'_, '_> = zvariant::to_bytes(context, &value).unwrap();
         let (deserialized, decoded): (UnitStruct, usize) = serialized.deserialize().unwrap();
-        assert_eq!(value, deserialized);
-        assert_eq!(decoded, serialized.len());
+        assert_eq!(value, deserialized, "Failed with context: {:?}", context);
+        assert_eq!(
+            decoded,
+            serialized.len(),
+            "Failed with context: {:?}",
+            context
+        );
     }
 }
 
