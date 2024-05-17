@@ -2064,7 +2064,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn recursion_limits() {
         let ctxt = Context::new_dbus(LE, 0);
         // Total container depth exceeds limit (64)
