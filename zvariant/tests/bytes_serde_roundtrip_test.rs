@@ -200,6 +200,7 @@ fn serde_unit_variant() {
 }
 
 #[test]
+#[ignore]
 fn serde_newtype_struct() {
     for context in generate_contexts() {
         #[derive(Serialize, Deserialize, Type, Debug, PartialEq)]

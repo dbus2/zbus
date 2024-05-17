@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Unexpected, Visitor};
 use static_assertions::assert_impl_all;
 
-use crate::{Error, Signature, Type, Value};
+use crate::{Signature, Type, Value};
 
 /// A wrapper to deserialize a value to `T: Type + Deserialize`.
 ///

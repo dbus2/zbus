@@ -2,10 +2,7 @@ use std::slice::SliceIndex;
 
 #[cfg(feature = "gvariant")]
 use crate::signature_parser::SignatureParser;
-use crate::{serialized::Format, Basic, Error, ObjectPath, Result, Signature};
-
-#[cfg(unix)]
-use crate::Fd;
+use crate::{Error, Result};
 
 /// The prefix of ARRAY type signature, as a character. Provided for manual signature creation.
 pub const ARRAY_SIGNATURE_CHAR: char = 'a';
@@ -33,7 +30,6 @@ pub const DICT_ENTRY_SIG_START_STR: &str = "{";
 /// The closing character of DICT_ENTRY type signature, as a string. Provided for manual signature
 /// creation.
 pub const DICT_ENTRY_SIG_END_STR: &str = "}";
-pub(crate) const DICT_ENTRY_ALIGNMENT_DBUS: usize = 8;
 /// The VARIANT type signature. Provided for manual signature creation.
 pub const VARIANT_SIGNATURE_CHAR: char = 'v';
 /// The VARIANT type signature, as a string. Provided for manual signature creation.
@@ -74,59 +70,6 @@ pub(crate) fn usize_to_u8(value: usize) -> u8 {
     );
 
     value as u8
-}
-
-pub(crate) fn f64_to_f32(value: f64) -> f32 {
-    assert!(
-        value <= (std::f32::MAX as f64),
-        "{} too large for `f32`",
-        value,
-    );
-
-    value as f32
-}
-
-// `signature` must be **one** complete and correct signature. Expect panics otherwise!
-pub(crate) fn alignment_for_signature(signature: &Signature<'_>, format: Format) -> Result<usize> {
-    let alignment = match signature
-        .as_bytes()
-        .first()
-        .map(|b| *b as char)
-        .ok_or_else(|| -> Error { serde::de::Error::invalid_length(0, &">= 1 character") })?
-    {
-        u8::SIGNATURE_CHAR => u8::alignment(format),
-        bool::SIGNATURE_CHAR => bool::alignment(format),
-        i16::SIGNATURE_CHAR => i16::alignment(format),
-        u16::SIGNATURE_CHAR => u16::alignment(format),
-        i32::SIGNATURE_CHAR => i32::alignment(format),
-        u32::SIGNATURE_CHAR => u32::alignment(format),
-        #[cfg(unix)]
-        Fd::SIGNATURE_CHAR => u32::alignment(format),
-        i64::SIGNATURE_CHAR => i64::alignment(format),
-        u64::SIGNATURE_CHAR => u64::alignment(format),
-        f64::SIGNATURE_CHAR => f64::alignment(format),
-        <&str>::SIGNATURE_CHAR => <&str>::alignment(format),
-        ObjectPath::SIGNATURE_CHAR => ObjectPath::alignment(format),
-        Signature::SIGNATURE_CHAR => Signature::alignment(format),
-        VARIANT_SIGNATURE_CHAR => match format {
-            Format::DBus => VARIANT_ALIGNMENT_DBUS,
-            #[cfg(feature = "gvariant")]
-            Format::GVariant => VARIANT_ALIGNMENT_GVARIANT,
-        },
-        ARRAY_SIGNATURE_CHAR => alignment_for_array_signature(signature, format)?,
-        STRUCT_SIG_START_CHAR => alignment_for_struct_signature(signature, format)?,
-        DICT_ENTRY_SIG_START_CHAR => alignment_for_dict_entry_signature(signature, format)?,
-        #[cfg(feature = "gvariant")]
-        MAYBE_SIGNATURE_CHAR => alignment_for_maybe_signature(signature, format)?,
-        _ => {
-            return Err(serde::de::Error::invalid_value(
-                serde::de::Unexpected::Str(signature),
-                &"a valid signature",
-            ))
-        }
-    };
-
-    Ok(alignment)
 }
 
 #[cfg(feature = "gvariant")]
@@ -178,98 +121,9 @@ macro_rules! check_child_value_signature {
     }};
 }
 
-fn alignment_for_single_child_type_signature(
-    #[allow(unused)] signature: &Signature<'_>,
-    format: Format,
-    dbus_align: usize,
-) -> Result<usize> {
-    match format {
-        Format::DBus => Ok(dbus_align),
-        #[cfg(feature = "gvariant")]
-        Format::GVariant => {
-            let child_signature = signature.slice(1..);
-
-            alignment_for_signature(&child_signature, format)
-        }
-    }
-}
-
-fn alignment_for_array_signature(signature: &Signature<'_>, format: Format) -> Result<usize> {
-    alignment_for_single_child_type_signature(signature, format, ARRAY_ALIGNMENT_DBUS)
-}
-
 #[cfg(feature = "gvariant")]
 fn alignment_for_maybe_signature(signature: &Signature<'_>, format: Format) -> Result<usize> {
     alignment_for_single_child_type_signature(signature, format, 1)
-}
-
-fn alignment_for_struct_signature(
-    #[allow(unused)] signature: &Signature<'_>,
-    format: Format,
-) -> Result<usize> {
-    match format {
-        Format::DBus => Ok(STRUCT_ALIGNMENT_DBUS),
-        #[cfg(feature = "gvariant")]
-        Format::GVariant => {
-            if signature.len() < 3 {
-                return Err(serde::de::Error::invalid_length(
-                    signature.len(),
-                    &">= 3 characters in struct signature",
-                ));
-            }
-            let inner_signature = Signature::from_str_unchecked(&signature[1..signature.len() - 1]);
-            let mut sig_parser = SignatureParser::new(inner_signature);
-            let mut alignment = 0;
-
-            while !sig_parser.done() {
-                let child_signature = sig_parser.parse_next_signature()?;
-
-                let child_alignment = alignment_for_signature(&child_signature, format)?;
-                if child_alignment > alignment {
-                    alignment = child_alignment;
-
-                    if alignment == 8 {
-                        // 8 bytes is max alignment so we can short-circuit here
-                        break;
-                    }
-                }
-            }
-
-            Ok(alignment)
-        }
-    }
-}
-
-fn alignment_for_dict_entry_signature(
-    #[allow(unused)] signature: &Signature<'_>,
-    format: Format,
-) -> Result<usize> {
-    match format {
-        Format::DBus => Ok(DICT_ENTRY_ALIGNMENT_DBUS),
-        #[cfg(feature = "gvariant")]
-        Format::GVariant => {
-            if signature.len() < 4 {
-                return Err(serde::de::Error::invalid_length(
-                    signature.len(),
-                    &">= 4 characters in dict entry signature",
-                ));
-            }
-            let key_signature = Signature::from_str_unchecked(&signature[1..2]);
-            let key_alignment = alignment_for_signature(&key_signature, format)?;
-            if key_alignment == 8 {
-                // 8 bytes is max alignment so we can short-circuit here
-                return Ok(8);
-            }
-
-            let value_signature = Signature::from_str_unchecked(&signature[2..signature.len() - 1]);
-            let value_alignment = alignment_for_signature(&value_signature, format)?;
-            if value_alignment > key_alignment {
-                Ok(value_alignment)
-            } else {
-                Ok(key_alignment)
-            }
-        }
-    }
 }
 
 #[cfg(feature = "gvariant")]

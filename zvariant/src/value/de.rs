@@ -9,7 +9,7 @@
 //! by this create. This deserializer can also be constructed
 //! by calling `Value::into_deserializer`.
 
-use crate::{Array, Dict, DynamicType, Value};
+use crate::{Array, Dict, Value};
 use serde::{
     de::{
         EnumAccess, Error, IntoDeserializer, MapAccess, SeqAccess, Unexpected, VariantAccess,

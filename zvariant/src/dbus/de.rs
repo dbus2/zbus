@@ -7,7 +7,7 @@ use serde::{
 };
 use static_assertions::assert_impl_all;
 
-use std::{collections::VecDeque, marker::PhantomData, str};
+use std::{collections::VecDeque, str};
 
 #[cfg(unix)]
 use std::os::fd::AsFd;
@@ -16,12 +16,9 @@ use crate::{
     de::DeserializerCommon,
     serialized::{Context, Format},
     utils::*,
-    value::parsed_signature::{self, ParsedSignature, SignatureEntry},
-    Basic, Error, ObjectPath, Result, Signature, Structure, Value,
+    value::parsed_signature::{ParsedSignature, SignatureEntry},
+    Basic, Error, ObjectPath, Result, Signature,
 };
-
-#[cfg(unix)]
-use crate::Fd;
 
 /// Our D-Bus deserialization implementation.
 #[derive(Debug)]
@@ -335,7 +332,7 @@ impl<'de, 'd, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deserializer<'d
         visitor.visit_borrowed_str(s)
     }
 
-    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_option<V>(self, _visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
@@ -488,7 +485,7 @@ impl<'de, 'd, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deserializer<'d
         V: Visitor<'de>,
     {
         match self.parsed_signature.next() {
-            Some(SignatureEntry::Struct(mut fields)) => {
+            Some(SignatureEntry::Struct(fields)) => {
                 self.common.parse_padding(STRUCT_ALIGNMENT_DBUS)?;
 
                 let fields = fields.into_iter().collect();
