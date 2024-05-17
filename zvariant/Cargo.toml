@@ -13,7 +13,7 @@ categories = ["data-structures", "encoding", "parsing"]
 readme = "README.md"
 
 [features]
-default = []
+default = ["gvariant"]
 # FIXME: Also allow disabling D-Bus support
 gvariant = []
 ostree-tests = ["gvariant"]
