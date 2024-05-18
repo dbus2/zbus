@@ -2,7 +2,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens};
 use syn::{
     spanned::Spanned, Attribute, Data, DataEnum, DeriveInput, Error, Expr, Fields, Generics, Ident,
-    Lifetime, LifetimeDef,
+    Lifetime, LifetimeParam,
 };
 
 use crate::utils::*;
@@ -51,7 +51,7 @@ fn impl_struct(
     signature: Option<String>,
     zv: &TokenStream,
 ) -> Result<TokenStream, Error> {
-    let statc_lifetime = LifetimeDef::new(Lifetime::new("'static", Span::call_site()));
+    let statc_lifetime = LifetimeParam::new(Lifetime::new("'static", Span::call_site()));
     let (
         value_type,
         value_lifetime,
@@ -232,7 +232,7 @@ fn impl_enum(
     data: &DataEnum,
     zv: &TokenStream,
 ) -> Result<TokenStream, Error> {
-    let repr: TokenStream = match attrs.iter().find(|attr| attr.path.is_ident("repr")) {
+    let repr: TokenStream = match attrs.iter().find(|attr| attr.path().is_ident("repr")) {
         Some(repr_attr) => repr_attr.parse_args()?,
         None => quote! { u32 },
     };

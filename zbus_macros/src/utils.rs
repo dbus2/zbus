@@ -29,7 +29,7 @@ pub fn pat_ident(pat: &PatType) -> Option<&Ident> {
 }
 
 pub fn get_doc_attrs(attrs: &[Attribute]) -> Vec<&Attribute> {
-    attrs.iter().filter(|x| x.path.is_ident("doc")).collect()
+    attrs.iter().filter(|x| x.path().is_ident("doc")).collect()
 }
 
 // Convert to pascal case, assuming snake case.
