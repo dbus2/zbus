@@ -327,7 +327,7 @@ pub fn expand<T: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>
                 )),
             };
 
-        (name, !spawn.unwrap_or(true))
+        (name, !spawn.unwrap_or(false))
     };
 
     // Store parsed information about each method
