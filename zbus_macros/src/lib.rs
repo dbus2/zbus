@@ -12,7 +12,9 @@
 )))]
 
 use proc_macro::TokenStream;
-use syn::{parse_macro_input, AttributeArgs, DeriveInput, ItemImpl, ItemTrait};
+use syn::{
+    parse_macro_input, punctuated::Punctuated, DeriveInput, ItemImpl, ItemTrait, Meta, Token,
+};
 
 mod error;
 mod iface;
@@ -193,7 +195,7 @@ mod utils;
 /// [dbus_emits_changed_signal]: https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format
 #[proc_macro_attribute]
 pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(attr as AttributeArgs);
+    let args = parse_macro_input!(attr with Punctuated<Meta, Token![,]>::parse_terminated);
     let input = parse_macro_input!(item as ItemTrait);
     proxy::expand::<proxy::ImplAttributes, proxy::MethodAttributes>(args, input)
         .unwrap_or_else(|err| err.to_compile_error())
@@ -203,7 +205,7 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[deprecated = "Use `#[proxy(...)]` proc macro with `#[zbus(...)]` item attributes instead."]
 #[proc_macro_attribute]
 pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(attr as AttributeArgs);
+    let args = parse_macro_input!(attr with Punctuated<Meta, Token![,]>::parse_terminated);
     let input = parse_macro_input!(item as ItemTrait);
     proxy::expand::<proxy::old::ImplAttributes, proxy::old::MethodAttributes>(args, input)
         .unwrap_or_else(|err| err.to_compile_error())
@@ -363,7 +365,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// [dbus_emits_changed_signal]: https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format
 #[proc_macro_attribute]
 pub fn interface(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(attr);
+    let args = parse_macro_input!(attr with Punctuated<Meta, Token![,]>::parse_terminated);
     let input = parse_macro_input!(item as ItemImpl);
     iface::expand::<iface::TraitAttributes, iface::MethodAttributes>(args, input)
         .unwrap_or_else(|err| err.to_compile_error())
@@ -373,7 +375,7 @@ pub fn interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[deprecated = "Use `#[interface(...)]` proc macro with `#[zbus(...)]` item attributes instead."]
 #[proc_macro_attribute]
 pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(attr);
+    let args = parse_macro_input!(attr with Punctuated<Meta, Token![,]>::parse_terminated);
     let input = parse_macro_input!(item as ItemImpl);
     iface::expand::<iface::old::TraitAttributes, iface::old::MethodAttributes>(args, input)
         .unwrap_or_else(|err| err.to_compile_error())

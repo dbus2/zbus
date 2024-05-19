@@ -154,7 +154,7 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> Result<TokenStream, Erro
 
     let (_, ty_generics, _) = input.generics.split_for_impl();
     let mut generics = input.generics.clone();
-    let def = syn::LifetimeDef {
+    let def = syn::LifetimeParam {
         attrs: Vec::new(),
         lifetime: syn::Lifetime::new("'de", Span::call_site()),
         colon_token: None,

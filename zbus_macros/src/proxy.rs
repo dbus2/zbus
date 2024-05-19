@@ -2,8 +2,8 @@ use crate::utils::{pat_ident, typed_arg, zbus_path, PropertyEmitsChangedSignal};
 use proc_macro2::{Literal, Span, TokenStream};
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::{
-    fold::Fold, parse_quote, parse_str, spanned::Spanned, AttributeArgs, Error, FnArg, Ident,
-    ItemTrait, Path, ReturnType, TraitItemMethod,
+    fold::Fold, parse_quote, parse_str, punctuated::Punctuated, spanned::Spanned, Error, FnArg,
+    Ident, ItemTrait, Meta, Path, ReturnType, Token, TraitItemFn,
 };
 use zvariant_utils::{case, def_attrs, macros::AttrParse, old_new};
 
@@ -99,7 +99,7 @@ impl AsyncOpts {
 }
 
 pub fn expand<I: AttrParse + Into<ImplAttrs>, M: AttrParse + Into<MethodAttrs>>(
-    args: AttributeArgs,
+    args: Punctuated<Meta, Token![,]>,
     input: ItemTrait,
 ) -> Result<TokenStream, Error> {
     let (
@@ -112,7 +112,7 @@ pub fn expand<I: AttrParse + Into<ImplAttrs>, M: AttrParse + Into<MethodAttrs>>(
         blocking_name,
         gen_async,
         gen_blocking,
-    ) = match I::parse_nested_metas(&args)?.into() {
+    ) = match I::parse_nested_metas(args)?.into() {
         ImplAttrs::Old(old) => (
             old.interface,
             old.name,
@@ -225,7 +225,7 @@ pub fn create_proxy<M: AttrParse + Into<MethodAttrs>>(
     let other_attrs: Vec<_> = input
         .attrs
         .iter()
-        .filter(|a| !a.path.is_ident("zbus") && !a.path.is_ident("dbus_proxy"))
+        .filter(|a| !a.path().is_ident("zbus") && !a.path().is_ident("dbus_proxy"))
         .collect();
     let proxy_name = Ident::new(proxy_name, Span::call_site());
     let ident = input.ident.to_string();
@@ -254,7 +254,7 @@ pub fn create_proxy<M: AttrParse + Into<MethodAttrs>>(
     let async_opts = AsyncOpts::new(blocking);
 
     for i in input.items.iter() {
-        if let syn::TraitItem::Method(m) = i {
+        if let syn::TraitItem::Fn(m) = i {
             let (mut name, signal, property) = match <M>::parse(&m.attrs)?.into() {
                 MethodAttrs::Old(old) => (
                     old.name,
@@ -518,7 +518,7 @@ pub fn create_proxy<M: AttrParse + Into<MethodAttrs>>(
 fn gen_proxy_method_call<M: AttrParse + Into<MethodAttrs>>(
     method_name: &str,
     snake_case_name: &str,
-    m: &TraitItemMethod,
+    m: &TraitItemFn,
     method_attrs: M,
     async_opts: &AsyncOpts,
 ) -> Result<TokenStream, Error> {
@@ -550,7 +550,7 @@ fn gen_proxy_method_call<M: AttrParse + Into<MethodAttrs>>(
     let other_attrs: Vec<_> = m
         .attrs
         .iter()
-        .filter(|a| !a.path.is_ident("zbus") && !a.path.is_ident("dbus_proxy"))
+        .filter(|a| !a.path().is_ident("zbus") && !a.path().is_ident("dbus_proxy"))
         .collect();
     let args: Vec<_> = m
         .sig
@@ -727,7 +727,7 @@ fn gen_proxy_method_call<M: AttrParse + Into<MethodAttrs>>(
 fn gen_proxy_property(
     property_name: &str,
     method_name: &str,
-    m: &TraitItemMethod,
+    m: &TraitItemFn,
     async_opts: &AsyncOpts,
     emits_changed_signal: PropertyEmitsChangedSignal,
 ) -> TokenStream {
@@ -740,7 +740,7 @@ fn gen_proxy_property(
     let other_attrs: Vec<_> = m
         .attrs
         .iter()
-        .filter(|a| !a.path.is_ident("zbus") && !a.path.is_ident("dbus_proxy"))
+        .filter(|a| !a.path().is_ident("zbus") && !a.path().is_ident("dbus_proxy"))
         .collect();
     let signature = &m.sig;
     if signature.inputs.len() > 1 {
@@ -856,7 +856,7 @@ fn gen_proxy_signal(
     iface_name: &str,
     signal_name: &str,
     snake_case_name: &str,
-    method: &TraitItemMethod,
+    method: &TraitItemFn,
     async_opts: &AsyncOpts,
     gen_sig_args: bool,
 ) -> (TokenStream, TokenStream) {
@@ -869,7 +869,7 @@ fn gen_proxy_signal(
     let other_attrs: Vec<_> = method
         .attrs
         .iter()
-        .filter(|a| !a.path.is_ident("zbus") && !a.path.is_ident("dbus_proxy"))
+        .filter(|a| !a.path().is_ident("zbus") && !a.path().is_ident("dbus_proxy"))
         .collect();
     let input_types: Vec<_> = method
         .sig
