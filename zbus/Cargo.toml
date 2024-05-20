@@ -40,7 +40,7 @@ tokio-vsock = ["dep:tokio-vsock", "tokio"]
 [dependencies]
 serde = { version = "1.0.200", features = ["derive"] }
 serde_repr = "0.1.19"
-zvariant = { path = "../zvariant", version = "4.0.0", default-features = false, features = [
+zvariant = { path = "../zvariant", version = "4.1.1", default-features = false, features = [
   "enumflags2",
 ] }
 zbus_names = { path = "../zbus_names", version = "3.0" }
