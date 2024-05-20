@@ -41,8 +41,8 @@ impl Greeter {
     }
 }
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
+// Although we use `tokio` here, you can use any async runtime of choice.
+#[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let greeter = Greeter { count: 0 };
     let _conn = connection::Builder::session()?
@@ -81,8 +81,8 @@ trait MyGreeter {
     async fn say_hello(&self, name: &str) -> Result<String>;
 }
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
+// Although we use `tokio` here, you can use any async runtime of choice.
+#[tokio::main]
 async fn main() -> Result<()> {
     let connection = Connection::session().await?;
 
