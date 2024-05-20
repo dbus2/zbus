@@ -1,7 +1,7 @@
 [package]
 name = "zbus_macros"
 # Keep version in sync with zbus crate
-version = "4.2.1"
+version = "4.2.2"
 authors = [
     "Marc-André Lureau <marcandre.lureau@redhat.com>",
     "Zeeshan Ali Khan <zeeshanak@gnome.org>",
