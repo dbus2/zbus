@@ -277,7 +277,6 @@ impl<'s> Server<'s> {
                         Command::Error("FD-passing not possible on this socket type".to_string());
                     self.common.write_command(cmd).await?;
                 }
-                self.step = ServerHandshakeStep::WaitingForBegin;
             }
             _ => self.unsupported_command_error().await?,
         }
