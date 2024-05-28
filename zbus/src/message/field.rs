@@ -21,7 +21,7 @@ use zvariant::{ObjectPath, Signature, Type, Value};
 /// [`Fields`]: struct.Fields.html
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, Deserialize_repr, PartialEq, Eq, Serialize_repr, Type)]
-pub(super) enum FieldCode {
+pub(crate) enum FieldCode {
     /// Code for [`Field::Path`](enum.Field.html#variant.Path)
     Path = 1,
     /// Code for [`Field::Interface`](enum.Field.html#variant.Interface)
@@ -73,7 +73,7 @@ impl<'f> Field<'f> {
 /// [are fixed]: struct.PrimaryHeader.html
 /// [Message Format]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-messages
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) enum Field<'f> {
+pub(crate) enum Field<'f> {
     /// The object to send a call to, or the object a signal is emitted from.
     Path(ObjectPath<'f>),
     /// The interface to invoke a method call on, or that a signal is emitted from.

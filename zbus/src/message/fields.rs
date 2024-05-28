@@ -16,7 +16,7 @@ const MAX_FIELDS_IN_MESSAGE: usize = 16;
 ///
 /// [`Field`]: enum.Field.html
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub(super) struct Fields<'m>(#[serde(borrow)] Vec<Field<'m>>);
+pub(crate) struct Fields<'m>(#[serde(borrow)] Vec<Field<'m>>);
 
 assert_impl_all!(Fields<'_>: Send, Sync, Unpin);
 

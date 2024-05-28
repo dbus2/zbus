@@ -11,10 +11,11 @@ mod builder;
 pub use builder::Builder;
 
 mod field;
-use field::{Field, FieldCode};
+pub(crate) use field::{Field, FieldCode};
 
 mod fields;
-use fields::{Fields, QuickFields};
+pub(crate) use fields::Fields;
+use fields::QuickFields;
 
 mod body;
 pub use body::Body;
