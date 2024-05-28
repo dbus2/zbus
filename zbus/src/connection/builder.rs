@@ -409,6 +409,8 @@ impl<'a> Builder<'a> {
                 server_guid: server_guid.unwrap(),
                 already_received_bytes: vec![],
                 unique_name,
+                #[cfg(unix)]
+                already_received_fds: vec![],
             }
         } else {
             #[cfg(feature = "p2p")]
@@ -452,6 +454,8 @@ impl<'a> Builder<'a> {
         // SAFETY: `Authenticated` is always built with these fields set to `Some`.
         let socket_read = auth.socket_read.take().unwrap();
         let already_received_bytes = auth.already_received_bytes.drain(..).collect();
+        #[cfg(unix)]
+        let already_received_fds = auth.already_received_fds.drain(..).collect();
 
         let mut conn = Connection::new(auth, is_bus_conn, executor).await?;
         conn.set_max_queued(self.max_queued.unwrap_or(DEFAULT_MAX_QUEUED));
@@ -478,7 +482,12 @@ impl<'a> Builder<'a> {
         }
 
         // Start the socket reader task.
-        conn.init_socket_reader(socket_read, already_received_bytes);
+        conn.init_socket_reader(
+            socket_read,
+            already_received_bytes,
+            #[cfg(unix)]
+            already_received_fds,
+        );
 
         for name in self.names {
             conn.request_name(name).await?;

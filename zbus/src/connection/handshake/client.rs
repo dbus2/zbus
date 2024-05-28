@@ -257,8 +257,10 @@ impl Handshake for Client {
         }
 
         trace!("Handshake done");
-        #[allow(unused_variables)]
-        let (socket, mut recv_buffer, cap_unix_fd, _) = self.common.into_components();
+        #[cfg(unix)]
+        let (socket, mut recv_buffer, received_fds, cap_unix_fd, _) = self.common.into_components();
+        #[cfg(not(unix))]
+        let (socket, mut recv_buffer, _, _) = self.common.into_components();
         let (mut read, write) = socket.take();
 
         // If we're a bus connection, we need to read the unique name from `Hello` response.
@@ -277,6 +279,8 @@ impl Handshake for Client {
             #[cfg(unix)]
             cap_unix_fd,
             already_received_bytes: recv_buffer,
+            #[cfg(unix)]
+            already_received_fds: received_fds,
             unique_name,
         })
     }
@@ -299,7 +303,14 @@ async fn receive_hello_response(
 ) -> Result<OwnedUniqueName> {
     use crate::message::Type;
 
-    let reply = read.receive_message(0, recv_buffer).await?;
+    let reply = read
+        .receive_message(
+            0,
+            recv_buffer,
+            #[cfg(unix)]
+            &mut vec![],
+        )
+        .await?;
     match reply.message_type() {
         Type::MethodReturn => reply.body().deserialize(),
         Type::Error => Err(Error::from(reply)),

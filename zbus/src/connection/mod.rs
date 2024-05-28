@@ -1210,6 +1210,7 @@ impl Connection {
         &self,
         socket_read: Box<dyn socket::ReadHalf>,
         already_read: Vec<u8>,
+        #[cfg(unix)] already_received_fds: Vec<std::os::fd::OwnedFd>,
     ) {
         let inner = &self.inner;
         inner
@@ -1219,6 +1220,8 @@ impl Connection {
                     socket_read,
                     inner.msg_senders.clone(),
                     already_read,
+                    #[cfg(unix)]
+                    already_received_fds,
                     inner.activity_event.clone(),
                 )
                 .spawn(&inner.executor),

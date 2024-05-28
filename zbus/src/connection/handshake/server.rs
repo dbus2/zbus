@@ -292,8 +292,10 @@ impl Handshake for Server<'_> {
         while !self.next_step().await? {}
 
         trace!("Handshake done");
-        #[allow(unused_variables)]
-        let (socket, recv_buffer, cap_unix_fd, _) = self.common.into_components();
+        #[cfg(unix)]
+        let (socket, recv_buffer, received_fds, cap_unix_fd, _) = self.common.into_components();
+        #[cfg(not(unix))]
+        let (socket, recv_buffer, _, _) = self.common.into_components();
         let (read, write) = socket.take();
         Ok(Authenticated {
             socket_write: write,
@@ -302,6 +304,8 @@ impl Handshake for Server<'_> {
             #[cfg(unix)]
             cap_unix_fd,
             already_received_bytes: recv_buffer,
+            #[cfg(unix)]
+            already_received_fds: received_fds,
             unique_name: self.unique_name,
         })
     }
