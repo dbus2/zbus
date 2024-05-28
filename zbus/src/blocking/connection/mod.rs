@@ -67,15 +67,10 @@ impl Connection {
 
     /// Send a method call.
     ///
-    /// Create a method-call message, send it over the connection, then wait for the reply. Incoming
-    /// messages are received through [`receive_message`] until the matching method reply (error or
-    /// return) is received.
+    /// Create a method-call message, send it over the connection, then wait for the reply.
     ///
     /// On successful reply, an `Ok(Message)` is returned. On error, an `Err` is returned. D-Bus
-    /// error replies are returned as [`MethodError`].
-    ///
-    /// [`receive_message`]: struct.Connection.html#method.receive_message
-    /// [`MethodError`]: enum.Error.html#variant.MethodError
+    /// error replies are returned as [`Error::MethodError`].
     pub fn call_method<'d, 'p, 'i, 'm, D, P, I, M, B>(
         &self,
         destination: Option<D>,
