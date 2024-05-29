@@ -12,9 +12,9 @@ mod vsock;
 
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
-use std::io;
 #[cfg(not(feature = "tokio"))]
 use std::sync::Arc;
+use std::{io, mem};
 use tracing::trace;
 
 use crate::{
@@ -95,7 +95,7 @@ pub trait ReadHalf: std::fmt::Debug + Send + Sync + 'static {
         let mut bytes = if already_received_bytes.len() < MIN_MESSAGE_SIZE {
             let mut bytes = vec![];
             if !already_received_bytes.is_empty() {
-                std::mem::swap(already_received_bytes, &mut bytes);
+                mem::swap(already_received_bytes, &mut bytes);
             }
             let mut pos = bytes.len();
             bytes.resize(MIN_MESSAGE_SIZE, 0);
@@ -194,11 +194,17 @@ pub trait ReadHalf: std::fmt::Debug + Send + Sync + 'static {
                 Some(Field::UnixFDs(num_fds)) => *num_fds as usize,
                 _ => 0,
             };
-            let pending = num_required_fds
+            let num_pending = num_required_fds
                 .checked_sub(fds.len())
                 .ok_or_else(|| crate::Error::ExcessData)?;
-            let to_take = std::cmp::min(pending, already_received_fds.len());
-            fds.extend(already_received_fds.drain(..to_take));
+            // If we had previously received FDs, `num_pending` has to be > 0
+            if num_pending == 0 {
+                return Err(crate::Error::MissingParameter("Missing file descriptors"));
+            }
+            // All previously received FDs must go first in the list.
+            let mut already_received: Vec<_> = already_received_fds.drain(..num_pending).collect();
+            mem::swap(&mut already_received, &mut fds);
+            fds.extend(already_received);
         }
 
         let ctxt = Context::new_dbus(endian, 0);
