@@ -9,6 +9,8 @@ use crate::{Error, Result};
 pub(super) struct Common {
     socket: BoxedSplit,
     recv_buffer: Vec<u8>,
+    #[cfg(unix)]
+    received_fds: Vec<std::os::fd::OwnedFd>,
     cap_unix_fd: bool,
     // the current AUTH mechanism is front, ordered by priority
     mechanisms: VecDeque<AuthMechanism>,
@@ -21,6 +23,8 @@ impl Common {
         Self {
             socket,
             recv_buffer: Vec::new(),
+            #[cfg(unix)]
+            received_fds: Vec::new(),
             cap_unix_fd: false,
             mechanisms,
             first_command: true,
@@ -45,10 +49,12 @@ impl Common {
         &self.mechanisms
     }
 
-    pub fn into_components(self) -> (BoxedSplit, Vec<u8>, bool, VecDeque<AuthMechanism>) {
+    pub fn into_components(self) -> IntoComponentsReturn {
         (
             self.socket,
             self.recv_buffer,
+            #[cfg(unix)]
+            self.received_fds,
             self.cap_unix_fd,
             self.mechanisms,
         )
@@ -151,7 +157,8 @@ impl Common {
                 {
                     let (read, fds) = res;
                     if !fds.is_empty() {
-                        return Err(Error::Handshake("Unexpected FDs during handshake".into()));
+                        // Most likely belonging to the messages already received.
+                        self.received_fds.extend(fds);
                     }
                     read
                 }
@@ -175,3 +182,14 @@ impl Common {
             .ok_or_else(|| Error::Handshake("Exhausted available AUTH mechanisms".into()))
     }
 }
+
+#[cfg(unix)]
+type IntoComponentsReturn = (
+    BoxedSplit,
+    Vec<u8>,
+    Vec<std::os::fd::OwnedFd>,
+    bool,
+    VecDeque<AuthMechanism>,
+);
+#[cfg(not(unix))]
+type IntoComponentsReturn = (BoxedSplit, Vec<u8>, bool, VecDeque<AuthMechanism>);

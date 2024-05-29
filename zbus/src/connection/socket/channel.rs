@@ -62,6 +62,7 @@ impl super::ReadHalf for Reader {
         &mut self,
         _seq: u64,
         _already_received_bytes: &mut Vec<u8>,
+        #[cfg(unix)] _already_received_fds: &mut Vec<std::os::fd::OwnedFd>,
     ) -> crate::Result<Message> {
         self.0.recv().await.map_err(|e| {
             crate::Error::InputOutput(io::Error::new(io::ErrorKind::BrokenPipe, e).into())

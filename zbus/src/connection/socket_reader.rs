@@ -14,6 +14,8 @@ pub(crate) struct SocketReader {
     socket: Box<dyn ReadHalf>,
     senders: Arc<Mutex<HashMap<Option<OwnedMatchRule>, MsgBroadcaster>>>,
     already_received_bytes: Vec<u8>,
+    #[cfg(unix)]
+    already_received_fds: Vec<std::os::fd::OwnedFd>,
     prev_seq: u64,
     activity_event: Arc<Event>,
 }
@@ -23,12 +25,15 @@ impl SocketReader {
         socket: Box<dyn ReadHalf>,
         senders: Arc<Mutex<HashMap<Option<OwnedMatchRule>, MsgBroadcaster>>>,
         already_received_bytes: Vec<u8>,
+        #[cfg(unix)] already_received_fds: Vec<std::os::fd::OwnedFd>,
         activity_event: Arc<Event>,
     ) -> Self {
         Self {
             socket,
             senders,
             already_received_bytes,
+            #[cfg(unix)]
+            already_received_fds,
             prev_seq: 0,
             activity_event,
         }
@@ -96,7 +101,12 @@ impl SocketReader {
         let seq = self.prev_seq + 1;
         let msg = self
             .socket
-            .receive_message(seq, &mut self.already_received_bytes)
+            .receive_message(
+                seq,
+                &mut self.already_received_bytes,
+                #[cfg(unix)]
+                &mut self.already_received_fds,
+            )
             .await?;
         self.prev_seq = seq;
 

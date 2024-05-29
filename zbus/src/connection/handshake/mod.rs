@@ -45,6 +45,8 @@ pub struct Authenticated {
 
     pub(crate) socket_read: Option<Box<dyn ReadHalf>>,
     pub(crate) already_received_bytes: Vec<u8>,
+    #[cfg(unix)]
+    pub(crate) already_received_fds: Vec<std::os::fd::OwnedFd>,
     pub(crate) unique_name: Option<OwnedUniqueName>,
 }
 

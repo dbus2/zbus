@@ -11,10 +11,11 @@ mod builder;
 pub use builder::Builder;
 
 mod field;
-use field::{Field, FieldCode};
+pub(crate) use field::{Field, FieldCode};
 
 mod fields;
-use fields::{Fields, QuickFields};
+pub(crate) use fields::Fields;
+use fields::QuickFields;
 
 mod body;
 pub use body::Body;
@@ -67,7 +68,6 @@ pub(super) struct Inner {
 
 assert_impl_all!(Message: Send, Sync, Unpin);
 
-// TODO: Handle non-native byte order: https://github.com/dbus2/zbus/issues/19
 impl Message {
     /// Create a builder for message of type [`Type::MethodCall`].
     pub fn method<'b, 'p: 'b, 'm: 'b, P, M>(path: P, method_name: M) -> Result<Builder<'b>>

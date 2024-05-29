@@ -80,13 +80,15 @@ pub trait ReadHalf: std::fmt::Debug + Send + Sync + 'static {
     ///
     /// - `seq`: The sequence number of the message. The returned message should have this sequence.
     /// - `already_received_bytes`: Sometimes, zbus already received some bytes from the socket
-    ///   belonging to the message (as part of the connection handshake process). This is the buffer
-    ///   containing those bytes (if any). If you're implementing this method, most likely you can
-    ///   safely ignore this parameter.
+    ///   belonging to the first message(s) (as part of the connection handshake process). This is
+    ///   the buffer containing those bytes (if any). If you're implementing this method, most
+    ///   likely you can safely ignore this parameter.
+    /// - `already_received_fds`: Same goes for file descriptors belonging to first messages.
     async fn receive_message(
         &mut self,
         seq: u64,
         already_received_bytes: &mut Vec<u8>,
+        #[cfg(unix)] already_received_fds: &mut Vec<std::os::fd::OwnedFd>,
     ) -> crate::Result<Message> {
         #[cfg(unix)]
         let mut fds = vec![];
@@ -179,6 +181,26 @@ pub trait ReadHalf: std::fmt::Debug + Send + Sync + 'static {
 
         // If we reach here, the message is complete; return it
         let endian = Endian::from(primary_header.endian_sig());
+
+        #[cfg(unix)]
+        if !already_received_fds.is_empty() {
+            use crate::message::{header::PRIMARY_HEADER_SIZE, Field};
+
+            let ctxt = Context::new_dbus(endian, PRIMARY_HEADER_SIZE);
+            let encoded_fields =
+                serialized::Data::new(&bytes[PRIMARY_HEADER_SIZE..header_len], ctxt);
+            let fields: crate::message::Fields<'_> = encoded_fields.deserialize()?.0;
+            let num_required_fds = match fields.get_field(crate::message::FieldCode::UnixFDs) {
+                Some(Field::UnixFDs(num_fds)) => *num_fds as usize,
+                _ => 0,
+            };
+            let pending = num_required_fds
+                .checked_sub(fds.len())
+                .ok_or_else(|| crate::Error::ExcessData)?;
+            let to_take = std::cmp::min(pending, already_received_fds.len());
+            fds.extend(already_received_fds.drain(..to_take));
+        }
+
         let ctxt = Context::new_dbus(endian, 0);
         #[cfg(unix)]
         let bytes = serialized::Data::new_fds(bytes, ctxt, fds);
@@ -307,8 +329,16 @@ impl ReadHalf for Box<dyn ReadHalf> {
         &mut self,
         seq: u64,
         already_received_bytes: &mut Vec<u8>,
+        #[cfg(unix)] already_received_fds: &mut Vec<std::os::fd::OwnedFd>,
     ) -> crate::Result<Message> {
-        (**self).receive_message(seq, already_received_bytes).await
+        (**self)
+            .receive_message(
+                seq,
+                already_received_bytes,
+                #[cfg(unix)]
+                already_received_fds,
+            )
+            .await
     }
 
     async fn recvmsg(&mut self, buf: &mut [u8]) -> RecvmsgResult {
