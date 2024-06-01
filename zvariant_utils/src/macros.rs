@@ -477,6 +477,48 @@ macro_rules! def_attrs {
                 }
             );
         )+
+    };
+    (
+        inner_crate $list_name:ident;
+        $(
+            $(#[$m:meta])*
+            $vis:vis $name:ident($what:literal) {
+                $($attr_name:ident $kind:tt),+
+            }
+        );+;
+    ) => {
+        $(
+            $crate::def_attrs!(
+                @def_ty
+                $list_name {
+                    $(#[$m])*
+                    $vis $name($what) {
+                        $($attr_name $kind),+
+                    }
+                }
+            );
+        )+
+    };
+    (
+        static_allowed
+        $(
+            $(#[$m:meta])*
+            $vis:vis $name:ident($what:literal) {
+                $($attr_name:ident $kind:tt),+
+            }
+        );+;
+    ) => {
+        static ALLOWED_ATTRS: &[&'static str] = &[
+            $($(::std::stringify!($attr_name),)+)+
+        ];
+    };
+    (
+        crate $first:ident, $($rest:ident),+;
+        $($things:tt)+
+    ) => {
+        $crate::def_attrs!(static_allowed $($things)+);
+        $crate::def_attrs!(inner_crate $first; $($things)+);
+        $crate::def_attrs!(inner_crate $($rest)+; $($things)+);
     }
 }
 
