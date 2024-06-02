@@ -13,6 +13,8 @@
 
 #[cfg(doctest)]
 mod doctests {
+    // Repo README.
+    doc_comment::doctest!("../../README.md");
     // Book markdown checks
     doc_comment::doctest!("../../book/src/client.md");
     doc_comment::doctest!("../../book/src/concepts.md");
