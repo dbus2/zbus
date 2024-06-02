@@ -295,13 +295,13 @@ method calls, where the return type is a directly serializable value, like the `
 `say_hello()` above.
 
 The second is a result return value, where the `Ok` variant is the serializable value, and the
-error is any type that implements `zbus::DBusError`. The `zbus::fdo::Error` type implements this
+error is any type that implements [`zbus::DBusError`]. The [`zbus::fdo::Error`] type implements this
 trait, and should cover most common use cases. However, when a custom error type needs to be emitted
 from the method as an error reply, it can be created using `derive(zbus::DBusError)`, and used in
 the returned `Result<T, E>`.
 
-Property methods may also return errors, but they must be `zbus::fdo::Error`. Most often
-you'll want to use `zbus::fdo::Error::UnknownProperty` variant.
+Property methods may also return errors, but they must be [`zbus::fdo::Error`]. Most often you'll
+want to use [`zbus::fdo::Error::UnknownProperty`] variant.
 
 ### Sending signals
 
@@ -355,3 +355,6 @@ iface.greeter_name_changed(iface_ref.signal_context()).await?;
 
 [D-Bus concepts]: concepts.html#bus-name--service-name
 [didoc]: https://docs.rs/zbus/4/zbus/attr.interface.html
+[`zbus::DBusError`]:https://docs.rs/zbus/4/zbus/trait.DBusError.html
+[`zbus::fdo::Error`]: https://docs.rs/zbus/4/zbus/fdo/enum.Error.html
+[`zbus::fdo::Error::UnknownProperty`]: https://docs.rs/zbus/4/zbus/fdo/enum.Error.html#variant.UnknownProperty
