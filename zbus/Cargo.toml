@@ -126,7 +126,6 @@ tokio = { version = "1.37.0", features = [
   "net",
   "sync",
 ] }
-async-std = { version = "1.12.0", features = ["attributes"] }
 tracing-subscriber = { version = "0.3.18", features = [
   "env-filter",
   "fmt",

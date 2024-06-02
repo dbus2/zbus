@@ -822,16 +822,15 @@ impl Connection {
     ///
     /// # Examples
     ///
-    /// Here is how one would typically run the zbus executor through async-std's single-threaded
-    /// scheduler:
+    /// Here is how one would typically run the zbus executor through tokio's scheduler:
     ///
     /// ```
     /// # // Disable on windows because somehow it triggers a stack overflow there:
     /// # // https://gitlab.freedesktop.org/zeenix/zbus/-/jobs/34023494
-    /// # #[cfg(all(not(feature = "tokio"), not(target_os = "windows")))]
+    /// # #[cfg(not(target_os = "unix"))]
     /// # {
     /// use zbus::connection::Builder;
-    /// use async_std::task::{block_on, spawn};
+    /// use tokio::task::spawn;
     ///
     /// # struct SomeIface;
     /// #
@@ -839,7 +838,8 @@ impl Connection {
     /// # impl SomeIface {
     /// # }
     /// #
-    /// block_on(async {
+    /// #[tokio::main]
+    /// async fn main() {
     ///     let conn = Builder::session()
     ///         .unwrap()
     ///         .internal_executor(false)
@@ -859,7 +859,7 @@ impl Connection {
     ///     }
     ///
     ///     // All your other async code goes here.
-    /// });
+    /// }
     /// # }
     /// ```
     ///

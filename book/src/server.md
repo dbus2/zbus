@@ -20,8 +20,8 @@ our choice:
 ```rust,no_run
 use zbus::{Connection, Result};
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
+// Although we use `tokio` here, you can use any async runtime of choice.
+#[tokio::main]
 async fn main() -> Result<()> {
     let connection = Connection::session()
         .await?;
@@ -55,8 +55,8 @@ by replacing the loop above with this code:
 ```rust,no_run
 use futures_util::stream::TryStreamExt;
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-# #[async_std::main]
+// Although we use `tokio` here, you can use any async runtime of choice.
+# #[tokio::main]
 # async fn main() -> zbus::Result<()> {
 #    let connection = zbus::Connection::session()
 #        .await?;
@@ -120,8 +120,8 @@ impl Greeter {
     }
 }
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
+// Although we use `tokio` here, you can use any async runtime of choice.
+#[tokio::main]
 async fn main() -> Result<()> {
     let connection = Connection::session().await?;
     // setup the server
@@ -162,7 +162,7 @@ setting up your interfaces and requesting names, and not have to care about this
 #     }
 # }
 #
-# #[async_std::main]
+# #[tokio::main]
 # async fn main() -> Result<()> {
     let _connection = connection::Builder::session()?
         .name("org.zbus.MyGreeter")?
@@ -255,8 +255,8 @@ impl Greeter {
     async fn greeted_everyone(ctxt: &SignalContext<'_>) -> Result<()>;
 }
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
+// Although we use `tokio` here, you can use any async runtime of choice.
+#[tokio::main]
 async fn main() -> Result<()> {
     let greeter = Greeter {
         name: "GreeterName".to_string(),
@@ -340,7 +340,7 @@ example code:
 #     }
 # }
 #
-# #[async_std::main]
+# #[tokio::main]
 # async fn main() -> zbus::Result<()> {
 # let connection = zbus::Connection::session().await?;
 # let object_server = connection.object_server();

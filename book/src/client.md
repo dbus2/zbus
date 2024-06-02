@@ -60,8 +60,8 @@ use std::error::Error;
 
 use zbus::{zvariant::Value, Connection};
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
+// Although we use `tokio` here, you can use any async runtime of choice.
+#[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let connection = Connection::session().await?;
 
@@ -116,8 +116,8 @@ trait Notifications {
               expire_timeout: i32) -> zbus::Result<u32>;
 }
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
+// Although we use `tokio` here, you can use any async runtime of choice.
+#[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let connection = Connection::session().await?;
 
@@ -161,7 +161,7 @@ Let's look at this API in action, with an example where we monitor started syste
 
 ```rust,no_run
 # // NOTE: When changing this, please also keep `zbus/examples/watch-systemd-jobs.rs` in sync.
-use async_std::stream::StreamExt;
+use futures_util::stream::StreamExt;
 use zbus::Connection;
 use zbus_macros::proxy;
 use zvariant::OwnedObjectPath;
@@ -247,8 +247,8 @@ trait Location {
     fn longitude(&self) -> Result<f64>;
 }
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
+// Although we use `tokio` here, you can use any async runtime of choice.
+#[tokio::main]
 async fn main() -> Result<()> {
     let conn = Connection::system().await?;
     let manager = ManagerProxy::new(&conn).await?;
@@ -342,7 +342,7 @@ trait SystemdManager {
     fn environment(&self) -> Result<Vec<String>>;
 }
 
-#[async_std::main]
+#[tokio::main]
 async fn main() -> Result<()> {
     let connection = Connection::system().await?;
 
@@ -399,7 +399,7 @@ Here is an example:
 # use zbus::{Connection, proxy, Result};
 # use futures_util::stream::StreamExt;
 #
-# #[async_std::main]
+# #[tokio::main]
 # async fn main() -> Result<()> {
     #[proxy(
         interface = "org.freedesktop.systemd1.Manager",

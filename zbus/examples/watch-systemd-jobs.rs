@@ -4,7 +4,7 @@
 //!
 //! Run with command: `cargo run --example watch-systemd-jobs`
 
-use async_std::stream::StreamExt;
+use futures_util::stream::StreamExt;
 use zbus::Connection;
 use zbus_macros::proxy;
 use zvariant::OwnedObjectPath;
