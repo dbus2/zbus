@@ -436,7 +436,7 @@ pub fn expand<T: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>
             ..
         } = &mut method.sig;
 
-        clean_input_args(inputs);
+        clear_input_arg_attrs(inputs);
 
         match method_type {
             MethodType::Signal => {
@@ -963,7 +963,8 @@ fn get_args_from_inputs(
     }
 }
 
-fn clean_input_args(inputs: &mut Punctuated<FnArg, Token![,]>) {
+// Removes all `zbus` and `dbus_interface` attributes from the given inputs.
+fn clear_input_arg_attrs(inputs: &mut Punctuated<FnArg, Token![,]>) {
     for input in inputs {
         if let FnArg::Typed(t) = input {
             t.attrs.retain(|attr| {
