@@ -1,7 +1,7 @@
 //! The object server API.
 
 use event_listener::{Event, EventListener};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{hash_map::Entry, HashMap},
     fmt::Write,
@@ -867,6 +867,21 @@ where
         S: serde::Serializer,
     {
         self.response.serialize(serializer)
+    }
+}
+
+impl<'de, R> Deserialize<'de> for ResponseDispatchNotifier<R>
+where
+    R: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(Self {
+            response: R::deserialize(deserializer)?,
+            event: None,
+        })
     }
 }
 
