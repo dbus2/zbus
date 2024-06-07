@@ -197,7 +197,7 @@ mod utils;
 pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr with Punctuated<Meta, Token![,]>::parse_terminated);
     let input = parse_macro_input!(item as ItemTrait);
-    proxy::expand::<proxy::ImplAttributes, proxy::MethodAttributes>(args, input)
+    proxy::expand::<proxy::TraitAttributes, proxy::MethodAttributes>(args, input)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
 }
@@ -207,7 +207,7 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr with Punctuated<Meta, Token![,]>::parse_terminated);
     let input = parse_macro_input!(item as ItemTrait);
-    proxy::expand::<proxy::old::ImplAttributes, proxy::old::MethodAttributes>(args, input)
+    proxy::expand::<proxy::old::TraitAttributes, proxy::old::MethodAttributes>(args, input)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
 }
@@ -367,7 +367,7 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn interface(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr with Punctuated<Meta, Token![,]>::parse_terminated);
     let input = parse_macro_input!(item as ItemImpl);
-    iface::expand::<iface::TraitAttributes, iface::MethodAttributes>(args, input)
+    iface::expand::<iface::ImplAttributes, iface::MethodAttributes>(args, input)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
 }
@@ -377,7 +377,7 @@ pub fn interface(attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr with Punctuated<Meta, Token![,]>::parse_terminated);
     let input = parse_macro_input!(item as ItemImpl);
-    iface::expand::<iface::old::TraitAttributes, iface::old::MethodAttributes>(args, input)
+    iface::expand::<iface::old::ImplAttributes, iface::old::MethodAttributes>(args, input)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
 }

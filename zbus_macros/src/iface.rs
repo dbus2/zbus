@@ -21,7 +21,7 @@ pub mod old {
     def_attrs! {
         crate dbus_interface;
 
-        pub TraitAttributes("trait") {
+        pub ImplAttributes("impl block") {
             interface str,
             name str,
             spawn bool
@@ -43,7 +43,7 @@ pub mod old {
 def_attrs! {
     crate zbus;
 
-    pub TraitAttributes("trait") {
+    pub ImplAttributes("impl block") {
         interface str,
         name str,
         spawn bool
@@ -68,7 +68,7 @@ def_attrs! {
     };
 }
 
-old_new!(TraitAttrs, old::TraitAttributes, TraitAttributes);
+old_new!(ImplAttrs, old::ImplAttributes, ImplAttributes);
 old_new!(MethodAttrs, old::MethodAttributes, MethodAttributes);
 
 #[derive(Debug)]
@@ -282,7 +282,7 @@ impl MethodInfo {
     }
 }
 
-pub fn expand<T: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>(
+pub fn expand<T: AttrParse + Into<ImplAttrs>, M: AttrParse + Into<MethodAttrs>>(
     args: Punctuated<Meta, Token![,]>,
     mut input: ItemImpl,
 ) -> syn::Result<TokenStream> {
@@ -313,8 +313,8 @@ pub fn expand<T: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>
 
     let (iface_name, with_spawn) = {
         let (name, interface, spawn) = match T::parse_nested_metas(args)?.into() {
-            TraitAttrs::New(new) => (new.name, new.interface, new.spawn),
-            TraitAttrs::Old(old) => (old.name, old.interface, old.spawn),
+            ImplAttrs::New(new) => (new.name, new.interface, new.spawn),
+            ImplAttrs::Old(old) => (old.name, old.interface, old.spawn),
         };
 
         let name =
