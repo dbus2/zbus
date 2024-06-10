@@ -46,16 +46,16 @@ pub fn match_attribute_with_str_value<'a>(
     meta: &'a Meta,
     attr: &str,
 ) -> Result<Option<&'a LitStr>> {
-    if meta.path().is_ident(attr) {
-        match get_meta_value(meta, attr)? {
-            Lit::Str(value) => Ok(Some(value)),
-            _ => Err(syn::Error::new(
-                meta.span(),
-                format!("value of the `{attr}` attribute must be a string literal"),
-            )),
-        }
-    } else {
-        Ok(None)
+    if !meta.path().is_ident(attr) {
+        return Ok(None);
+    }
+
+    match get_meta_value(meta, attr)? {
+        Lit::Str(value) => Ok(Some(value)),
+        _ => Err(syn::Error::new(
+            meta.span(),
+            format!("value of the `{attr}` attribute must be a string literal"),
+        )),
     }
 }
 
@@ -252,15 +252,15 @@ macro_rules! def_attrs {
     }) => {::std::option::Option<$name>};
     (@match_attr_with $attr_name:ident, $meta:ident, $self:ident, $matched:expr) => {
         if let ::std::option::Option::Some(value) = $matched? {
-            if $self.$attr_name.is_none() {
-                $self.$attr_name = ::std::option::Option::Some(value.value());
-                return Ok(());
-            } else {
+            if $self.$attr_name.is_some() {
                 return ::std::result::Result::Err(::syn::Error::new(
                     $meta.span(),
                     ::std::concat!("duplicate `", ::std::stringify!($attr_name), "` attribute")
                 ));
             }
+
+            $self.$attr_name = ::std::option::Option::Some(value.value());
+            return Ok(());
         }
     };
     (@match_attr str $attr_name:ident, $meta:ident, $self:ident) => {
@@ -292,15 +292,15 @@ macro_rules! def_attrs {
             $meta,
             ::std::stringify!($attr_name),
         )? {
-            if $self.$attr_name.is_none() {
-                $self.$attr_name = Some(list);
-                return Ok(());
-            } else {
+            if $self.$attr_name.is_some() {
                 return ::std::result::Result::Err(::syn::Error::new(
                     $meta.span(),
                     concat!("duplicate `", stringify!($attr_name), "` attribute")
                 ));
             }
+
+            $self.$attr_name = Some(list);
+            return Ok(());
         }
     };
     (@match_attr none $attr_name:ident, $meta:ident, $self:ident) => {
@@ -308,15 +308,15 @@ macro_rules! def_attrs {
             $meta,
             ::std::stringify!($attr_name),
         )? {
-            if !$self.$attr_name {
-                $self.$attr_name = true;
-                return Ok(());
-            } else {
+            if $self.$attr_name {
                 return ::std::result::Result::Err(::syn::Error::new(
                     $meta.span(),
                     concat!("duplicate `", stringify!($attr_name), "` attribute")
                 ));
             }
+
+            $self.$attr_name = true;
+            return Ok(());
         }
     };
     (@match_attr {
@@ -324,9 +324,15 @@ macro_rules! def_attrs {
         $vis:vis $name:ident($what:literal) $body:tt
     } $attr_name:ident, $meta:expr, $self:ident) => {
         if $meta.path().is_ident(::std::stringify!($attr_name)) {
-            return if $self.$attr_name.is_none() {
-                match $meta {
-                    ::syn::Meta::List(meta) => {
+            if $self.$attr_name.is_some() {
+                return ::std::result::Result::Err(::syn::Error::new(
+                    $meta.span(),
+                    concat!("duplicate `", stringify!($attr_name), "` attribute")
+                ));
+            }
+
+            return match $meta {
+                ::syn::Meta::List(meta) => {
                         $self.$attr_name = ::std::option::Option::Some($name::parse_nested_metas(
                             meta.parse_args_with(::syn::punctuated::Punctuated::<::syn::Meta, ::syn::Token![,]>::parse_terminated)?
                         )?);
@@ -343,13 +349,7 @@ macro_rules! def_attrs {
                             "` must be either a list or a path"
                         )),
                     ))
-                }
-            } else {
-                ::std::result::Result::Err(::syn::Error::new(
-                    $meta.span(),
-                    concat!("duplicate `", stringify!($attr_name), "` attribute")
-                ))
-            }
+                };
         }
     };
     (@def_ty $list_name:ident str) => {};
@@ -420,15 +420,15 @@ macro_rules! def_attrs {
                 )+
 
                 // None of the if blocks have been taken, return the appropriate error.
-                let is_valid_attr = ALLOWED_ATTRS.iter().any(|attr| meta.path().is_ident(attr));
-                return ::std::result::Result::Err(::syn::Error::new(meta.span(), if is_valid_attr {
+                let err = if ALLOWED_ATTRS.iter().any(|attr| meta.path().is_ident(attr)) {
                     ::std::format!(
                         ::std::concat!("attribute `{}` is not allowed on ", $what),
                         meta.path().get_ident().unwrap()
                     )
                 } else {
                     ::std::format!("unknown attribute `{}`", meta.path().get_ident().unwrap())
-                }))
+                };
+                return ::std::result::Result::Err(::syn::Error::new(meta.span(), err));
             }
 
             pub fn parse_nested_metas<I>(iter: I) -> syn::Result<Self>
@@ -445,7 +445,10 @@ macro_rules! def_attrs {
 
             pub fn parse(attrs: &[::syn::Attribute]) -> ::syn::Result<Self> {
                 let mut parsed = $name::default();
-                for nested_meta in $crate::macros::iter_meta_lists(attrs, ::std::stringify!($list_name))? {
+                for nested_meta in $crate::macros::iter_meta_lists(
+                    attrs,
+                    ::std::stringify!($list_name),
+                )? {
                     parsed.parse_meta(&nested_meta)?;
                 }
 
