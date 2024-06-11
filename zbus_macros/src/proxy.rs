@@ -45,6 +45,7 @@ pub mod old {
 def_attrs! {
     crate zbus;
 
+    // Keep this in sync with interface's proxy method attributes.
     pub TraitAttributes("trait") {
         interface str,
         name str,
@@ -57,6 +58,7 @@ def_attrs! {
         gen_blocking bool
     };
 
+    // Keep this in sync with interface's proxy method attributes.
     pub MethodAttributes("method") {
         name str,
         property {
