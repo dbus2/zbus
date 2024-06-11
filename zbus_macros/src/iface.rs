@@ -92,19 +92,20 @@ impl<'a> Property<'a> {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 enum MethodType {
     Signal,
     Property(PropertyType),
     Other,
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 enum PropertyType {
     Inputs,
     NoInputs,
 }
 
+#[derive(Debug, Clone)]
 struct MethodInfo {
     /// The type of method being parsed
     method_type: MethodType,
