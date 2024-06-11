@@ -277,7 +277,7 @@ fn fd_recvmsg(fd: RawFd, buffer: &mut [u8]) -> io::Result<(usize, Vec<OwnedFd>)>
         ));
     }
     let mut fds = vec![];
-    for cmsg in msg.cmsgs() {
+    for cmsg in msg.cmsgs()? {
         #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
         if let ControlMessageOwned::ScmCreds(_) = cmsg {
             continue;
