@@ -237,6 +237,10 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///   However, care must be taken to avoid making D-Bus method calls from within your interface
 ///   methods when this setting is false, as it may lead to deadlocks under certain conditions.
 ///
+/// * `proxy` - If specified, a proxy type will also be generated for the interface. This attribute
+///   supports all the [`macro@proxy`]-specific sub-attributes (e.g `gen_async`). The common
+///   sub-attributes (e.g `name`) are automatically forworded to the [`macro@proxy`] macro.
+///
 /// The methods accepts the `interface` attributes:
 ///
 /// * `name` - override the D-Bus name (pascal case form of the method by default)
@@ -263,6 +267,10 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// * `out_args` - When returning multiple values from a method, naming the out arguments become
 ///   important. You can use `out_args` to specify their names.
+///
+/// * `proxy` - Use this to specify the [`macro@proxy`]-specific method sub-attributes (e.g
+///   `object`). The common sub-attributes (e.g `name`) are automatically forworded to the
+///   [`macro@proxy`] macro.
 ///
 ///   In such case, your method must return a tuple containing
 ///   your out arguments, in the same order as passed to `out_args`.
