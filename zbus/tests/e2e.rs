@@ -25,7 +25,6 @@ use zbus::{
     connection, interface,
     message::Header,
     object_server::{InterfaceRef, SignalContext},
-    proxy,
     proxy::CacheProperties,
     Connection, ObjectServer,
 };
@@ -52,110 +51,6 @@ pub struct RefType<'a> {
     field1: Str<'a>,
 }
 
-#[proxy(assume_defaults = true, gen_blocking = true)]
-trait MyIface {
-    fn ping(&self) -> zbus::Result<u32>;
-
-    fn quit(&self) -> zbus::Result<()>;
-
-    fn test_header(&self) -> zbus::Result<()>;
-
-    fn test_error(&self) -> zbus::Result<()>;
-
-    fn test_single_struct_arg(&self, arg: ArgStructTest) -> zbus::Result<()>;
-
-    fn test_single_struct_ret(&self) -> zbus::Result<ArgStructTest>;
-
-    fn test_multi_ret(&self) -> zbus::Result<(i32, String)>;
-
-    fn test_response_notify(&self) -> zbus::Result<String>;
-
-    fn test_hashmap_return(&self) -> zbus::Result<HashMap<String, String>>;
-
-    fn create_obj(&self, key: &str) -> zbus::Result<()>;
-
-    fn destroy_obj(&self, key: &str) -> zbus::Result<()>;
-
-    #[cfg(feature = "option-as-array")]
-    // Optional params and return values.
-    fn optional_args(&self, key: Option<&str>) -> zbus::Result<Option<String>>;
-
-    #[zbus(property)]
-    fn count(&self) -> zbus::Result<u32>;
-
-    #[zbus(property)]
-    fn set_count(&self, count: u32) -> zbus::Result<()>;
-
-    #[zbus(property)]
-    fn hash_map(&self) -> zbus::Result<HashMap<String, String>>;
-
-    #[zbus(property)]
-    fn address_data(&self) -> zbus::Result<IP4Adress>;
-
-    #[zbus(property)]
-    fn set_address_data(&self, addr: IP4Adress) -> zbus::Result<()>;
-
-    #[zbus(property)]
-    fn address_data2(&self) -> zbus::Result<IP4Adress>;
-
-    #[zbus(property)]
-    fn str_prop(&self) -> zbus::Result<String>;
-
-    #[zbus(property)]
-    fn set_str_prop(&self, str_prop: &str) -> zbus::Result<()>;
-
-    #[zbus(property)]
-    fn ref_type(&self) -> zbus::Result<RefType<'_>>;
-
-    #[zbus(property)]
-    fn set_ref_type(&self, ref_type: RefType<'_>) -> zbus::Result<()>;
-
-    #[zbus(property)]
-    fn fail_property(&self) -> zbus::Result<u32>;
-
-    #[zbus(property)]
-    fn optional_property(&self) -> zbus::Result<Optional<u32>>;
-
-    #[zbus(no_reply)]
-    fn test_no_reply(&self) -> zbus::Result<()>;
-
-    #[zbus(no_autostart)]
-    fn test_no_autostart(&self) -> zbus::Result<()>;
-
-    #[zbus(allow_interactive_auth)]
-    fn test_interactive_auth(&self) -> zbus::Result<()>;
-
-    #[zbus(property)]
-    fn emits_changed_default(&self) -> zbus::Result<u32>;
-
-    #[zbus(property)]
-    fn set_emits_changed_default(&self, count: u32) -> zbus::Result<()>;
-
-    #[zbus(property(emits_changed_signal = "true"))]
-    fn emits_changed_true(&self) -> zbus::Result<u32>;
-
-    #[zbus(property)]
-    fn set_emits_changed_true(&self, count: u32) -> zbus::Result<()>;
-
-    #[zbus(property(emits_changed_signal = "invalidates"))]
-    fn emits_changed_invalidates(&self) -> zbus::Result<u32>;
-
-    #[zbus(property)]
-    fn set_emits_changed_invalidates(&self, count: u32) -> zbus::Result<()>;
-
-    #[zbus(property(emits_changed_signal = "const"))]
-    fn emits_changed_const(&self) -> zbus::Result<u32>;
-
-    #[zbus(property)]
-    fn set_emits_changed_const(&self, count: u32) -> zbus::Result<()>;
-
-    #[zbus(property(emits_changed_signal = "false"))]
-    fn emits_changed_false(&self) -> zbus::Result<u32>;
-
-    #[zbus(property)]
-    fn set_emits_changed_false(&self, count: u32) -> zbus::Result<()>;
-}
-
 #[derive(Debug, Clone)]
 enum NextAction {
     Quit,
@@ -164,7 +59,7 @@ enum NextAction {
 }
 
 #[derive(Debug)]
-struct MyIfaceImpl {
+struct MyIface {
     next_tx: Sender<NextAction>,
     count: u32,
     emits_changed_default: u32,
@@ -174,7 +69,7 @@ struct MyIfaceImpl {
     emits_changed_false: u32,
 }
 
-impl MyIfaceImpl {
+impl MyIface {
     fn new(next_tx: Sender<NextAction>) -> Self {
         Self {
             next_tx,
@@ -197,13 +92,16 @@ enum MyIfaceError {
     ZBus(zbus::Error),
 }
 
-#[interface(interface = "org.freedesktop.MyIface")]
-impl MyIfaceImpl {
+#[interface(
+    interface = "org.freedesktop.MyIface",
+    proxy(gen_blocking = true, assume_defaults = true)
+)]
+impl MyIface {
     #[instrument]
     async fn ping(&mut self, #[zbus(signal_context)] ctxt: SignalContext<'_>) -> u32 {
         self.count += 1;
         if self.count % 3 == 0 {
-            MyIfaceImpl::alert_count(&ctxt, self.count)
+            MyIface::alert_count(&ctxt, self.count)
                 .await
                 .expect("Failed to emit signal");
             debug!("emitted `AlertCount` signal.");
@@ -305,9 +203,12 @@ impl MyIfaceImpl {
     }
 
     #[instrument]
-    async fn create_obj(&self, key: String) {
+    async fn create_obj(&self, key: &str) {
         debug!("`CreateObj` called.");
-        self.next_tx.send(NextAction::CreateObj(key)).await.unwrap();
+        self.next_tx
+            .send(NextAction::CreateObj(key.into()))
+            .await
+            .unwrap();
     }
 
     #[instrument]
@@ -320,17 +221,17 @@ impl MyIfaceImpl {
         object_server
             .at(
                 format!("/zbus/test/{key}"),
-                MyIfaceImpl::new(self.next_tx.clone()),
+                MyIface::new(self.next_tx.clone()),
             )
             .await
             .unwrap();
     }
 
     #[instrument]
-    async fn destroy_obj(&self, key: String) {
+    async fn destroy_obj(&self, key: &str) {
         debug!("`DestroyObj` called.");
         self.next_tx
-            .send(NextAction::DestroyObj(key))
+            .send(NextAction::DestroyObj(key.into()))
             .await
             .unwrap();
     }
@@ -441,6 +342,7 @@ impl MyIfaceImpl {
     }
 
     #[instrument]
+    #[zbus(proxy(no_reply))]
     fn test_no_reply(&self, #[zbus(header)] header: Header<'_>) {
         debug!("`TestNoReply` called");
         assert_eq!(header.message_type(), zbus::message::Type::MethodCall);
@@ -451,6 +353,7 @@ impl MyIfaceImpl {
     }
 
     #[instrument]
+    #[zbus(proxy(no_autostart))]
     fn test_no_autostart(&self, #[zbus(header)] header: Header<'_>) {
         debug!("`TestNoAutostart` called");
         assert_eq!(header.message_type(), zbus::message::Type::MethodCall);
@@ -461,6 +364,7 @@ impl MyIfaceImpl {
     }
 
     #[instrument]
+    #[zbus(proxy(allow_interactive_auth))]
     fn test_interactive_auth(&self, #[zbus(header)] header: Header<'_>) {
         debug!("`TestInteractiveAuth` called");
         assert_eq!(header.message_type(), zbus::message::Type::MethodCall);
@@ -562,6 +466,11 @@ fn check_ipv4_address(address: IP4Adress) {
             prefix: 1234,
         }
     );
+}
+
+fn check_ipv4_address_hashmap(address: HashMap<String, OwnedValue>) {
+    assert_eq!(**address.get("address").unwrap(), Value::from("127.0.0.1"));
+    assert_eq!(**address.get("prefix").unwrap(), Value::from(1234u32));
 }
 
 #[instrument]
@@ -670,7 +579,7 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
         .await?;
     proxy.set_str_prop("This is an str ref").await?;
     check_ipv4_address(proxy.address_data().await?);
-    check_ipv4_address(proxy.address_data2().await?);
+    check_ipv4_address_hashmap(proxy.address_data2().await?);
 
     proxy.test_no_reply().await?;
     proxy.test_no_autostart().await?;
@@ -1011,7 +920,7 @@ async fn iface_and_proxy_(#[allow(unused)] p2p: bool) {
         service_conn_builder
     );
     let (next_tx, mut next_rx) = channel(64);
-    let iface = MyIfaceImpl::new(next_tx.clone());
+    let iface = MyIface::new(next_tx.clone());
     let service_conn_builder = service_conn_builder
         .serve_at("/org/freedesktop/MyService", iface)
         .unwrap()
@@ -1034,7 +943,7 @@ async fn iface_and_proxy_(#[allow(unused)] p2p: bool) {
     listen.await;
     debug!("Child task signaled it's ready.");
 
-    let iface: InterfaceRef<MyIfaceImpl> = service_conn
+    let iface: InterfaceRef<MyIface> = service_conn
         .object_server()
         .interface("/org/freedesktop/MyService")
         .await
@@ -1048,7 +957,7 @@ async fn iface_and_proxy_(#[allow(unused)] p2p: bool) {
     debug!("`PropertiesChanged` emitted for `Count` property.");
 
     loop {
-        MyIfaceImpl::alert_count(iface.signal_context(), 51)
+        MyIface::alert_count(iface.signal_context(), 51)
             .await
             .unwrap();
         debug!("`AlertCount` signal emitted.");
@@ -1059,7 +968,7 @@ async fn iface_and_proxy_(#[allow(unused)] p2p: bool) {
                 let path = format!("/zbus/test/{key}");
                 service_conn
                     .object_server()
-                    .at(path.clone(), MyIfaceImpl::new(next_tx.clone()))
+                    .at(path.clone(), MyIface::new(next_tx.clone()))
                     .await
                     .unwrap();
                 debug!("Object `{path}` added.");
@@ -1068,7 +977,7 @@ async fn iface_and_proxy_(#[allow(unused)] p2p: bool) {
                 let path = format!("/zbus/test/{key}");
                 service_conn
                     .object_server()
-                    .remove::<MyIfaceImpl, _>(path.clone())
+                    .remove::<MyIface, _>(path.clone())
                     .await
                     .unwrap();
                 debug!("Object `{path}` removed.");
