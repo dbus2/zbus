@@ -51,11 +51,11 @@ impl super::WriteHalf for std::sync::Arc<async_io::Async<vsock::VsockStream>> {
 
 #[cfg(feature = "tokio-vsock")]
 impl Socket for tokio_vsock::VsockStream {
-    type ReadHalf = tokio_vsock::ReadHalf;
-    type WriteHalf = tokio_vsock::WriteHalf;
+    type ReadHalf = tokio_vsock::OwnedReadHalf;
+    type WriteHalf = tokio_vsock::OwnedWriteHalf;
 
     fn split(self) -> Split<Self::ReadHalf, Self::WriteHalf> {
-        let (read, write) = self.split();
+        let (read, write) = self.into_split();
 
         Split { read, write }
     }
@@ -63,7 +63,7 @@ impl Socket for tokio_vsock::VsockStream {
 
 #[cfg(feature = "tokio-vsock")]
 #[async_trait::async_trait]
-impl super::ReadHalf for tokio_vsock::ReadHalf {
+impl super::ReadHalf for tokio_vsock::OwnedReadHalf {
     async fn recvmsg(&mut self, buf: &mut [u8]) -> super::RecvmsgResult {
         use tokio::io::{AsyncReadExt, ReadBuf};
 
@@ -80,7 +80,7 @@ impl super::ReadHalf for tokio_vsock::ReadHalf {
 
 #[cfg(feature = "tokio-vsock")]
 #[async_trait::async_trait]
-impl super::WriteHalf for tokio_vsock::WriteHalf {
+impl super::WriteHalf for tokio_vsock::OwnedWriteHalf {
     async fn sendmsg(
         &mut self,
         buf: &[u8],

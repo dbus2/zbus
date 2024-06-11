@@ -15,7 +15,7 @@ use std::os::unix::net::{SocketAddr, UnixStream};
 #[cfg(feature = "tokio")]
 use tokio::net::TcpStream;
 #[cfg(feature = "tokio-vsock")]
-use tokio_vsock::VsockStream;
+use tokio_vsock::{VsockAddr, VsockStream};
 #[cfg(windows)]
 use uds_windows::UnixStream;
 #[cfg(all(feature = "vsock", not(feature = "tokio")))]
@@ -143,7 +143,7 @@ impl Transport {
             }
 
             #[cfg(feature = "tokio-vsock")]
-            Transport::Vsock(addr) => VsockStream::connect(addr.cid(), addr.port())
+            Transport::Vsock(addr) => VsockStream::connect(VsockAddr::new(addr.cid(), addr.port()))
                 .await
                 .map(Stream::Vsock)
                 .map_err(Into::into),
