@@ -12,7 +12,7 @@ pub mod old {
     def_attrs! {
         crate dbus_proxy;
 
-        pub ImplAttributes("impl block") {
+        pub TraitAttributes("trait") {
             interface str,
             name str,
             assume_defaults bool,
@@ -45,7 +45,8 @@ pub mod old {
 def_attrs! {
     crate zbus;
 
-    pub ImplAttributes("impl block") {
+    // Keep this in sync with interface's proxy method attributes.
+    pub TraitAttributes("trait") {
         interface str,
         name str,
         assume_defaults bool,
@@ -57,6 +58,7 @@ def_attrs! {
         gen_blocking bool
     };
 
+    // Keep this in sync with interface's proxy method attributes.
     pub MethodAttributes("method") {
         name str,
         property {
@@ -74,7 +76,7 @@ def_attrs! {
     };
 }
 
-old_new!(ImplAttrs, old::ImplAttributes, ImplAttributes);
+old_new!(TraitAttrs, old::TraitAttributes, TraitAttributes);
 old_new!(MethodAttrs, old::MethodAttributes, MethodAttributes);
 
 struct AsyncOpts {
@@ -98,7 +100,7 @@ impl AsyncOpts {
     }
 }
 
-pub fn expand<I: AttrParse + Into<ImplAttrs>, M: AttrParse + Into<MethodAttrs>>(
+pub fn expand<I: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>(
     args: Punctuated<Meta, Token![,]>,
     input: ItemTrait,
 ) -> Result<TokenStream, Error> {
@@ -113,7 +115,7 @@ pub fn expand<I: AttrParse + Into<ImplAttrs>, M: AttrParse + Into<MethodAttrs>>(
         gen_async,
         gen_blocking,
     ) = match I::parse_nested_metas(args)?.into() {
-        ImplAttrs::Old(old) => (
+        TraitAttrs::Old(old) => (
             old.interface,
             old.name,
             old.assume_defaults,
@@ -124,7 +126,7 @@ pub fn expand<I: AttrParse + Into<ImplAttrs>, M: AttrParse + Into<MethodAttrs>>(
             old.gen_async,
             old.gen_blocking,
         ),
-        ImplAttrs::New(new) => (
+        TraitAttrs::New(new) => (
             new.interface,
             new.name,
             new.assume_defaults,

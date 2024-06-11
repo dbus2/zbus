@@ -6,7 +6,8 @@ use syn::{
     parse_quote,
     punctuated::Punctuated,
     spanned::Spanned,
-    AngleBracketedGenericArguments, Attribute, Error, Expr, ExprLit, FnArg, GenericArgument,
+    token::Comma,
+    AngleBracketedGenericArguments, Attribute, Error, Expr, ExprLit, FnArg, GenericArgument, Ident,
     ImplItem, ImplItemFn, ItemImpl,
     Lit::Str,
     Meta, MetaNameValue, PatType, PathArguments, ReturnType, Signature, Token, Type, TypePath,
@@ -21,7 +22,7 @@ pub mod old {
     def_attrs! {
         crate dbus_interface;
 
-        pub TraitAttributes("trait") {
+        pub ImplAttributes("impl block") {
             interface str,
             name str,
             spawn bool
@@ -43,10 +44,23 @@ pub mod old {
 def_attrs! {
     crate zbus;
 
-    pub TraitAttributes("trait") {
+    pub ImplAttributes("impl block") {
         interface str,
         name str,
-        spawn bool
+        spawn bool,
+        proxy {
+            // Keep this in sync with proxy's method attributes.
+            // TODO: Find a way to share code with proxy module.
+            pub ProxyAttributes("proxy") {
+                assume_defaults bool,
+                default_path str,
+                default_service str,
+                async_name str,
+                blocking_name str,
+                gen_async bool,
+                gen_blocking bool
+            }
+        }
     };
 
     pub MethodAttributes("method") {
@@ -57,7 +71,19 @@ def_attrs! {
                 emits_changed_signal str
             }
         },
-        out_args [str]
+        out_args [str],
+        proxy {
+            // Keep this in sync with proxy's method attributes.
+            // TODO: Find a way to share code with proxy module.
+            pub ProxyMethodAttributes("proxy") {
+                object str,
+                async_object str,
+                blocking_object str,
+                no_reply none,
+                no_autostart none,
+                allow_interactive_auth none
+            }
+        }
     };
 
     pub ArgAttributes("argument") {
@@ -68,7 +94,7 @@ def_attrs! {
     };
 }
 
-old_new!(TraitAttrs, old::TraitAttributes, TraitAttributes);
+old_new!(ImplAttrs, old::ImplAttributes, ImplAttributes);
 old_new!(MethodAttrs, old::MethodAttributes, MethodAttributes);
 
 #[derive(Debug)]
@@ -92,20 +118,23 @@ impl<'a> Property<'a> {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 enum MethodType {
     Signal,
     Property(PropertyType),
     Other,
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 enum PropertyType {
     Inputs,
     NoInputs,
 }
 
+#[derive(Debug, Clone)]
 struct MethodInfo {
+    /// The method identifier
+    ident: Ident,
     /// The type of method being parsed
     method_type: MethodType,
     /// Whether the method has inputs
@@ -134,6 +163,12 @@ struct MethodInfo {
     signal_context_arg: Option<PatType>,
     /// The name of the method (setters are stripped of set_ prefix)
     member_name: String,
+    /// The proxy method attributes, if any.
+    proxy_attrs: Option<ProxyMethodAttributes>,
+    /// The method output type.
+    output: ReturnType,
+    /// The cfg attributes of the method.
+    cfg_attrs: Vec<Attribute>,
 }
 
 impl MethodInfo {
@@ -167,18 +202,20 @@ impl MethodInfo {
             })
             .collect();
         let doc_comments = to_xml_docs(docs);
-        let (is_property, is_signal, out_args, attrs_name) = match attrs {
+        let (is_property, is_signal, out_args, attrs_name, proxy_attrs) = match attrs {
             MethodAttrs::Old(old) => (
                 old.property.is_some(),
                 old.signal,
                 old.out_args.clone(),
                 old.name.clone(),
+                None,
             ),
             MethodAttrs::New(new) => (
                 new.property.is_some(),
                 new.signal,
                 new.out_args.clone(),
                 new.name.clone(),
+                new.proxy.clone(),
             ),
         };
         assert!(!is_property || !is_signal);
@@ -264,6 +301,7 @@ impl MethodInfo {
         };
 
         Ok(MethodInfo {
+            ident: ident.clone(),
             method_type,
             has_inputs,
             is_async,
@@ -278,11 +316,14 @@ impl MethodInfo {
             args_names,
             reply,
             member_name,
+            proxy_attrs,
+            output: output.clone(),
+            cfg_attrs: cfg_attrs.iter().cloned().cloned().collect(),
         })
     }
 }
 
-pub fn expand<T: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>(
+pub fn expand<T: AttrParse + Into<ImplAttrs>, M: AttrParse + Into<MethodAttrs>>(
     args: Punctuated<Meta, Token![,]>,
     mut input: ItemImpl,
 ) -> syn::Result<TokenStream> {
@@ -311,10 +352,16 @@ pub fn expand<T: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>
         _ => return Err(Error::new_spanned(&input.self_ty, "Invalid type")),
     };
 
-    let (iface_name, with_spawn) = {
-        let (name, interface, spawn) = match T::parse_nested_metas(args)?.into() {
-            TraitAttrs::New(new) => (new.name, new.interface, new.spawn),
-            TraitAttrs::Old(old) => (old.name, old.interface, old.spawn),
+    let (iface_name, with_spawn, mut proxy) = {
+        let (name, interface, spawn, proxy) = match T::parse_nested_metas(args)?.into() {
+            ImplAttrs::New(new) => (
+                new.name,
+                new.interface,
+                new.spawn,
+                new.proxy.map(|p| Proxy::new(ty, p)),
+            ),
+            // New proxy attributes are not supported for old `dbus_interface`.
+            ImplAttrs::Old(old) => (old.name, old.interface, old.spawn, None),
         };
 
         let name =
@@ -327,7 +374,7 @@ pub fn expand<T: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>
                 )),
             };
 
-        (name, !spawn.unwrap_or(false))
+        (name, !spawn.unwrap_or(false), proxy)
     };
 
     // Store parsed information about each method
@@ -412,6 +459,7 @@ pub fn expand<T: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>
             .filter(|a| a.path().is_ident("cfg"))
             .collect();
 
+        let info = method_info.clone();
         let MethodInfo {
             method_type,
             has_inputs,
@@ -427,6 +475,7 @@ pub fn expand<T: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>
             args_names,
             reply,
             member_name,
+            ..
         } = method_info;
 
         let Signature {
@@ -436,7 +485,7 @@ pub fn expand<T: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>
             ..
         } = &mut method.sig;
 
-        clean_input_args(inputs);
+        clear_input_arg_attrs(inputs);
 
         match method_type {
             MethodType::Signal => {
@@ -598,7 +647,7 @@ pub fn expand<T: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>
                 } else {
                     let is_fallible_property = is_result_output;
 
-                    p.ty = Some(get_property_type(output)?);
+                    p.ty = Some(get_return_type(output)?);
                     p.read = true;
                     let value_convert = quote!(
                         <#zbus::zvariant::OwnedValue as ::std::convert::TryFrom<_>>::try_from(
@@ -722,6 +771,10 @@ pub fn expand<T: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>
                 }
             }
         }
+
+        if let Some(proxy) = &mut proxy {
+            proxy.add_method(info, &properties, &zbus);
+        }
     }
 
     introspect_properties(&mut introspect, properties)?;
@@ -740,6 +793,8 @@ pub fn expand<T: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>
             }
         }
     };
+
+    let proxy = proxy.map(|proxy| proxy.gen(&iface_name, &zbus));
 
     Ok(quote! {
         #input
@@ -849,6 +904,8 @@ pub fn expand<T: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>
                 ::std::writeln!(writer, r#"{:indent$}</interface>"#, "", indent = level).unwrap();
             }
         }
+
+        #proxy
     })
 }
 
@@ -963,7 +1020,8 @@ fn get_args_from_inputs(
     }
 }
 
-fn clean_input_args(inputs: &mut Punctuated<FnArg, Token![,]>) {
+// Removes all `zbus` and `dbus_interface` attributes from the given inputs.
+fn clear_input_arg_attrs(inputs: &mut Punctuated<FnArg, Token![,]>) {
     for input in inputs {
         if let FnArg::Typed(t) = input {
             t.attrs.retain(|attr| {
@@ -1116,7 +1174,7 @@ fn introspect_add_output_args(
     Ok(is_result_output)
 }
 
-fn get_property_type(output: &ReturnType) -> syn::Result<&Type> {
+fn get_return_type(output: &ReturnType) -> syn::Result<&Type> {
     if let ReturnType::Type(_, ty) = output {
         let ty = ty.as_ref();
 
@@ -1135,7 +1193,7 @@ fn get_property_type(output: &ReturnType) -> syn::Result<&Type> {
 
         Ok(ty)
     } else {
-        Err(Error::new_spanned(output, "Invalid property getter"))
+        Err(Error::new_spanned(output, "Invalid return type"))
     }
 }
 
@@ -1242,5 +1300,152 @@ impl Parse for ImplItemSignal {
         let _: Token![;] = input.parse()?;
 
         Ok(ImplItemSignal { attrs, vis, sig })
+    }
+}
+
+#[derive(Debug)]
+struct Proxy {
+    // The type name
+    ty: Ident,
+
+    // Input
+    attrs: ProxyAttributes,
+
+    // Output
+    methods: TokenStream,
+}
+
+impl Proxy {
+    fn new(ty: &Ident, attrs: ProxyAttributes) -> Self {
+        Self {
+            ty: ty.clone(),
+            attrs,
+            methods: quote!(),
+        }
+    }
+
+    fn add_method(
+        &mut self,
+        method_info: MethodInfo,
+        properties: &BTreeMap<String, Property<'_>>,
+        zbus: &TokenStream,
+    ) {
+        let inputs: Punctuated<PatType, Comma> = method_info
+            .typed_inputs
+            .iter()
+            .enumerate()
+            .filter(|(idx, input)| {
+                if method_info.method_type == MethodType::Signal {
+                    // Skip the `SignalContext` argument.
+                    return *idx != 0;
+                }
+
+                let a = ArgAttributes::parse(&input.attrs).unwrap();
+                !a.object_server && !a.connection && !a.header && !a.signal_context
+            })
+            .map(|(_, p)| p.clone())
+            .collect();
+        let ret = get_return_type(&method_info.output)
+            .map(|r| quote!(#r))
+            .unwrap_or(quote!(()));
+        let ident = &method_info.ident;
+        let member_name = method_info.member_name;
+        let mut proxy_method_attrs = quote! { name = #member_name, };
+        proxy_method_attrs.extend(match method_info.method_type {
+            MethodType::Signal => quote!(signal),
+            MethodType::Property(_) => {
+                let emits_changed_signal = properties
+                    .get(&member_name)
+                    .unwrap()
+                    .emits_changed_signal
+                    .to_string();
+                let emits_changed_signal = quote! { emits_changed_signal = #emits_changed_signal };
+
+                quote! { property(#emits_changed_signal) }
+            }
+            MethodType::Other => quote!(),
+        });
+        if let Some(attrs) = method_info.proxy_attrs {
+            if let Some(object) = attrs.object {
+                proxy_method_attrs.extend(quote! { object = #object, });
+            }
+            if let Some(async_object) = attrs.async_object {
+                proxy_method_attrs.extend(quote! { async_object = #async_object, });
+            }
+            if let Some(blocking_object) = attrs.blocking_object {
+                proxy_method_attrs.extend(quote! { blocking_object = #blocking_object, });
+            }
+            if attrs.no_reply {
+                proxy_method_attrs.extend(quote! { no_reply, });
+            }
+            if attrs.no_autostart {
+                proxy_method_attrs.extend(quote! { no_autostart, });
+            }
+            if attrs.allow_interactive_auth {
+                proxy_method_attrs.extend(quote! { allow_interactive_auth, });
+            }
+        }
+        let cfg_attrs = method_info.cfg_attrs;
+        self.methods.extend(quote! {
+            #(#cfg_attrs)*
+            #[zbus(#proxy_method_attrs)]
+            fn #ident(&self, #inputs) -> #zbus::Result<#ret>;
+        });
+    }
+
+    fn gen(&self, iface_name: &str, zbus: &TokenStream) -> TokenStream {
+        let attrs = &self.attrs;
+        let (
+            assume_defaults,
+            default_path,
+            default_service,
+            async_name,
+            blocking_name,
+            gen_async,
+            gen_blocking,
+            ty,
+            methods,
+        ) = (
+            attrs
+                .assume_defaults
+                .map(|value| quote! { assume_defaults = #value, }),
+            attrs
+                .default_path
+                .as_ref()
+                .map(|value| quote! { default_path = #value, }),
+            attrs
+                .default_service
+                .as_ref()
+                .map(|value| quote! { default_service = #value, }),
+            attrs
+                .async_name
+                .as_ref()
+                .map(|value| quote! { async_name = #value, }),
+            attrs
+                .blocking_name
+                .as_ref()
+                .map(|value| quote! { blocking_name = #value, }),
+            attrs.gen_async.map(|value| quote! { gen_async = #value, }),
+            attrs
+                .gen_blocking
+                .map(|value| quote! { gen_blocking = #value, }),
+            &self.ty,
+            &self.methods,
+        );
+        quote! {
+            #[#zbus::proxy(
+                name = #iface_name,
+                #assume_defaults
+                #default_path
+                #default_service
+                #async_name
+                #blocking_name
+                #gen_async
+                #gen_blocking
+            )]
+            trait #ty {
+                #methods
+            }
+        }
     }
 }
