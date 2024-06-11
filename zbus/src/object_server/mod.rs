@@ -856,6 +856,11 @@ impl<R> ResponseDispatchNotifier<R> {
             listener,
         )
     }
+
+    /// Get the response.
+    pub fn response(&self) -> &R {
+        &self.response
+    }
 }
 
 impl<R> Serialize for ResponseDispatchNotifier<R>
