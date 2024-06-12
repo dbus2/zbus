@@ -1115,7 +1115,7 @@ fn introspect_output_arg(
     )
 }
 
-fn get_result_type(p: &TypePath) -> syn::Result<&Type> {
+fn get_result_inner_type(p: &TypePath) -> syn::Result<&Type> {
     if let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) = &p
         .path
         .segments
@@ -1151,7 +1151,7 @@ fn introspect_add_output_args(
                 .ident
                 == "Result";
             if is_result_output {
-                ty = get_result_type(p)?;
+                ty = get_result_inner_type(p)?;
             }
         }
 
@@ -1187,7 +1187,7 @@ fn get_return_type(output: &ReturnType) -> syn::Result<&Type> {
                 .ident
                 == "Result";
             if is_result_output {
-                return get_result_type(p);
+                return get_result_inner_type(p);
             }
         }
 
