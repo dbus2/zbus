@@ -58,7 +58,7 @@ pub(crate) fn padding_for_n_bytes(value: usize, align: usize) -> usize {
 
 pub(crate) fn usize_to_u32(value: usize) -> u32 {
     assert!(
-        value <= (std::u32::MAX as usize),
+        value <= (u32::MAX as usize),
         "{} too large for `u32`",
         value,
     );
@@ -67,21 +67,13 @@ pub(crate) fn usize_to_u32(value: usize) -> u32 {
 }
 
 pub(crate) fn usize_to_u8(value: usize) -> u8 {
-    assert!(
-        value <= (std::u8::MAX as usize),
-        "{} too large for `u8`",
-        value,
-    );
+    assert!(value <= (u8::MAX as usize), "{} too large for `u8`", value,);
 
     value as u8
 }
 
 pub(crate) fn f64_to_f32(value: f64) -> f32 {
-    assert!(
-        value <= (std::f32::MAX as f64),
-        "{} too large for `f32`",
-        value,
-    );
+    assert!(value <= (f32::MAX as f64), "{} too large for `f32`", value,);
 
     value as f32
 }

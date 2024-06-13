@@ -29,7 +29,7 @@ impl Write for NullWriteSeek {
 
 impl Seek for NullWriteSeek {
     fn seek(&mut self, _pos: std::io::SeekFrom) -> std::io::Result<u64> {
-        Ok(std::u64::MAX) // should never read the return value!
+        Ok(u64::MAX) // should never read the return value!
     }
 }
 
