@@ -169,6 +169,8 @@ struct MethodInfo {
     output: ReturnType,
     /// The cfg attributes of the method.
     cfg_attrs: Vec<Attribute>,
+    /// The doc attributes of the method.
+    doc_attrs: Vec<Attribute>,
 }
 
 impl MethodInfo {
@@ -177,6 +179,7 @@ impl MethodInfo {
         method: &ImplItemFn,
         attrs: &MethodAttrs,
         cfg_attrs: &[&Attribute],
+        doc_attrs: &[&Attribute],
     ) -> syn::Result<MethodInfo> {
         let is_async = method.sig.asyncness.is_some();
         let Signature {
@@ -319,6 +322,7 @@ impl MethodInfo {
             proxy_attrs,
             output: output.clone(),
             cfg_attrs: cfg_attrs.iter().cloned().cloned().collect(),
+            doc_attrs: doc_attrs.iter().cloned().cloned().collect(),
         })
     }
 }
@@ -354,12 +358,7 @@ pub fn expand<T: AttrParse + Into<ImplAttrs>, M: AttrParse + Into<MethodAttrs>>(
 
     let (iface_name, with_spawn, mut proxy) = {
         let (name, interface, spawn, proxy) = match T::parse_nested_metas(args)?.into() {
-            ImplAttrs::New(new) => (
-                new.name,
-                new.interface,
-                new.spawn,
-                new.proxy.map(|p| Proxy::new(ty, p)),
-            ),
+            ImplAttrs::New(new) => (new.name, new.interface, new.spawn, new.proxy),
             // New proxy attributes are not supported for old `dbus_interface`.
             ImplAttrs::Old(old) => (old.name, old.interface, old.spawn, None),
         };
@@ -373,6 +372,7 @@ pub fn expand<T: AttrParse + Into<ImplAttrs>, M: AttrParse + Into<MethodAttrs>>(
                     "`name` and `interface` attributes should not be specified at the same time",
                 )),
             };
+        let proxy = proxy.map(|p| Proxy::new(ty, &name, p, &zbus));
 
         (name, !spawn.unwrap_or(false), proxy)
     };
@@ -424,8 +424,13 @@ pub fn expand<T: AttrParse + Into<ImplAttrs>, M: AttrParse + Into<MethodAttrs>>(
             .iter()
             .filter(|a| a.path().is_ident("cfg"))
             .collect();
+        let doc_attrs: Vec<_> = method
+            .attrs
+            .iter()
+            .filter(|a| a.path().is_ident("doc"))
+            .collect();
 
-        let method_info = MethodInfo::new(&zbus, method, &attrs, &cfg_attrs)?;
+        let method_info = MethodInfo::new(&zbus, method, &attrs, &cfg_attrs, &doc_attrs)?;
         let attr_property = match attrs {
             MethodAttrs::Old(o) => o.property.map(|op| PropertyAttributes {
                 emits_changed_signal: op.emits_changed_signal,
@@ -773,7 +778,7 @@ pub fn expand<T: AttrParse + Into<ImplAttrs>, M: AttrParse + Into<MethodAttrs>>(
         }
 
         if let Some(proxy) = &mut proxy {
-            proxy.add_method(info, &properties, &zbus);
+            proxy.add_method(info, &properties);
         }
     }
 
@@ -794,7 +799,7 @@ pub fn expand<T: AttrParse + Into<ImplAttrs>, M: AttrParse + Into<MethodAttrs>>(
         }
     };
 
-    let proxy = proxy.map(|proxy| proxy.gen(&iface_name, &zbus));
+    let proxy = proxy.map(|proxy| proxy.gen());
 
     Ok(quote! {
         #input
@@ -1115,7 +1120,7 @@ fn introspect_output_arg(
     )
 }
 
-fn get_result_type(p: &TypePath) -> syn::Result<&Type> {
+fn get_result_inner_type(p: &TypePath) -> syn::Result<&Type> {
     if let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) = &p
         .path
         .segments
@@ -1151,7 +1156,7 @@ fn introspect_add_output_args(
                 .ident
                 == "Result";
             if is_result_output {
-                ty = get_result_type(p)?;
+                ty = get_result_inner_type(p)?;
             }
         }
 
@@ -1187,7 +1192,7 @@ fn get_return_type(output: &ReturnType) -> syn::Result<&Type> {
                 .ident
                 == "Result";
             if is_result_output {
-                return get_result_type(p);
+                return get_result_inner_type(p);
             }
         }
 
@@ -1307,6 +1312,10 @@ impl Parse for ImplItemSignal {
 struct Proxy {
     // The type name
     ty: Ident,
+    // The interface name
+    iface_name: String,
+    // The zbus crate
+    zbus: TokenStream,
 
     // Input
     attrs: ProxyAttributes,
@@ -1316,34 +1325,25 @@ struct Proxy {
 }
 
 impl Proxy {
-    fn new(ty: &Ident, attrs: ProxyAttributes) -> Self {
+    fn new(ty: &Ident, iface_name: &str, attrs: ProxyAttributes, zbus: &TokenStream) -> Self {
         Self {
+            iface_name: iface_name.to_string(),
             ty: ty.clone(),
+            zbus: zbus.clone(),
             attrs,
             methods: quote!(),
         }
     }
 
-    fn add_method(
-        &mut self,
-        method_info: MethodInfo,
-        properties: &BTreeMap<String, Property<'_>>,
-        zbus: &TokenStream,
-    ) {
+    fn add_method(&mut self, method_info: MethodInfo, properties: &BTreeMap<String, Property<'_>>) {
         let inputs: Punctuated<PatType, Comma> = method_info
             .typed_inputs
             .iter()
-            .enumerate()
-            .filter(|(idx, input)| {
-                if method_info.method_type == MethodType::Signal {
-                    // Skip the `SignalContext` argument.
-                    return *idx != 0;
-                }
-
+            .filter(|input| {
                 let a = ArgAttributes::parse(&input.attrs).unwrap();
                 !a.object_server && !a.connection && !a.header && !a.signal_context
             })
-            .map(|(_, p)| p.clone())
+            .cloned()
             .collect();
         let ret = get_return_type(&method_info.output)
             .map(|r| quote!(#r))
@@ -1386,14 +1386,17 @@ impl Proxy {
             }
         }
         let cfg_attrs = method_info.cfg_attrs;
+        let zbus = &self.zbus;
+        let doc_attrs = method_info.doc_attrs;
         self.methods.extend(quote! {
             #(#cfg_attrs)*
+            #(#doc_attrs)*
             #[zbus(#proxy_method_attrs)]
             fn #ident(&self, #inputs) -> #zbus::Result<#ret>;
         });
     }
 
-    fn gen(&self, iface_name: &str, zbus: &TokenStream) -> TokenStream {
+    fn gen(&self) -> TokenStream {
         let attrs = &self.attrs;
         let (
             assume_defaults,
@@ -1432,7 +1435,11 @@ impl Proxy {
             &self.ty,
             &self.methods,
         );
+        let iface_name = &self.iface_name;
+        let zbus = &self.zbus;
+        let proxy_doc = format!("Proxy for the `{iface_name}` interface.");
         quote! {
+            #[doc = #proxy_doc]
             #[#zbus::proxy(
                 name = #iface_name,
                 #assume_defaults
