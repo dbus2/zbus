@@ -21,24 +21,18 @@ use crate::{
     OwnedGuid,
 };
 
-/// Proxy for the `org.freedesktop.DBus.Introspectable` interface.
-#[proxy(interface = "org.freedesktop.DBus.Introspectable", default_path = "/")]
-pub trait Introspectable {
-    /// Returns an XML description of the object, including its interfaces (with signals and
-    /// methods), objects below it in the object path tree, and its properties.
-    fn introspect(&self) -> Result<String>;
-}
-
-assert_impl_all!(IntrospectableProxy<'_>: Send, Sync, Unpin);
-assert_impl_all!(IntrospectableProxyBlocking<'_>: Send, Sync, Unpin);
-
 /// Service-side implementation for the `org.freedesktop.DBus.Introspectable` interface.
 /// This interface is implemented automatically for any object registered to the
 /// [ObjectServer](crate::ObjectServer).
 pub(crate) struct Introspectable;
 
-#[interface(name = "org.freedesktop.DBus.Introspectable")]
+#[interface(
+    name = "org.freedesktop.DBus.Introspectable",
+    proxy(default_path = "/", visibility = "pub")
+)]
 impl Introspectable {
+    /// Returns an XML description of the object, including its interfaces (with signals and
+    /// methods), objects below it in the object path tree, and its properties.
     async fn introspect(
         &self,
         #[zbus(object_server)] server: &ObjectServer,
@@ -54,41 +48,8 @@ impl Introspectable {
     }
 }
 
-/// Proxy for the `org.freedesktop.DBus.Properties` interface.
-#[proxy(interface = "org.freedesktop.DBus.Properties")]
-pub trait Properties {
-    /// Get a property value.
-    async fn get(
-        &self,
-        interface_name: InterfaceName<'_>,
-        property_name: &str,
-    ) -> Result<OwnedValue>;
-
-    /// Set a property value.
-    async fn set(
-        &self,
-        interface_name: InterfaceName<'_>,
-        property_name: &str,
-        value: &Value<'_>,
-    ) -> Result<()>;
-
-    /// Get all properties.
-    async fn get_all(
-        &self,
-        interface_name: Optional<InterfaceName<'_>>,
-    ) -> Result<HashMap<String, OwnedValue>>;
-
-    #[zbus(signal)]
-    async fn properties_changed(
-        &self,
-        interface_name: InterfaceName<'_>,
-        changed_properties: HashMap<&str, Value<'_>>,
-        invalidated_properties: Vec<&str>,
-    ) -> Result<()>;
-}
-
-assert_impl_all!(PropertiesProxy<'_>: Send, Sync, Unpin);
-assert_impl_all!(PropertiesProxyBlocking<'_>: Send, Sync, Unpin);
+assert_impl_all!(IntrospectableProxy<'_>: Send, Sync, Unpin);
+assert_impl_all!(IntrospectableProxyBlocking<'_>: Send, Sync, Unpin);
 
 /// Service-side implementation for the `org.freedesktop.DBus.Properties` interface.
 /// This interface is implemented automatically for any object registered to the
@@ -97,8 +58,9 @@ pub struct Properties;
 
 assert_impl_all!(Properties: Send, Sync, Unpin);
 
-#[interface(name = "org.freedesktop.DBus.Properties")]
+#[interface(name = "org.freedesktop.DBus.Properties", proxy(visibility = "pub"))]
 impl Properties {
+    /// Get a property value.
     async fn get(
         &self,
         interface_name: InterfaceName<'_>,
@@ -123,6 +85,7 @@ impl Properties {
         })
     }
 
+    /// Set a property value.
     async fn set(
         &self,
         interface_name: InterfaceName<'_>,
@@ -170,6 +133,7 @@ impl Properties {
         })
     }
 
+    /// Get all properties.
     async fn get_all(
         &self,
         interface_name: InterfaceName<'_>,
@@ -195,50 +159,17 @@ impl Properties {
     pub async fn properties_changed(
         ctxt: &SignalContext<'_>,
         interface_name: InterfaceName<'_>,
-        changed_properties: &HashMap<&str, &Value<'_>>,
-        invalidated_properties: &[&str],
+        changed_properties: HashMap<&str, Value<'_>>,
+        invalidated_properties: Vec<&str>,
     ) -> zbus::Result<()>;
 }
+
+assert_impl_all!(PropertiesProxy<'_>: Send, Sync, Unpin);
+assert_impl_all!(PropertiesProxyBlocking<'_>: Send, Sync, Unpin);
 
 /// The type returned by the [`ObjectManagerProxy::get_managed_objects`] method.
 pub type ManagedObjects =
     HashMap<OwnedObjectPath, HashMap<OwnedInterfaceName, HashMap<String, OwnedValue>>>;
-
-/// Proxy for the `org.freedesktop.DBus.ObjectManager` interface.
-///
-/// **NB:** Changes to properties on existing interfaces are not reported using this interface.
-/// Please use [`PropertiesProxy::receive_properties_changed`] to monitor changes to properties on
-/// objects.
-#[proxy(interface = "org.freedesktop.DBus.ObjectManager")]
-pub trait ObjectManager {
-    /// The return value of this method is a dict whose keys are object paths. All returned object
-    /// paths are children of the object path implementing this interface, i.e. their object paths
-    /// start with the ObjectManager's object path plus '/'.
-    ///
-    /// Each value is a dict whose keys are interfaces names. Each value in this inner dict is the
-    /// same dict that would be returned by the org.freedesktop.DBus.Properties.GetAll() method for
-    /// that combination of object path and interface. If an interface has no properties, the empty
-    /// dict is returned.
-    fn get_managed_objects(&self) -> Result<ManagedObjects>;
-
-    /// This signal is emitted when either a new object is added or when an existing object gains
-    /// one or more interfaces. The `interfaces_and_properties` argument contains a map with the
-    /// interfaces and properties (if any) that have been added to the given object path.
-    #[zbus(signal)]
-    fn interfaces_added(
-        &self,
-        object_path: ObjectPath<'_>,
-        interfaces_and_properties: HashMap<&str, HashMap<&str, Value<'_>>>,
-    ) -> Result<()>;
-
-    /// This signal is emitted whenever an object is removed or it loses one or more interfaces.
-    /// The `interfaces` parameters contains a list of the interfaces that were removed.
-    #[zbus(signal)]
-    fn interfaces_removed(&self, object_path: ObjectPath<'_>, interfaces: Vec<&str>) -> Result<()>;
-}
-
-assert_impl_all!(ObjectManagerProxy<'_>: Send, Sync, Unpin);
-assert_impl_all!(ObjectManagerProxyBlocking<'_>: Send, Sync, Unpin);
 
 /// Service-side [Object Manager][om] interface implementation.
 ///
@@ -257,8 +188,16 @@ assert_impl_all!(ObjectManagerProxyBlocking<'_>: Send, Sync, Unpin);
 #[derive(Debug, Clone)]
 pub struct ObjectManager;
 
-#[interface(name = "org.freedesktop.DBus.ObjectManager")]
+#[interface(name = "org.freedesktop.DBus.ObjectManager", proxy(visibility = "pub"))]
 impl ObjectManager {
+    /// The return value of this method is a dict whose keys are object paths. All returned object
+    /// paths are children of the object path implementing this interface, i.e. their object paths
+    /// start with the ObjectManager's object path plus '/'.
+    ///
+    /// Each value is a dict whose keys are interfaces names. Each value in this inner dict is the
+    /// same dict that would be returned by the org.freedesktop.DBus.Properties.GetAll() method for
+    /// that combination of object path and interface. If an interface has no properties, the empty
+    /// dict is returned.
     async fn get_managed_objects(
         &self,
         #[zbus(object_server)] server: &ObjectServer,
@@ -279,8 +218,8 @@ impl ObjectManager {
     #[zbus(signal)]
     pub async fn interfaces_added(
         ctxt: &SignalContext<'_>,
-        object_path: &ObjectPath<'_>,
-        interfaces_and_properties: &HashMap<InterfaceName<'_>, HashMap<&str, Value<'_>>>,
+        object_path: ObjectPath<'_>,
+        interfaces_and_properties: HashMap<InterfaceName<'_>, HashMap<&str, Value<'_>>>,
     ) -> zbus::Result<()>;
 
     /// This signal is emitted whenever an object is removed or it loses one or more interfaces.
@@ -288,38 +227,30 @@ impl ObjectManager {
     #[zbus(signal)]
     pub async fn interfaces_removed(
         ctxt: &SignalContext<'_>,
-        object_path: &ObjectPath<'_>,
-        interfaces: &[InterfaceName<'_>],
+        object_path: ObjectPath<'_>,
+        interfaces: Vec<InterfaceName<'_>>,
     ) -> zbus::Result<()>;
 }
 
-/// Proxy for the `org.freedesktop.DBus.Peer` interface.
-#[proxy(interface = "org.freedesktop.DBus.Peer")]
-pub trait Peer {
-    /// On receipt, an application should do nothing other than reply as usual. It does not matter
-    /// which object path a ping is sent to.
-    fn ping(&self) -> Result<()>;
-
-    /// An application should reply the containing a hex-encoded UUID representing the identity of
-    /// the machine the process is running on. This UUID must be the same for all processes on a
-    /// single system at least until that system next reboots. It should be the same across reboots
-    /// if possible, but this is not always possible to implement and is not guaranteed. It does not
-    /// matter which object path a GetMachineId is sent to.
-    fn get_machine_id(&self) -> Result<String>;
-}
-
-assert_impl_all!(PeerProxy<'_>: Send, Sync, Unpin);
-assert_impl_all!(PeerProxyBlocking<'_>: Send, Sync, Unpin);
+assert_impl_all!(ObjectManagerProxy<'_>: Send, Sync, Unpin);
+assert_impl_all!(ObjectManagerProxyBlocking<'_>: Send, Sync, Unpin);
 
 pub(crate) struct Peer;
 
 /// Service-side implementation for the `org.freedesktop.DBus.Peer` interface.
 /// This interface is implemented automatically for any object registered to the
 /// [ObjectServer](crate::ObjectServer).
-#[interface(name = "org.freedesktop.DBus.Peer")]
+#[interface(name = "org.freedesktop.DBus.Peer", proxy(visibility = "pub"))]
 impl Peer {
+    /// On receipt, an application should do nothing other than reply as usual. It does not matter
+    /// which object path a ping is sent to.
     fn ping(&self) {}
 
+    /// An application should reply the containing a hex-encoded UUID representing the identity of
+    /// the machine the process is running on. This UUID must be the same for all processes on a
+    /// single system at least until that system next reboots. It should be the same across reboots
+    /// if possible, but this is not always possible to implement and is not guaranteed. It does not
+    /// matter which object path a GetMachineId is sent to.
     fn get_machine_id(&self) -> Result<String> {
         let mut id = match std::fs::read_to_string("/var/lib/dbus/machine-id") {
             Ok(id) => id,
@@ -339,6 +270,9 @@ impl Peer {
         Ok(id)
     }
 }
+
+assert_impl_all!(PeerProxy<'_>: Send, Sync, Unpin);
+assert_impl_all!(PeerProxyBlocking<'_>: Send, Sync, Unpin);
 
 /// Proxy for the `org.freedesktop.DBus.Monitoring` interface.
 #[proxy(
@@ -1069,7 +1003,7 @@ mod tests {
         assert_eq!(
             signal.args().unwrap().interfaces_and_properties,
             vec![(
-                "org.zbus.TestObj",
+                "org.zbus.TestObj".try_into().unwrap(),
                 vec![("Test", zvariant::Value::new("test"))]
                     .into_iter()
                     .collect()

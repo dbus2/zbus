@@ -665,12 +665,12 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                         ) -> #zbus::Result<()> {
                             let mut changed = ::std::collections::HashMap::new();
                             let value = <#zbus::zvariant::Value as ::std::convert::From<_>>::from(#prop_value_handled);
-                            changed.insert(#member_name, &value);
+                            changed.insert(#member_name, value);
                             #zbus::fdo::Properties::properties_changed(
                                 signal_context,
                                 #zbus::names::InterfaceName::from_static_str_unchecked(#iface_name),
-                                &changed,
-                                &[],
+                                changed,
+                                vec![],
                             ).await
                         }
                     );
@@ -685,8 +685,8 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                             #zbus::fdo::Properties::properties_changed(
                                 signal_context,
                                 #zbus::names::InterfaceName::from_static_str_unchecked(#iface_name),
-                                &::std::collections::HashMap::new(),
-                                &[#member_name],
+                                ::std::collections::HashMap::new(),
+                                vec![#member_name],
                             ).await
                         }
                     );
