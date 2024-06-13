@@ -1432,7 +1432,9 @@ impl Proxy {
         );
         let iface_name = &self.iface_name;
         let zbus = &self.zbus;
+        let proxy_doc = format!("Proxy for the `{iface_name}` interface.");
         quote! {
+            #[doc = #proxy_doc]
             #[#zbus::proxy(
                 name = #iface_name,
                 #assume_defaults
