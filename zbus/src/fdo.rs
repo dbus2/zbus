@@ -827,7 +827,7 @@ assert_impl_all!(DBusProxy<'_>: Send, Sync, Unpin);
 #[zbus(prefix = "org.freedesktop.DBus.Error", impl_display = true)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum Error {
-    /// Unknown or fall-through ZBus error.
+    /// Unknown or fall-through zbus error.
     #[zbus(error)]
     ZBus(zbus::Error),
 
