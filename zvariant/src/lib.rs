@@ -820,13 +820,13 @@ mod tests {
         // Signature: "a(yu(xbxas)s)");
         let ar = vec![(
             // top-most simple fields
-            u8::max_value(),
-            u32::max_value(),
+            u8::MAX,
+            u32::MAX,
             (
                 // 2nd level simple fields
-                i64::max_value(),
+                i64::MAX,
                 true,
-                i64::max_value(),
+                i64::MAX,
                 // 2nd level array field
                 &["Hello", "World"][..],
             ),
@@ -841,12 +841,12 @@ mod tests {
             encoded.deserialize().unwrap().0;
         assert_eq!(decoded.len(), 1);
         let r = &decoded[0];
-        assert_eq!(r.0, u8::max_value());
-        assert_eq!(r.1, u32::max_value());
+        assert_eq!(r.0, u8::MAX);
+        assert_eq!(r.1, u32::MAX);
         let inner_r = &r.2;
-        assert_eq!(inner_r.0, i64::max_value());
+        assert_eq!(inner_r.0, i64::MAX);
         assert!(inner_r.1);
-        assert_eq!(inner_r.2, i64::max_value());
+        assert_eq!(inner_r.2, i64::MAX);
         let as_ = &inner_r.3;
         assert_eq!(as_.len(), 2);
         assert_eq!(as_[0], "Hello");
@@ -863,12 +863,12 @@ mod tests {
                 gv_encoded.deserialize().unwrap().0;
             assert_eq!(decoded.len(), 1);
             let r = &decoded[0];
-            assert_eq!(r.0, u8::max_value());
-            assert_eq!(r.1, u32::max_value());
+            assert_eq!(r.0, u8::MAX);
+            assert_eq!(r.1, u32::MAX);
             let inner_r = &r.2;
-            assert_eq!(inner_r.0, i64::max_value());
+            assert_eq!(inner_r.0, i64::MAX);
             assert!(inner_r.1);
-            assert_eq!(inner_r.2, i64::max_value());
+            assert_eq!(inner_r.2, i64::MAX);
             let as_ = &inner_r.3;
             assert_eq!(as_.len(), 2);
             assert_eq!(as_[0], "Hello");
@@ -883,8 +883,8 @@ mod tests {
             assert_eq!(variant.n_children(), 1);
             let r: (u8, u32, (i64, bool, i64, Vec<String>), String) =
                 variant.child_value(0).get().unwrap();
-            assert_eq!(r.0, u8::max_value());
-            assert_eq!(r.1, u32::max_value());
+            assert_eq!(r.0, u8::MAX);
+            assert_eq!(r.1, u32::MAX);
         }
         let ctxt = Context::new_dbus(LE, 0);
 
@@ -900,13 +900,13 @@ mod tests {
             let r = &array[0];
             if let Value::Structure(r) = r {
                 let fields = r.fields();
-                assert_eq!(fields[0], Value::U8(u8::max_value()));
-                assert_eq!(fields[1], Value::U32(u32::max_value()));
+                assert_eq!(fields[0], Value::U8(u8::MAX));
+                assert_eq!(fields[1], Value::U32(u32::MAX));
                 if let Value::Structure(r) = &fields[2] {
                     let fields = r.fields();
-                    assert_eq!(fields[0], Value::I64(i64::max_value()));
+                    assert_eq!(fields[0], Value::I64(i64::MAX));
                     assert_eq!(fields[1], Value::Bool(true));
-                    assert_eq!(fields[2], Value::I64(i64::max_value()));
+                    assert_eq!(fields[2], Value::I64(i64::MAX));
                     if let Value::Array(as_) = &fields[3] {
                         assert_eq!(as_.len(), 2);
                         assert_eq!(as_[0], Value::new("Hello"));
@@ -940,13 +940,13 @@ mod tests {
                 let r = &array.get(0).unwrap().unwrap();
                 if let Value::Structure(r) = r {
                     let fields = r.fields();
-                    assert_eq!(fields[0], Value::U8(u8::max_value()));
-                    assert_eq!(fields[1], Value::U32(u32::max_value()));
+                    assert_eq!(fields[0], Value::U8(u8::MAX));
+                    assert_eq!(fields[1], Value::U32(u32::MAX));
                     if let Value::Structure(r) = &fields[2] {
                         let fields = r.fields();
-                        assert_eq!(fields[0], Value::I64(i64::max_value()));
+                        assert_eq!(fields[0], Value::I64(i64::MAX));
                         assert_eq!(fields[1], Value::Bool(true));
-                        assert_eq!(fields[2], Value::I64(i64::max_value()));
+                        assert_eq!(fields[2], Value::I64(i64::MAX));
                         if let Value::Array(as_) = &fields[3] {
                             assert_eq!(as_.len(), 2);
                             assert_eq!(as_.get(0).unwrap(), Some("Hello"));
@@ -972,8 +972,8 @@ mod tests {
             let child: Variant = variant.child_value(0);
             let r: (u8, u32, (i64, bool, i64, Vec<String>), String) =
                 child.child_value(0).get().unwrap();
-            assert_eq!(r.0, u8::max_value());
-            assert_eq!(r.1, u32::max_value());
+            assert_eq!(r.0, u8::MAX);
+            assert_eq!(r.1, u32::MAX);
 
             let mut rng = thread_rng();
             // Let's test GVariant ser/de of a 254 byte array with variable-width elements as to
