@@ -169,6 +169,8 @@ struct MethodInfo {
     output: ReturnType,
     /// The cfg attributes of the method.
     cfg_attrs: Vec<Attribute>,
+    /// The doc attributes of the method.
+    doc_attrs: Vec<Attribute>,
 }
 
 impl MethodInfo {
@@ -177,6 +179,7 @@ impl MethodInfo {
         method: &ImplItemFn,
         attrs: &MethodAttrs,
         cfg_attrs: &[&Attribute],
+        doc_attrs: &[&Attribute],
     ) -> syn::Result<MethodInfo> {
         let is_async = method.sig.asyncness.is_some();
         let Signature {
@@ -319,6 +322,7 @@ impl MethodInfo {
             proxy_attrs,
             output: output.clone(),
             cfg_attrs: cfg_attrs.iter().cloned().cloned().collect(),
+            doc_attrs: doc_attrs.iter().cloned().cloned().collect(),
         })
     }
 }
@@ -420,8 +424,13 @@ pub fn expand<T: AttrParse + Into<ImplAttrs>, M: AttrParse + Into<MethodAttrs>>(
             .iter()
             .filter(|a| a.path().is_ident("cfg"))
             .collect();
+        let doc_attrs: Vec<_> = method
+            .attrs
+            .iter()
+            .filter(|a| a.path().is_ident("doc"))
+            .collect();
 
-        let method_info = MethodInfo::new(&zbus, method, &attrs, &cfg_attrs)?;
+        let method_info = MethodInfo::new(&zbus, method, &attrs, &cfg_attrs, &doc_attrs)?;
         let attr_property = match attrs {
             MethodAttrs::Old(o) => o.property.map(|op| PropertyAttributes {
                 emits_changed_signal: op.emits_changed_signal,
@@ -1384,8 +1393,10 @@ impl Proxy {
         }
         let cfg_attrs = method_info.cfg_attrs;
         let zbus = &self.zbus;
+        let doc_attrs = method_info.doc_attrs;
         self.methods.extend(quote! {
             #(#cfg_attrs)*
+            #(#doc_attrs)*
             #[zbus(#proxy_method_attrs)]
             fn #ident(&self, #inputs) -> #zbus::Result<#ret>;
         });
