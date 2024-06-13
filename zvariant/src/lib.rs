@@ -1165,9 +1165,9 @@ mod tests {
         let expect_iter = expect.iter().map(|(k, v)| (k, v)).collect::<Vec<_>>();
         let actual = dict.iter().collect::<Vec<_>>();
         assert_eq!(actual, expect_iter);
-        let actual = (&dict).iter().collect::<Vec<_>>();
+        let actual = dict.iter().collect::<Vec<_>>();
         assert_eq!(actual, expect_iter);
-        let actual = (&mut dict).iter().collect::<Vec<_>>();
+        let actual = dict.iter().collect::<Vec<_>>();
         assert_eq!(actual, expect_iter);
         for (_, v) in dict.iter_mut() {
             if let Value::Str(vv) = v {
