@@ -1339,17 +1339,11 @@ impl Proxy {
         let inputs: Punctuated<PatType, Comma> = method_info
             .typed_inputs
             .iter()
-            .enumerate()
-            .filter(|(idx, input)| {
-                if method_info.method_type == MethodType::Signal {
-                    // Skip the `SignalContext` argument.
-                    return *idx != 0;
-                }
-
+            .filter(|input| {
                 let a = ArgAttributes::parse(&input.attrs).unwrap();
                 !a.object_server && !a.connection && !a.header && !a.signal_context
             })
-            .map(|(_, p)| p.clone())
+            .cloned()
             .collect();
         let ret = get_return_type(&method_info.output)
             .map(|r| quote!(#r))
