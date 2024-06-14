@@ -348,7 +348,7 @@ async fn main() -> Result<()> {
 
     let proxy = SystemdManagerProxy::new(&connection).await?;
     println!("Host architecture: {}", proxy.architecture().await?);
-    println!("Environment:");
+    println!("Environment variables:");
     for env in proxy.environment().await? {
         println!("  {}", env);
     }
