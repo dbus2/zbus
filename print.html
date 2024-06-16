@@ -364,8 +364,8 @@ use std::error::Error;
 
 use zbus::{zvariant::Value, Connection};
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
+// Although we use `tokio` here, you can use any async runtime of choice.
+#[tokio::main]
 async fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
     let connection = Connection::session().await?;
 
@@ -413,8 +413,8 @@ trait Notifications {
               expire_timeout: i32) -&gt; zbus::Result&lt;u32&gt;;
 }
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
+// Although we use `tokio` here, you can use any async runtime of choice.
+#[tokio::main]
 async fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
     let connection = Connection::session().await?;
 
@@ -450,7 +450,7 @@ to notify interested peers of any changes to the state of the service. zbus prov
 <a href="https://docs.rs/futures/4/futures/stream/trait.Stream.html"><code>Stream</code></a>-based API for receiving signals.</p>
 <p>Let’s look at this API in action, with an example where we monitor started systemd units.</p>
 <pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">// NOTE: When changing this, please also keep `zbus/examples/watch-systemd-jobs.rs` in sync.
-</span>use async_std::stream::StreamExt;
+</span>use futures_util::stream::StreamExt;
 use zbus::Connection;
 use zbus_macros::proxy;
 use zvariant::OwnedObjectPath;
@@ -531,8 +531,8 @@ trait Location {
     fn longitude(&amp;self) -&gt; Result&lt;f64&gt;;
 }
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
+// Although we use `tokio` here, you can use any async runtime of choice.
+#[tokio::main]
 async fn main() -&gt; Result&lt;()&gt; {
     let conn = Connection::system().await?;
     let manager = ManagerProxy::new(&amp;conn).await?;
@@ -614,13 +614,13 @@ trait SystemdManager {
     fn environment(&amp;self) -&gt; Result&lt;Vec&lt;String&gt;&gt;;
 }
 
-#[async_std::main]
+#[tokio::main]
 async fn main() -&gt; Result&lt;()&gt; {
     let connection = Connection::system().await?;
 
     let proxy = SystemdManagerProxy::new(&amp;connection).await?;
     println!("Host architecture: {}", proxy.architecture().await?);
-    println!("Environment:");
+    println!("Environment variables:");
     for env in proxy.environment().await? {
         println!("  {}", env);
     }
@@ -658,7 +658,7 @@ methods are named after the properties’ names: <code>receive_&lt;prop_name&gt;
 <pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use zbus::{Connection, proxy, Result};
 </span><span class="boring">use futures_util::stream::StreamExt;
 </span><span class="boring">
-</span><span class="boring">#[async_std::main]
+</span><span class="boring">#[tokio::main]
 </span><span class="boring">async fn main() -&gt; Result&lt;()&gt; {
 </span>    #[proxy(
         interface = "org.freedesktop.systemd1.Manager",
@@ -858,8 +858,8 @@ in this context) can easily discover them.</p>
 our choice:</p>
 <pre><pre class="playground"><code class="language-rust no_run edition2018">use zbus::{Connection, Result};
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
+// Although we use `tokio` here, you can use any async runtime of choice.
+#[tokio::main]
 async fn main() -&gt; Result&lt;()&gt; {
     let connection = Connection::session()
         .await?;
@@ -882,8 +882,8 @@ org.zbus.MyGreeter                             412452 server            elmarco 
 by replacing the loop above with this code:</p>
 <pre><pre class="playground"><code class="language-rust no_run edition2018">use futures_util::stream::TryStreamExt;
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-<span class="boring">#[async_std::main]
+// Although we use `tokio` here, you can use any async runtime of choice.
+<span class="boring">#[tokio::main]
 </span><span class="boring">async fn main() -&gt; zbus::Result&lt;()&gt; {
 </span><span class="boring">   let connection = zbus::Connection::session()
 </span><span class="boring">       .await?;
@@ -936,8 +936,8 @@ impl Greeter {
     }
 }
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
+// Although we use `tokio` here, you can use any async runtime of choice.
+#[tokio::main]
 async fn main() -&gt; Result&lt;()&gt; {
     let connection = Connection::session().await?;
     // setup the server
@@ -973,7 +973,7 @@ setting up your interfaces and requesting names, and not have to care about this
 </span><span class="boring">    }
 </span><span class="boring">}
 </span><span class="boring">
-</span><span class="boring">#[async_std::main]
+</span><span class="boring">#[tokio::main]
 </span><span class="boring">async fn main() -&gt; Result&lt;()&gt; {
 </span>    let _connection = connection::Builder::session()?
         .name("org.zbus.MyGreeter")?
@@ -1056,8 +1056,8 @@ impl Greeter {
     async fn greeted_everyone(ctxt: &amp;SignalContext&lt;'_&gt;) -&gt; Result&lt;()&gt;;
 }
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
+// Although we use `tokio` here, you can use any async runtime of choice.
+#[tokio::main]
 async fn main() -&gt; Result&lt;()&gt; {
     let greeter = Greeter {
         name: "GreeterName".to_string(),
@@ -1089,12 +1089,12 @@ org.zbus.MyGreeter1                 interface -         -             -
 method calls, where the return type is a directly serializable value, like the <code>String</code> in
 <code>say_hello()</code> above.</p>
 <p>The second is a result return value, where the <code>Ok</code> variant is the serializable value, and the
-error is any type that implements <code>zbus::DBusError</code>. The <code>zbus::fdo::Error</code> type implements this
+error is any type that implements <a href="https://docs.rs/zbus/4/zbus/trait.DBusError.html"><code>zbus::DBusError</code></a>. The <a href="https://docs.rs/zbus/4/zbus/fdo/enum.Error.html"><code>zbus::fdo::Error</code></a> type implements this
 trait, and should cover most common use cases. However, when a custom error type needs to be emitted
 from the method as an error reply, it can be created using <code>derive(zbus::DBusError)</code>, and used in
 the returned <code>Result&lt;T, E&gt;</code>.</p>
-<p>Property methods may also return errors, but they must be <code>zbus::fdo::Error</code>. Most often
-you’ll want to use <code>zbus::fdo::Error::UnknownProperty</code> variant.</p>
+<p>Property methods may also return errors, but they must be <a href="https://docs.rs/zbus/4/zbus/fdo/enum.Error.html"><code>zbus::fdo::Error</code></a>. Most often you’ll
+want to use <a href="https://docs.rs/zbus/4/zbus/fdo/enum.Error.html#variant.UnknownProperty"><code>zbus::fdo::Error::UnknownProperty</code></a> variant.</p>
 <h3 id="sending-signals"><a class="header" href="#sending-signals">Sending signals</a></h3>
 <p>As you might have noticed in the previous example, the signal methods don’t take a <code>&amp;self</code> argument
 but a <code>SignalContext</code> reference. This allows to emit signals whether from inside or outside of the
@@ -1126,7 +1126,7 @@ example code:</p>
 </span><span class="boring">    }
 </span><span class="boring">}
 </span><span class="boring">
-</span><span class="boring">#[async_std::main]
+</span><span class="boring">#[tokio::main]
 </span><span class="boring">async fn main() -&gt; zbus::Result&lt;()&gt; {
 </span><span class="boring">let connection = zbus::Connection::session().await?;
 </span><span class="boring">let object_server = connection.object_server();
@@ -1137,6 +1137,72 @@ iface.name = String::from("👋");
 iface.greeter_name_changed(iface_ref.signal_context()).await?;
 <span class="boring">Ok(())
 </span><span class="boring">}</span></code></pre></pre>
+<h2 id="proxy-generation"><a class="header" href="#proxy-generation">Proxy generation</a></h2>
+<p><code>interface</code> macro can also generate the client-side proxy code for you. It utilizes the <a href="https://docs.rs/zbus/4/zbus/attr.proxy.html"><code>proxy</code></a>
+macro behind the scenes to achieve this. Here is how to use it:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">use zbus::interface;
+
+struct Greeter {
+    name: String
+}
+
+#[interface(
+    name = "org.zbus.MyGreeter.WithProxy",
+    // Specifying the `proxy` attribute instructs `interface` to generate the
+    // client-side proxy. You can specify proxy-specific attributes
+    // (e.g `gen_blocking) here. All the attributes that are common between
+    // `proxy` and `interface` macros (e.g `name`) are automtically forwarded to
+    // the `proxy` macro.
+    proxy(
+        gen_blocking = false,
+        default_path = "/org/zbus/MyGreeter/WithProxy",
+        default_service = "org.zbus.MyGreeter.WithProxy",
+    ),
+)]
+impl Greeter {
+    #[zbus(property)]
+    async fn greeter_name(&amp;self) -&gt; String {
+        self.name.clone()
+    }
+
+    #[zbus(proxy(no_reply))]
+    async fn whatever(&amp;self) {
+        println!("Whatever!");
+    }
+}
+
+<span class="boring">#[tokio::main]
+</span><span class="boring">async fn main() -&gt; zbus::Result&lt;()&gt; {
+</span>
+let greeter = Greeter { name: "GreeterName".to_string() };
+let connection = zbus::connection::Builder::session()?
+        .name("org.zbus.MyGreeter.WithProxy")?
+        .serve_at("/org/zbus/MyGreeter/WithProxy", greeter)?
+        .build()
+        .await?;
+let proxy = GreeterProxy::new(&amp;connection).await?;
+assert_eq!(proxy.greeter_name().await?, "GreeterName");
+proxy.whatever().await?;
+
+<span class="boring">Ok(())
+</span><span class="boring">}</span></code></pre></pre>
+<h3 id="known-limitations"><a class="header" href="#known-limitations">Known Limitations</a></h3>
+<p>While it’s extremely useful to be able to generate the client-side proxy code directly from
+<code>interface</code> as it allows you to avoid duplicating code, there are some limitations to be aware of:</p>
+<ul>
+<li>The trait bounds of the <code>proxy</code> macro methods’ arguments and return value, now also apply to the
+<code>interface</code> methods. For example, when only generating the server-side code, the method return
+values need to implement <code>serde::Serialize</code> but when generating the client-side proxy code, the
+method return values need to implement <code>serde::DeserializeOwned</code> as well.</li>
+<li>Reference types in return values of <code>interface</code> methods won’t work. As you may have noticed,
+unlike the previous examples the <code>greeter_name</code> method in the example above returns a <code>String</code>
+instead of a <code>&amp;str</code>. This is because the methods in the <code>proxy</code> macro do not support reference
+type to be returned from its methods.</li>
+<li>Methods returning [<code>object_server::ResponseDispatchNotifier</code>] wrapper type will do the same for
+proxy as well.</li>
+<li>Only <code>interface</code> macro supports this feature, while the deprecated <code>dbus_interface</code> macro does
+not. Still haven’t switched to <code>interface</code> and want to use this feature? Time to switch!</li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="blocking-api"><a class="header" href="#blocking-api">Blocking API</a></h1>
 <p>While zbus API being primarily asynchronous (since 2.0) is a great thing, it could easily feel
 daunting for simple use cases. Not to worry! In the spirit of “ease” being a primary goal of zbus,

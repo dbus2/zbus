@@ -235,8 +235,8 @@ use std::error::Error;
 
 use zbus::{zvariant::Value, Connection};
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
+// Although we use `tokio` here, you can use any async runtime of choice.
+#[tokio::main]
 async fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
     let connection = Connection::session().await?;
 
@@ -284,8 +284,8 @@ trait Notifications {
               expire_timeout: i32) -&gt; zbus::Result&lt;u32&gt;;
 }
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
+// Although we use `tokio` here, you can use any async runtime of choice.
+#[tokio::main]
 async fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
     let connection = Connection::session().await?;
 
@@ -321,7 +321,7 @@ to notify interested peers of any changes to the state of the service. zbus prov
 <a href="https://docs.rs/futures/4/futures/stream/trait.Stream.html"><code>Stream</code></a>-based API for receiving signals.</p>
 <p>Let’s look at this API in action, with an example where we monitor started systemd units.</p>
 <pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">// NOTE: When changing this, please also keep `zbus/examples/watch-systemd-jobs.rs` in sync.
-</span>use async_std::stream::StreamExt;
+</span>use futures_util::stream::StreamExt;
 use zbus::Connection;
 use zbus_macros::proxy;
 use zvariant::OwnedObjectPath;
@@ -402,8 +402,8 @@ trait Location {
     fn longitude(&amp;self) -&gt; Result&lt;f64&gt;;
 }
 
-// Although we use `async-std` here, you can use any async runtime of choice.
-#[async_std::main]
+// Although we use `tokio` here, you can use any async runtime of choice.
+#[tokio::main]
 async fn main() -&gt; Result&lt;()&gt; {
     let conn = Connection::system().await?;
     let manager = ManagerProxy::new(&amp;conn).await?;
@@ -485,13 +485,13 @@ trait SystemdManager {
     fn environment(&amp;self) -&gt; Result&lt;Vec&lt;String&gt;&gt;;
 }
 
-#[async_std::main]
+#[tokio::main]
 async fn main() -&gt; Result&lt;()&gt; {
     let connection = Connection::system().await?;
 
     let proxy = SystemdManagerProxy::new(&amp;connection).await?;
     println!("Host architecture: {}", proxy.architecture().await?);
-    println!("Environment:");
+    println!("Environment variables:");
     for env in proxy.environment().await? {
         println!("  {}", env);
     }
@@ -529,7 +529,7 @@ methods are named after the properties’ names: <code>receive_&lt;prop_name&gt;
 <pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use zbus::{Connection, proxy, Result};
 </span><span class="boring">use futures_util::stream::StreamExt;
 </span><span class="boring">
-</span><span class="boring">#[async_std::main]
+</span><span class="boring">#[tokio::main]
 </span><span class="boring">async fn main() -&gt; Result&lt;()&gt; {
 </span>    #[proxy(
         interface = "org.freedesktop.systemd1.Manager",
