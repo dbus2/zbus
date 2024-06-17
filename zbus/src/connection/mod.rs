@@ -1565,6 +1565,73 @@ mod p2p_tests {
     ))]
     #[test]
     #[timeout(15000)]
+    fn vsock_connect() {
+        crate::utils::block_on(async {
+            let executor = Executor::new();
+            executor
+                .run(async {
+                    let guid = Guid::generate();
+
+                    #[cfg(all(feature = "vsock", not(feature = "tokio")))]
+                    let listener =
+                        vsock::VsockListener::bind_with_cid_port(vsock::VMADDR_CID_LOCAL, u32::MAX)
+                            .unwrap();
+                    #[cfg(feature = "tokio-vsock")]
+                    let listener = tokio_vsock::VsockListener::bind(1, u32::MAX).unwrap();
+
+                    let addr = listener.local_addr().unwrap();
+                    let addr = format!("vsock:cid={},port={},guid={guid}", addr.cid(), addr.port());
+
+                    #[cfg(all(feature = "vsock", not(feature = "tokio")))]
+                    let server = executor.spawn(
+                        async move {
+                            let server = listener.incoming().next().unwrap().unwrap();
+                            Builder::vsock_stream(server)
+                                .server(guid)
+                                .unwrap()
+                                .p2p()
+                                .auth_mechanism(AuthMechanism::Anonymous)
+                                .build()
+                                .await
+                                .unwrap()
+                        },
+                        "",
+                    );
+                    #[cfg(feature = "tokio-vsock")]
+                    let server = executor.spawn(
+                        async {
+                            let server = listener.incoming().next().await.unwrap().unwrap();
+                            Builder::vsock_stream(server)
+                                .server(guid)
+                                .unwrap()
+                                .p2p()
+                                .auth_mechanism(AuthMechanism::Anonymous)
+                                .build()
+                                .await
+                                .unwrap()
+                        },
+                        "",
+                    );
+
+                    let _conn = crate::connection::Builder::address(addr.as_str())
+                        .unwrap()
+                        .p2p()
+                        .build()
+                        .await
+                        .unwrap();
+
+                    let _ = server.await;
+                })
+                .await;
+        })
+    }
+
+    #[cfg(any(
+        all(feature = "vsock", not(feature = "tokio")),
+        feature = "tokio-vsock"
+    ))]
+    #[test]
+    #[timeout(15000)]
     fn vsock_p2p() {
         crate::utils::block_on(test_vsock_p2p()).unwrap();
     }
