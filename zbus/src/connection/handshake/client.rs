@@ -4,7 +4,7 @@ use tracing::{debug, instrument, trace, warn};
 
 use sha1::{Digest, Sha1};
 
-use crate::{conn::socket::ReadHalf, names::OwnedUniqueName, Message};
+use crate::{conn::socket::ReadHalf, is_flatpak, names::OwnedUniqueName, Message};
 
 use super::{
     random_ascii, sasl_auth_id, AuthMechanism, Authenticated, BoxedSplit, Command, Common, Cookie,
@@ -316,8 +316,4 @@ async fn receive_hello_response(
         Type::Error => Err(Error::from(reply)),
         m => Err(Error::Handshake(format!("Unexpected messgage `{m:?}`"))),
     }
-}
-
-fn is_flatpak() -> bool {
-    std::env::var("FLATPAK_ID").is_ok()
 }
