@@ -74,4 +74,4 @@ cargo feature of `zbus` is enabled.
 [`connection::Builder::address`]: https://docs.rs/zbus/4/zbus/connection/struct.Builder.html#method.address
 [dspec]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
 
-[^bus-less] Unless you implemented them, none of the bus methods will exist.
+[^bus-less]: Unless you implemented them, none of the bus methods will exist.
