@@ -1,5 +1,5 @@
 [book]
-authors = ["Marc-André Lureau"]
+authors = ["Marc-André Lureau", "Zeeshan Ali Khan"]
 language = "en"
 multilingual = false
 src = "src"
