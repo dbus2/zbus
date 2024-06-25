@@ -13,6 +13,7 @@ default-theme = "Rust"
 curly-quotes = true
 git-repository-url = "https://github.com/dbus2/zbus"
 git-repository-icon = "fa-github"
+no-section-label = true
 
 [preprocessor.toc]
 command = "mdbook-toc"
