@@ -6,7 +6,7 @@ src = "src"
 title = "zbus: D-Bus for Rust made easy"
 
 [rust]
-edition = "2018"
+edition = "2021"
 
 [output.html]
 default-theme = "Rust"
