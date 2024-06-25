@@ -12,6 +12,7 @@ edition = "2021"
 default-theme = "Rust"
 smart-punctuation = true
 git-repository-url = "https://github.com/dbus2/zbus"
+edit-url-template = "https://github.com/dbus2/zbus/edit/main/book/{path}"
 git-repository-icon = "fa-github"
 no-section-label = true
 
