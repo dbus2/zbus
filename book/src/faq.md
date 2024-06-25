@@ -1,5 +1,7 @@
 # FAQ
 
+<!-- toc -->
+
 ## How to use a struct as a dictionary?
 
 Since the use of a dictionary, specifically one with strings as keys and variants as value (i-e

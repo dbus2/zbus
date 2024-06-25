@@ -1,5 +1,7 @@
 # Some D-Bus concepts to help newcomers
 
+<!-- toc -->
+
 ## Bus
 
 A D-Bus "bus" is a kind of server that handles several connections in a bus-topology fashion. As

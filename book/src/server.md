@@ -1,5 +1,7 @@
 # Writing a server interface
 
+<!-- toc -->
+
 In this chapter, we are going to implement a server with a method "SayHello", to greet back the
 calling client.
 
