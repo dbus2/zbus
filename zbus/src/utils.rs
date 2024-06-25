@@ -48,3 +48,8 @@ pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
     });
     runtime.block_on(future)
 }
+
+// If we're running inside a Flatpak sandbox.
+pub(crate) fn is_flatpak() -> bool {
+    std::env::var("FLATPAK_ID").is_ok()
+}
