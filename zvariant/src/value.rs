@@ -12,7 +12,9 @@ use serde::{
         Deserialize, DeserializeSeed, Deserializer, Error, MapAccess, SeqAccess, Unexpected,
         Visitor,
     },
-    ser::{Serialize, SerializeSeq, SerializeStruct, SerializeTupleStruct, Serializer},
+    ser::{
+        Serialize, SerializeMap, SerializeSeq, SerializeStruct, SerializeTupleStruct, Serializer,
+    },
 };
 use static_assertions::assert_impl_all;
 
@@ -336,6 +338,23 @@ impl<'a> Value<'a> {
         S: SerializeSeq,
     {
         serialize_value!(self serializer.serialize_element)
+    }
+
+    pub(crate) fn serialize_value_as_dict_key<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+    where
+        S: SerializeMap,
+    {
+        serialize_value!(self serializer.serialize_key)
+    }
+
+    pub(crate) fn serialize_value_as_dict_value<S>(
+        &self,
+        serializer: &mut S,
+    ) -> Result<(), S::Error>
+    where
+        S: SerializeMap,
+    {
+        serialize_value!(self serializer.serialize_value)
     }
 
     #[cfg(feature = "gvariant")]

@@ -1195,6 +1195,15 @@ mod tests {
             assert_eq!(map["hi"], "1234");
             assert_eq!(map["world"], "561");
 
+            // Ensure SerializeValue produces the same result as Value
+            // Tests for https://github.com/dbus2/zbus/issues/868
+            let mut map = std::collections::HashMap::<&str, &str>::new();
+            map.insert("k", "v");
+            let gv_ser_value_encoded =
+                zvariant::to_bytes(ctxt, &zvariant::SerializeValue(&map)).unwrap();
+            let gv_value_encoded = to_bytes(ctxt, &zvariant::Value::new(map)).unwrap();
+            assert_eq!(gv_value_encoded.as_ref(), gv_ser_value_encoded.as_ref());
+
             // Check encoding against GLib
             let bytes = Bytes::from_owned(gv_encoded);
             let variant = Variant::from_bytes::<HashMap<&str, &str>>(&bytes);
