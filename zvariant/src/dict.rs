@@ -4,7 +4,7 @@ use std::{
     hash::{BuildHasher, Hash},
 };
 
-use serde::ser::{Serialize, SerializeSeq, SerializeStruct, Serializer};
+use serde::ser::{Serialize, SerializeMap, Serializer};
 use static_assertions::assert_impl_all;
 
 use crate::{value_display_fmt, Basic, DynamicType, Error, Signature, Type, Value};
@@ -215,12 +215,13 @@ impl<'k, 'v> Serialize for Dict<'k, 'v> {
     where
         S: Serializer,
     {
-        let mut seq = serializer.serialize_seq(Some(self.map.len()))?;
+        let mut map = serializer.serialize_map(Some(self.map.len()))?;
         for (key, value) in self.map.iter() {
-            seq.serialize_element(&DictEntry { key, value })?;
+            key.serialize_value_as_dict_key(&mut map)?;
+            value.serialize_value_as_dict_value(&mut map)?;
         }
 
-        seq.end()
+        map.end()
     }
 }
 
@@ -295,27 +296,6 @@ macro_rules! to_dict {
 }
 to_dict!(HashMap<K: Eq + Hash, V, H>);
 to_dict!(BTreeMap<K: Ord, V>);
-
-#[derive(Debug)]
-struct DictEntry<'kref, 'k, 'vref, 'v> {
-    key: &'kref Value<'k>,
-    value: &'vref Value<'v>,
-}
-
-impl Serialize for DictEntry<'_, '_, '_, '_> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut entry = serializer.serialize_struct("zvariant::DictEntry", 2)?;
-        self.key
-            .serialize_value_as_struct_field("zvariant::DictEntry::Key", &mut entry)?;
-        self.value
-            .serialize_value_as_struct_field("zvariant::DictEntry::Value", &mut entry)?;
-
-        entry.end()
-    }
-}
 
 fn create_signature(
     key_signature: &Signature<'_>,
