@@ -96,7 +96,7 @@ A common issue might arise when using a zbus proxy is that your proxy's property
 updating. This is due to zbus' default caching policy, which updates the value of a property only
 when a change is signaled, primarily to minimize latency and optimize client request performance.
 By default, if your service does not emit change notifications, the property values will not
-update accordingly. 
+update accordingly.
 
 However, you can disabling caching for specific properties:
 
@@ -133,6 +133,7 @@ The idea here is to represent `None` case with 0 elements (empty array) and the 
 element. `zvariant` and `zbus` provide `option-as-array` Cargo feature, which when enabled, allows
 the (de)serialization of `Option<T>`. Unlike the previous solution, this solution can be used with
 all types. However, it does come with some caveats and limitations:
+
   1. Since the D-Bus type signature does not provide any hints about the array being in fact a
     nullable type, this can be confusing for users of generic tools like [`d-feet`]. It is therefore
     highly recommended that service authors document each use of `Option<T>` in their D-Bus
