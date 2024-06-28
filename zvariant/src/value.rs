@@ -117,6 +117,9 @@ impl Hash for Value<'_> {
             Self::U32(inner) => inner.hash(state),
             Self::I64(inner) => inner.hash(state),
             Self::U64(inner) => inner.hash(state),
+            // To hold the +0.0 == -0.0 => hash(+0.0) == hash(-0.0) property.
+            // See https://doc.rust-lang.org/beta/std/hash/trait.Hash.html#hash-and-eq
+            Self::F64(inner) if *inner == 0. => 0f64.to_le_bytes().hash(state),
             Self::F64(inner) => inner.to_le_bytes().hash(state),
             Self::Str(inner) => inner.hash(state),
             Self::Signature(inner) => inner.hash(state),
