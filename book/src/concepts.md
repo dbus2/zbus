@@ -4,8 +4,8 @@
 
 ## Bus
 
-A D-Bus "bus" is a kind of server that handles several connections in a bus-topology fashion. As
-such, it relays messages between connected endpoints, and allows to discover endpoints or sending
+A D-Bus "bus" is a server that handles several connections in a bus-topology fashion. As such, it
+relays messages between connected endpoints, and allows to discover endpoints or sending
 broadcast messages (signals).
 
 Typically, a Linux system has a system bus, and a session bus. The latter is per-user. It is also

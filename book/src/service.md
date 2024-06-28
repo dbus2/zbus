@@ -1,11 +1,11 @@
-# Writing a server interface
+# Writing a service interface
 
 <!-- toc -->
 
-In this chapter, we are going to implement a server with a method "SayHello", to greet back the
+In this chapter, we are going to implement a service with a method "SayHello", to greet back the
 calling client.
 
-We will first discuss the need to associate a service name with the server. Then we are going to
+We will first discuss the need to associate a service name with the service. Then we are going to
 manually handle incoming messages using the low-level API. Finally, we will present the
 `ObjectServer` higher-level API and some of its more advanced concepts.
 
@@ -39,12 +39,12 @@ We can check our service is running and is associated with the service name:
 
 ```bash
 $ busctl --user list | grep zbus
-org.zbus.MyGreeter                             412452 server            elmarco :1.396        user@1000.service -       -
+org.zbus.MyGreeter                             412452 service           elmarco :1.396        user@1000.service -       -
 ```
 
 ### 🖐 Hang on
 
-This example is not handling incoming messages yet. Any attempt to call the server will time out
+This example is not handling incoming messages yet. Any attempt to call the service will time out
 (including the shell completion!).
 
 ## Handling low-level messages
@@ -126,7 +126,7 @@ impl Greeter {
 #[tokio::main]
 async fn main() -> Result<()> {
     let connection = Connection::session().await?;
-    // setup the server
+    // setup the object server
     connection
         .object_server()
         .at("/org/zbus/MyGreeter", Greeter)
@@ -425,7 +425,7 @@ While it's extremely useful to be able to generate the client-side proxy code di
 `interface` as it allows you to avoid duplicating code, there are some limitations to be aware of:
 
 * The trait bounds of the `proxy` macro methods' arguments and return value, now also apply to the
-  `interface` methods. For example, when only generating the server-side code, the method return
+  `interface` methods. For example, when only generating the service-side code, the method return
   values need to implement `serde::Serialize` but when generating the client-side proxy code, the
   method return values need to implement `serde::DeserializeOwned` as well.
 * Reference types in return values of `interface` methods won't work. As you may have noticed,

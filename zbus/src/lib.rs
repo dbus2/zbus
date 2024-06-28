@@ -23,7 +23,7 @@ mod doctests {
     doc_comment::doctest!("../../book/src/connection.md");
     doc_comment::doctest!("../../book/src/contributors.md");
     doc_comment::doctest!("../../book/src/introduction.md");
-    doc_comment::doctest!("../../book/src/server.md");
+    doc_comment::doctest!("../../book/src/service.md");
     doc_comment::doctest!("../../book/src/blocking.md");
     doc_comment::doctest!("../../book/src/faq.md");
 }
