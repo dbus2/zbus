@@ -290,6 +290,16 @@ org.zbus.MyGreeter1                 interface -         -             -
 .GreetedEveryone                    signal    -         -             -
 ```
 
+### Trait-bounds for property values
+
+If you use custom types for property values, you might get a compile error for missing
+`TryFrom<zvariant::Value<'_>>` and/or `TryFrom<OwnedValue>` implementations. This is because
+properties are always sent as Variants on the bus, so you need to implement these conversions for
+your custom types.
+
+Not to worry though, the `zvariant` crate provides a [`Value`] and [`OwnedValue`] derive macro to
+implement these conversions for you.
+
 ### Method errors
 
 There are two possibilities for the return value of interface methods. The first is for infallible
@@ -429,6 +439,8 @@ While it's extremely useful to be able to generate the client-side proxy code di
 
 [D-Bus concepts]: concepts.html#bus-name--service-name
 [didoc]: https://docs.rs/zbus/4/zbus/attr.interface.html
+[`Value`]: https://docs.rs/zvariant/4/zvariant/derive.Value.html
+[`OwnedValue`]: https://docs.rs/zvariant/4/zvariant/derive.OwnedValue.html
 [`zbus::DBusError`]:https://docs.rs/zbus/4/zbus/trait.DBusError.html
 [`zbus::fdo::Error`]: https://docs.rs/zbus/4/zbus/fdo/enum.Error.html
 [`zbus::fdo::Error::UnknownProperty`]: https://docs.rs/zbus/4/zbus/fdo/enum.Error.html#variant.UnknownProperty
