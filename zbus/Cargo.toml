@@ -1,6 +1,6 @@
 [package]
 name = "zbus"
-version = "4.3.0"
+version = "4.3.1"
 authors = ["Zeeshan Ali Khan <zeeshanak@gnome.org>"]
 edition = "2021"
 rust-version = "1.75"
@@ -44,7 +44,7 @@ zvariant = { path = "../zvariant", version = "4.1.1", default-features = false, 
   "enumflags2",
 ] }
 zbus_names = { path = "../zbus_names", version = "3.0" }
-zbus_macros = { path = "../zbus_macros", version = "=4.3.0" }
+zbus_macros = { path = "../zbus_macros", version = "=4.3.1" }
 enumflags2 = { version = "0.7.9", features = ["serde"] }
 async-io = { version = "2.3.2", optional = true }
 futures-core = "0.3.30"
