@@ -20,7 +20,7 @@ examples assume that a D-Bus broker is setup on your machine and you've a sessio
 (`DBUS_SESSION_BUS_ADDRESS` environment variable must be set). This is guaranteed to be the case on
 a typical Linux desktop session.
 
-### Server
+### Service
 
 A simple service that politely greets whoever calls its `SayHello` method:
 
