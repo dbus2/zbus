@@ -778,7 +778,7 @@ pub fn expand<T: AttrParse + Into<ImplAttrs>, M: AttrParse + Into<MethodAttrs>>(
         }
 
         if let Some(proxy) = &mut proxy {
-            proxy.add_method(info, &properties);
+            proxy.add_method(info, &properties)?;
         }
     }
 
@@ -1335,7 +1335,11 @@ impl Proxy {
         }
     }
 
-    fn add_method(&mut self, method_info: MethodInfo, properties: &BTreeMap<String, Property<'_>>) {
+    fn add_method(
+        &mut self,
+        method_info: MethodInfo,
+        properties: &BTreeMap<String, Property<'_>>,
+    ) -> syn::Result<()> {
         let inputs: Punctuated<PatType, Comma> = method_info
             .typed_inputs
             .iter()
@@ -1345,9 +1349,38 @@ impl Proxy {
             })
             .cloned()
             .collect();
-        let ret = get_return_type(&method_info.output)
-            .map(|r| quote!(#r))
-            .unwrap_or(quote!(()));
+        let zbus = &self.zbus;
+        let ret = match &method_info.output {
+            ReturnType::Type(_, ty) => {
+                let ty = ty.as_ref();
+
+                if let Type::Path(p) = ty {
+                    let is_result_output = p
+                        .path
+                        .segments
+                        .last()
+                        .ok_or_else(|| Error::new_spanned(ty, "unsupported return type"))?
+                        .ident
+                        == "Result";
+                    if is_result_output {
+                        let is_prop = matches!(method_info.method_type, MethodType::Property(_));
+
+                        if is_prop {
+                            // Proxy methods always return `zbus::Result<T>`
+                            let inner_ty = get_result_inner_type(p)?;
+                            quote! { #zbus::Result<#inner_ty> }
+                        } else {
+                            quote! { #ty }
+                        }
+                    } else {
+                        quote! { #zbus::Result<#ty> }
+                    }
+                } else {
+                    quote! { #zbus::Result<#ty> }
+                }
+            }
+            ReturnType::Default => quote! { #zbus::Result<()> },
+        };
         let ident = &method_info.ident;
         let member_name = method_info.member_name;
         let mut proxy_method_attrs = quote! { name = #member_name, };
@@ -1386,14 +1419,15 @@ impl Proxy {
             }
         }
         let cfg_attrs = method_info.cfg_attrs;
-        let zbus = &self.zbus;
         let doc_attrs = method_info.doc_attrs;
         self.methods.extend(quote! {
             #(#cfg_attrs)*
             #(#doc_attrs)*
             #[zbus(#proxy_method_attrs)]
-            fn #ident(&self, #inputs) -> #zbus::Result<#ret>;
+            fn #ident(&self, #inputs) -> #ret;
         });
+
+        Ok(())
     }
 
     fn gen(&self) -> TokenStream {

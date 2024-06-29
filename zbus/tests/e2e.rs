@@ -84,7 +84,7 @@ impl MyIface {
 }
 
 /// Custom D-Bus error type.
-#[derive(Debug, DBusError)]
+#[derive(Debug, DBusError, PartialEq)]
 #[zbus(prefix = "org.freedesktop.MyIface.Error")]
 enum MyIfaceError {
     SomethingWentWrong(String),
@@ -569,6 +569,13 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
             bar: "TestString".into(),
         })
         .await?;
+
+    proxy.test_error().await.unwrap_err();
+    assert_eq!(
+        proxy.test_custom_error().await.unwrap_err(),
+        MyIfaceError::SomethingWentWrong("oops".to_string())
+    );
+
     check_hash_map(proxy.test_hashmap_return().await?);
     check_hash_map(proxy.hash_map().await?);
     proxy
