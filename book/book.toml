@@ -1,15 +1,21 @@
 [book]
-authors = ["Marc-André Lureau"]
+authors = ["Marc-André Lureau", "Zeeshan Ali Khan"]
 language = "en"
 multilingual = false
 src = "src"
 title = "zbus: D-Bus for Rust made easy"
 
 [rust]
-edition = "2018"
+edition = "2021"
 
 [output.html]
 default-theme = "Rust"
-curly-quotes = true
+smart-punctuation = true
 git-repository-url = "https://github.com/dbus2/zbus"
-git-repository-icon = "fa-gitlab"
+edit-url-template = "https://github.com/dbus2/zbus/edit/main/book/{path}"
+git-repository-icon = "fa-github"
+no-section-label = true
+
+[preprocessor.toc]
+command = "mdbook-toc"
+renderer = ["html"]
