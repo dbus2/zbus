@@ -110,7 +110,7 @@ However, you can disabling caching for specific properties:
 - In order to disable caching for either type of proxy use the [`proxy::Builder::cache_properites`]
   method.
 
-## How do I use `Option<T>`` with zbus?
+## How do I use `Option<T>` with zbus?
 
 While `Option<T>` is a very commonly used type in Rust, there is unfortunately [no concept of a
 nullable-type in the D-Bus protocol][nonull]. However, there are two ways to simulate it:
