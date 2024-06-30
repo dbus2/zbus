@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Writing a server interface - zbus: D-Bus for Rust made easy</title>
+        <title>Writing a service interface - zbus: D-Bus for Rust made easy</title>
 
 
         <!-- Custom HTML head -->
@@ -88,7 +88,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded affix "><a href="introduction.html">Introduction</a></li><li class="chapter-item expanded "><a href="concepts.html"><strong aria-hidden="true">1.</strong> Some D-Bus concepts</a></li><li class="chapter-item expanded "><a href="connection.html"><strong aria-hidden="true">2.</strong> Establishing connections</a></li><li class="chapter-item expanded "><a href="client.html"><strong aria-hidden="true">3.</strong> Writing a client proxy</a></li><li class="chapter-item expanded "><a href="server.html" class="active"><strong aria-hidden="true">4.</strong> Writing a server interface</a></li><li class="chapter-item expanded "><a href="blocking.html"><strong aria-hidden="true">5.</strong> Blocking API</a></li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">6.</strong> FAQ</a></li><li class="chapter-item expanded affix "><li class="spacer"></li><li class="chapter-item expanded affix "><a href="contributors.html">Contributors</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="introduction.html">Introduction</a></li><li class="chapter-item expanded "><a href="concepts.html">Some D-Bus concepts</a></li><li class="chapter-item expanded "><a href="connection.html">Establishing connections</a></li><li class="chapter-item expanded "><a href="client.html">Writing a client proxy</a></li><li class="chapter-item expanded "><a href="service.html" class="active">Writing a service interface</a></li><li class="chapter-item expanded "><a href="blocking.html">Blocking API</a></li><li class="chapter-item expanded "><a href="faq.html">FAQ</a></li><li class="chapter-item expanded affix "><li class="spacer"></li><li class="chapter-item expanded affix "><a href="contributors.html">Contributors</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -148,7 +148,10 @@
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
                         <a href="https://github.com/dbus2/zbus" title="Git repository" aria-label="Git repository">
-                            <i id="git-repository-button" class="fa fa-gitlab"></i>
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/dbus2/zbus/edit/main/book/src/service.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
                     </div>
@@ -176,10 +179,34 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="writing-a-server-interface"><a class="header" href="#writing-a-server-interface">Writing a server interface</a></h1>
-<p>In this chapter, we are going to implement a server with a method “SayHello”, to greet back the
+                        <h1 id="writing-a-service-interface"><a class="header" href="#writing-a-service-interface">Writing a service interface</a></h1>
+<ul>
+<li><a href="#taking-a-service-name">Taking a service name</a>
+<ul>
+<li><a href="#-hang-on">🖐 Hang on</a></li>
+</ul>
+</li>
+<li><a href="#handling-low-level-messages">Handling low-level messages</a></li>
+<li><a href="#using-the-objectserver">Using the <code>ObjectServer</code></a>
+<ul>
+<li><a href="#mygreeter-simple-example"><code>MyGreeter</code> simple example</a></li>
+<li><a href="#-service-activation-pitfalls">⚠ Service activation pitfalls</a></li>
+<li><a href="#a-more-complete-example">A more complete example</a></li>
+<li><a href="#trait-bounds-for-property-values">Trait-bounds for property values</a></li>
+<li><a href="#method-errors">Method errors</a></li>
+<li><a href="#sending-signals">Sending signals</a></li>
+<li><a href="#notifying-property-changes">Notifying property changes</a></li>
+</ul>
+</li>
+<li><a href="#proxy-generation">Proxy generation</a>
+<ul>
+<li><a href="#known-limitations">Known Limitations</a></li>
+</ul>
+</li>
+</ul>
+<p>In this chapter, we are going to implement a service with a method “SayHello”, to greet back the
 calling client.</p>
-<p>We will first discuss the need to associate a service name with the server. Then we are going to
+<p>We will first discuss the need to associate a service name with the service. Then we are going to
 manually handle incoming messages using the low-level API. Finally, we will present the
 <code>ObjectServer</code> higher-level API and some of its more advanced concepts.</p>
 <h2 id="taking-a-service-name"><a class="header" href="#taking-a-service-name">Taking a service name</a></h2>
@@ -189,7 +216,7 @@ D-Bus API. However, typically services use a service name (aka <em>well-known na
 in this context) can easily discover them.</p>
 <p>In this example, that is exactly what we’re going to do and request the bus for the service name of
 our choice:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018">use zbus::{Connection, Result};
+<pre><pre class="playground"><code class="language-rust no_run edition2021">use zbus::{Connection, Result};
 
 // Although we use `tokio` here, you can use any async runtime of choice.
 #[tokio::main]
@@ -204,16 +231,16 @@ async fn main() -&gt; Result&lt;()&gt; {
 }</code></pre></pre>
 <p>We can check our service is running and is associated with the service name:</p>
 <pre><code class="language-bash">$ busctl --user list | grep zbus
-org.zbus.MyGreeter                             412452 server            elmarco :1.396        user@1000.service -       -
+org.zbus.MyGreeter                             412452 service           elmarco :1.396        user@1000.service -       -
 </code></pre>
 <h3 id="-hang-on"><a class="header" href="#-hang-on">🖐 Hang on</a></h3>
-<p>This example is not handling incoming messages yet. Any attempt to call the server will time out
+<p>This example is not handling incoming messages yet. Any attempt to call the service will time out
 (including the shell completion!).</p>
 <h2 id="handling-low-level-messages"><a class="header" href="#handling-low-level-messages">Handling low-level messages</a></h2>
 <p>At the low-level, you can handle method calls by checking the incoming messages manually.</p>
 <p>Let’s write a <code>SayHello</code> method, that takes a string as argument, and reply with a “hello” greeting
 by replacing the loop above with this code:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018">use futures_util::stream::TryStreamExt;
+<pre><pre class="playground"><code class="language-rust no_run edition2021">use futures_util::stream::TryStreamExt;
 
 // Although we use `tokio` here, you can use any async runtime of choice.
 <span class="boring">#[tokio::main]
@@ -257,7 +284,7 @@ write the D-Bus message handling details. It will dispatch the incoming method c
 respective handlers, as well as replying to introspection requests.</p>
 <h3 id="mygreeter-simple-example"><a class="header" href="#mygreeter-simple-example"><code>MyGreeter</code> simple example</a></h3>
 <p>Let see how to use it for <code>MyGreeter</code> interface:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use zbus::{Connection, interface, Result};
+<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">use zbus::{Connection, interface, Result};
 </span><span class="boring">
 </span>
 struct Greeter;
@@ -273,7 +300,7 @@ impl Greeter {
 #[tokio::main]
 async fn main() -&gt; Result&lt;()&gt; {
     let connection = Connection::session().await?;
-    // setup the server
+    // setup the object server
     connection
         .object_server()
         .at("/org/zbus/MyGreeter", Greeter)
@@ -294,7 +321,7 @@ async fn main() -&gt; Result&lt;()&gt; {
 otherwise incoming messages may be lost. Activated services may receive calls (or messages) right
 after taking their name. This is why it’s typically better to make use of <code>connection::Builder</code> for
 setting up your interfaces and requesting names, and not have to care about this:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use zbus::{connection, interface, Result};
+<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">use zbus::{connection, interface, Result};
 </span><span class="boring">
 </span><span class="boring">
 </span><span class="boring">struct Greeter;
@@ -341,7 +368,7 @@ org.zbus.MyGreeter1                 interface -         -             -
 <p>This is a more complete example, demonstrating some of its usages. It also shows a way to
 synchronize with the interface handlers from outside, thanks to the <code>event_listener</code> crate
 (this is just one of the many ways).</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use zbus::{object_server::SignalContext, connection::Builder, interface, fdo, Result};
+<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">use zbus::{object_server::SignalContext, connection::Builder, interface, fdo, Result};
 </span><span class="boring">
 </span>use event_listener::{Event, Listener};
 
@@ -417,6 +444,13 @@ org.zbus.MyGreeter1                 interface -         -             -
 .GreeterName                        property  s         "GreeterName" emits-change writable
 .GreetedEveryone                    signal    -         -             -
 </code></pre>
+<h3 id="trait-bounds-for-property-values"><a class="header" href="#trait-bounds-for-property-values">Trait-bounds for property values</a></h3>
+<p>If you use custom types for property values, you might get a compile error for missing
+<code>TryFrom&lt;zvariant::Value&lt;'_&gt;&gt;</code> and/or <code>TryFrom&lt;OwnedValue&gt;</code> implementations. This is because
+properties are always sent as Variants on the bus, so you need to implement these conversions for
+your custom types.</p>
+<p>Not to worry though, the <code>zvariant</code> crate provides a <a href="https://docs.rs/zvariant/4/zvariant/derive.Value.html"><code>Value</code></a> and <a href="https://docs.rs/zvariant/4/zvariant/derive.OwnedValue.html"><code>OwnedValue</code></a> derive macro to
+implement these conversions for you.</p>
 <h3 id="method-errors"><a class="header" href="#method-errors">Method errors</a></h3>
 <p>There are two possibilities for the return value of interface methods. The first is for infallible
 method calls, where the return type is a directly serializable value, like the <code>String</code> in
@@ -440,7 +474,7 @@ attributes you can make use of.</p>
 <p>For each property declared through the <code>interface</code> macro, a <code>&lt;property_name&gt;_changed</code> method is
 generated that emits the necessary property change signal. Here is how to use it with the previous
 example code:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use zbus::interface;
+<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">use zbus::interface;
 </span><span class="boring">
 </span><span class="boring">struct Greeter {
 </span><span class="boring">    name: String
@@ -473,7 +507,7 @@ iface.greeter_name_changed(iface_ref.signal_context()).await?;
 <h2 id="proxy-generation"><a class="header" href="#proxy-generation">Proxy generation</a></h2>
 <p><code>interface</code> macro can also generate the client-side proxy code for you. It utilizes the <a href="https://docs.rs/zbus/4/zbus/attr.proxy.html"><code>proxy</code></a>
 macro behind the scenes to achieve this. Here is how to use it:</p>
-<pre><pre class="playground"><code class="language-rust edition2018">use zbus::interface;
+<pre><pre class="playground"><code class="language-rust edition2021">use zbus::interface;
 
 struct Greeter {
     name: String
@@ -524,7 +558,7 @@ proxy.whatever().await?;
 <code>interface</code> as it allows you to avoid duplicating code, there are some limitations to be aware of:</p>
 <ul>
 <li>The trait bounds of the <code>proxy</code> macro methods’ arguments and return value, now also apply to the
-<code>interface</code> methods. For example, when only generating the server-side code, the method return
+<code>interface</code> methods. For example, when only generating the service-side code, the method return
 values need to implement <code>serde::Serialize</code> but when generating the client-side proxy code, the
 method return values need to implement <code>serde::DeserializeOwned</code> as well.</li>
 <li>Reference types in return values of <code>interface</code> methods won’t work. As you may have noticed,

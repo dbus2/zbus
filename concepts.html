@@ -88,7 +88,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded affix "><a href="introduction.html">Introduction</a></li><li class="chapter-item expanded "><a href="concepts.html" class="active"><strong aria-hidden="true">1.</strong> Some D-Bus concepts</a></li><li class="chapter-item expanded "><a href="connection.html"><strong aria-hidden="true">2.</strong> Establishing connections</a></li><li class="chapter-item expanded "><a href="client.html"><strong aria-hidden="true">3.</strong> Writing a client proxy</a></li><li class="chapter-item expanded "><a href="server.html"><strong aria-hidden="true">4.</strong> Writing a server interface</a></li><li class="chapter-item expanded "><a href="blocking.html"><strong aria-hidden="true">5.</strong> Blocking API</a></li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">6.</strong> FAQ</a></li><li class="chapter-item expanded affix "><li class="spacer"></li><li class="chapter-item expanded affix "><a href="contributors.html">Contributors</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="introduction.html">Introduction</a></li><li class="chapter-item expanded "><a href="concepts.html" class="active">Some D-Bus concepts</a></li><li class="chapter-item expanded "><a href="connection.html">Establishing connections</a></li><li class="chapter-item expanded "><a href="client.html">Writing a client proxy</a></li><li class="chapter-item expanded "><a href="service.html">Writing a service interface</a></li><li class="chapter-item expanded "><a href="blocking.html">Blocking API</a></li><li class="chapter-item expanded "><a href="faq.html">FAQ</a></li><li class="chapter-item expanded affix "><li class="spacer"></li><li class="chapter-item expanded affix "><a href="contributors.html">Contributors</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -148,7 +148,10 @@
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
                         <a href="https://github.com/dbus2/zbus" title="Git repository" aria-label="Git repository">
-                            <i id="git-repository-button" class="fa fa-gitlab"></i>
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/dbus2/zbus/edit/main/book/src/concepts.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
                     </div>
@@ -177,9 +180,16 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="some-d-bus-concepts-to-help-newcomers"><a class="header" href="#some-d-bus-concepts-to-help-newcomers">Some D-Bus concepts to help newcomers</a></h1>
+<ul>
+<li><a href="#bus">Bus</a></li>
+<li><a href="#bus-name--service-name">Bus name / service name</a></li>
+<li><a href="#objects-and-object-paths">Objects and Object paths</a></li>
+<li><a href="#interfaces">Interfaces</a></li>
+<li><a href="#good-practices--api-design">Good practices &amp; API design</a></li>
+</ul>
 <h2 id="bus"><a class="header" href="#bus">Bus</a></h2>
-<p>A D-Bus “bus” is a kind of server that handles several connections in a bus-topology fashion. As
-such, it relays messages between connected endpoints, and allows to discover endpoints or sending
+<p>A D-Bus “bus” is a server that handles several connections in a bus-topology fashion. As such, it
+relays messages between connected endpoints, and allows to discover endpoints or sending
 broadcast messages (signals).</p>
 <p>Typically, a Linux system has a system bus, and a session bus. The latter is per-user. It is also
 possible to have private buses or no bus at all (i-e direct peer-to-peer communication instead).</p>

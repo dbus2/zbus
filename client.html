@@ -88,7 +88,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded affix "><a href="introduction.html">Introduction</a></li><li class="chapter-item expanded "><a href="concepts.html"><strong aria-hidden="true">1.</strong> Some D-Bus concepts</a></li><li class="chapter-item expanded "><a href="connection.html"><strong aria-hidden="true">2.</strong> Establishing connections</a></li><li class="chapter-item expanded "><a href="client.html" class="active"><strong aria-hidden="true">3.</strong> Writing a client proxy</a></li><li class="chapter-item expanded "><a href="server.html"><strong aria-hidden="true">4.</strong> Writing a server interface</a></li><li class="chapter-item expanded "><a href="blocking.html"><strong aria-hidden="true">5.</strong> Blocking API</a></li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">6.</strong> FAQ</a></li><li class="chapter-item expanded affix "><li class="spacer"></li><li class="chapter-item expanded affix "><a href="contributors.html">Contributors</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="introduction.html">Introduction</a></li><li class="chapter-item expanded "><a href="concepts.html">Some D-Bus concepts</a></li><li class="chapter-item expanded "><a href="connection.html">Establishing connections</a></li><li class="chapter-item expanded "><a href="client.html" class="active">Writing a client proxy</a></li><li class="chapter-item expanded "><a href="service.html">Writing a service interface</a></li><li class="chapter-item expanded "><a href="blocking.html">Blocking API</a></li><li class="chapter-item expanded "><a href="faq.html">FAQ</a></li><li class="chapter-item expanded affix "><li class="spacer"></li><li class="chapter-item expanded affix "><a href="contributors.html">Contributors</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -148,7 +148,10 @@
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
                         <a href="https://github.com/dbus2/zbus" title="Git repository" aria-label="Git repository">
-                            <i id="git-repository-button" class="fa fa-gitlab"></i>
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/dbus2/zbus/edit/main/book/src/client.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
                     </div>
@@ -177,6 +180,25 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="writing-a-client-proxy"><a class="header" href="#writing-a-client-proxy">Writing a client proxy</a></h1>
+<ul>
+<li><a href="#low-level-call-from-a-zbusconnection">Low-level call from a <code>zbus::Connection</code></a></li>
+<li><a href="#trait-derived-proxy-call">Trait-derived proxy call</a>
+<ul>
+<li><a href="#signals">Signals</a>
+<ul>
+<li><a href="#more-advanced-example">More advanced example</a></li>
+</ul>
+</li>
+<li><a href="#properties">Properties</a>
+<ul>
+<li><a href="#trait-bounds-for-property-values">Trait-bounds for property values</a></li>
+<li><a href="#watching-for-changes">Watching for changes</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#generating-the-trait-from-an-xml-interface">Generating the trait from an XML interface</a></li>
+</ul>
 <p>In this chapter, we are going to see how to make low-level D-Bus method calls. Then we are going to
 dive in, and derive from a trait to make a convenient Rust binding. Finally, we will learn about
 <em>xmlgen</em>, a tool to help us generate a boilerplate trait from the XML of an introspected service.</p>
@@ -230,7 +252,7 @@ example, is for a string. ‘as’ is for array of strings.</p>
 <p>See <a href="https://www.freedesktop.org/software/systemd/man/busctl.html"><code>busctl</code></a> man page for more details.</p>
 <h2 id="low-level-call-from-a-zbusconnection"><a class="header" href="#low-level-call-from-a-zbusconnection">Low-level call from a <code>zbus::Connection</code></a></h2>
 <p>zbus <code>Connection</code> has a <code>call_method()</code> method, which you can use directly:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018">use std::collections::HashMap;
+<pre><pre class="playground"><code class="language-rust no_run edition2021">use std::collections::HashMap;
 use std::error::Error;
 
 use zbus::{zvariant::Value, Connection};
@@ -262,7 +284,7 @@ of <code>0u32</code>?).</p>
 <code>TProxyBlocking</code> (see <a href="blocking.html">chapter on “blocking”</a> for more information on that) implemented thanks
 to procedural macros. The trait methods will have respective <code>impl</code> methods wrapping the D-Bus
 calls:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018">use std::collections::HashMap;
+<pre><pre class="playground"><code class="language-rust no_run edition2021">use std::collections::HashMap;
 use std::error::Error;
 
 use zbus::{zvariant::Value, proxy, Connection};
@@ -320,7 +342,7 @@ convenient to use.</p>
 to notify interested peers of any changes to the state of the service. zbus provides you a
 <a href="https://docs.rs/futures/4/futures/stream/trait.Stream.html"><code>Stream</code></a>-based API for receiving signals.</p>
 <p>Let’s look at this API in action, with an example where we monitor started systemd units.</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">// NOTE: When changing this, please also keep `zbus/examples/watch-systemd-jobs.rs` in sync.
+<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">// NOTE: When changing this, please also keep `zbus/examples/watch-systemd-jobs.rs` in sync.
 </span>use futures_util::stream::StreamExt;
 use zbus::Connection;
 use zbus_macros::proxy;
@@ -363,7 +385,7 @@ async fn watch_systemd_jobs() -&gt; zbus::Result&lt;()&gt; {
 <h4 id="more-advanced-example"><a class="header" href="#more-advanced-example">More advanced example</a></h4>
 <p>Here is a more elaborate example, where we get our location from
 <a href="https://gitlab.freedesktop.org/geoclue/geoclue/-/blob/master/README.md">Geoclue</a>:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018">use zbus::{zvariant::ObjectPath, proxy, Connection, Result};
+<pre><pre class="playground"><code class="language-rust no_run edition2021">use zbus::{zvariant::ObjectPath, proxy, Connection, Result};
 use futures_util::stream::StreamExt;
 
 #[proxy(
@@ -471,7 +493,7 @@ trait MyInterface {
 <p>The <code>state()</code> method will translate to a <code>"State"</code> property <code>Get</code> call.</p>
 <p>To set the property, prefix the name of the property with <code>set_</code>.</p>
 <p>For a more real world example, let’s try and read two properties from systemd’s main service:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use zbus::{Connection, proxy, Result};
+<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">use zbus::{Connection, proxy, Result};
 </span><span class="boring">
 </span>#[proxy(
     interface = "org.freedesktop.systemd1.Manager",
@@ -526,7 +548,7 @@ implement these conversions for you.</p>
 <p>To be notified of a property change, you use a stream API, just like for receiving signals. The
 methods are named after the properties’ names: <code>receive_&lt;prop_name&gt;_changed()</code>.</p>
 <p>Here is an example:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use zbus::{Connection, proxy, Result};
+<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">use zbus::{Connection, proxy, Result};
 </span><span class="boring">use futures_util::stream::StreamExt;
 </span><span class="boring">
 </span><span class="boring">#[tokio::main]
@@ -723,7 +745,7 @@ implemented starting from the <em>xmlgen</em> output.</p>
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="server.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="service.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -737,7 +759,7 @@ implemented starting from the <em>xmlgen</em> output.</p>
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="server.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="service.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>

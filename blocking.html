@@ -88,7 +88,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded affix "><a href="introduction.html">Introduction</a></li><li class="chapter-item expanded "><a href="concepts.html"><strong aria-hidden="true">1.</strong> Some D-Bus concepts</a></li><li class="chapter-item expanded "><a href="connection.html"><strong aria-hidden="true">2.</strong> Establishing connections</a></li><li class="chapter-item expanded "><a href="client.html"><strong aria-hidden="true">3.</strong> Writing a client proxy</a></li><li class="chapter-item expanded "><a href="server.html"><strong aria-hidden="true">4.</strong> Writing a server interface</a></li><li class="chapter-item expanded "><a href="blocking.html" class="active"><strong aria-hidden="true">5.</strong> Blocking API</a></li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">6.</strong> FAQ</a></li><li class="chapter-item expanded affix "><li class="spacer"></li><li class="chapter-item expanded affix "><a href="contributors.html">Contributors</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="introduction.html">Introduction</a></li><li class="chapter-item expanded "><a href="concepts.html">Some D-Bus concepts</a></li><li class="chapter-item expanded "><a href="connection.html">Establishing connections</a></li><li class="chapter-item expanded "><a href="client.html">Writing a client proxy</a></li><li class="chapter-item expanded "><a href="service.html">Writing a service interface</a></li><li class="chapter-item expanded "><a href="blocking.html" class="active">Blocking API</a></li><li class="chapter-item expanded "><a href="faq.html">FAQ</a></li><li class="chapter-item expanded affix "><li class="spacer"></li><li class="chapter-item expanded affix "><a href="contributors.html">Contributors</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -148,7 +148,10 @@
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
                         <a href="https://github.com/dbus2/zbus" title="Git repository" aria-label="Git repository">
-                            <i id="git-repository-button" class="fa fa-gitlab"></i>
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/dbus2/zbus/edit/main/book/src/blocking.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
                     </div>
@@ -177,6 +180,15 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="blocking-api"><a class="header" href="#blocking-api">Blocking API</a></h1>
+<ul>
+<li><a href="#establishing-a-connection">Establishing a connection</a></li>
+<li><a href="#client">Client</a>
+<ul>
+<li><a href="#watching-for-properties">Watching for properties</a></li>
+</ul>
+</li>
+<li><a href="#server">Server</a></li>
+</ul>
 <p>While zbus API being primarily asynchronous (since 2.0) is a great thing, it could easily feel
 daunting for simple use cases. Not to worry! In the spirit of “ease” being a primary goal of zbus,
 it provides blocking wrapper types, under the <a href="https://docs.rs/zbus/4/zbus/blocking/index.html">blocking module</a>.</p>
@@ -193,7 +205,7 @@ except all its methods are blocking.</p>
 <code>blocking::Connection</code> instead of <code>Connection</code>. Moreover, <code>proxy</code> macro generates a
 <code>blocking::Proxy</code> wrapper for you as well. Let’s convert the last example in the previous chapter,
 to use the blocking connection and proxy:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">#![allow(unused)]
+<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>use zbus::{blocking::Connection, zvariant::ObjectPath, proxy, Result};
 
@@ -264,7 +276,7 @@ same as well. One difference that’s not obvious is that the blocking API for r
 implement <a href="https://doc.rust-lang.org/nightly/std/iter/trait.Iterator.html"><code>std::iter::Iterator</code></a> trait instead of <a href="https://docs.rs/futures/0.3.17/futures/stream/trait.Stream.html"><code>futures::stream::Stream</code></a>.</p>
 <h3 id="watching-for-properties"><a class="header" href="#watching-for-properties">Watching for properties</a></h3>
 <p>That’s almost the same as receiving signals:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use zbus::{blocking::Connection, proxy, Result};
+<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">use zbus::{blocking::Connection, proxy, Result};
 </span><span class="boring">
 </span>#[proxy(
     interface = "org.freedesktop.systemd1.Manager",
@@ -292,7 +304,7 @@ fn main() -&gt; Result&lt;()&gt; {
 <p><strong>Note:</strong> Even though you can write non-async methods, these methods are still called from an async
 context. Therefore, you can not use blocking API in the method implementation directly. See note at
 the beginning of this chapter for details on why and a possible workaround.</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2018"><span class="boring">use std::error::Error;
+<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">use std::error::Error;
 </span><span class="boring">use zbus::{blocking::connection, interface, fdo, SignalContext};
 </span><span class="boring">
 </span>use event_listener::{Event, Listener};
@@ -361,7 +373,7 @@ fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="server.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="service.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
@@ -375,7 +387,7 @@ fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="server.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="service.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
