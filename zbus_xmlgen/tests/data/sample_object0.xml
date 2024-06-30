@@ -36,6 +36,10 @@
        <arg name="polyphemus" type="i"/>
        <arg name="calypso" type="v"/>
      </method>
+     <method name="SetWallMessage">
+     </method>
+     <method name="State">
+     </method>
      <signal name="Changed">
        <arg name="new_value" type="b"/>
      </signal>
@@ -52,9 +56,13 @@
      <signal name="SignalDictStringToValue">
        <arg type="a{sv}" name="dict"/>
      </signal>
+     <signal name="State">
+     </signal>
      <property name="Bar" type="y" access="readwrite"/>
      <property name="Foo-Bar" type="y" access="readwrite"/>
      <property name="Matryoshkas" type="a(oiasta{sv})" access="read"/>
+     <property name="WallMessage" type="y" access="readwrite"/>
+     <property name="State" type="y" access="readwrite"/>
    </interface>
    <node name="child_of_sample_object"/>
    <node name="another_child_of_sample_object"/>

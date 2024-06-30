@@ -1,5 +1,6 @@
 use snakecase::ascii::to_snakecase;
 use std::{
+    collections::HashMap,
     error::Error,
     fmt::{Display, Formatter, Write},
     process::{Command, Stdio},
@@ -172,11 +173,13 @@ impl<'i> GenTrait<'i> {
         writeln!(w, ")]")?;
         writeln!(w, "trait {name} {{")?;
 
+        let mut identifiers = Identifier::default();
+
         let mut methods = iface.methods().to_vec();
         methods.sort_by(|a, b| a.name().partial_cmp(&b.name()).unwrap());
         for m in &methods {
             let (inputs, output) = inputs_output_from_args(m.args());
-            let name = to_identifier(&to_snakecase(m.name().as_str()));
+            let name = identifiers.make_unique(&to_identifier(&to_snakecase(m.name().as_str())));
             writeln!(w)?;
             writeln!(w, "    /// {} method", m.name())?;
             if pascal_case(&name) != m.name().as_str() {
@@ -190,7 +193,8 @@ impl<'i> GenTrait<'i> {
         signals.sort_by(|a, b| a.name().partial_cmp(&b.name()).unwrap());
         for signal in &signals {
             let args = parse_signal_args(signal.args());
-            let name = to_identifier(&to_snakecase(signal.name().as_str()));
+            let name =
+                identifiers.make_unique(&to_identifier(&to_snakecase(signal.name().as_str())));
             writeln!(w)?;
             writeln!(w, "    /// {} signal", signal.name())?;
             if pascal_case(&name) != signal.name().as_str() {
@@ -214,18 +218,20 @@ impl<'i> GenTrait<'i> {
             writeln!(w)?;
             writeln!(w, "    /// {} property", p.name())?;
             if p.access().read() {
+                let getter_name = identifiers.make_unique(&name);
                 writeln!(w, "{}", fn_attribute)?;
                 let output = to_rust_type(p.ty(), false, false);
                 hide_clippy_type_complexity_lint(w, p.ty().signature())?;
-                writeln!(w, "    fn {name}(&self) -> zbus::Result<{output}>;",)?;
+                writeln!(w, "    fn {getter_name}(&self) -> zbus::Result<{output}>;",)?;
             }
 
             if p.access().write() {
+                let setter_name = identifiers.make_unique(&format!("set_{}", &name));
                 writeln!(w, "{}", fn_attribute)?;
                 let input = to_rust_type(p.ty(), true, true);
                 writeln!(
                     w,
-                    "    fn set_{name}(&self, value: {input}) -> zbus::Result<()>;",
+                    "    fn {setter_name}(&self, value: {input}) -> zbus::Result<()>;",
                 )?;
             }
         }
@@ -434,6 +440,23 @@ fn to_identifier(id: &str) -> String {
         format!("{id}_")
     } else {
         id.replace('-', "_")
+    }
+}
+
+#[derive(Default)]
+struct Identifier {
+    used_identifiers: HashMap<String, usize>,
+}
+
+impl Identifier {
+    fn make_unique(&mut self, identifier: &str) -> String {
+        let use_count = self
+            .used_identifiers
+            .entry(identifier.to_owned())
+            .or_default();
+        let new_identifier = format!("{}{}", &identifier, "_".repeat(*use_count));
+        *use_count += 1;
+        new_identifier
     }
 }
 
