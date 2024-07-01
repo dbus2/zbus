@@ -974,20 +974,25 @@ impl Connection {
                     }) {
                         if let Some(conn) = weak_conn.upgrade() {
                             let hdr = msg.header();
-                            match hdr.destination() {
-                                // Unique name is already checked by the match rule.
-                                Some(BusName::Unique(_)) | None => (),
-                                Some(BusName::WellKnown(dest)) => {
-                                    let names = conn.inner.registered_names.lock().await;
-                                    // destination doesn't matter if no name has been registered
-                                    // (probably means name it's registered through external means).
-                                    if !names.is_empty() && !names.contains_key(dest) {
-                                        trace!(
-                                            "Got a method call for a different destination: {}",
-                                            dest
-                                        );
+                            // If we're connected to a bus, skip the destination check as the
+                            // server will only send us method calls destined to us.
+                            if !conn.is_bus() {
+                                match hdr.destination() {
+                                    // Unique name is already checked by the match rule.
+                                    Some(BusName::Unique(_)) | None => (),
+                                    Some(BusName::WellKnown(dest)) => {
+                                        let names = conn.inner.registered_names.lock().await;
+                                        // destination doesn't matter if no name has been registered
+                                        // (probably means the name is registered through external
+                                        // means).
+                                        if !names.is_empty() && !names.contains_key(dest) {
+                                            trace!(
+                                                "Got a method call for a different destination: {}",
+                                                dest
+                                            );
 
-                                        continue;
+                                            continue;
+                                        }
                                     }
                                 }
                             }
