@@ -31,20 +31,10 @@ Same rules apply here as for bug reports and feature requests. Plus:
 * We also prefer adding [emoji prefixes to commit messages](https://gitmoji.carloscuesta.me/). Since
   the `gitmoji` CLI tool can be very [slow](https://github.com/zeenix/gimoji#rationale), we
   recommend using [`gimoji`](https://github.com/zeenix/gimoji) instead.
-* Add a prefix indicating the packages being changed. Use either the package name or an abbreviation.
-  
-  | package name    | abbreviation |
-  |-----------------|--------------|
-  | zbus            | zb           |
-  | zbus_macros     | zm           |
-  | zbus_names      | zn           |
-  | zbus_xml        | zx           |
-  | zbus_xmlgen     | zx           |
-  | zvariant        | zv           |
-  | zvariant_derive | zv           |
-  | zvariant_utils  | zu           |
-
-  E.g. for a commit changing the packages `zbus` and `zvariant`, prefix the commit message with `zb,zv: `.
+* Add a prefix indicating the packages being changed. Use either the package name or an abbreviation
+  (for example, `zb` for `zbus`, `zv` for `zvariant` etc). If a commit touches multiple packages,
+  separate with a comma. For example, for a commit changing the packages `zbus` and `zvariant`,
+  prefix the commit message with `zb,zv: `.
 * Add details to each commit about the changes it contains. PR description is for summarizing the
   overall changes in the PR, while commit logs are for describing the specific changes of the
   commit in question.
