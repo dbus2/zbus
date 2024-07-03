@@ -553,6 +553,19 @@ mod tests {
         assert_eq!(&decoded, "hello world!");
     }
 
+    #[cfg(feature = "heapless")]
+    #[test]
+    fn heapless_string_value() {
+        use heapless::String;
+
+        let s = String::<32>::try_from("hello world!").unwrap();
+        let ctxt = Context::new_dbus(LE, 0);
+        let encoded = to_bytes(ctxt, &s).unwrap();
+        assert_eq!(encoded.len(), 17);
+        let decoded: String<32> = encoded.deserialize().unwrap().0;
+        assert_eq!(&decoded, "hello world!");
+    }
+
     #[test]
     fn signature_value() {
         let sig = Signature::try_from("yys").unwrap();
@@ -652,10 +665,12 @@ mod tests {
         let decoded: [u8; 2] = encoded.deserialize().unwrap().0;
         assert_eq!(&decoded, &[77u8, 88]);
 
-        // Then rest of the tests just use ArrayVec or Vec
+        // Then rest of the tests just use ArrayVec, heapless::Vec or Vec
         #[cfg(feature = "arrayvec")]
         let ay = ArrayVec::from([77u8, 88]);
-        #[cfg(not(feature = "arrayvec"))]
+        #[cfg(all(not(feature = "arrayvec"), feature = "heapless"))]
+        let ay = heapless::Vec::<_, 2>::from_slice(&[77u8, 88]).unwrap();
+        #[cfg(all(not(feature = "arrayvec"), not(feature = "heapless")))]
         let ay = vec![77u8, 88];
         let ctxt = Context::new_dbus(LE, 0);
         let encoded = to_bytes(ctxt, &ay).unwrap();
@@ -663,7 +678,9 @@ mod tests {
 
         #[cfg(feature = "arrayvec")]
         let decoded: ArrayVec<u8, 2> = encoded.deserialize().unwrap().0;
-        #[cfg(not(feature = "arrayvec"))]
+        #[cfg(all(not(feature = "arrayvec"), feature = "heapless"))]
+        let decoded: heapless::Vec<u8, 2> = encoded.deserialize().unwrap().0;
+        #[cfg(all(not(feature = "arrayvec"), not(feature = "heapless")))]
         let decoded: Vec<u8> = encoded.deserialize().unwrap().0;
         assert_eq!(&decoded.as_slice(), &[77u8, 88]);
 

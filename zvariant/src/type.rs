@@ -187,6 +187,25 @@ impl<const CAP: usize> Type for arrayvec::ArrayString<CAP> {
     }
 }
 
+#[cfg(feature = "heapless")]
+impl<T, const CAP: usize> Type for heapless::Vec<T, CAP>
+where
+    T: Type,
+{
+    #[inline]
+    fn signature() -> Signature<'static> {
+        <[T]>::signature()
+    }
+}
+
+#[cfg(feature = "heapless")]
+impl<const CAP: usize> Type for heapless::String<CAP> {
+    #[inline]
+    fn signature() -> Signature<'static> {
+        <&str>::signature()
+    }
+}
+
 // Empty type deserves empty signature
 impl Type for () {
     #[inline]

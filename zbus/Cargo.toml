@@ -18,6 +18,7 @@ uuid = ["zvariant/uuid"]
 url = ["zvariant/url"]
 time = ["zvariant/time"]
 chrono = ["zvariant/chrono"]
+heapless = ["zvariant/heapless"]
 # Enables ser/de of `Option<T>` as an array of 0 or 1 elements.
 option-as-array = ["zvariant/option-as-array"]
 # Enables API that is only needed for bus implementations (enables `p2p`).
