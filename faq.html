@@ -190,7 +190,7 @@
 </ul>
 </li>
 <li><a href="#why-arent-property-values-updating-for-my-service-that-doesnt-notify-changes">Why aren’t property values updating for my service that doesn’t notify changes?</a></li>
-<li><a href="#how-do-i-use-option-with-zbus">How do I use `Option`` with zbus?</a>
+<li><a href="#how-do-i-use-optiont-with-zbus">How do I use <code>Option&lt;T&gt;</code> with zbus?</a>
 <ul>
 <li><a href="#1-designation-of-a-special-value-as-none">1. Designation of a special value as <code>None</code></a></li>
 <li><a href="#2-encoding-as-an-array-a">2. Encoding as an array (<code>a?</code>)</a></li>
@@ -289,7 +289,7 @@ method to list all properties you wish to disable caching for.</p>
 method.</p>
 </li>
 </ul>
-<h2 id="how-do-i-use-option-with-zbus"><a class="header" href="#how-do-i-use-option-with-zbus">How do I use `Option<T>`` with zbus?</a></h2>
+<h2 id="how-do-i-use-optiont-with-zbus"><a class="header" href="#how-do-i-use-optiont-with-zbus">How do I use <code>Option&lt;T&gt;</code> with zbus?</a></h2>
 <p>While <code>Option&lt;T&gt;</code> is a very commonly used type in Rust, there is unfortunately <a href="https://gitlab.freedesktop.org/dbus/dbus/-/issues/25">no concept of a
 nullable-type in the D-Bus protocol</a>. However, there are two ways to simulate it:</p>
 <h3 id="1-designation-of-a-special-value-as-none"><a class="header" href="#1-designation-of-a-special-value-as-none">1. Designation of a special value as <code>None</code></a></h3>

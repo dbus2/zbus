@@ -196,7 +196,7 @@ macros, zbus is able to make interacting with D-Bus very easy.</p>
 <h2 id="zvariant"><a class="header" href="#zvariant">zvariant</a></h2>
 <p>D-Bus defines a marshalling format for its messages. The <a href="https://crates.io/crates/zvariant">zvariant</a> crate provides a <a href="https://serde.rs/">serde</a>-based
 <a href="https://docs.rs/zvariant/">API</a> to serialize/deserialize Rust data types to/from this format. Outside of D-Bus context, a
-modified form of this format, <a href="https://developer.gnome.org/glib/stable/glib-GVariant.html">GVariant</a>
+modified form of this format, <a href="https://developer.gnome.org/documentation/specifications/gvariant-specification-1.0.html">GVariant</a>
 is very commonly used for efficient storage of arbitrary data and is also supported by this crate.</p>
 <h2 id="zbus"><a class="header" href="#zbus">zbus</a></h2>
 <p>The <a href="https://crates.io/crates/zbus">zbus crate</a> provides the main API you will use to interact with D-Bus from Rust. It takes care

@@ -194,7 +194,7 @@ macros, zbus is able to make interacting with D-Bus very easy.</p>
 <h2 id="zvariant"><a class="header" href="#zvariant">zvariant</a></h2>
 <p>D-Bus defines a marshalling format for its messages. The <a href="https://crates.io/crates/zvariant">zvariant</a> crate provides a <a href="https://serde.rs/">serde</a>-based
 <a href="https://docs.rs/zvariant/">API</a> to serialize/deserialize Rust data types to/from this format. Outside of D-Bus context, a
-modified form of this format, <a href="https://developer.gnome.org/glib/stable/glib-GVariant.html">GVariant</a>
+modified form of this format, <a href="https://developer.gnome.org/documentation/specifications/gvariant-specification-1.0.html">GVariant</a>
 is very commonly used for efficient storage of arbitrary data and is also supported by this crate.</p>
 <h2 id="zbus"><a class="header" href="#zbus">zbus</a></h2>
 <p>The <a href="https://crates.io/crates/zbus">zbus crate</a> provides the main API you will use to interact with D-Bus from Rust. It takes care
@@ -1467,7 +1467,7 @@ fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
 </ul>
 </li>
 <li><a href="faq.html#why-arent-property-values-updating-for-my-service-that-doesnt-notify-changes">Why aren’t property values updating for my service that doesn’t notify changes?</a></li>
-<li><a href="faq.html#how-do-i-use-option-with-zbus">How do I use `Option`` with zbus?</a>
+<li><a href="faq.html#how-do-i-use-optiont-with-zbus">How do I use <code>Option&lt;T&gt;</code> with zbus?</a>
 <ul>
 <li><a href="faq.html#1-designation-of-a-special-value-as-none">1. Designation of a special value as <code>None</code></a></li>
 <li><a href="faq.html#2-encoding-as-an-array-a">2. Encoding as an array (<code>a?</code>)</a></li>
@@ -1566,7 +1566,7 @@ method to list all properties you wish to disable caching for.</p>
 method.</p>
 </li>
 </ul>
-<h2 id="how-do-i-use-option-with-zbus"><a class="header" href="#how-do-i-use-option-with-zbus">How do I use `Option<T>`` with zbus?</a></h2>
+<h2 id="how-do-i-use-optiont-with-zbus"><a class="header" href="#how-do-i-use-optiont-with-zbus">How do I use <code>Option&lt;T&gt;</code> with zbus?</a></h2>
 <p>While <code>Option&lt;T&gt;</code> is a very commonly used type in Rust, there is unfortunately <a href="https://gitlab.freedesktop.org/dbus/dbus/-/issues/25">no concept of a
 nullable-type in the D-Bus protocol</a>. However, there are two ways to simulate it:</p>
 <h3 id="1-designation-of-a-special-value-as-none"><a class="header" href="#1-designation-of-a-special-value-as-none">1. Designation of a special value as <code>None</code></a></h3>
