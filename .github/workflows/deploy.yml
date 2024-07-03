@@ -35,7 +35,7 @@ jobs:
       - name: Build Books
         run: |
           mdbook build book
-          mkdir -p public/1.0
+          mkdir public
           cp -r ./book/book/* ./public
           # link to the old name for service
           ln -rs public/service.html public/server.html
