@@ -37,6 +37,8 @@ jobs:
           mdbook build book
           mkdir -p public/1.0
           cp -r ./book/book/* ./public
+          # link to the old name for service
+          ln -rs public/service.html public/server.html
       - name: Deploy 🚀
         uses: JamesIves/github-pages-deploy-action@v4.6.1
         with:
