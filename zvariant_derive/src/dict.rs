@@ -20,7 +20,8 @@ fn dict_name_for_field(
             Some("UPPERCASE") => Ok(ident.to_ascii_uppercase()),
             Some("PascalCase") => Ok(case::pascal_or_camel_case(&ident, true)),
             Some("camelCase") => Ok(case::pascal_or_camel_case(&ident, false)),
-            Some("snake_case") => Ok(case::snake_case(&ident)),
+            Some("snake_case") => Ok(case::snake_or_kebab_case(&ident, true)),
+            Some("kebab-case") => Ok(case::snake_or_kebab_case(&ident, false)),
             None => Ok(ident),
             Some(other) => Err(Error::new(
                 f.span(),
