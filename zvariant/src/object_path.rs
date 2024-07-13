@@ -116,7 +116,7 @@ impl<'a> ObjectPath<'a> {
 
 impl std::default::Default for ObjectPath<'_> {
     fn default() -> Self {
-        ObjectPath::from_str_unchecked("/")
+        ObjectPath::from_static_str_unchecked("/")
     }
 }
 
