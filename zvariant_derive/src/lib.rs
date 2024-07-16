@@ -224,6 +224,7 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
 /// * `"PascalCase"`
 /// * `"camelCase"`
 /// * `"snake_case"`
+/// * `"kebab-case"`
 ///
 /// [`Serialize`]: https://docs.serde.rs/serde/trait.Serialize.html
 #[proc_macro_derive(SerializeDict, attributes(zvariant))]
@@ -292,6 +293,7 @@ pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// * `"PascalCase"`
 /// * `"camelCase"`
 /// * `"snake_case"`
+/// * `"kebab-case"`
 ///
 /// [`Deserialize`]: https://docs.serde.rs/serde/de/trait.Deserialize.html
 #[proc_macro_derive(DeserializeDict, attributes(zvariant))]

@@ -515,7 +515,7 @@ pub fn expand<T: AttrParse + Into<ImplAttrs>, M: AttrParse + Into<MethodAttrs>>(
                     "Write-only properties aren't supported yet",
                 ))?;
 
-                let sk_member_name = case::snake_case(&member_name);
+                let sk_member_name = case::snake_or_kebab_case(&member_name, true);
                 let prop_changed_method_name = format_ident!("{sk_member_name}_changed");
                 let prop_invalidate_method_name = format_ident!("{sk_member_name}_invalidate");
 
