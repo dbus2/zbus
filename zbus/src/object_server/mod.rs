@@ -767,9 +767,19 @@ impl ObjectServer {
                     async move {
                         let server = connection.object_server();
                         let hdr = msg.header();
-                        server
+                        if let Err(e) = server
                             .dispatch_call_to_iface(iface, &connection, &msg, &hdr)
                             .await
+                        {
+                            // When not spawning a task, this error is handled by the caller.
+                            debug!("Returning error: {}", e);
+                            if let Err(e) = connection.reply_dbus_error(&hdr, e).await {
+                                debug!(
+                                    "Error dispatching message. Message: {:?}, error: {:?}",
+                                    msg, e
+                                );
+                            }
+                        }
                     }
                     .instrument(trace_span!("{}", task_name)),
                     &task_name,

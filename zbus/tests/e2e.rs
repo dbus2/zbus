@@ -535,6 +535,16 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
         .build()
         .await?;
     debug!("Created: {:?}", proxy);
+
+    // First let's call a non-existent method. It should immediately fail.
+    // There was a regression where object server would just not reply in this case:
+    // https://github.com/dbus2/zbus/issues/905
+    assert!(proxy
+        .inner()
+        .call::<_, _, ()>("NonExistantMethod", &())
+        .await
+        .is_err());
+
     let props_proxy = zbus::fdo::PropertiesProxy::builder(&conn)
         .destination("org.freedesktop.MyService")?
         .path("/org/freedesktop/MyService")?
