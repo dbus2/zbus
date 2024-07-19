@@ -21,7 +21,7 @@ proc-macro2 = "1.0.81"
 syn = { version = "2.0.64", features = ["extra-traits", "full"] }
 quote = "1.0.36"
 proc-macro-crate = "3.1.0"
-zvariant_utils = { path = "../zvariant_utils", version = "=2.0.0" }
+zvariant_utils = { path = "../zvariant_utils", version = "=2.1.0" }
 
 [dev-dependencies]
 zvariant = { path = "../zvariant", features = ["enumflags2"] }
