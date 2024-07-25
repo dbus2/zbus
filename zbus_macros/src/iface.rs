@@ -374,7 +374,7 @@ pub fn expand<T: AttrParse + Into<ImplAttrs>, M: AttrParse + Into<MethodAttrs>>(
             };
         let proxy = proxy.map(|p| Proxy::new(ty, &name, p, &zbus));
 
-        (name, !spawn.unwrap_or(false), proxy)
+        (name, spawn.unwrap_or(true), proxy)
     };
 
     // Store parsed information about each method
