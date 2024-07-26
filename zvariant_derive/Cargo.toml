@@ -28,3 +28,7 @@ zvariant = { path = "../zvariant", features = ["enumflags2"] }
 enumflags2 = { version = "0.7.9", features = ["serde"] }
 serde = { version = "1.0.200", features = ["derive"] }
 serde_repr = "0.1.19"
+
+[lints]
+workspace = true
+

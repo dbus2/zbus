@@ -33,3 +33,7 @@ trybuild = "1.0.93"
 rustversion = "1.0.15"
 async-io = "2.3.2"
 futures-util = { version = "0.3.30", default-features = false }
+
+[lints]
+workspace = true
+
