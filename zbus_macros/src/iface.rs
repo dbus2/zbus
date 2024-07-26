@@ -557,7 +557,7 @@ pub fn expand<T: AttrParse + Into<ImplAttrs>, M: AttrParse + Into<MethodAttrs>>(
                     };
                     let value_arg = match &*typed_inputs
                     .first()
-                    .ok_or_else(|| Error::new_spanned(&inputs, "Expected a value argument"))?
+                    .ok_or_else(|| Error::new_spanned(inputs, "Expected a value argument"))?
                     .ty
                 {
                     Type::Reference(_) => quote!(value),
