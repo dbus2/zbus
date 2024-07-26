@@ -234,7 +234,8 @@ pub fn iter_meta_lists(attrs: &[Attribute], list_name: &str) -> Result<impl Iter
 /// The generated parse method checks for some error conditions:
 ///
 /// 1. Unknown attributes. When multiple attribute groups are defined in the same macro invocation,
-/// one gets a different error message when providing an attribute from a different attribute group.
+///    one gets a different error message when providing an attribute from a different attribute
+///    group.
 /// 2. Duplicate attributes.
 /// 3. Missing attribute value or present attribute value when none is expected.
 /// 4. Invalid literal type for attributes with values.
