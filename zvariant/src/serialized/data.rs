@@ -141,7 +141,7 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
     /// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
     pub fn deserialize<'d, T>(&'d self) -> Result<(T, usize)>
     where
-        T: ?Sized + Deserialize<'d> + Type,
+        T: Deserialize<'d> + Type,
     {
         let signature = T::signature();
         self.deserialize_for_signature(&signature)
@@ -215,7 +215,7 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
     /// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
     pub fn deserialize_for_signature<'d, S, T>(&'d self, signature: S) -> Result<(T, usize)>
     where
-        T: ?Sized + Deserialize<'d>,
+        T: Deserialize<'d>,
         S: TryInto<Signature<'d>>,
         S::Error: Into<Error>,
     {

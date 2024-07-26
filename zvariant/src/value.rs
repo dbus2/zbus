@@ -411,7 +411,7 @@ impl<'a> Value<'a> {
     /// [`From<Value>`]: https://doc.rust-lang.org/std/convert/trait.From.html
     pub fn downcast<T>(self) -> Result<T, crate::Error>
     where
-        T: ?Sized + TryFrom<Value<'a>>,
+        T: TryFrom<Value<'a>>,
         <T as TryFrom<Value<'a>>>::Error: Into<crate::Error>,
     {
         if let Value::Value(v) = self {
@@ -461,7 +461,7 @@ impl<'a> Value<'a> {
     /// [`downcast`]: enum.Value.html#method.downcast
     pub fn downcast_ref<T>(&'a self) -> Result<T, crate::Error>
     where
-        T: ?Sized + TryFrom<&'a Value<'a>>,
+        T: TryFrom<&'a Value<'a>>,
         <T as TryFrom<&'a Value<'a>>>::Error: Into<crate::Error>,
     {
         if let Value::Value(v) = self {

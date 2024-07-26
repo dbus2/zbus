@@ -67,7 +67,7 @@ impl<'a> Array<'a> {
     /// Get the value at the given index.
     pub fn get<V>(&'a self, idx: usize) -> Result<Option<V>>
     where
-        V: ?Sized + TryFrom<&'a Value<'a>>,
+        V: TryFrom<&'a Value<'a>>,
         <V as TryFrom<&'a Value<'a>>>::Error: Into<crate::Error>,
     {
         self.elements
