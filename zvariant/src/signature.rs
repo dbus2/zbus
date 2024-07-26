@@ -124,11 +124,17 @@ impl Hash for Bytes<'_> {
 ///
 /// [identifies]: https://dbus.freedesktop.org/doc/dbus-specification.html#type-system
 /// [`slice`]: #method.slice
-#[derive(Hash, Clone, PartialOrd, Ord)]
+#[derive(Clone, PartialOrd, Ord)]
 pub struct Signature<'a> {
     bytes: Bytes<'a>,
     pos: usize,
     end: usize,
+}
+
+impl<'a> Hash for Signature<'a> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        without_outer_parentheses(self).hash(state)
+    }
 }
 
 assert_impl_all!(Signature<'_>: Send, Sync, Unpin);
