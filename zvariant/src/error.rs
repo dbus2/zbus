@@ -60,6 +60,8 @@ pub enum Error {
     OutOfBounds,
     /// The maximum allowed depth for containers in encoding was exceeded.
     MaxDepthExceeded(MaxDepthExceeded),
+    /// Invalid signature.
+    InvalidSignature,
 }
 
 assert_impl_all!(Error: Send, Sync, Unpin);
@@ -74,6 +76,7 @@ impl PartialEq for Error {
             (Error::PaddingNot0(p), Error::PaddingNot0(other)) => p == other,
             (Error::UnknownFd, Error::UnknownFd) => true,
             (Error::MaxDepthExceeded(max1), Error::MaxDepthExceeded(max2)) => max1 == max2,
+            (Error::MissingFramingOffset, Error::MissingFramingOffset) => true,
             (_, _) => false,
         }
     }
@@ -115,6 +118,7 @@ impl fmt::Display for Error {
                 "Out of bounds range specified",
             ),
             Error::MaxDepthExceeded(max) => write!(f, "{max}"),
+            Error::InvalidSignature => write!(f, "Invalid signature"),
         }
     }
 }
@@ -137,6 +141,7 @@ impl Clone for Error {
             }
             Error::OutOfBounds => Error::OutOfBounds,
             Error::MaxDepthExceeded(max) => Error::MaxDepthExceeded(*max),
+            Error::InvalidSignature => Error::InvalidSignature,
         }
     }
 }
