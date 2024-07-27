@@ -1785,6 +1785,7 @@ mod p2p_tests {
             Builder::vsock_stream(client).p2p().build(),
         )
     }
+
     #[cfg(any(unix, not(feature = "tokio")))]
     #[test]
     #[timeout(15000)]
