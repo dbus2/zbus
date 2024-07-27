@@ -586,9 +586,9 @@ impl Connection {
     ///
     /// * Same as that of [`Connection::request_name`].
     /// * If you wish to track changes to name ownership after this call, make sure that the
-    /// [`fdo::NameAcquired`] and/or [`fdo::NameLostStream`] instance(s) are created **before**
-    /// calling this method. Otherwise, you may loose the signal if it's emitted after this call but
-    /// just before the stream instance get created.
+    ///   [`fdo::NameAcquired`] and/or [`fdo::NameLostStream`] instance(s) are created **before**
+    ///   calling this method. Otherwise, you may loose the signal if it's emitted after this call
+    ///   but just before the stream instance get created.
     pub async fn request_name_with_flags<'w, W>(
         &self,
         well_known_name: W,
@@ -836,10 +836,6 @@ impl Connection {
     /// Here is how one would typically run the zbus executor through tokio's scheduler:
     ///
     /// ```
-    /// # // Disable on windows because somehow it triggers a stack overflow there:
-    /// # // https://gitlab.freedesktop.org/zeenix/zbus/-/jobs/34023494
-    /// # #[cfg(not(target_os = "unix"))]
-    /// # {
     /// use zbus::connection::Builder;
     /// use tokio::task::spawn;
     ///
@@ -871,7 +867,6 @@ impl Connection {
     ///
     ///     // All your other async code goes here.
     /// }
-    /// # }
     /// ```
     ///
     /// **Note**: zbus 2.1 added support for tight integration with tokio. This means, if you use

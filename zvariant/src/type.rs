@@ -97,7 +97,7 @@ where
 
 impl<'de, T> DynamicDeserialize<'de> for T
 where
-    T: Type + ?Sized + Deserialize<'de>,
+    T: Type + Deserialize<'de>,
 {
     type Deserializer = PhantomData<T>;
 

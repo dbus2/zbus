@@ -33,3 +33,7 @@ clap = { version = "4.5.4", features = ["derive", "wrap_help"] }
 
 [dev-dependencies]
 pretty_assertions = "1.4"
+
+[lints]
+workspace = true
+

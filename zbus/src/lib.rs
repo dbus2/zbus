@@ -913,7 +913,7 @@ mod tests {
             "org.zbus.Issue260",
         )
         .await?
-        .call("Whatever", &())
+        .call::<_, _, ()>("Whatever", &())
         .await?;
         Ok(())
     }

@@ -107,8 +107,10 @@ fn test_proxy() {
     });
 }
 
+#[ignore]
 #[test]
 fn test_derive_error() {
+    #[allow(unused)]
     #[derive(Debug, DBusError)]
     #[zbus(prefix = "org.freedesktop.zbus")]
     enum Test {

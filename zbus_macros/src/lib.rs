@@ -228,14 +228,14 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///   behavior.
 ///
 ///   - **When True (Default):** Suitable for interfaces where method calls are independent of each
-///   other or can be processed asynchronously without strict ordering. In scenarios where a client
-///   must wait for a reply before making further dependent calls, this default behavior is
-///   appropriate.
+///     other or can be processed asynchronously without strict ordering. In scenarios where a
+///     client must wait for a reply before making further dependent calls, this default behavior is
+///     appropriate.
 ///
 ///   - **When False:** Use this setting to ensure methods are handled in the order they are
-///   received, which is crucial for interfaces requiring sequential processing of method calls.
-///   However, care must be taken to avoid making D-Bus method calls from within your interface
-///   methods when this setting is false, as it may lead to deadlocks under certain conditions.
+///     received, which is crucial for interfaces requiring sequential processing of method calls.
+///     However, care must be taken to avoid making D-Bus method calls from within your interface
+///     methods when this setting is false, as it may lead to deadlocks under certain conditions.
 ///
 /// * `proxy` - If specified, a proxy type will also be generated for the interface. This attribute
 ///   supports all the [`macro@proxy`]-specific sub-attributes (e.g `gen_async`). The common
@@ -252,9 +252,9 @@ pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///   * `emits_changed_signal` - specifies how property changes are signaled. Valid values are those
 ///     documented in [DBus specifications][dbus_emits_changed_signal]:
 ///     * `"true"` - (default) the change signal is always emitted when the property's setter is
-///     called. The value of the property is included in the signal.
+///       called. The value of the property is included in the signal.
 ///     * `"invalidates"` - the change signal is emitted, but the value is not included in the
-///     signal.
+///       signal.
 ///     * `"const"` - the property never changes, thus no signal is ever emitted for it.
 ///     * `"false"` - the change signal is not emitted if the property changes.
 
