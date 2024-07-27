@@ -25,6 +25,7 @@ zvariant_derive = { version = "=4.2.0", path = "../zvariant_derive" }
 endi = "1.1.0"
 serde = { version = "1.0.200", features = ["derive"] }
 static_assertions = "1.1.0"
+nom = "7"
 
 # Optional dependencies
 
