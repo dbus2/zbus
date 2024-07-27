@@ -836,10 +836,6 @@ impl Connection {
     /// Here is how one would typically run the zbus executor through tokio's scheduler:
     ///
     /// ```
-    /// # // Disable on windows because somehow it triggers a stack overflow there:
-    /// # // https://gitlab.freedesktop.org/zeenix/zbus/-/jobs/34023494
-    /// # #[cfg(not(target_os = "unix"))]
-    /// # {
     /// use zbus::connection::Builder;
     /// use tokio::task::spawn;
     ///
@@ -871,7 +867,6 @@ impl Connection {
     ///
     ///     // All your other async code goes here.
     /// }
-    /// # }
     /// ```
     ///
     /// **Note**: zbus 2.1 added support for tight integration with tokio. This means, if you use
