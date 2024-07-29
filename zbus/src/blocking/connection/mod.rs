@@ -257,6 +257,14 @@ impl Connection {
     pub fn close(self) -> Result<()> {
         block_on(self.inner.close())
     }
+
+    /// Gracefully close the connection, waiting for all other references to be dropped.
+    ///
+    /// Blocking version of [`crate::Connection::graceful_shutdown`]. See docs there for
+    /// more details and caveats.
+    pub fn graceful_shutdown(self) {
+        block_on(self.inner.graceful_shutdown())
+    }
 }
 
 impl From<crate::Connection> for Connection {
