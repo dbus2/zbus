@@ -7,12 +7,14 @@ use std::{
     num::{Saturating, Wrapping},
     ops::{Range, RangeFrom, RangeInclusive, RangeTo},
     path::{Path, PathBuf},
-    rc::Rc,
-    sync::atomic::{
-        AtomicBool, AtomicI16, AtomicI32, AtomicI64, AtomicI8, AtomicU16, AtomicU32, AtomicU64,
-        AtomicU8,
+    rc::{Rc, Weak as RcWeak},
+    sync::{
+        atomic::{
+            AtomicBool, AtomicI16, AtomicI32, AtomicI64, AtomicI8, AtomicU16, AtomicU32, AtomicU64,
+            AtomicU8,
+        },
+        Arc, Mutex, RwLock, Weak as ArcWeak,
     },
-    sync::{Arc, Mutex, RwLock},
     time::Duration,
 };
 
@@ -339,10 +341,12 @@ deref_impl!(T, <T: ?Sized + Type> Type for &T);
 deref_impl!(T, <T: ?Sized + Type> Type for &mut T);
 deref_impl!(T, <T: ?Sized + Type + ToOwned> Type for Cow<'_, T>);
 deref_impl!(T, <T: ?Sized + Type> Type for Arc<T>);
+deref_impl!(T, <T: ?Sized + Type> Type for ArcWeak<T>);
 deref_impl!(T, <T: ?Sized + Type> Type for Mutex<T>);
 deref_impl!(T, <T: ?Sized + Type> Type for RwLock<T>);
 deref_impl!(T, <T: ?Sized + Type> Type for Box<T>);
 deref_impl!(T, <T: ?Sized + Type> Type for Rc<T>);
+deref_impl!(T, <T: ?Sized + Type> Type for RcWeak<T>);
 
 #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
 impl<T> Type for Option<T>
