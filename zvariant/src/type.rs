@@ -7,6 +7,10 @@ use std::{
     num::{Saturating, Wrapping},
     path::{Path, PathBuf},
     rc::Rc,
+    sync::atomic::{
+        AtomicBool, AtomicI16, AtomicI32, AtomicI64, AtomicI8, AtomicU16, AtomicU32, AtomicU64,
+        AtomicU8,
+    },
     sync::{Arc, Mutex, RwLock},
     time::Duration,
 };
@@ -763,5 +767,35 @@ macro_rules! impl_type_for_wrapper {
 }
 
 impl_type_for_wrapper!(Wrapping<T>, Saturating<T>, Reverse<T>);
+
+////////////////////////////////////////////////////////////////////////////////
+
+macro_rules! atomic_impl {
+    ($($ty:ident $size:expr => $primitive:ident)*) => {
+        $(
+            static_assertions::assert_impl_all!($ty: From<$primitive>);
+
+            #[cfg(target_has_atomic = $size)]
+            impl Type for $ty {
+                #[inline]
+                fn signature() -> Signature<'static> {
+                    <$primitive>::signature()
+                }
+            }
+        )*
+    }
+}
+
+atomic_impl! {
+    AtomicBool "8" => bool
+    AtomicI8 "8" => i8
+    AtomicI16 "16" => i16
+    AtomicI32 "32" => i32
+    AtomicI64 "64" => i64
+    AtomicU8 "8" => u8
+    AtomicU16 "16" => u16
+    AtomicU32 "32" => u32
+    AtomicU64 "64" => u64
+}
 
 // TODO: Blanket implementation for more types: https://github.com/serde-rs/serde/blob/master/serde/src/ser/impls.rs
