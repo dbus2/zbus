@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Project
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+    xmlns:foaf="http://xmlns.com/foaf/0.1/"
+    xmlns:gnome="http://api.gnome.org/doap-extensions#"
+    xmlns="http://usefulinc.com/ns/doap#">
+
+  <name xml:lang="en">zbus</name>
+  <shortdesc xml:lang="en">Rust implementation of D-Bus</shortdesc>
+  <description>A Rust API for D-Bus communication. The goal is to provide a safe and simple high- and low-level API akin to GDBus, that doesn't depend on C libraries.</description>
+
+  <homepage rdf:resource="https://dbus2.github.io/zbus/" />
+
+  <programming-language>Rust</programming-language>
+
+  <maintainer>
+    <foaf:Person>
+      <foaf:name>Zeeshan Ali Khan</foaf:name>
+      <foaf:mbox rdf:resource="mailto:zeenix@gmail.com" />
+      <foaf:account>
+        <foaf:OnlineAccount>
+          <foaf:accountServiceHomepage rdf:resource="https://github.com"/>
+          <foaf:accountName>zeenix</foaf:accountName>
+        </foaf:OnlineAccount>
+      </foaf:account>
+    </foaf:Person>
+  </maintainer>
+
+</Project>
