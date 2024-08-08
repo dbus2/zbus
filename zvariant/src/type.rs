@@ -77,6 +77,106 @@ pub trait DynamicDeserialize<'de>: DynamicType {
         S::Error: Into<zvariant::Error>;
 }
 
+/// Implements the [`Type`] trait by delegating the signature to a simpler type (usually a tuple).
+/// Tests that ensure that the two types are serialize-compatible are auto-generated.
+///
+/// Example:
+/// ```no_compile
+/// impl_type_with_repr! {
+///    // Duration is serialized as a (u64, u32) pair.
+///    Duration => (u64, u32) {
+///        // The macro auto-generates tests for us,
+///        // so we need to provide a test name.
+///        duration {
+///            // Sample values used to test serialize compatibility.
+///            samples = [Duration::ZERO, Duration::MAX],
+///            // Converts our type into the simpler "repr" type.
+///            repr(d) = (d.as_secs(), d.subsec_nanos()),
+///        }
+///    }
+/// }
+/// ```
+macro_rules! impl_type_with_repr {
+    ($($ty:ident)::+ $(<$typaram:ident $(: $($tbound:ident)::+)?>)? => $repr:ty {
+        $test_mod:ident $(<$($typaram_sample:ident = $typaram_sample_value:ty),*>)? {
+            $(signature = $signature:literal,)?
+            samples = $samples:expr,
+            repr($sample_ident:ident) = $into_repr:expr,
+        }
+    }) => {
+        impl $(<$typaram $(: $($tbound)::+)?>)? crate::Type for $($ty)::+ $(<$typaram>)? {
+            #[inline]
+            fn signature() -> crate::Signature<'static> {
+                <$repr>::signature()
+            }
+        }
+
+        #[cfg(test)]
+        #[allow(unused_imports)]
+        mod $test_mod {
+            use super::*;
+            use crate::{serialized::Context, to_bytes, LE};
+
+            $($(type $typaram_sample = $typaram_sample_value;)*)?
+            type Ty = $($ty)::+$(<$typaram>)?;
+
+            const _: fn() = || {
+                fn assert_impl_all<'de, T: ?Sized + serde::Serialize + serde::Deserialize<'de>>() {}
+                assert_impl_all::<Ty>();
+            };
+
+            #[test]
+            fn repr_can_be_deserialized_from_encoded_type() {
+                let ctx = Context::new_dbus(LE, 0);
+                let samples = $samples;
+                let _: &[Ty] = &samples;
+
+                for $sample_ident in samples {
+                    let repr: $repr = $into_repr;
+                    let encoded = to_bytes(ctx, &$sample_ident).unwrap();
+                    let (decoded, _): ($repr, _) = encoded.deserialize().unwrap();
+                    assert_eq!(repr, decoded);
+                }
+            }
+
+            #[test]
+            fn type_can_be_deserialized_from_encoded_repr() {
+                let ctx = Context::new_dbus(LE, 0);
+                let samples = $samples;
+                let _: &[Ty] = &samples;
+
+                for $sample_ident in samples {
+                    let repr: $repr = $into_repr;
+                    let encoded = to_bytes(ctx, &repr).unwrap();
+                    let (decoded, _): (Ty, _) = encoded.deserialize().unwrap();
+                    assert_eq!($sample_ident, decoded);
+                }
+            }
+
+            #[test]
+            fn encoding_of_type_and_repr_match() {
+                let ctx = Context::new_dbus(LE, 0);
+                let samples = $samples;
+                let _: &[Ty] = &samples;
+
+                for $sample_ident in samples {
+                    let repr: $repr = $into_repr;
+                    let encoded = to_bytes(ctx, &$sample_ident).unwrap();
+                    let encoded_repr = to_bytes(ctx, &repr).unwrap();
+                    assert_eq!(encoded.bytes(), encoded_repr.bytes());
+                }
+            }
+
+            $(
+                #[test]
+                fn signature_equals() {
+                    assert_eq!(<Ty as Type>::signature(), $signature);
+                }
+            )?
+        }
+    };
+}
+
 impl<T> DynamicType for T
 where
     T: Type + ?Sized,
