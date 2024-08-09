@@ -677,6 +677,16 @@ impl_type! {
 
 #[cfg(feature = "chrono")]
 impl_type! {
+    chrono::NaiveDate => &str {
+        test_chrono_naive_date {
+            samples = [chrono::NaiveDate::from_ymd_opt(2016, 7, 8).unwrap()],
+            repr(d) = &format!("{d:?}"),
+        }
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl_type! {
     chrono::NaiveDateTime => &str {
         test_chrono_naive_date_time {
             samples = [chrono::NaiveDate::from_ymd_opt(2016, 7, 8).unwrap().and_hms_opt(9, 10, 11).unwrap()],
