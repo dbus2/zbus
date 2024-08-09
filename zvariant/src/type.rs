@@ -696,6 +696,26 @@ impl_type_with_repr! {
 
 #[cfg(feature = "chrono")]
 impl_type_with_repr! {
+    chrono::Month => &str {
+        chrono_month {
+            samples = [chrono::Month::January, chrono::Month::December],
+            repr(month) = month.name(),
+        }
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl_type_with_repr! {
+    chrono::NaiveDate => &str {
+        chrono_naive_date {
+            samples = [chrono::NaiveDate::from_ymd_opt(2016, 7, 8).unwrap()],
+            repr(d) = &format!("{d:?}"),
+        }
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl_type_with_repr! {
     chrono::NaiveDateTime => &str {
         chrono_naive_date_time {
             samples = [chrono::NaiveDate::from_ymd_opt(2016, 7, 8).unwrap().and_hms_opt(9, 10, 11).unwrap()],
@@ -710,6 +730,17 @@ impl_type_with_repr! {
         chrono_naive_time {
             samples = [chrono::NaiveTime::from_hms_opt(9, 10, 11).unwrap()],
             repr(t) = &format!("{t:?}"),
+        }
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl_type_with_repr! {
+    chrono::Weekday => &str {
+        chrono_weekday {
+            samples = [chrono::Weekday::Mon, chrono::Weekday::Fri],
+            // Serialized as the weekday's name.
+            repr(weekday) = &weekday.to_string(),
         }
     }
 }
