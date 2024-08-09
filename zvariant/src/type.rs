@@ -1,8 +1,10 @@
 use crate::{utils::*, Signature};
 use serde::de::{Deserialize, DeserializeSeed};
 use std::{
+    cmp::Reverse,
     marker::PhantomData,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
+    num::{Saturating, Wrapping},
     path::{Path, PathBuf},
     rc::Rc,
     sync::{Arc, Mutex, RwLock},
@@ -744,5 +746,22 @@ impl_type_with_repr! {
         }
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////
+
+macro_rules! impl_type_for_wrapper {
+    ($($wrapper:ident<$T:ident>),+) => {
+        $(
+            impl<$T: Type> Type for $wrapper<$T> {
+                #[inline]
+                fn signature() -> Signature<'static> {
+                    <$T>::signature()
+                }
+            }
+        )+
+    };
+}
+
+impl_type_for_wrapper!(Wrapping<T>, Saturating<T>, Reverse<T>);
 
 // TODO: Blanket implementation for more types: https://github.com/serde-rs/serde/blob/master/serde/src/ser/impls.rs
