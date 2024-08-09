@@ -1,6 +1,7 @@
 use crate::{utils::*, Signature};
 use serde::de::{Deserialize, DeserializeSeed};
 use std::{
+    cell::{Cell, RefCell},
     cmp::Reverse,
     marker::PhantomData,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6},
@@ -369,6 +370,8 @@ deref_impl!(T, <T: ?Sized + Type> Type for RwLock<T>);
 deref_impl!(T, <T: ?Sized + Type> Type for Box<T>);
 deref_impl!(T, <T: ?Sized + Type> Type for Rc<T>);
 deref_impl!(T, <T: ?Sized + Type> Type for RcWeak<T>);
+deref_impl!(T, <T: ?Sized + Type> Type for Cell<T>);
+deref_impl!(T, <T: ?Sized + Type> Type for RefCell<T>);
 
 #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
 impl<T> Type for Option<T>
