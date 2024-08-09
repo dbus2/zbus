@@ -596,8 +596,6 @@ impl_type_with_repr! {
     }
 }
 
-// FIXME: Ignoring the `serde-human-readable` feature of `time` crate in these impls:
-// https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L110
 #[cfg(feature = "time")]
 impl_type_with_repr! {
     time::Date => (i32, u16) {
