@@ -265,11 +265,33 @@ macro_rules! array_type {
 
 array_type!([T]);
 array_type!(Vec<T>);
+array_type!(std::collections::VecDeque<T>);
+array_type!(std::collections::LinkedList<T>);
 
 impl<T, S> Type for std::collections::HashSet<T, S>
 where
     T: Type + Eq + Hash,
     S: BuildHasher,
+{
+    #[inline]
+    fn signature() -> Signature<'static> {
+        <[T]>::signature()
+    }
+}
+
+impl<T> Type for std::collections::BTreeSet<T>
+where
+    T: Type + Ord,
+{
+    #[inline]
+    fn signature() -> Signature<'static> {
+        <[T]>::signature()
+    }
+}
+
+impl<T> Type for std::collections::BinaryHeap<T>
+where
+    T: Type + Ord,
 {
     #[inline]
     fn signature() -> Signature<'static> {
