@@ -715,4 +715,15 @@ impl_type! {
     }
 }
 
+#[cfg(feature = "chrono")]
+impl_type! {
+    chrono::Weekday => &str {
+        test_chrono_weekday {
+            samples = [chrono::Weekday::Mon, chrono::Weekday::Fri],
+            // Serialized as the weekday's name.
+            repr(weekday) = &weekday.to_string(),
+        }
+    }
+}
+
 // TODO: Blanket implementation for more types: https://github.com/serde-rs/serde/blob/master/serde/src/ser/impls.rs
