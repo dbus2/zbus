@@ -8,7 +8,7 @@ dive in, and derive from a trait to make a convenient Rust binding. Finally, we 
 
 To make this learning "hands-on", we are going to call and bind the cross-desktop notification
 service (please refer to this
-[reference](https://specifications.freedesktop.org/notification-spec/notification-spec-latest.html)
+[reference](https://specifications.freedesktop.org/notification-spec/latest/)
 document for further details on this API).
 
 Let's start by playing with the service from the shell, and notify the desktop with [`busctl`][^busctl]:
@@ -621,4 +621,4 @@ There you have it, a Rust-friendly binding for your D-Bus service!
 [`Value`]: https://docs.rs/zvariant/4/zvariant/derive.Value.html
 [`OwnedValue`]: https://docs.rs/zvariant/4/zvariant/derive.OwnedValue.html
 
-[^busctl]: `busctl` is part of [`systemd`](https://www.freedesktop.org/wiki/Software/systemd/).
+[^busctl]: `busctl` is part of [`systemd`](https://systemd.io/).

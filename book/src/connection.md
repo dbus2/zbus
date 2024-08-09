@@ -70,7 +70,7 @@ cargo feature of `zbus` is enabled.
 
 [NetworkManager]: https://developer.gnome.org/NetworkManager/stable/spec.html
 [BlueZ]: https://git.kernel.org/pub/scm/bluetooth/bluez.git/tree/doc
-[PID1]: https://www.freedesktop.org/wiki/Software/systemd/dbus/
+[PID1]: https://www.freedesktop.org/software/systemd/man/latest/org.freedesktop.systemd1.html
 [`futures::stream::Stream`]: https://docs.rs/futures/4/futures/stream/trait.Stream.html
 [`MessageStream`]: https://docs.rs/zbus/4/zbus/struct.MessageStream.html
 [`connection::Builder::address`]: https://docs.rs/zbus/4/zbus/connection/struct.Builder.html#method.address

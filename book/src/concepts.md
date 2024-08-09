@@ -60,7 +60,7 @@ Please read the [D-Bus API Design Guidelines] carefully for other similar consid
 
 Onwards to implementation details & examples!
 
-[FreeDesktop Notifications Service]: https://specifications.freedesktop.org/notification-spec/notification-spec-latest.html
+[FreeDesktop Notifications Service]: https://specifications.freedesktop.org/notification-spec/latest/
 [D-Bus API Design Guidelines]: https://dbus.freedesktop.org/doc/dbus-api-design.html
 [Bus names chapter]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus
 [Basic types chapter]: https://dbus.freedesktop.org/doc/dbus-specification.html#basic-types
