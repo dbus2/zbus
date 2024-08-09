@@ -5,6 +5,7 @@ use std::{
     marker::PhantomData,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
     num::{Saturating, Wrapping},
+    ops::{Range, RangeFrom, RangeInclusive, RangeTo},
     path::{Path, PathBuf},
     rc::Rc,
     sync::atomic::{
@@ -797,5 +798,46 @@ atomic_impl! {
     AtomicU32 "32" => u32
     AtomicU64 "64" => u64
 }
+
+////////////////////////////////////////////////////////////////////////////////
+
+impl_type_with_repr! {
+    Range<Idx: Type> => (Idx, Idx) {
+        range <Idx = u32> {
+            samples = [0..42, 17..100],
+            repr(range) = (range.start, range.end),
+        }
+    }
+}
+
+impl_type_with_repr! {
+    RangeFrom<Idx: Type> => (Idx,) {
+        range_from <Idx = u32> {
+            samples = [0.., 17..],
+            repr(range) = (range.start,),
+        }
+    }
+}
+
+impl_type_with_repr! {
+    RangeInclusive<Idx: Type> => (Idx, Idx) {
+        range_inclusive <Idx = u32> {
+            samples = [0..=42, 17..=100],
+            repr(range) = (*range.start(), *range.end()),
+        }
+    }
+}
+
+impl_type_with_repr! {
+    RangeTo<Idx: Type> => (Idx,) {
+        range_to <Idx = u32> {
+            samples = [..42, ..100],
+            repr(range) = (range.end,),
+        }
+    }
+}
+
+// serde::Serialize is not implemented for `RangeToInclusive` and `RangeFull`:
+// https://github.com/serde-rs/serde/issues/2685
 
 // TODO: Blanket implementation for more types: https://github.com/serde-rs/serde/blob/master/serde/src/ser/impls.rs
