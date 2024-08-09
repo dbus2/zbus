@@ -677,6 +677,16 @@ impl_type! {
 
 #[cfg(feature = "chrono")]
 impl_type! {
+    chrono::Month => &str {
+        test_chrono_month {
+            samples = [chrono::Month::January, chrono::Month::December],
+            repr(month) = month.name(),
+        }
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl_type! {
     chrono::NaiveDate => &str {
         test_chrono_naive_date {
             samples = [chrono::NaiveDate::from_ymd_opt(2016, 7, 8).unwrap()],
