@@ -10,8 +10,8 @@ use std::{
     rc::{Rc, Weak as RcWeak},
     sync::{
         atomic::{
-            AtomicBool, AtomicI16, AtomicI32, AtomicI64, AtomicI8, AtomicU16, AtomicU32, AtomicU64,
-            AtomicU8,
+            AtomicBool, AtomicI16, AtomicI32, AtomicI64, AtomicI8, AtomicIsize, AtomicU16,
+            AtomicU32, AtomicU64, AtomicU8, AtomicUsize,
         },
         Arc, Mutex, RwLock, Weak as ArcWeak,
     },
@@ -463,6 +463,32 @@ macro_rules! map_impl {
 map_impl!(BTreeMap<K: Ord, V>);
 map_impl!(HashMap<K: Eq + Hash, V, H: BuildHasher>);
 
+////////////////////////////////////////////////////////////////////////////////
+
+impl_type_with_repr! {
+    // usize is serialized as u64:
+    // https://github.com/serde-rs/serde/blob/9b868ef831c95f50dd4bde51a7eb52e3b9ee265a/serde/src/ser/impls.rs#L28
+    usize => u64 {
+        usize {
+            samples = [usize::MAX, usize::MIN],
+            repr(n) = n as u64,
+        }
+    }
+}
+
+impl_type_with_repr! {
+    // isize is serialized as i64:
+    // https://github.com/serde-rs/serde/blob/9b868ef831c95f50dd4bde51a7eb52e3b9ee265a/serde/src/ser/impls.rs#L22
+    isize => i64 {
+        isize {
+            samples = [isize::MAX, isize::MIN],
+            repr(n) = n as i64,
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
 impl_type_with_repr! {
     Duration => (u64, u32) {
         duration {
@@ -803,7 +829,7 @@ macro_rules! atomic_impl {
             impl Type for $ty {
                 #[inline]
                 fn signature() -> Signature<'static> {
-                    <$primitive>::signature()
+                    <$primitive as Type>::signature()
                 }
             }
         )*
@@ -815,11 +841,13 @@ atomic_impl! {
     AtomicI8 "8" => i8
     AtomicI16 "16" => i16
     AtomicI32 "32" => i32
+    AtomicIsize "ptr" => isize
     AtomicI64 "64" => i64
     AtomicU8 "8" => u8
     AtomicU16 "16" => u16
     AtomicU32 "32" => u32
     AtomicU64 "64" => u64
+    AtomicUsize "ptr" => usize
 }
 
 ////////////////////////////////////////////////////////////////////////////////
