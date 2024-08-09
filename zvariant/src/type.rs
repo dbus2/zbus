@@ -3,7 +3,7 @@ use serde::de::{Deserialize, DeserializeSeed};
 use std::{
     cmp::Reverse,
     marker::PhantomData,
-    net::{IpAddr, Ipv4Addr, Ipv6Addr},
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6},
     num::{Saturating, Wrapping},
     ops::{Range, RangeFrom, RangeInclusive, RangeTo},
     path::{Path, PathBuf},
@@ -513,6 +513,27 @@ impl_type_with_repr! {
         }
     }
 }
+
+impl_type_with_repr! {
+    SocketAddrV4 => (Ipv4Addr, u16) {
+        socket_addr_v4 {
+            samples = [SocketAddrV4::new(Ipv4Addr::LOCALHOST, 8080)],
+            repr(addr) = (*addr.ip(), addr.port()),
+        }
+    }
+}
+
+impl_type_with_repr! {
+    SocketAddrV6 => (Ipv6Addr, u16) {
+        socket_addr_v6 {
+            samples = [SocketAddrV6::new(Ipv6Addr::LOCALHOST, 8080, 0, 0)],
+            // https://github.com/serde-rs/serde/blob/9b868ef831c95f50dd4bde51a7eb52e3b9ee265a/serde/src/ser/impls.rs#L966
+            repr(addr) = (*addr.ip(), addr.port()),
+        }
+    }
+}
+
+// TODO(bash): Implement DynamicType for SocketAddr
 
 // BitFlags
 #[cfg(feature = "enumflags2")]
