@@ -452,42 +452,54 @@ macro_rules! map_impl {
 map_impl!(BTreeMap<K: Ord, V>);
 map_impl!(HashMap<K: Eq + Hash, V, H: BuildHasher>);
 
-impl Type for Duration {
-    fn signature() -> Signature<'static> {
-        <(u64, u32)>::signature()
+impl_type_with_repr! {
+    Duration => (u64, u32) {
+        duration {
+            samples = [Duration::ZERO, Duration::MAX],
+            repr(d) = (d.as_secs(), d.subsec_nanos()),
+        }
     }
 }
 
-impl Type for SystemTime {
-    #[inline]
-    fn signature() -> Signature<'static> {
-        <(
-            // seconds
-            u64,
-            // nano
-            u32,
-        )>::signature()
+impl_type_with_repr! {
+    SystemTime => (u64, u32) {
+        system_time {
+            samples = [SystemTime::now()],
+            repr(t) = {
+                let since_epoch = t.duration_since(SystemTime::UNIX_EPOCH).unwrap();
+                (since_epoch.as_secs(), since_epoch.subsec_nanos())
+            },
+        }
     }
 }
 
-impl Type for Ipv4Addr {
-    #[inline]
-    fn signature() -> Signature<'static> {
-        <[u8; 4]>::signature()
+impl_type_with_repr! {
+    Ipv4Addr => [u8; 4] {
+        ipv4_addr {
+            samples = [Ipv4Addr::LOCALHOST],
+            repr(addr) = addr.octets(),
+        }
     }
 }
 
-impl Type for Ipv6Addr {
-    #[inline]
-    fn signature() -> Signature<'static> {
-        <[u8; 16]>::signature()
+impl_type_with_repr! {
+    Ipv6Addr => [u8; 16] {
+        ipv6_addr {
+            samples = [Ipv6Addr::LOCALHOST],
+            repr(addr) = addr.octets(),
+        }
     }
 }
 
-impl Type for IpAddr {
-    #[inline]
-    fn signature() -> Signature<'static> {
-        <(u32, &[u8])>::signature()
+impl_type_with_repr! {
+    IpAddr => (u32, &[u8]) {
+        ip_addr {
+            samples = [IpAddr::V4(Ipv4Addr::LOCALHOST), IpAddr::V6(Ipv6Addr::LOCALHOST)],
+            repr(addr) = match addr {
+                IpAddr::V4(v4) => (0, &v4.octets()),
+                IpAddr::V6(v6) => (1, &v6.octets()),
+            },
+        }
     }
 }
 
@@ -532,140 +544,174 @@ static_str_type!(Path);
 static_str_type!(PathBuf);
 
 #[cfg(feature = "uuid")]
-impl Type for uuid::Uuid {
-    fn signature() -> Signature<'static> {
-        Signature::from_static_str_unchecked("ay")
+impl_type_with_repr! {
+    uuid::Uuid => &[u8] {
+        uuid_ {
+            signature = "ay",
+            samples = [uuid::Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").unwrap()],
+            repr(u) = u.as_bytes(),
+        }
     }
 }
 
 #[cfg(feature = "url")]
-static_str_type!(url::Url);
+impl_type_with_repr! {
+    url::Url => &str {
+        url_ {
+            samples = [url::Url::parse("https://example.com").unwrap()],
+            repr(url) = &url.to_string(),
+        }
+    }
+}
 
 // FIXME: Ignoring the `serde-human-readable` feature of `time` crate in these impls:
 // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L110
 #[cfg(feature = "time")]
-impl Type for time::Date {
-    fn signature() -> Signature<'static> {
-        // Serialized as a (year, ordinal) tuple:
-        // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L92
-        <(i32, u16)>::signature()
+impl_type_with_repr! {
+    time::Date => (i32, u16) {
+        time_date {
+            samples = [time::Date::MIN, time::Date::MAX],
+            // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L92
+            repr(d) = (d.year(), d.ordinal()),
+        }
     }
 }
 
 #[cfg(feature = "time")]
-impl Type for time::Duration {
-    fn signature() -> Signature<'static> {
-        // Serialized as a (whole seconds, nanoseconds) tuple:
-        // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L119
-        <(i64, i32)>::signature()
+impl_type_with_repr! {
+    time::Duration => (i64, i32) {
+        time_duration {
+            samples = [time::Duration::MIN, time::Duration::MAX],
+            // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L119
+            repr(d) = (d.whole_seconds(), d.subsec_nanoseconds()),
+        }
     }
 }
 
 #[cfg(feature = "time")]
-impl Type for time::OffsetDateTime {
-    fn signature() -> Signature<'static> {
-        // Serialized as a tuple:
-        // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L155
-        <(
-            // year
-            i32,
-            // ordinal
-            u16,
-            // hour
-            u8,
-            // minute
-            u8,
-            // second
-            u8,
-            // nanosecond
-            u32,
-            // offset.whole_hours
-            i8,
-            // offset.minutes_past_hour
-            i8,
-            // offset.seconds_past_minute
-            i8,
-        )>::signature()
+impl_type_with_repr! {
+    time::OffsetDateTime => (i32, u16, u8, u8, u8, u32, i8, i8, i8) {
+        time_offset_date_time {
+            samples = [
+                time::OffsetDateTime::now_utc(),
+                time::OffsetDateTime::new_in_offset(
+                    time::Date::from_calendar_date(2024, time::Month::May, 4).unwrap(),
+                    time::Time::from_hms_nano(15, 32, 43, 2_000).unwrap(),
+                    time::UtcOffset::from_hms(1, 2, 3).unwrap())
+            ],
+            // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L155
+            repr(d) = (
+                d.year(),
+                d.ordinal(),
+                d.hour(),
+                d.minute(),
+                d.second(),
+                d.nanosecond(),
+                d.offset().whole_hours(),
+                d.offset().minutes_past_hour(),
+                d.offset().seconds_past_minute()
+            ),
+        }
     }
 }
 
 #[cfg(feature = "time")]
-impl Type for time::PrimitiveDateTime {
-    fn signature() -> Signature<'static> {
-        // Serialized as a tuple:
-        // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L200
-        <(
-            // year
-            i32,
-            // ordinal
-            u16,
-            // hour
-            u8,
-            // minute
-            u8,
-            // second
-            u8,
-            // nanosecond
-            u32,
-        )>::signature()
+impl_type_with_repr! {
+    time::PrimitiveDateTime => (i32, u16, u8, u8, u8, u32) {
+        time_primitive_date_time {
+            samples = [
+                time::PrimitiveDateTime::MIN,
+                time::PrimitiveDateTime::MAX,
+                time::PrimitiveDateTime::new(
+                    time::Date::from_calendar_date(2024, time::Month::May, 4).unwrap(),
+                    time::Time::from_hms_nano(15, 32, 43, 2_000).unwrap())
+            ],
+            // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L200
+            repr(d) = (
+                d.year(),
+                d.ordinal(),
+                d.hour(),
+                d.minute(),
+                d.second(),
+                d.nanosecond()
+            ),
+        }
     }
 }
 
 #[cfg(feature = "time")]
-impl Type for time::Time {
-    fn signature() -> Signature<'static> {
-        // Serialized as a tuple:
-        // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L246
-        <(
-            // hour
-            u8,
-            // minute
-            u8,
-            // second
-            u8,
-            // nanosecond
-            u32,
-        )>::signature()
+impl_type_with_repr! {
+    time::Time => (u8, u8, u8, u32) {
+        time_time {
+            samples = [time::Time::MIDNIGHT, time::Time::from_hms_nano(15, 32, 43, 2_000).unwrap()],
+            // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L246
+            repr(t) = (t.hour(), t.minute(), t.second(), t.nanosecond()),
+        }
     }
 }
 
 #[cfg(feature = "time")]
-impl Type for time::UtcOffset {
-    fn signature() -> Signature<'static> {
-        // Serialized as a (whole hours, minutes past hour, seconds past minute) tuple:
-        // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L282
-        <(i8, i8, i8)>::signature()
+impl_type_with_repr! {
+    time::UtcOffset => (i8, i8, i8) {
+        time_utc_offset {
+            samples = [time::UtcOffset::UTC, time::UtcOffset::from_hms(1, 2, 3).unwrap()],
+            // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L282
+            repr(offset) = (offset.whole_hours(), offset.minutes_past_hour(), offset.seconds_past_minute()),
+        }
     }
 }
 
 #[cfg(feature = "time")]
-impl Type for time::Weekday {
-    fn signature() -> Signature<'static> {
-        // Serialized as number from Monday:
-        // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L312
-        u8::signature()
+impl_type_with_repr! {
+    time::Weekday => u8 {
+        time_weekday {
+            samples = [time::Weekday::Monday, time::Weekday::Wednesday, time::Weekday::Friday],
+            // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L312
+            repr(weekday) = weekday.number_from_monday(),
+        }
     }
 }
 
 #[cfg(feature = "time")]
-impl Type for time::Month {
-    fn signature() -> Signature<'static> {
-        // Serialized as month number:
-        // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L337
-        u8::signature()
+impl_type_with_repr! {
+    time::Month => u8 {
+        time_month {
+            samples = [time::Month::January, time::Month::July, time::Month::December],
+            // Serialized as month number:
+            // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L337
+            repr(month) = month as u8,
+        }
     }
 }
 
 #[cfg(feature = "chrono")]
-impl<Tz: chrono::TimeZone> Type for chrono::DateTime<Tz> {
-    fn signature() -> Signature<'static> {
-        <&str>::signature()
+impl_type_with_repr! {
+    chrono::DateTime<Tz: chrono::TimeZone> => &str {
+        chrono_date_time <Tz = chrono::offset::Utc> {
+            samples = [chrono::DateTime::<Tz>::MIN_UTC, chrono::DateTime::<Tz>::MAX_UTC],
+            repr(date) = &date.format("%Y-%m-%dT%H:%M:%S%.fZ").to_string(),
+        }
     }
 }
 
 #[cfg(feature = "chrono")]
-static_str_type!(chrono::NaiveDateTime);
+impl_type_with_repr! {
+    chrono::NaiveDateTime => &str {
+        chrono_naive_date_time {
+            samples = [chrono::NaiveDate::from_ymd_opt(2016, 7, 8).unwrap().and_hms_opt(9, 10, 11).unwrap()],
+            repr(dt) = &format!("{dt:?}"),
+        }
+    }
+}
+
 #[cfg(feature = "chrono")]
-static_str_type!(chrono::NaiveTime);
+impl_type_with_repr! {
+    chrono::NaiveTime => &str {
+        chrono_naive_time {
+            samples = [chrono::NaiveTime::from_hms_opt(9, 10, 11).unwrap()],
+            repr(t) = &format!("{t:?}"),
+        }
+    }
+}
 
 // TODO: Blanket implementation for more types: https://github.com/serde-rs/serde/blob/master/serde/src/ser/impls.rs
