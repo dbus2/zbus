@@ -136,6 +136,19 @@ macro_rules! impl_type_with_repr {
             };
 
             #[test]
+            fn type_can_be_deserialized_from_encoded_type() {
+                let ctx = Context::new_dbus(LE, 0);
+                let samples = $samples;
+                let _: &[Ty] = &samples;
+
+                for $sample_ident in samples {
+                    let encoded = to_bytes(ctx, &$sample_ident).unwrap();
+                    let (decoded, _): (Ty, _) = encoded.deserialize().unwrap();
+                    assert_eq!($sample_ident, decoded);
+                }
+            }
+
+            #[test]
             fn repr_can_be_deserialized_from_encoded_type() {
                 let ctx = Context::new_dbus(LE, 0);
                 let samples = $samples;
@@ -651,7 +664,7 @@ impl_type_with_repr! {
 impl_type_with_repr! {
     time::Date => (i32, u16) {
         time_date {
-            samples = [time::Date::MIN, time::Date::MAX],
+            samples = [time::Date::MIN, time::Date::MAX, time::Date::from_calendar_date(2011, time::Month::June, 21).unwrap()],
             // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L92
             repr(d) = (d.year(), d.ordinal()),
         }
@@ -662,7 +675,7 @@ impl_type_with_repr! {
 impl_type_with_repr! {
     time::Duration => (i64, i32) {
         time_duration {
-            samples = [time::Duration::MIN, time::Duration::MAX],
+            samples = [time::Duration::MIN, time::Duration::MAX, time::Duration::new(42, 123456789)],
             // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L119
             repr(d) = (d.whole_seconds(), d.subsec_nanoseconds()),
         }
@@ -724,7 +737,7 @@ impl_type_with_repr! {
 impl_type_with_repr! {
     time::Time => (u8, u8, u8, u32) {
         time_time {
-            samples = [time::Time::MIDNIGHT, time::Time::from_hms_nano(15, 32, 43, 2_000).unwrap()],
+            samples = [time::Time::MIDNIGHT, time::Time::from_hms(23, 42, 59).unwrap(), time::Time::from_hms_nano(15, 32, 43, 2_000).unwrap()],
             // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L246
             repr(t) = (t.hour(), t.minute(), t.second(), t.nanosecond()),
         }

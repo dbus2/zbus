@@ -123,10 +123,7 @@ pub use endi::*;
 #[cfg(test)]
 #[allow(clippy::disallowed_names)]
 mod tests {
-    use std::{
-        collections::{BTreeMap, HashMap},
-        net::{IpAddr, Ipv4Addr, Ipv6Addr},
-    };
+    use std::collections::{BTreeMap, HashMap};
 
     #[cfg(feature = "arrayvec")]
     use arrayvec::{ArrayString, ArrayVec};
@@ -2005,33 +2002,6 @@ mod tests {
         let _: ZVStruct<'_> = encoded.deserialize_for_signature(signature).unwrap().0;
     }
 
-    #[test]
-    fn ip_addr() {
-        let ctxt = Context::new_dbus(LE, 0);
-
-        // First the bare specific types.
-        let localhost_v4 = Ipv4Addr::new(127, 0, 0, 1);
-        let encoded = to_bytes(ctxt, &localhost_v4).unwrap();
-        let decoded: Ipv4Addr = encoded.deserialize().unwrap().0;
-        assert_eq!(localhost_v4, decoded);
-
-        let localhost_v6 = Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1);
-        let encoded = to_bytes(ctxt, &localhost_v6).unwrap();
-        let decoded: Ipv6Addr = encoded.deserialize().unwrap().0;
-        assert_eq!(localhost_v6, decoded);
-
-        // Now wrapper under the generic IpAddr.
-        let localhost_v4 = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-        let encoded = to_bytes(ctxt, &localhost_v4).unwrap();
-        let decoded: IpAddr = encoded.deserialize().unwrap().0;
-        assert_eq!(localhost_v4, decoded);
-
-        let localhost_v6 = IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1));
-        let encoded = to_bytes(ctxt, &localhost_v6).unwrap();
-        let decoded: IpAddr = encoded.deserialize().unwrap().0;
-        assert_eq!(localhost_v6, decoded);
-    }
-
     #[cfg(feature = "ostree-tests")]
     #[test]
     fn ostree_de() {
@@ -2050,45 +2020,6 @@ mod tests {
         let _: Summary<'_> = encoded.deserialize().unwrap().0;
         // If we're able to deserialize all the data successfully, don't bother checking the summary
         // data.
-    }
-
-    #[test]
-    #[cfg(feature = "time")]
-    fn time() {
-        // time::Date
-        let date = time::Date::from_calendar_date(2011, time::Month::June, 21).unwrap();
-        let ctxt = Context::new_dbus(LE, 0);
-        let encoded = to_bytes(ctxt, &date).unwrap();
-        let decoded: time::Date = encoded.deserialize().unwrap().0;
-        assert_eq!(date, decoded);
-
-        // time::Duration
-        let duration = time::Duration::new(42, 123456789);
-        let ctxt = Context::new_dbus(LE, 0);
-        let encoded = to_bytes(ctxt, &duration).unwrap();
-        let decoded: time::Duration = encoded.deserialize().unwrap().0;
-        assert_eq!(duration, decoded);
-
-        // time::OffsetDateTime
-        let offset = time::OffsetDateTime::now_utc();
-        let ctxt = Context::new_dbus(LE, 0);
-        let encoded = to_bytes(ctxt, &offset).unwrap();
-        let decoded: time::OffsetDateTime = encoded.deserialize().unwrap().0;
-        assert_eq!(offset, decoded);
-
-        // time::Time
-        let time = time::Time::from_hms(23, 42, 59).unwrap();
-        let ctxt = Context::new_dbus(LE, 0);
-        let encoded = to_bytes(ctxt, &time).unwrap();
-        let decoded: time::Time = encoded.deserialize().unwrap().0;
-        assert_eq!(time, decoded);
-
-        // time::PrimitiveDateTime
-        let date = time::PrimitiveDateTime::new(date, time);
-        let ctxt = Context::new_dbus(LE, 0);
-        let encoded = to_bytes(ctxt, &date).unwrap();
-        let decoded: time::PrimitiveDateTime = encoded.deserialize().unwrap().0;
-        assert_eq!(date, decoded);
     }
 
     #[test]
