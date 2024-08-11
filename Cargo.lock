@@ -2355,7 +2355,7 @@ dependencies = [
  "tracing-subscriber",
  "uds_windows",
  "vsock 0.5.0",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
  "xdg-home",
  "zbus_macros",
  "zbus_names",
