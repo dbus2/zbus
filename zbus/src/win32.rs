@@ -52,7 +52,7 @@ impl Mutex {
     }
 
     pub fn lock(&self) -> MutexGuard<'_> {
-        match unsafe { WaitForSingleObject(self.0.as_raw_handle() as isize, INFINITE) } {
+        match unsafe { WaitForSingleObject(self.0.as_raw_handle(), INFINITE) } {
             WAIT_ABANDONED | WAIT_OBJECT_0 => MutexGuard(self),
             err => panic!("WaitForSingleObject() failed: return code {}", err),
         }
@@ -63,7 +63,7 @@ struct MutexGuard<'a>(&'a Mutex);
 
 impl Drop for MutexGuard<'_> {
     fn drop(&mut self) {
-        unsafe { ReleaseMutex(self.0 .0.as_raw_handle() as isize) };
+        unsafe { ReleaseMutex(self.0 .0.as_raw_handle()) };
     }
 }
 
@@ -82,7 +82,7 @@ impl ProcessHandle {
             unsafe { GetCurrentProcess() }
         };
 
-        if process == 0 {
+        if process.is_null() {
             Err(Error::last_os_error())
         } else {
             // SAFETY: We have exclusive ownership over the process handle
@@ -104,12 +104,12 @@ pub struct ProcessToken(OwnedHandle);
 impl ProcessToken {
     // Open the access token associated with the process_id (if None, the current process)
     pub fn open(process_id: Option<u32>) -> Result<Self, Error> {
-        let mut process_token: HANDLE = HANDLE::default();
+        let mut process_token: HANDLE = ptr::null_mut();
         let process = ProcessHandle::open(process_id, PROCESS_QUERY_LIMITED_INFORMATION)?;
 
         if unsafe {
             OpenProcessToken(
-                process.0.as_raw_handle() as isize,
+                process.0.as_raw_handle(),
                 TOKEN_QUERY,
                 ptr::addr_of_mut!(process_token),
             ) == 0
@@ -133,7 +133,7 @@ impl ProcessToken {
 
             let result = unsafe {
                 GetTokenInformation(
-                    self.0.as_raw_handle() as isize,
+                    self.0.as_raw_handle(),
                     TokenUser,
                     token_info.as_mut_ptr().cast(),
                     len,
@@ -285,7 +285,7 @@ fn read_shm(name: &str) -> Result<Vec<u8>, crate::Error> {
 
         let res = unsafe { OpenFileMappingW(FILE_MAP_READ, FALSE, wide_name.as_ptr()) };
 
-        if res != 0 {
+        if !res.is_null() {
             // SAFETY: We have exclusive ownership over the file mapping handle
             unsafe { OwnedHandle::from_raw_handle(res as RawHandle) }
         } else {
@@ -295,7 +295,7 @@ fn read_shm(name: &str) -> Result<Vec<u8>, crate::Error> {
         }
     };
 
-    let addr = unsafe { MapViewOfFile(handle.as_raw_handle() as isize, FILE_MAP_READ, 0, 0, 0) };
+    let addr = unsafe { MapViewOfFile(handle.as_raw_handle(), FILE_MAP_READ, 0, 0, 0) };
 
     if addr.Value.is_null() {
         return Err(crate::Error::Address("MapViewOfFile() failed".to_owned()));
