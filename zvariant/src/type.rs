@@ -1,11 +1,21 @@
 use crate::{utils::*, Signature};
 use serde::de::{Deserialize, DeserializeSeed};
 use std::{
+    cell::{Cell, RefCell},
+    cmp::Reverse,
     marker::PhantomData,
-    net::{IpAddr, Ipv4Addr, Ipv6Addr},
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6},
+    num::{Saturating, Wrapping},
+    ops::{Range, RangeFrom, RangeInclusive, RangeTo},
     path::{Path, PathBuf},
-    rc::Rc,
-    sync::{Arc, Mutex, RwLock},
+    rc::{Rc, Weak as RcWeak},
+    sync::{
+        atomic::{
+            AtomicBool, AtomicI16, AtomicI32, AtomicI64, AtomicI8, AtomicIsize, AtomicU16,
+            AtomicU32, AtomicU64, AtomicU8, AtomicUsize,
+        },
+        Arc, Mutex, RwLock, Weak as ArcWeak,
+    },
     time::Duration,
 };
 
@@ -75,6 +85,119 @@ pub trait DynamicDeserialize<'de>: DynamicType {
     where
         S: TryInto<Signature<'de>>,
         S::Error: Into<zvariant::Error>;
+}
+
+/// Implements the [`Type`] trait by delegating the signature to a simpler type (usually a tuple).
+/// Tests that ensure that the two types are serialize-compatible are auto-generated.
+///
+/// Example:
+/// ```no_compile
+/// impl_type_with_repr! {
+///    // Duration is serialized as a (u64, u32) pair.
+///    Duration => (u64, u32) {
+///        // The macro auto-generates tests for us,
+///        // so we need to provide a test name.
+///        duration {
+///            // Sample values used to test serialize compatibility.
+///            samples = [Duration::ZERO, Duration::MAX],
+///            // Converts our type into the simpler "repr" type.
+///            repr(d) = (d.as_secs(), d.subsec_nanos()),
+///        }
+///    }
+/// }
+/// ```
+macro_rules! impl_type_with_repr {
+    ($($ty:ident)::+ $(<$typaram:ident $(: $($tbound:ident)::+)?>)? => $repr:ty {
+        $test_mod:ident $(<$($typaram_sample:ident = $typaram_sample_value:ty),*>)? {
+            $(signature = $signature:literal,)?
+            samples = $samples:expr,
+            repr($sample_ident:ident) = $into_repr:expr,
+        }
+    }) => {
+        impl $(<$typaram $(: $($tbound)::+)?>)? crate::Type for $($ty)::+ $(<$typaram>)? {
+            #[inline]
+            fn signature() -> crate::Signature<'static> {
+                <$repr>::signature()
+            }
+        }
+
+        #[cfg(test)]
+        #[allow(unused_imports)]
+        mod $test_mod {
+            use super::*;
+            use crate::{serialized::Context, to_bytes, LE};
+
+            $($(type $typaram_sample = $typaram_sample_value;)*)?
+            type Ty = $($ty)::+$(<$typaram>)?;
+
+            const _: fn() = || {
+                fn assert_impl_all<'de, T: ?Sized + serde::Serialize + serde::Deserialize<'de>>() {}
+                assert_impl_all::<Ty>();
+            };
+
+            #[test]
+            fn type_can_be_deserialized_from_encoded_type() {
+                let ctx = Context::new_dbus(LE, 0);
+                let samples = $samples;
+                let _: &[Ty] = &samples;
+
+                for $sample_ident in samples {
+                    let encoded = to_bytes(ctx, &$sample_ident).unwrap();
+                    let (decoded, _): (Ty, _) = encoded.deserialize().unwrap();
+                    assert_eq!($sample_ident, decoded);
+                }
+            }
+
+            #[test]
+            fn repr_can_be_deserialized_from_encoded_type() {
+                let ctx = Context::new_dbus(LE, 0);
+                let samples = $samples;
+                let _: &[Ty] = &samples;
+
+                for $sample_ident in samples {
+                    let repr: $repr = $into_repr;
+                    let encoded = to_bytes(ctx, &$sample_ident).unwrap();
+                    let (decoded, _): ($repr, _) = encoded.deserialize().unwrap();
+                    assert_eq!(repr, decoded);
+                }
+            }
+
+            #[test]
+            fn type_can_be_deserialized_from_encoded_repr() {
+                let ctx = Context::new_dbus(LE, 0);
+                let samples = $samples;
+                let _: &[Ty] = &samples;
+
+                for $sample_ident in samples {
+                    let repr: $repr = $into_repr;
+                    let encoded = to_bytes(ctx, &repr).unwrap();
+                    let (decoded, _): (Ty, _) = encoded.deserialize().unwrap();
+                    assert_eq!($sample_ident, decoded);
+                }
+            }
+
+            #[test]
+            fn encoding_of_type_and_repr_match() {
+                let ctx = Context::new_dbus(LE, 0);
+                let samples = $samples;
+                let _: &[Ty] = &samples;
+
+                for $sample_ident in samples {
+                    let repr: $repr = $into_repr;
+                    let encoded = to_bytes(ctx, &$sample_ident).unwrap();
+                    let encoded_repr = to_bytes(ctx, &repr).unwrap();
+                    assert_eq!(encoded.bytes(), encoded_repr.bytes());
+                }
+            }
+
+            $(
+                #[test]
+                fn signature_equals() {
+                    assert_eq!(<Ty as Type>::signature(), $signature);
+                }
+            )?
+        }
+    };
 }
 
 impl<T> DynamicType for T
@@ -156,11 +279,33 @@ macro_rules! array_type {
 
 array_type!([T]);
 array_type!(Vec<T>);
+array_type!(std::collections::VecDeque<T>);
+array_type!(std::collections::LinkedList<T>);
 
 impl<T, S> Type for std::collections::HashSet<T, S>
 where
     T: Type + Eq + Hash,
     S: BuildHasher,
+{
+    #[inline]
+    fn signature() -> Signature<'static> {
+        <[T]>::signature()
+    }
+}
+
+impl<T> Type for std::collections::BTreeSet<T>
+where
+    T: Type + Ord,
+{
+    #[inline]
+    fn signature() -> Signature<'static> {
+        <[T]>::signature()
+    }
+}
+
+impl<T> Type for std::collections::BinaryHeap<T>
+where
+    T: Type + Ord,
 {
     #[inline]
     fn signature() -> Signature<'static> {
@@ -232,10 +377,14 @@ deref_impl!(T, <T: ?Sized + Type> Type for &T);
 deref_impl!(T, <T: ?Sized + Type> Type for &mut T);
 deref_impl!(T, <T: ?Sized + Type + ToOwned> Type for Cow<'_, T>);
 deref_impl!(T, <T: ?Sized + Type> Type for Arc<T>);
+deref_impl!(T, <T: ?Sized + Type> Type for ArcWeak<T>);
 deref_impl!(T, <T: ?Sized + Type> Type for Mutex<T>);
 deref_impl!(T, <T: ?Sized + Type> Type for RwLock<T>);
 deref_impl!(T, <T: ?Sized + Type> Type for Box<T>);
 deref_impl!(T, <T: ?Sized + Type> Type for Rc<T>);
+deref_impl!(T, <T: ?Sized + Type> Type for RcWeak<T>);
+deref_impl!(T, <T: ?Sized + Type> Type for Cell<T>);
+deref_impl!(T, <T: ?Sized + Type> Type for RefCell<T>);
 
 #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
 impl<T> Type for Option<T>
@@ -352,44 +501,103 @@ macro_rules! map_impl {
 map_impl!(BTreeMap<K: Ord, V>);
 map_impl!(HashMap<K: Eq + Hash, V, H: BuildHasher>);
 
-impl Type for Duration {
-    fn signature() -> Signature<'static> {
-        <(u64, u32)>::signature()
+////////////////////////////////////////////////////////////////////////////////
+
+impl_type_with_repr! {
+    // usize is serialized as u64:
+    // https://github.com/serde-rs/serde/blob/9b868ef831c95f50dd4bde51a7eb52e3b9ee265a/serde/src/ser/impls.rs#L28
+    usize => u64 {
+        usize {
+            samples = [usize::MAX, usize::MIN],
+            repr(n) = n as u64,
+        }
     }
 }
 
-impl Type for SystemTime {
-    #[inline]
-    fn signature() -> Signature<'static> {
-        <(
-            // seconds
-            u64,
-            // nano
-            u32,
-        )>::signature()
+impl_type_with_repr! {
+    // isize is serialized as i64:
+    // https://github.com/serde-rs/serde/blob/9b868ef831c95f50dd4bde51a7eb52e3b9ee265a/serde/src/ser/impls.rs#L22
+    isize => i64 {
+        isize {
+            samples = [isize::MAX, isize::MIN],
+            repr(n) = n as i64,
+        }
     }
 }
 
-impl Type for Ipv4Addr {
-    #[inline]
-    fn signature() -> Signature<'static> {
-        <[u8; 4]>::signature()
+////////////////////////////////////////////////////////////////////////////////
+
+impl_type_with_repr! {
+    Duration => (u64, u32) {
+        duration {
+            samples = [Duration::ZERO, Duration::MAX],
+            repr(d) = (d.as_secs(), d.subsec_nanos()),
+        }
     }
 }
 
-impl Type for Ipv6Addr {
-    #[inline]
-    fn signature() -> Signature<'static> {
-        <[u8; 16]>::signature()
+impl_type_with_repr! {
+    SystemTime => (u64, u32) {
+        system_time {
+            samples = [SystemTime::now()],
+            repr(t) = {
+                let since_epoch = t.duration_since(SystemTime::UNIX_EPOCH).unwrap();
+                (since_epoch.as_secs(), since_epoch.subsec_nanos())
+            },
+        }
     }
 }
 
-impl Type for IpAddr {
-    #[inline]
-    fn signature() -> Signature<'static> {
-        <(u32, &[u8])>::signature()
+impl_type_with_repr! {
+    Ipv4Addr => [u8; 4] {
+        ipv4_addr {
+            samples = [Ipv4Addr::LOCALHOST],
+            repr(addr) = addr.octets(),
+        }
     }
 }
+
+impl_type_with_repr! {
+    Ipv6Addr => [u8; 16] {
+        ipv6_addr {
+            samples = [Ipv6Addr::LOCALHOST],
+            repr(addr) = addr.octets(),
+        }
+    }
+}
+
+impl_type_with_repr! {
+    IpAddr => (u32, &[u8]) {
+        ip_addr {
+            samples = [IpAddr::V4(Ipv4Addr::LOCALHOST), IpAddr::V6(Ipv6Addr::LOCALHOST)],
+            repr(addr) = match addr {
+                IpAddr::V4(v4) => (0, &v4.octets()),
+                IpAddr::V6(v6) => (1, &v6.octets()),
+            },
+        }
+    }
+}
+
+impl_type_with_repr! {
+    SocketAddrV4 => (Ipv4Addr, u16) {
+        socket_addr_v4 {
+            samples = [SocketAddrV4::new(Ipv4Addr::LOCALHOST, 8080)],
+            repr(addr) = (*addr.ip(), addr.port()),
+        }
+    }
+}
+
+impl_type_with_repr! {
+    SocketAddrV6 => (Ipv6Addr, u16) {
+        socket_addr_v6 {
+            samples = [SocketAddrV6::new(Ipv6Addr::LOCALHOST, 8080, 0, 0)],
+            // https://github.com/serde-rs/serde/blob/9b868ef831c95f50dd4bde51a7eb52e3b9ee265a/serde/src/ser/impls.rs#L966
+            repr(addr) = (*addr.ip(), addr.port()),
+        }
+    }
+}
+
+// TODO(bash): Implement DynamicType for SocketAddr
 
 // BitFlags
 #[cfg(feature = "enumflags2")]
@@ -432,140 +640,293 @@ static_str_type!(Path);
 static_str_type!(PathBuf);
 
 #[cfg(feature = "uuid")]
-impl Type for uuid::Uuid {
-    fn signature() -> Signature<'static> {
-        Signature::from_static_str_unchecked("ay")
+impl_type_with_repr! {
+    uuid::Uuid => &[u8] {
+        uuid_ {
+            signature = "ay",
+            samples = [uuid::Uuid::parse_str("a1a2a3a4-b1b2-c1c2-d1d2-d3d4d5d6d7d8").unwrap()],
+            repr(u) = u.as_bytes(),
+        }
     }
 }
 
 #[cfg(feature = "url")]
-static_str_type!(url::Url);
-
-// FIXME: Ignoring the `serde-human-readable` feature of `time` crate in these impls:
-// https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L110
-#[cfg(feature = "time")]
-impl Type for time::Date {
-    fn signature() -> Signature<'static> {
-        // Serialized as a (year, ordinal) tuple:
-        // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L92
-        <(i32, u16)>::signature()
+impl_type_with_repr! {
+    url::Url => &str {
+        url_ {
+            samples = [url::Url::parse("https://example.com").unwrap()],
+            repr(url) = &url.to_string(),
+        }
     }
 }
 
 #[cfg(feature = "time")]
-impl Type for time::Duration {
-    fn signature() -> Signature<'static> {
-        // Serialized as a (whole seconds, nanoseconds) tuple:
-        // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L119
-        <(i64, i32)>::signature()
+impl_type_with_repr! {
+    time::Date => (i32, u16) {
+        time_date {
+            samples = [time::Date::MIN, time::Date::MAX, time::Date::from_calendar_date(2011, time::Month::June, 21).unwrap()],
+            // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L92
+            repr(d) = (d.year(), d.ordinal()),
+        }
     }
 }
 
 #[cfg(feature = "time")]
-impl Type for time::OffsetDateTime {
-    fn signature() -> Signature<'static> {
-        // Serialized as a tuple:
-        // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L155
-        <(
-            // year
-            i32,
-            // ordinal
-            u16,
-            // hour
-            u8,
-            // minute
-            u8,
-            // second
-            u8,
-            // nanosecond
-            u32,
-            // offset.whole_hours
-            i8,
-            // offset.minutes_past_hour
-            i8,
-            // offset.seconds_past_minute
-            i8,
-        )>::signature()
+impl_type_with_repr! {
+    time::Duration => (i64, i32) {
+        time_duration {
+            samples = [time::Duration::MIN, time::Duration::MAX, time::Duration::new(42, 123456789)],
+            // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L119
+            repr(d) = (d.whole_seconds(), d.subsec_nanoseconds()),
+        }
     }
 }
 
 #[cfg(feature = "time")]
-impl Type for time::PrimitiveDateTime {
-    fn signature() -> Signature<'static> {
-        // Serialized as a tuple:
-        // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L200
-        <(
-            // year
-            i32,
-            // ordinal
-            u16,
-            // hour
-            u8,
-            // minute
-            u8,
-            // second
-            u8,
-            // nanosecond
-            u32,
-        )>::signature()
+impl_type_with_repr! {
+    time::OffsetDateTime => (i32, u16, u8, u8, u8, u32, i8, i8, i8) {
+        time_offset_date_time {
+            samples = [
+                time::OffsetDateTime::now_utc(),
+                time::OffsetDateTime::new_in_offset(
+                    time::Date::from_calendar_date(2024, time::Month::May, 4).unwrap(),
+                    time::Time::from_hms_nano(15, 32, 43, 2_000).unwrap(),
+                    time::UtcOffset::from_hms(1, 2, 3).unwrap())
+            ],
+            // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L155
+            repr(d) = (
+                d.year(),
+                d.ordinal(),
+                d.hour(),
+                d.minute(),
+                d.second(),
+                d.nanosecond(),
+                d.offset().whole_hours(),
+                d.offset().minutes_past_hour(),
+                d.offset().seconds_past_minute()
+            ),
+        }
     }
 }
 
 #[cfg(feature = "time")]
-impl Type for time::Time {
-    fn signature() -> Signature<'static> {
-        // Serialized as a tuple:
-        // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L246
-        <(
-            // hour
-            u8,
-            // minute
-            u8,
-            // second
-            u8,
-            // nanosecond
-            u32,
-        )>::signature()
+impl_type_with_repr! {
+    time::PrimitiveDateTime => (i32, u16, u8, u8, u8, u32) {
+        time_primitive_date_time {
+            samples = [
+                time::PrimitiveDateTime::MIN,
+                time::PrimitiveDateTime::MAX,
+                time::PrimitiveDateTime::new(
+                    time::Date::from_calendar_date(2024, time::Month::May, 4).unwrap(),
+                    time::Time::from_hms_nano(15, 32, 43, 2_000).unwrap())
+            ],
+            // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L200
+            repr(d) = (
+                d.year(),
+                d.ordinal(),
+                d.hour(),
+                d.minute(),
+                d.second(),
+                d.nanosecond()
+            ),
+        }
     }
 }
 
 #[cfg(feature = "time")]
-impl Type for time::UtcOffset {
-    fn signature() -> Signature<'static> {
-        // Serialized as a (whole hours, minutes past hour, seconds past minute) tuple:
-        // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L282
-        <(i8, i8, i8)>::signature()
+impl_type_with_repr! {
+    time::Time => (u8, u8, u8, u32) {
+        time_time {
+            samples = [time::Time::MIDNIGHT, time::Time::from_hms(23, 42, 59).unwrap(), time::Time::from_hms_nano(15, 32, 43, 2_000).unwrap()],
+            // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L246
+            repr(t) = (t.hour(), t.minute(), t.second(), t.nanosecond()),
+        }
     }
 }
 
 #[cfg(feature = "time")]
-impl Type for time::Weekday {
-    fn signature() -> Signature<'static> {
-        // Serialized as number from Monday:
-        // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L312
-        u8::signature()
+impl_type_with_repr! {
+    time::UtcOffset => (i8, i8, i8) {
+        time_utc_offset {
+            samples = [time::UtcOffset::UTC, time::UtcOffset::from_hms(1, 2, 3).unwrap()],
+            // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L282
+            repr(offset) = (offset.whole_hours(), offset.minutes_past_hour(), offset.seconds_past_minute()),
+        }
     }
 }
 
 #[cfg(feature = "time")]
-impl Type for time::Month {
-    fn signature() -> Signature<'static> {
-        // Serialized as month number:
-        // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L337
-        u8::signature()
+impl_type_with_repr! {
+    time::Weekday => u8 {
+        time_weekday {
+            samples = [time::Weekday::Monday, time::Weekday::Wednesday, time::Weekday::Friday],
+            // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L312
+            repr(weekday) = weekday.number_from_monday(),
+        }
+    }
+}
+
+#[cfg(feature = "time")]
+impl_type_with_repr! {
+    time::Month => u8 {
+        time_month {
+            samples = [time::Month::January, time::Month::July, time::Month::December],
+            // Serialized as month number:
+            // https://github.com/time-rs/time/blob/f9398b9598757508ca3815694f23203843e0011b/src/serde/mod.rs#L337
+            repr(month) = month as u8,
+        }
     }
 }
 
 #[cfg(feature = "chrono")]
-impl<Tz: chrono::TimeZone> Type for chrono::DateTime<Tz> {
-    fn signature() -> Signature<'static> {
-        <&str>::signature()
+impl_type_with_repr! {
+    chrono::DateTime<Tz: chrono::TimeZone> => &str {
+        chrono_date_time <Tz = chrono::offset::Utc> {
+            samples = [chrono::DateTime::<Tz>::MIN_UTC, chrono::DateTime::<Tz>::MAX_UTC],
+            repr(date) = &date.format("%Y-%m-%dT%H:%M:%S%.fZ").to_string(),
+        }
     }
 }
 
 #[cfg(feature = "chrono")]
-static_str_type!(chrono::NaiveDateTime);
+impl_type_with_repr! {
+    chrono::Month => &str {
+        chrono_month {
+            samples = [chrono::Month::January, chrono::Month::December],
+            repr(month) = month.name(),
+        }
+    }
+}
+
 #[cfg(feature = "chrono")]
-static_str_type!(chrono::NaiveTime);
+impl_type_with_repr! {
+    chrono::NaiveDate => &str {
+        chrono_naive_date {
+            samples = [chrono::NaiveDate::from_ymd_opt(2016, 7, 8).unwrap()],
+            repr(d) = &format!("{d:?}"),
+        }
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl_type_with_repr! {
+    chrono::NaiveDateTime => &str {
+        chrono_naive_date_time {
+            samples = [chrono::NaiveDate::from_ymd_opt(2016, 7, 8).unwrap().and_hms_opt(9, 10, 11).unwrap()],
+            repr(dt) = &format!("{dt:?}"),
+        }
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl_type_with_repr! {
+    chrono::NaiveTime => &str {
+        chrono_naive_time {
+            samples = [chrono::NaiveTime::from_hms_opt(9, 10, 11).unwrap()],
+            repr(t) = &format!("{t:?}"),
+        }
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl_type_with_repr! {
+    chrono::Weekday => &str {
+        chrono_weekday {
+            samples = [chrono::Weekday::Mon, chrono::Weekday::Fri],
+            // Serialized as the weekday's name.
+            repr(weekday) = &weekday.to_string(),
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+macro_rules! impl_type_for_wrapper {
+    ($($wrapper:ident<$T:ident>),+) => {
+        $(
+            impl<$T: Type> Type for $wrapper<$T> {
+                #[inline]
+                fn signature() -> Signature<'static> {
+                    <$T>::signature()
+                }
+            }
+        )+
+    };
+}
+
+impl_type_for_wrapper!(Wrapping<T>, Saturating<T>, Reverse<T>);
+
+////////////////////////////////////////////////////////////////////////////////
+
+macro_rules! atomic_impl {
+    ($($ty:ident $size:expr => $primitive:ident)*) => {
+        $(
+            static_assertions::assert_impl_all!($ty: From<$primitive>);
+
+            #[cfg(target_has_atomic = $size)]
+            impl Type for $ty {
+                #[inline]
+                fn signature() -> Signature<'static> {
+                    <$primitive as Type>::signature()
+                }
+            }
+        )*
+    }
+}
+
+atomic_impl! {
+    AtomicBool "8" => bool
+    AtomicI8 "8" => i8
+    AtomicI16 "16" => i16
+    AtomicI32 "32" => i32
+    AtomicIsize "ptr" => isize
+    AtomicI64 "64" => i64
+    AtomicU8 "8" => u8
+    AtomicU16 "16" => u16
+    AtomicU32 "32" => u32
+    AtomicU64 "64" => u64
+    AtomicUsize "ptr" => usize
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+impl_type_with_repr! {
+    Range<Idx: Type> => (Idx, Idx) {
+        range <Idx = u32> {
+            samples = [0..42, 17..100],
+            repr(range) = (range.start, range.end),
+        }
+    }
+}
+
+impl_type_with_repr! {
+    RangeFrom<Idx: Type> => (Idx,) {
+        range_from <Idx = u32> {
+            samples = [0.., 17..],
+            repr(range) = (range.start,),
+        }
+    }
+}
+
+impl_type_with_repr! {
+    RangeInclusive<Idx: Type> => (Idx, Idx) {
+        range_inclusive <Idx = u32> {
+            samples = [0..=42, 17..=100],
+            repr(range) = (*range.start(), *range.end()),
+        }
+    }
+}
+
+impl_type_with_repr! {
+    RangeTo<Idx: Type> => (Idx,) {
+        range_to <Idx = u32> {
+            samples = [..42, ..100],
+            repr(range) = (range.end,),
+        }
+    }
+}
+
+// serde::Serialize is not implemented for `RangeToInclusive` and `RangeFull`:
+// https://github.com/serde-rs/serde/issues/2685
 
 // TODO: Blanket implementation for more types: https://github.com/serde-rs/serde/blob/master/serde/src/ser/impls.rs
