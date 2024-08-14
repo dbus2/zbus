@@ -75,6 +75,17 @@ pub(crate) struct ConnectionInner {
 
     object_server: OnceLock<blocking::ObjectServer>,
     object_server_dispatch_task: OnceLock<Task<()>>,
+
+    drop_event: Event,
+}
+
+impl Drop for ConnectionInner {
+    fn drop(&mut self) {
+        // Notify anyone waiting that the connection is going away. Since we're being dropped, it's
+        // not possible for any new listeners to be created after this notification, so this is
+        // race-free.
+        self.drop_event.notify(usize::MAX);
+    }
 }
 
 type Subscriptions = HashMap<OwnedMatchRule, (u64, InactiveReceiver<Result<Message>>)>;
@@ -110,6 +121,13 @@ pub(crate) type MsgBroadcaster = Broadcaster<Result<Message>>;
 /// respectively.
 ///
 /// For sending messages you can either use [`Connection::send`] method.
+///
+/// To gracefully close a connection while waiting for any outstanding method calls to complete,
+/// use [`Connection::graceful_shutdown`]. To immediately close a connection in a way that will
+/// disrupt any outstanding method calls, use [`Connection::close`]. If you do not need the
+/// shutdown to be immediate and do not care about waiting for outstanding method calls, you can
+/// also simply drop the `Connection` instance, which will act similarly to spawning
+/// `graceful_shutdown` in the background.
 ///
 /// [method calls]: struct.Connection.html#method.call_method
 /// [signals]: struct.Connection.html#method.emit_signal
@@ -1159,6 +1177,7 @@ impl Connection {
                 msg_receiver,
                 method_return_receiver,
                 registered_names: Mutex::new(HashMap::new()),
+                drop_event: Event::new(),
             }),
         };
 
@@ -1215,6 +1234,55 @@ impl Connection {
             .close()
             .await
             .map_err(Into::into)
+    }
+
+    /// Gracefully close the connection, waiting for all other references to be dropped.
+    ///
+    /// This will not disrupt any incoming or outgoing method calls, and will await their
+    /// completion.
+    ///
+    /// # Caveats
+    ///
+    /// * This will not prevent new incoming messages from keeping the connection alive (and
+    ///   indefinitely delaying this method's completion).
+    ///
+    /// * The shutdown will not complete until the underlying connection is fully dropped, so beware
+    ///   of deadlocks if you are holding any other clones of this `Connection`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use std::error::Error;
+    /// # use zbus::connection::Builder;
+    /// # use zbus::interface;
+    /// #
+    /// # struct MyInterface;
+    /// #
+    /// # #[interface(name = "foo.bar.baz")]
+    /// # impl MyInterface {
+    /// #     async fn do_thing(&self) {}
+    /// # }
+    /// #
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn Error>> {
+    /// let conn = Builder::session()?
+    ///     .name("foo.bar.baz")?
+    ///     .serve_at("/foo/bar/baz", MyInterface)?
+    ///     .build()
+    ///     .await?;
+    ///
+    /// # let some_exit_condition = std::future::ready(());
+    /// some_exit_condition.await;
+    ///
+    /// conn.graceful_shutdown().await;
+    /// #
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn graceful_shutdown(self) {
+        let listener = self.inner.drop_event.listen();
+        drop(self);
+        listener.await;
     }
 
     pub(crate) fn init_socket_reader(
@@ -1303,6 +1371,7 @@ mod tests {
     use super::*;
     use crate::fdo::DBusProxy;
     use ntest::timeout;
+    use std::{pin::pin, time::Duration};
     use test_log::test;
 
     #[cfg(windows)]
@@ -1369,6 +1438,100 @@ mod tests {
         // Let's still make sure the name is gone.
         let name_has_owner = dbus.name_has_owner(name.try_into().unwrap()).await.unwrap();
         assert!(!name_has_owner);
+    }
+
+    #[tokio::test(start_paused = true)]
+    #[timeout(15000)]
+    async fn test_graceful_shutdown() {
+        // If we have a second reference, it should wait until we drop it.
+        let connection = Connection::session().await.unwrap();
+        let clone = connection.clone();
+        let mut shutdown = pin!(connection.graceful_shutdown());
+        // Due to start_paused above, tokio will auto-advance time once the runtime is idle.
+        // See https://docs.rs/tokio/latest/tokio/time/fn.pause.html.
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_secs(u64::MAX)) => {},
+            _ = &mut shutdown => {
+                panic!("Graceful shutdown unexpectedly completed");
+            }
+        }
+
+        drop(clone);
+        shutdown.await;
+
+        // An outstanding method call should also be sufficient to keep the connection alive.
+        struct GracefulInterface {
+            method_called: Event,
+            wait_before_return: Option<EventListener>,
+            announce_done: Event,
+        }
+
+        #[crate::interface(name = "dev.peelz.TestGracefulShutdown")]
+        impl GracefulInterface {
+            async fn do_thing(&mut self) {
+                self.method_called.notify(1);
+                if let Some(listener) = self.wait_before_return.take() {
+                    listener.await;
+                }
+                self.announce_done.notify(1);
+            }
+        }
+
+        let method_called = Event::new();
+        let method_called_listener = method_called.listen();
+
+        let trigger_return = Event::new();
+        let wait_before_return = Some(trigger_return.listen());
+
+        let announce_done = Event::new();
+        let done_listener = announce_done.listen();
+
+        let interface = GracefulInterface {
+            method_called,
+            wait_before_return,
+            announce_done,
+        };
+
+        let name = "dev.peelz.TestGracefulShutdown";
+        let obj = "/dev/peelz/TestGracefulShutdown";
+        let connection = Builder::session()
+            .unwrap()
+            .name(name)
+            .unwrap()
+            .serve_at(obj, interface)
+            .unwrap()
+            .build()
+            .await
+            .unwrap();
+
+        // Call the method from another connection - it won't return until we tell it to.
+        let client_conn = Connection::session().await.unwrap();
+        tokio::spawn(async move {
+            client_conn
+                .call_method(Some(name), obj, Some(name), "DoThing", &())
+                .await
+                .unwrap();
+        });
+
+        // Avoid races - make sure we've actually received the method call before we drop our
+        // Connection handle.
+        method_called_listener.await;
+
+        let mut shutdown = pin!(connection.graceful_shutdown());
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_secs(u64::MAX)) => {},
+            _ = &mut shutdown => {
+                // While that method call is outstanding, graceful shutdown should not complete.
+                panic!("Graceful shutdown unexpectedly completed");
+            }
+        }
+
+        // If we let the call complete, then the shutdown should complete eventually.
+        trigger_return.notify(1);
+        shutdown.await;
+
+        // The method call should have been allowed to finish properly.
+        done_listener.await;
     }
 }
 
