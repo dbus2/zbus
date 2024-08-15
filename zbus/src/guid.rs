@@ -38,7 +38,7 @@ impl Guid<'_> {
         Guid(s.into())
     }
 
-    /// Returns a string slice for the GUID.
+    /// Return a string slice for the GUID.
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
@@ -65,7 +65,7 @@ impl fmt::Display for Guid<'_> {
 impl<'g> TryFrom<&'g str> for Guid<'g> {
     type Error = crate::Error;
 
-    /// Creates a GUID from a string with 32 hex digits.
+    /// Create a GUID from a string with 32 hex digits.
     ///
     /// Returns `Err(`[`Error::InvalidGUID`]`)` if the provided string is not a well-formed GUID.
     ///
@@ -80,7 +80,7 @@ impl<'g> TryFrom<&'g str> for Guid<'g> {
 impl<'g> TryFrom<Str<'g>> for Guid<'g> {
     type Error = crate::Error;
 
-    /// Creates a GUID from a string with 32 hex digits.
+    /// Create a GUID from a string with 32 hex digits.
     ///
     /// Returns `Err(`[`Error::InvalidGUID`]`)` if the provided string is not a well-formed GUID.
     ///

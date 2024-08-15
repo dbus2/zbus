@@ -67,11 +67,11 @@ impl Drop for MutexGuard<'_> {
     }
 }
 
-// A process handle
+/// A process handle.
 pub struct ProcessHandle(OwnedHandle);
 
 impl ProcessHandle {
-    // Open the process associated with the process_id (if None, the current process)
+    /// Open the process associated with the process_id (if None, the current process).
     pub fn open(
         process_id: Option<u32>,
         desired_access: PROCESS_ACCESS_RIGHTS,
@@ -93,16 +93,16 @@ impl ProcessHandle {
     }
 }
 
-// A process token
-//
-// See MSDN documentation:
-// https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
-//
-// Get the process security identifier with the `sid()` function.
+/// A process token.
+///
+/// See MSDN documentation:
+/// https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocesstoken
+///
+/// Get the process security identifier with the `sid()` function.
 pub struct ProcessToken(OwnedHandle);
 
 impl ProcessToken {
-    // Open the access token associated with the process_id (if None, the current process)
+    /// Open the access token associated with the process_id (if None, the current process).
     pub fn open(process_id: Option<u32>) -> Result<Self, Error> {
         let mut process_token: HANDLE = ptr::null_mut();
         let process = ProcessHandle::open(process_id, PROCESS_QUERY_LIMITED_INFORMATION)?;
@@ -123,7 +123,7 @@ impl ProcessToken {
         }
     }
 
-    // Return the process SID (security identifier) as a string
+    /// Return the process SID (security identifier) as a string.
     pub fn sid(&self) -> Result<String, Error> {
         let mut len = 256;
         let mut token_info;
@@ -177,7 +177,7 @@ impl ProcessToken {
     }
 }
 
-// Get the process ID of the local socket address
+/// Get the process ID of the local socket address.
 // TODO: add ipv6 support
 pub fn socket_addr_get_pid(addr: &SocketAddr) -> Result<u32, Error> {
     let mut len = 4096;
@@ -222,7 +222,7 @@ pub fn socket_addr_get_pid(addr: &SocketAddr) -> Result<u32, Error> {
     Err(Error::new(ErrorKind::Other, "PID of TCP address not found"))
 }
 
-// Get the process ID of the connected peer
+/// Get the process ID of the connected peer.
 #[cfg(any(test, not(feature = "tokio")))]
 pub fn tcp_stream_get_peer_pid(stream: &std::net::TcpStream) -> Result<u32, Error> {
     let peer_addr = stream.peer_addr()?;
@@ -238,7 +238,7 @@ fn last_err() -> std::io::Error {
     std::io::Error::from_raw_os_error(err)
 }
 
-// Get the process ID of the connected peer
+/// Get the process ID of the connected peer.
 #[cfg(not(feature = "tokio"))]
 pub fn unix_stream_get_peer_pid(stream: &UnixStream) -> Result<u32, Error> {
     use std::os::windows::io::AsRawSocket;

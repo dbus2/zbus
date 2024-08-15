@@ -21,20 +21,25 @@ where
     I: 'static,
 {
     /// Get a reference to the underlying interface.
+    ///
+    /// **WARNING:** If methods (e.g property setters) in `ObjectServer` require `&mut self`
+    /// `ObjectServer` will not be able to access the interface in question until all references
+    /// of this method are dropped; it is highly recommended that the scope of the interface
+    /// returned is restricted.
     pub fn get(&self) -> InterfaceDeref<'_, I> {
         block_on(self.azync.get())
     }
 
     /// Get a reference to the underlying interface.
     ///
-    /// **WARNINGS:** Since the `ObjectServer` will not be able to access the interface in question
+    /// **WARNING:** Since the `ObjectServer` will not be able to access the interface in question
     /// until the return value of this method is dropped, it is highly recommended that the scope
     /// of the interface returned is restricted.
     ///
     /// # Errors
     ///
-    /// If the interface at this instance's path is not valid, `Error::InterfaceNotFound` error is
-    /// returned.
+    /// If the interface at this instance's path is not valid, an `Error::InterfaceNotFound` error
+    /// is returned.
     ///
     /// # Examples
     ///
@@ -52,7 +57,7 @@ where
     ///        self.0
     ///    }
     /// }
-    /// // Setup connection and object_server etc here and then in another part of the code:
+    /// // Set up connection and object_server etc here and then in another part of the code:
     /// #
     /// # let connection = Connection::session()?;
     /// #
@@ -130,14 +135,14 @@ pub struct ObjectServer {
 assert_impl_all!(ObjectServer: Send, Sync, Unpin);
 
 impl ObjectServer {
-    /// Creates a new D-Bus `ObjectServer`.
+    /// Create a new D-Bus `ObjectServer`.
     pub(crate) fn new(conn: &crate::Connection) -> Self {
         Self {
             azync: crate::ObjectServer::new(conn),
         }
     }
 
-    /// Register a D-Bus [`Interface`] at a given path. (see the example above)
+    /// Register a D-Bus [`Interface`] at a given path (see the example above).
     ///
     /// Typically you'd want your interfaces to be registered immediately after the associated
     /// connection is established and therefore use
@@ -176,7 +181,7 @@ impl ObjectServer {
     ///
     /// # Errors
     ///
-    /// If the interface is not registered at the given path, `Error::InterfaceNotFound` error is
+    /// If the interface is not registered at the given path, an `Error::InterfaceNotFound` error is
     /// returned.
     ///
     /// # Examples

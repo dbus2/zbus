@@ -21,19 +21,19 @@ pub(crate) struct Fields<'m>(#[serde(borrow)] Vec<Field<'m>>);
 assert_impl_all!(Fields<'_>: Send, Sync, Unpin);
 
 impl<'m> Fields<'m> {
-    /// Creates an empty collection of fields.
+    /// Create an empty collection of fields.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Appends a [`Field`] to the collection of fields in the message.
+    /// Append a [`Field`] to the collection of fields in the message.
     ///
     /// [`Field`]: enum.Field.html
     pub fn add<'f: 'm>(&mut self, field: Field<'f>) {
         self.0.push(field);
     }
 
-    /// Replaces a [`Field`] from the collection of fields with one with the same code,
+    /// Replace a [`Field`] from the collection of fields with one with the same code,
     /// returning the old value if present.
     ///
     /// [`Field`]: enum.Field.html
@@ -46,14 +46,14 @@ impl<'m> Fields<'m> {
         None
     }
 
-    /// Returns a slice with all the [`Field`] in the message.
+    /// Return a slice with all the [`Field`] in the message.
     ///
     /// [`Field`]: enum.Field.html
     pub fn get(&self) -> &[Field<'m>] {
         &self.0
     }
 
-    /// Gets a reference to a specific [`Field`] by its code.
+    /// Get a reference to a specific [`Field`] by its code.
     ///
     /// Returns `None` if the message has no such field.
     ///

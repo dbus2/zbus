@@ -246,8 +246,8 @@ impl<'a> Proxy<'a> {
     /// method flags to control the way the method call message is sent and handled.
     ///
     /// Use [`call`] instead if you do not need any special handling via additional flags.
-    /// If the `NoReplyExpected` flag is passed , this will return None immediately
-    /// after sending the message, similar to [`call_noreply`]
+    /// If the `NoReplyExpected` flag is passed, this will return None immediately
+    /// after sending the message, similar to [`call_noreply`].
     ///
     /// [`call`]: struct.Proxy.html#method.call
     /// [`call_noreply`]: struct.Proxy.html#method.call_noreply
@@ -266,7 +266,7 @@ impl<'a> Proxy<'a> {
         block_on(self.inner().call_with_flags(method_name, flags, body))
     }
 
-    /// Call a method without expecting a reply
+    /// Call a method without expecting a reply.
     ///
     /// This sets the `NoReplyExpected` flag on the calling message and does not wait for a reply.
     pub fn call_noreply<'m, M, B>(&self, method_name: M, body: &B) -> Result<()>
@@ -300,7 +300,7 @@ impl<'a> Proxy<'a> {
     /// this method where possible. Note that this filtering is limited to arguments of string
     /// types.
     ///
-    /// The arguments are passed as a tuples of argument index and expected value.
+    /// The arguments are passed as tuples of argument index and expected value.
     pub fn receive_signal_with_args<'m, M>(
         &self,
         signal_name: M,
@@ -455,11 +455,11 @@ impl<'a, T> PropertyChanged<'a, T> {
         self.0.name()
     }
 
-    // Get the raw value of the property that changed.
-    //
-    // If the notification signal contained the new value, it has been cached already and this call
-    // will return that value. Otherwise (i-e invalidated property), a D-Bus call is made to fetch
-    // and cache the new value.
+    /// Get the raw value of the property that changed.
+    ///
+    /// If the notification signal contained the new value, it has been cached already and this call
+    /// will return that value. Otherwise (i.e. invalidated property), a D-Bus call is made to fetch
+    /// and cache the new value.
     pub fn get_raw(&self) -> Result<impl Deref<Target = Value<'static>> + '_> {
         block_on(self.0.get_raw())
     }
@@ -470,11 +470,11 @@ where
     T: TryFrom<zvariant::OwnedValue>,
     T::Error: Into<crate::Error>,
 {
-    // Get the value of the property that changed.
-    //
-    // If the notification signal contained the new value, it has been cached already and this call
-    // will return that value. Otherwise (i-e invalidated property), a D-Bus call is made to fetch
-    // and cache the new value.
+    /// Get the value of the property that changed.
+    ///
+    /// If the notification signal contained the new value, it has been cached already and this call
+    /// will return that value. Otherwise (i.e. invalidated property), a D-Bus call is made to fetch
+    /// and cache the new value.
     pub fn get(&self) -> Result<T> {
         block_on(self.0.get())
     }
@@ -506,10 +506,10 @@ pub trait ProxyImpl<'p>
 where
     Self: Sized,
 {
-    /// Returns a customizable builder for this proxy.
+    /// Return a customizable builder for this proxy.
     fn builder(conn: &Connection) -> Builder<'p, Self>;
 
-    /// Consumes `self`, returning the underlying `zbus::Proxy`.
+    /// Consume `self`, returning the underlying `zbus::Proxy`.
     fn into_inner(self) -> Proxy<'p>;
 
     /// The reference to the underlying `zbus::Proxy`.

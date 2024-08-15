@@ -64,7 +64,7 @@ impl<'a> Executor<'a> {
         }
     }
 
-    /// Returns `true` if there are no unfinished tasks.
+    /// Return `true` if there are no unfinished tasks.
     ///
     /// With `tokio` feature enabled, this always returns `true`.
     pub fn is_empty(&self) -> bool {

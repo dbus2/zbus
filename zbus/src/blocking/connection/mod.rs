@@ -208,7 +208,7 @@ impl Connection {
         block_on(self.inner.release_name(well_known_name))
     }
 
-    /// Checks if `self` is a connection to a message bus.
+    /// Check if `self` is a connection to a message bus.
     ///
     /// This will return `false` for p2p connections.
     pub fn is_bus(&self) -> bool {
@@ -232,14 +232,14 @@ impl Connection {
         self.inner
     }
 
-    /// Returns a listener, notified on various connection activity.
+    /// Return a listener, notified on various connection activity.
     ///
     /// This function is meant for the caller to implement idle or timeout on inactivity.
     pub fn monitor_activity(&self) -> EventListener {
         self.inner.monitor_activity()
     }
 
-    /// Returns the peer credentials.
+    /// Return the peer credentials.
     ///
     /// The fields are populated on the best effort basis. Some or all fields may not even make
     /// sense for certain sockets or on certain platforms and hence will be set to `None`.

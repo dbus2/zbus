@@ -124,16 +124,16 @@ pub struct PropertyChanged<'a, T> {
 }
 
 impl<'a, T> PropertyChanged<'a, T> {
-    // The name of the property that changed.
+    /// The name of the property that changed.
     pub fn name(&self) -> &str {
         self.name
     }
 
-    // Get the raw value of the property that changed.
-    //
-    // If the notification signal contained the new value, it has been cached already and this call
-    // will return that value. Otherwise (i-e invalidated property), a D-Bus call is made to fetch
-    // and cache the new value.
+    /// Get the raw value of the property that changed.
+    ///
+    /// If the notification signal contained the new value, it has been cached already and this call
+    /// will return that value. Otherwise (i.e. invalidated property), a D-Bus call is made to fetch
+    /// and cache the new value.
     pub async fn get_raw<'p>(&'p self) -> Result<impl Deref<Target = Value<'static>> + 'p> {
         struct Wrapper<'w> {
             name: &'w str,
@@ -197,11 +197,11 @@ where
     T: TryFrom<zvariant::OwnedValue>,
     T::Error: Into<crate::Error>,
 {
-    // Get the value of the property that changed.
-    //
-    // If the notification signal contained the new value, it has been cached already and this call
-    // will return that value. Otherwise (i-e invalidated property), a D-Bus call is made to fetch
-    // and cache the new value.
+    /// Get the value of the property that changed.
+    ///
+    /// If the notification signal contained the new value, it has been cached already and this call
+    /// will return that value. Otherwise (i.e. invalidated property), a D-Bus call is made to fetch
+    /// and cache the new value.
     pub async fn get(&self) -> Result<T> {
         self.get_raw()
             .await
@@ -323,7 +323,7 @@ impl PropertiesCache {
         (cache, task)
     }
 
-    // new() runs this in a task it spawns for initialization of properties cache.
+    /// new() runs this in a task it spawns for initialization of properties cache.
     async fn init(
         &self,
         proxy: PropertiesProxy<'static>,
@@ -390,7 +390,7 @@ impl PropertiesCache {
         Ok((prop_changes, interface, uncached_properties))
     }
 
-    // new() runs this in a task it spawns for keeping the cache in sync.
+    /// new() runs this in a task it spawns for keeping the cache in sync.
     #[instrument(skip_all)]
     async fn keep_updated(
         &self,
@@ -468,7 +468,7 @@ impl PropertiesCache {
         }
     }
 
-    /// Wait for the cache to be populated and return any error encountered during population
+    /// Wait for the cache to be populated and return any error encountered during population.
     pub(crate) async fn ready(&self) -> Result<()> {
         let listener = match &*self.caching_result.read().expect("lock poisoned") {
             CachingResult::Caching { ready } => ready.listen(),
@@ -858,8 +858,8 @@ impl<'a> Proxy<'a> {
     /// method flags to control the way the method call message is sent and handled.
     ///
     /// Use [`call`] instead if you do not need any special handling via additional flags.
-    /// If the `NoReplyExpected` flag is passed , this will return None immediately
-    /// after sending the message, similar to [`call_noreply`]
+    /// If the `NoReplyExpected` flag is passed, this will return None immediately
+    /// after sending the message, similar to [`call_noreply`].
     ///
     /// [`call`]: struct.Proxy.html#method.call
     /// [`call_noreply`]: struct.Proxy.html#method.call_noreply
@@ -895,7 +895,7 @@ impl<'a> Proxy<'a> {
         }
     }
 
-    /// Call a method without expecting a reply
+    /// Call a method without expecting a reply.
     ///
     /// This sets the `NoReplyExpected` flag on the calling message and does not wait for a reply.
     pub async fn call_noreply<'m, M, B>(&self, method_name: M, body: &B) -> Result<()>
@@ -909,7 +909,13 @@ impl<'a> Proxy<'a> {
         Ok(())
     }
 
-    /// Create a stream for signal named `signal_name`.
+    /// Create a stream for the signal named `signal_name`.
+    ///
+    /// # Errors
+    ///
+    /// Apart from general I/O errors that can result from socket communications, calling this
+    /// method will also result in an error if the destination service has not yet registered its
+    /// well-known name with the bus (assuming you're using the well-known name as destination).
     pub async fn receive_signal<'m, M>(&self, signal_name: M) -> Result<SignalStream<'m>>
     where
         M: TryInto<MemberName<'m>>,
@@ -925,7 +931,7 @@ impl<'a> Proxy<'a> {
     /// this method where possible. Note that this filtering is limited to arguments of string
     /// types.
     ///
-    /// The arguments are passed as a tuples of argument index and expected value.
+    /// The arguments are passed as tuples of argument index and expected value.
     pub async fn receive_signal_with_args<'m, M>(
         &self,
         signal_name: M,
@@ -1337,10 +1343,10 @@ pub trait ProxyImpl<'c>
 where
     Self: Sized,
 {
-    /// Returns a customizable builder for this proxy.
+    /// Return a customizable builder for this proxy.
     fn builder(conn: &Connection) -> Builder<'c, Self>;
 
-    /// Consumes `self`, returning the underlying `zbus::Proxy`.
+    /// Consume `self`, returning the underlying `zbus::Proxy`.
     fn into_inner(self) -> Proxy<'c>;
 
     /// The reference to the underlying `zbus::Proxy`.

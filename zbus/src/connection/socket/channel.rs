@@ -9,7 +9,7 @@ use crate::{fdo::ConnectionCredentials, Message};
 /// This is a pair of two cross-wired channels. Since all communication happens in-process, there is
 /// no need for any authentication.
 ///
-/// This type is only available when `p2p` feature is enabled.
+/// This type is only available when the `p2p` feature is enabled.
 #[derive(Debug)]
 pub struct Channel {
     writer: Writer,
@@ -52,7 +52,7 @@ impl super::Socket for Channel {
 
 /// The reader half of a [`Channel`].
 ///
-/// This type is only available when `p2p` feature is enabled.
+/// This type is only available when the `p2p` feature is enabled.
 #[derive(Debug)]
 pub struct Reader(Receiver<Message>);
 
@@ -76,7 +76,7 @@ impl super::ReadHalf for Reader {
 
 /// The writer half of a [`Channel`].
 ///
-/// This type is only available when `p2p` feature is enabled.
+/// This type is only available when the `p2p` feature is enabled.
 #[derive(Debug)]
 pub struct Writer(Sender<Message>);
 
@@ -106,7 +106,7 @@ impl super::WriteHalf for Writer {
     }
 }
 
-/// Return the credentials of the current process.
+/// The credentials of the current process.
 async fn self_credentials() -> io::Result<ConnectionCredentials> {
     let mut creds = ConnectionCredentials::default().set_process_id(std::process::id());
 

@@ -68,7 +68,7 @@ pub enum AutolaunchScope {
     InstallPath,
     /// Limit session bus to the recent user.
     User,
-    /// other values - specify dedicated session bus like "release", "debug" or other.
+    /// Other values - specify dedicated session bus like "release", "debug" or other.
     Other(String),
 }
 

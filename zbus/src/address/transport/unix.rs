@@ -69,7 +69,7 @@ impl Display for Unix {
 pub enum UnixSocket {
     /// A path to a unix domain socket on the filesystem.
     File(PathBuf),
-    /// A abstract unix domain socket name.
+    /// An abstract unix domain socket name.
     #[cfg(target_os = "linux")]
     Abstract(OsString),
     /// A listenable address using the specified path, in which a socket file with a random file

@@ -30,7 +30,7 @@ macro_rules! dbus_context {
     };
 }
 
-/// A builder for [`Message`]
+/// A builder for a [`Message`].
 #[derive(Debug, Clone)]
 pub struct Builder<'a> {
     header: Header<'a>,

@@ -21,10 +21,10 @@ pub use builder::Builder;
 
 /// A bus match rule for subscribing to specific messages.
 ///
-/// This is mainly used by peer to subscribe to specific signals as by default the bus will not
-/// send out most broadcasted signals. This API is intended to make it easy to create and parse
-/// match rules. See the [match rules section of the D-Bus specification][mrs] for a description of
-/// each possible element of a match rule.
+/// This is mainly used to subscribe to specific signals as by default the bus will not send out
+/// most broadcasted signals. This API is intended to make it easy to create and parse match rules.
+/// See the [match rules section of the D-Bus specification][mrs] for a description of each
+/// possible element of a match rule.
 ///
 /// # Examples
 ///
@@ -57,7 +57,7 @@ pub use builder::Builder;
 /// let parsed_rule = MatchRule::try_from(rule_str.as_str())?;
 /// assert_eq!(rule, parsed_rule);
 ///
-/// // Now for `ObjectManager::InterfacesAdded` signal.
+/// // Now for the `ObjectManager::InterfacesAdded` signal.
 /// let rule = MatchRule::builder()
 ///     .msg_type(zbus::message::Type::Signal)
 ///     .sender("org.zbus")?
@@ -120,12 +120,12 @@ impl<'m> MatchRule<'m> {
         self.msg_type
     }
 
-    /// The interfac, if set.
+    /// The interface, if set.
     pub fn interface(&self) -> Option<&InterfaceName<'_>> {
         self.interface.as_ref()
     }
 
-    /// The member name if set.
+    /// The member name, if set.
     pub fn member(&self) -> Option<&MemberName<'_>> {
         self.member.as_ref()
     }
@@ -155,7 +155,7 @@ impl<'m> MatchRule<'m> {
         self.arg0ns.as_ref()
     }
 
-    /// Creates an owned clone of `self`.
+    /// Create an owned clone of `self`.
     pub fn to_owned(&self) -> MatchRule<'static> {
         MatchRule {
             msg_type: self.msg_type,
@@ -174,7 +174,7 @@ impl<'m> MatchRule<'m> {
         }
     }
 
-    /// Creates an owned clone of `self`.
+    /// Convert into an owned clone of `self`.
     pub fn into_owned(self) -> MatchRule<'static> {
         MatchRule {
             msg_type: self.msg_type,
@@ -207,7 +207,7 @@ impl<'m> MatchRule<'m> {
     /// * `sender` in the rule (if set) that is a well-known name. The `sender` on a message is
     ///   always a unique name.
     /// * `destination` in the rule when `destination` on the `msg` is a well-known name. The
-    ///   `destination` on match rule is always a unique name.
+    ///   `destination` on a match rule is always a unique name.
     pub fn matches(&self, msg: &zbus::message::Message) -> Result<bool> {
         let hdr = msg.header();
 
@@ -487,7 +487,7 @@ pub enum PathSpec<'m> {
 assert_impl_all!(PathSpec<'_>: Send, Sync, Unpin);
 
 impl<'m> PathSpec<'m> {
-    /// Creates an owned clone of `self`.
+    /// Create an owned clone of `self`.
     fn to_owned(&self) -> PathSpec<'static> {
         match self {
             PathSpec::Path(path) => PathSpec::Path(path.to_owned()),
@@ -495,7 +495,7 @@ impl<'m> PathSpec<'m> {
         }
     }
 
-    /// Creates an owned clone of `self`.
+    /// Convert into an owned clone of `self`.
     pub fn into_owned(self) -> PathSpec<'static> {
         match self {
             PathSpec::Path(path) => PathSpec::Path(path.into_owned()),

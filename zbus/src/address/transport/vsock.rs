@@ -1,7 +1,7 @@
 use crate::{Error, Result};
 use std::collections::HashMap;
 
-/// A `tcp:` D-Bus address.
+/// A VSOCK D-Bus address.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Vsock {
     pub(super) cid: u32,

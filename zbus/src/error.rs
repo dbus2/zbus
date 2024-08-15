@@ -15,7 +15,7 @@ use crate::{
 #[non_exhaustive]
 #[allow(clippy::upper_case_acronyms)]
 pub enum Error {
-    /// Interface not found
+    /// Interface not found.
     InterfaceNotFound,
     /// Invalid D-Bus address.
     Address(String),

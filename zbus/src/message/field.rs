@@ -22,23 +22,23 @@ use zvariant::{ObjectPath, Signature, Type, Value};
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, Deserialize_repr, PartialEq, Eq, Serialize_repr, Type)]
 pub(crate) enum FieldCode {
-    /// Code for [`Field::Path`](enum.Field.html#variant.Path)
+    /// Code for [`Field::Path`](enum.Field.html#variant.Path).
     Path = 1,
-    /// Code for [`Field::Interface`](enum.Field.html#variant.Interface)
+    /// Code for [`Field::Interface`](enum.Field.html#variant.Interface).
     Interface = 2,
-    /// Code for [`Field::Member`](enum.Field.html#variant.Member)
+    /// Code for [`Field::Member`](enum.Field.html#variant.Member).
     Member = 3,
-    /// Code for [`Field::ErrorName`](enum.Field.html#variant.ErrorName)
+    /// Code for [`Field::ErrorName`](enum.Field.html#variant.ErrorName).
     ErrorName = 4,
-    /// Code for [`Field::ReplySerial`](enum.Field.html#variant.ReplySerial)
+    /// Code for [`Field::ReplySerial`](enum.Field.html#variant.ReplySerial).
     ReplySerial = 5,
-    /// Code for [`Field::Destination`](enum.Field.html#variant.Destination)
+    /// Code for [`Field::Destination`](enum.Field.html#variant.Destination).
     Destination = 6,
-    /// Code for [`Field::Sender`](enum.Field.html#variant.Sender)
+    /// Code for [`Field::Sender`](enum.Field.html#variant.Sender).
     Sender = 7,
-    /// Code for [`Field::Signature`](enum.Field.html#variant.Signature)
+    /// Code for [`Field::Signature`](enum.Field.html#variant.Signature).
     Signature = 8,
-    /// Code for [`Field::UnixFDs`](enum.Field.html#variant.UnixFDs)
+    /// Code for [`Field::UnixFDs`](enum.Field.html#variant.UnixFDs).
     UnixFDs = 9,
 }
 
@@ -80,7 +80,7 @@ pub(crate) enum Field<'f> {
     Interface(InterfaceName<'f>),
     /// The member, either the method name or signal name.
     Member(MemberName<'f>),
-    /// The name of the error that occurred, for errors
+    /// The name of the error that occurred, for errors.
     ErrorName(ErrorName<'f>),
     /// The serial number of the message this message is a reply to.
     ReplySerial(NonZeroU32),

@@ -91,7 +91,7 @@ where
     ///
     /// **WARNING:** If methods (e.g property setters) in `ObjectServer` require `&mut self`
     /// `ObjectServer` will not be able to access the interface in question until all references
-    /// of this method are dropped, it is highly recommended that the scope of the interface
+    /// of this method are dropped; it is highly recommended that the scope of the interface
     /// returned is restricted.
     pub async fn get(&self) -> InterfaceDeref<'_, I> {
         let iface = self.lock.read().await;
@@ -114,8 +114,8 @@ where
     ///
     /// # Errors
     ///
-    /// If the interface at this instance's path is not valid, `Error::InterfaceNotFound` error is
-    /// returned.
+    /// If the interface at this instance's path is not valid, an `Error::InterfaceNotFound` error
+    /// is returned.
     ///
     /// # Examples
     ///
@@ -135,7 +135,7 @@ where
     /// }
     ///
     /// # block_on(async {
-    /// // Setup connection and object_server etc here and then in another part of the code:
+    /// // Set up connection and object_server etc here and then in another part of the code:
     /// # let connection = Connection::session().await?;
     /// #
     /// # let path = "/org/zbus/path";
@@ -218,9 +218,10 @@ impl Node {
         Some(node)
     }
 
-    // Get the child Node at path. Optionally create one if it doesn't exist.
-    // It also returns the path of parent node that implements ObjectManager (if any). If multiple
-    // parents implement it (they shouldn't), then the closest one is returned.
+    /// Get the child Node at path. Optionally create one if it doesn't exist.
+    ///
+    /// This also returns the path of the parent node that implements ObjectManager (if any). If
+    /// multiple parents implement it (they shouldn't), then the closest one is returned.
     fn get_child_mut(
         &mut self,
         path: &ObjectPath<'_>,
@@ -296,13 +297,13 @@ impl Node {
 
     async fn introspect_to_writer<W: Write + Send>(&self, writer: &mut W) {
         enum Fragment<'a> {
-            /// Represent an unclosed node tree, could be further splitted into sub-`Fragment`s
+            /// Represent an unclosed node tree, could be further splitted into sub-`Fragment`s.
             Node {
                 name: &'a str,
                 node: &'a Node,
                 level: usize,
             },
-            /// Represent a closing `</node>`
+            /// Represent a closing `</node>`.
             End { level: usize },
         }
 
@@ -476,7 +477,7 @@ pub struct ObjectServer {
 assert_impl_all!(ObjectServer: Send, Sync, Unpin);
 
 impl ObjectServer {
-    /// Creates a new D-Bus `ObjectServer`.
+    /// Create a new D-Bus `ObjectServer`.
     pub(crate) fn new(conn: &Connection) -> Self {
         Self {
             conn: conn.into(),
@@ -488,7 +489,7 @@ impl ObjectServer {
         &self.root
     }
 
-    /// Register a D-Bus [`Interface`] at a given path. (see the example above)
+    /// Register a D-Bus [`Interface`] at a given path (see the example above).
     ///
     /// Typically you'd want your interfaces to be registered immediately after the associated
     /// connection is established and therefore use [`zbus::connection::Builder::serve_at`] instead.
@@ -596,7 +597,7 @@ impl ObjectServer {
     ///
     /// # Errors
     ///
-    /// If the interface is not registered at the given path, `Error::InterfaceNotFound` error is
+    /// If the interface is not registered at the given path, an `Error::InterfaceNotFound` error is
     /// returned.
     ///
     /// # Examples
@@ -830,12 +831,12 @@ impl From<crate::blocking::ObjectServer> for ObjectServer {
     }
 }
 
-/// A response wrapper that notifies after response has been sent.
+/// A response wrapper that notifies after the response has been sent.
 ///
-/// Sometimes in [`interface`] method implemenations we need to do some other work after the
+/// Sometimes in [`interface`] method implementations we need to do some other work after the
 /// response has been sent off. This wrapper type allows us to do that. Instead of returning your
 /// intended response type directly, wrap it in this type and return it from your method. The
-/// returned `EventListener` from `new` method will be notified when the response has been sent.
+/// returned `EventListener` from the `new` method will be notified when the response has been sent.
 ///
 /// A typical use case is sending off signals after the response has been sent. The easiest way to
 /// do that is to spawn a task from the method that sends the signal but only after being notified
