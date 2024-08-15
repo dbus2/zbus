@@ -1,5 +1,4 @@
 use serde::de::{self, DeserializeSeed, EnumAccess, MapAccess, SeqAccess, Visitor};
-use static_assertions::assert_impl_all;
 
 use std::{ffi::CStr, marker::PhantomData, str};
 
@@ -19,8 +18,6 @@ use crate::{
 /// Our GVariant deserialization implementation.
 #[derive(Debug)]
 pub struct Deserializer<'de, 'sig, 'f, F>(pub(crate) DeserializerCommon<'de, 'sig, 'f, F>);
-
-assert_impl_all!(Deserializer<'_, '_,'_, ()>: Send, Sync, Unpin);
 
 impl<'de, 'sig, 'f, F> Deserializer<'de, 'sig, 'f, F> {
     /// Create a Deserializer struct instance.

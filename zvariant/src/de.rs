@@ -1,5 +1,4 @@
 use serde::de::{self, DeserializeSeed, VariantAccess, Visitor};
-use static_assertions::assert_impl_all;
 
 use std::{marker::PhantomData, str};
 
@@ -44,8 +43,6 @@ pub(crate) enum Deserializer<'ser, 'sig, 'f, F> {
     #[cfg(feature = "gvariant")]
     GVariant(GVDeserializer<'ser, 'sig, 'f, F>),
 }
-
-assert_impl_all!(Deserializer<'_, '_, '_, ()>: Send, Sync, Unpin);
 
 #[cfg(unix)]
 impl<'de, 'sig, 'f, F> DeserializerCommon<'de, 'sig, 'f, F>

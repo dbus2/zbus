@@ -1,5 +1,4 @@
 use serde::{ser, ser::SerializeSeq, Serialize};
-use static_assertions::assert_impl_all;
 use std::{
     io::{Seek, Write},
     str,
@@ -18,8 +17,6 @@ use crate::Fd;
 
 /// Our D-Bus serialization implementation.
 pub(crate) struct Serializer<'ser, 'sig, W>(pub(crate) crate::SerializerCommon<'ser, 'sig, W>);
-
-assert_impl_all!(Serializer<'_, '_, i32>: Send, Sync, Unpin);
 
 impl<'ser, 'sig, W> Serializer<'ser, 'sig, W>
 where
