@@ -93,7 +93,9 @@ fn big_array_ser_and_de(c: &mut Criterion) {
     let ctxt = Context::new_dbus(LE, 0);
     let signature = ZVStruct::signature();
 
-    c.bench_function("big_array_ser_dbus", |b| {
+    let mut group = c.benchmark_group("dbus");
+    group.measurement_time(std::time::Duration::from_secs(30));
+    group.bench_function("big_array_ser_dbus", |b| {
         b.iter(|| {
             let encoded =
                 to_bytes_for_signature(black_box(ctxt), black_box(&signature), black_box(&element))
@@ -103,7 +105,7 @@ fn big_array_ser_and_de(c: &mut Criterion) {
     });
 
     let encoded = to_bytes_for_signature(ctxt, &signature, &element).unwrap();
-    c.bench_function("big_array_de_dbus", |b| {
+    group.bench_function("big_array_de_dbus", |b| {
         b.iter(|| {
             let (s, _): (ZVStruct, _) = encoded
                 .deserialize_for_signature(black_box(&signature))
@@ -116,8 +118,10 @@ fn big_array_ser_and_de(c: &mut Criterion) {
     #[cfg(feature = "gvariant")]
     {
         let ctxt = Context::new_gvariant(LE, 0);
+        let mut group = c.benchmark_group("gvariant");
+        group.measurement_time(std::time::Duration::from_secs(30));
 
-        c.bench_function("big_array_ser_gvariant", |b| {
+        group.bench_function("big_array_ser_gvariant", |b| {
             b.iter(|| {
                 let encoded = to_bytes_for_signature(
                     black_box(ctxt),
@@ -130,7 +134,7 @@ fn big_array_ser_and_de(c: &mut Criterion) {
         });
 
         let encoded = to_bytes_for_signature(ctxt, &signature, &element).unwrap();
-        c.bench_function("big_array_de_gvariant", |b| {
+        group.bench_function("big_array_de_gvariant", |b| {
             b.iter(|| {
                 let (s, _): (ZVStruct, _) = encoded
                     .deserialize_for_signature(black_box(&signature))
