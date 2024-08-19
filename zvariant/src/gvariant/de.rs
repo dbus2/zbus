@@ -403,7 +403,7 @@ fn deserialize_ay<'de, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F>(
 
     de.0.sig_parser.skip_char()?;
     let ad = ArrayDeserializer::new(de)?;
-    let len = dbg!(ad.len);
+    let len = ad.len;
     de.0.next_slice(len)
 }
 
