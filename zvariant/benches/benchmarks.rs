@@ -118,6 +118,7 @@ fn big_array_ser_and_de(c: &mut Criterion) {
     #[cfg(feature = "gvariant")]
     {
         let ctxt = Context::new_gvariant(LE, 0);
+        group.finish();
         let mut group = c.benchmark_group("gvariant");
         group.measurement_time(std::time::Duration::from_secs(30));
 
