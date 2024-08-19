@@ -46,7 +46,7 @@ fn fixed_size_array(c: &mut Criterion) {
     });
 }
 
-fn big_array_ser_and_de(c: &mut Criterion) {
+fn big_array(c: &mut Criterion) {
     #[derive(Deserialize, Serialize, Type, PartialEq, Debug, Clone)]
     struct ZVField<'f> {
         int2: u64,
@@ -147,7 +147,7 @@ fn big_array_ser_and_de(c: &mut Criterion) {
 }
 
 #[cfg(feature = "serde_bytes")]
-criterion_group!(benches, big_array_ser_and_de, byte_array, fixed_size_array);
+criterion_group!(benches, big_array, byte_array, fixed_size_array);
 #[cfg(not(feature = "serde_bytes"))]
-criterion_group!(benches, big_array_ser_and_de, fixed_size_array);
+criterion_group!(benches, big_array, fixed_size_array);
 criterion_main!(benches);
