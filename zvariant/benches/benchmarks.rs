@@ -94,17 +94,17 @@ fn big_array(c: &mut Criterion) {
         string2: &'f str,
     }
 
-    #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
+    #[derive(Deserialize, Serialize, Type, PartialEq, Debug, Clone)]
     struct BigArrayStruct<'s> {
         string1: &'s str,
         int1: u64,
         field: BigArrayField<'s>,
-        dict: HashMap<&'s str, Value<'s>>,
         int_array: Vec<u64>,
         string_array: Vec<&'s str>,
     }
 
-    let mut dict = HashMap::new();
+    let mut asv_dict = HashMap::new();
+    let mut ass_dict = HashMap::new();
     let int_array = vec![0u64; 1024 * 10];
     let mut strings = Vec::new();
     let mut string_array: Vec<&str> = Vec::new();
@@ -115,10 +115,11 @@ fn big_array(c: &mut Criterion) {
     }
     for s in &strings {
         string_array.push(s.as_str());
-        dict.insert(s.as_str(), Value::from(s.as_str()));
+        ass_dict.insert(s.as_str(), s.as_str());
+        asv_dict.insert(s.as_str(), Value::from(s.as_str()));
     }
 
-    let data = BigArrayStruct {
+    let structure = BigArrayStruct {
         string1: "Testtest",
         int1: 0xFFFFFFFFFFFFFFFFu64,
         field: BigArrayField {
@@ -127,10 +128,39 @@ fn big_array(c: &mut Criterion) {
         },
         int_array,
         string_array,
-        dict,
     };
 
-    benchmark!(c, data, BigArrayStruct<'_>, "big_array");
+    benchmark!(c, structure, BigArrayStruct<'_>, "big_array");
+
+    #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
+    struct BigArrayDictStruct<'s> {
+        #[serde(borrow)]
+        array_struct: BigArrayStruct<'s>,
+        dict: HashMap<&'s str, &'s str>,
+    }
+    let data = BigArrayDictStruct {
+        array_struct: structure.clone(),
+        dict: ass_dict,
+    };
+    benchmark!(c, data, BigArrayDictStruct<'_>, "big_array_and_ass_dict");
+
+    #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
+    struct BigArrayDictVariantStruct<'s> {
+        #[serde(borrow)]
+        array_struct: BigArrayStruct<'s>,
+        dict: HashMap<&'s str, Value<'s>>,
+    }
+
+    let data = BigArrayDictVariantStruct {
+        array_struct: structure,
+        dict: asv_dict,
+    };
+    benchmark!(
+        c,
+        data,
+        BigArrayDictVariantStruct<'_>,
+        "big_array_and_asv_dict"
+    );
 }
 
 #[cfg(feature = "serde_bytes")]
