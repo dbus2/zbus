@@ -7,63 +7,104 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use zvariant::{serialized::Context, to_bytes_for_signature, Type, Value, LE};
 
+macro_rules! benchmark {
+    ($c:ident, $data:ident, $data_type:ty, $func_prefix:literal) => {
+        let signature = <$data_type>::signature();
+
+        let ser_function_name = format!("{}_ser", $func_prefix);
+        let de_function_name = format!("{}_de", $func_prefix);
+
+        // Let's try with DBus format first
+        let ctxt = Context::new_dbus(LE, 0);
+        let mut group = $c.benchmark_group("dbus");
+        group.measurement_time(std::time::Duration::from_secs(30));
+        group.bench_function(&ser_function_name, |b| {
+            b.iter(|| {
+                let encoded = to_bytes_for_signature(
+                    black_box(ctxt),
+                    black_box(&signature),
+                    black_box(&$data),
+                )
+                .unwrap();
+                black_box(encoded);
+            })
+        });
+
+        let encoded = to_bytes_for_signature(ctxt, &signature, &$data).unwrap();
+        group.bench_function(&de_function_name, |b| {
+            b.iter(|| {
+                let (s, _): ($data_type, _) = encoded
+                    .deserialize_for_signature(black_box(&signature))
+                    .unwrap();
+                black_box(s);
+            })
+        });
+        group.finish();
+
+        // Now GVariant.
+        #[cfg(feature = "gvariant")]
+        {
+            let ctxt = Context::new_gvariant(LE, 0);
+            let mut group = $c.benchmark_group("gvariant");
+            group.measurement_time(std::time::Duration::from_secs(30));
+
+            group.bench_function(&ser_function_name, |b| {
+                b.iter(|| {
+                    let encoded = to_bytes_for_signature(
+                        black_box(ctxt),
+                        black_box(&signature),
+                        black_box(&$data),
+                    )
+                    .unwrap();
+                    black_box(encoded);
+                })
+            });
+
+            let encoded = to_bytes_for_signature(ctxt, &signature, &$data).unwrap();
+            group.bench_function(&de_function_name, |b| {
+                b.iter(|| {
+                    let (s, _): ($data_type, _) = encoded
+                        .deserialize_for_signature(black_box(&signature))
+                        .unwrap();
+                    black_box(s);
+                })
+            });
+            group.finish();
+        }
+    };
+}
+
 #[cfg(feature = "serde_bytes")]
 fn byte_array(c: &mut Criterion) {
     let ay = ByteBuf::from(vec![77u8; 100_000]);
-    let ctxt = Context::new_dbus(LE, 0);
-    let signature = ByteBuf::signature();
-    c.bench_function("byte_array_ser", |b| {
-        b.iter(|| {
-            to_bytes_for_signature(black_box(ctxt), black_box(&signature), black_box(&ay)).unwrap()
-        })
-    });
-    let enc = to_bytes_for_signature(ctxt, &signature, &ay).unwrap();
-    c.bench_function("byte_array_de", |b| {
-        b.iter(|| {
-            let _: (ByteBuf, _) = enc
-                .deserialize_for_signature(black_box(&signature))
-                .unwrap();
-        })
-    });
+
+    benchmark!(c, ay, ByteBuf, "byte_array");
 }
 
 fn fixed_size_array(c: &mut Criterion) {
     let ay = vec![77u8; 100_000];
-    let ctxt = Context::new_dbus(LE, 0);
-    let signature = Vec::<u8>::signature();
-    c.bench_function("fixed_size_array_ser", |b| {
-        b.iter(|| {
-            to_bytes_for_signature(black_box(ctxt), black_box(&signature), black_box(&ay)).unwrap()
-        })
-    });
-    let enc = to_bytes_for_signature(ctxt, &signature, &ay).unwrap();
-    c.bench_function("fixed_size_array_de", |b| {
-        b.iter(|| {
-            let _: (Vec<u8>, _) = enc
-                .deserialize_for_signature(black_box(&signature))
-                .unwrap();
-        })
-    });
+
+    benchmark!(c, ay, Vec<u8>, "fixed_size_array");
 }
 
-fn big_array_ser_and_de(c: &mut Criterion) {
+fn big_array(c: &mut Criterion) {
     #[derive(Deserialize, Serialize, Type, PartialEq, Debug, Clone)]
-    struct ZVField<'f> {
+    struct BigArrayField<'f> {
         int2: u64,
         string2: &'f str,
     }
 
-    #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
-    struct ZVStruct<'s> {
+    #[derive(Deserialize, Serialize, Type, PartialEq, Debug, Clone)]
+    struct BigArrayStruct<'s> {
         string1: &'s str,
         int1: u64,
-        field: ZVField<'s>,
-        dict: HashMap<&'s str, Value<'s>>,
+        field: BigArrayField<'s>,
         int_array: Vec<u64>,
         string_array: Vec<&'s str>,
     }
 
-    let mut dict = HashMap::new();
+    let mut asv_dict = HashMap::new();
+    let mut ass_dict = HashMap::new();
     let int_array = vec![0u64; 1024 * 10];
     let mut strings = Vec::new();
     let mut string_array: Vec<&str> = Vec::new();
@@ -74,79 +115,56 @@ fn big_array_ser_and_de(c: &mut Criterion) {
     }
     for s in &strings {
         string_array.push(s.as_str());
-        dict.insert(s.as_str(), Value::from(s.as_str()));
+        ass_dict.insert(s.as_str(), s.as_str());
+        asv_dict.insert(s.as_str(), Value::from(s.as_str()));
     }
 
-    let element = ZVStruct {
+    let structure = BigArrayStruct {
         string1: "Testtest",
         int1: 0xFFFFFFFFFFFFFFFFu64,
-        field: ZVField {
+        field: BigArrayField {
             string2: "TesttestTestest",
             int2: 0xFFFFFFFFFFFFFFFFu64,
         },
         int_array,
         string_array,
-        dict,
     };
 
-    // Let's try with DBus format first
-    let ctxt = Context::new_dbus(LE, 0);
-    let signature = ZVStruct::signature();
+    benchmark!(c, structure, BigArrayStruct<'_>, "big_array");
 
-    let mut group = c.benchmark_group("dbus");
-    group.measurement_time(std::time::Duration::from_secs(30));
-    group.bench_function("big_array_ser_dbus", |b| {
-        b.iter(|| {
-            let encoded =
-                to_bytes_for_signature(black_box(ctxt), black_box(&signature), black_box(&element))
-                    .unwrap();
-            black_box(encoded);
-        })
-    });
-
-    let encoded = to_bytes_for_signature(ctxt, &signature, &element).unwrap();
-    group.bench_function("big_array_de_dbus", |b| {
-        b.iter(|| {
-            let (s, _): (ZVStruct, _) = encoded
-                .deserialize_for_signature(black_box(&signature))
-                .unwrap();
-            black_box(s);
-        })
-    });
-
-    // Now GVariant.
-    #[cfg(feature = "gvariant")]
-    {
-        let ctxt = Context::new_gvariant(LE, 0);
-        let mut group = c.benchmark_group("gvariant");
-        group.measurement_time(std::time::Duration::from_secs(30));
-
-        group.bench_function("big_array_ser_gvariant", |b| {
-            b.iter(|| {
-                let encoded = to_bytes_for_signature(
-                    black_box(ctxt),
-                    black_box(&signature),
-                    black_box(&element),
-                )
-                .unwrap();
-                black_box(encoded);
-            })
-        });
-
-        let encoded = to_bytes_for_signature(ctxt, &signature, &element).unwrap();
-        group.bench_function("big_array_de_gvariant", |b| {
-            b.iter(|| {
-                let (s, _): (ZVStruct, _) = encoded
-                    .deserialize_for_signature(black_box(&signature))
-                    .unwrap();
-                black_box(s);
-            })
-        });
+    #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
+    struct BigArrayDictStruct<'s> {
+        #[serde(borrow)]
+        array_struct: BigArrayStruct<'s>,
+        dict: HashMap<&'s str, &'s str>,
     }
+    let data = BigArrayDictStruct {
+        array_struct: structure.clone(),
+        dict: ass_dict,
+    };
+    benchmark!(c, data, BigArrayDictStruct<'_>, "big_array_and_ass_dict");
+
+    #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
+    struct BigArrayDictVariantStruct<'s> {
+        #[serde(borrow)]
+        array_struct: BigArrayStruct<'s>,
+        dict: HashMap<&'s str, Value<'s>>,
+    }
+
+    let data = BigArrayDictVariantStruct {
+        array_struct: structure,
+        dict: asv_dict,
+    };
+    benchmark!(
+        c,
+        data,
+        BigArrayDictVariantStruct<'_>,
+        "big_array_and_asv_dict"
+    );
 }
 
 #[cfg(feature = "serde_bytes")]
-criterion_group!(benches, big_array_ser_and_de, byte_array, fixed_size_array);
+criterion_group!(benches, big_array, byte_array, fixed_size_array);
 #[cfg(not(feature = "serde_bytes"))]
-criterion_group!(benches, big_array_ser_and_de, fixed_size_array);
+criterion_group!(benches, big_array, fixed_size_array);
 criterion_main!(benches);
