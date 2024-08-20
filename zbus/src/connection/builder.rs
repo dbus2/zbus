@@ -87,7 +87,7 @@ impl<'a> Builder<'a> {
         Ok(Self::new(Target::Address(Address::system()?)))
     }
 
-    /// Create a builder for connection that will use the given [D-Bus bus address].
+    /// Create a builder for a connection that will use the given [D-Bus bus address].
     ///
     /// # Example
     ///
@@ -128,9 +128,9 @@ impl<'a> Builder<'a> {
         )))
     }
 
-    /// Create a builder for connection that will use the given unix stream.
+    /// Create a builder for a connection that will use the given unix stream.
     ///
-    /// If the default `async-io` feature is disabled, this method will expect
+    /// If the default `async-io` feature is disabled, this method will expect a
     /// [`tokio::net::UnixStream`](https://docs.rs/tokio/latest/tokio/net/struct.UnixStream.html)
     /// argument.
     ///
@@ -143,16 +143,16 @@ impl<'a> Builder<'a> {
         Self::new(Target::UnixStream(stream))
     }
 
-    /// Create a builder for connection that will use the given TCP stream.
+    /// Create a builder for a connection that will use the given TCP stream.
     ///
-    /// If the default `async-io` feature is disabled, this method will expect
+    /// If the default `async-io` feature is disabled, this method will expect a
     /// [`tokio::net::TcpStream`](https://docs.rs/tokio/latest/tokio/net/struct.TcpStream.html)
     /// argument.
     pub fn tcp_stream(stream: TcpStream) -> Self {
         Self::new(Target::TcpStream(stream))
     }
 
-    /// Create a builder for connection that will use the given VSOCK stream.
+    /// Create a builder for a connection that will use the given VSOCK stream.
     ///
     /// This method is only available when either `vsock` or `tokio-vsock` feature is enabled. The
     /// type of `stream` is `vsock::VsockStream` with `vsock` feature and `tokio_vsock::VsockStream`
@@ -165,7 +165,7 @@ impl<'a> Builder<'a> {
         Self::new(Target::VsockStream(stream))
     }
 
-    /// Create a builder for connection that will use the given socket.
+    /// Create a builder for a connection that will use the given socket.
     pub fn socket<S: Into<BoxedSplit>>(socket: S) -> Self {
         Self::new(Target::Socket(socket.into()))
     }
@@ -203,7 +203,7 @@ impl<'a> Builder<'a> {
     /// The cookie context to use during authentication.
     ///
     /// This is only used when the `cookie` authentication mechanism is enabled and only valid for
-    /// server connection.
+    /// server connections.
     ///
     /// If not specified, the default cookie context of `org_freedesktop_general` will be used.
     ///
@@ -222,7 +222,7 @@ impl<'a> Builder<'a> {
     /// The ID of the cookie to use during authentication.
     ///
     /// This is only used when the `cookie` authentication mechanism is enabled and only valid for
-    /// server connection.
+    /// server connections.
     ///
     /// If not specified, the first cookie found in the cookie context file will be used.
     pub fn cookie_id(mut self, id: usize) -> Self {
@@ -342,7 +342,7 @@ impl<'a> Builder<'a> {
         Ok(self)
     }
 
-    /// Sets the unique name of the connection.
+    /// Set the unique name of the connection.
     ///
     /// This is mainly provided for bus implementations. All other users should not need to use this
     /// method. Hence why this method is only available when the `bus-impl` feature is enabled.
@@ -371,7 +371,7 @@ impl<'a> Builder<'a> {
     /// # Errors
     ///
     /// Until server-side bus connection is supported, attempting to build such a connection will
-    /// result in [`Error::Unsupported`] error.
+    /// result in a [`Error::Unsupported`] error.
     pub async fn build(self) -> Result<Connection> {
         let executor = Executor::new();
         #[cfg(not(feature = "tokio"))]

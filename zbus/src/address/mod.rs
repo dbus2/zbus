@@ -21,7 +21,7 @@ use std::fmt::{Display, Formatter};
 use self::transport::Stream;
 pub use self::transport::Transport;
 
-/// A bus address
+/// A bus address.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Address {
@@ -59,9 +59,9 @@ impl Address {
         self.transport.connect().await
     }
 
-    /// Get the address for session socket respecting the DBUS_SESSION_BUS_ADDRESS environment
+    /// Get the address for the session socket respecting the `DBUS_SESSION_BUS_ADDRESS` environment
     /// variable. If we don't recognize the value (or it's not set) we fall back to
-    /// $XDG_RUNTIME_DIR/bus
+    /// `$XDG_RUNTIME_DIR/bus`.
     pub fn session() -> Result<Self> {
         match env::var("DBUS_SESSION_BUS_ADDRESS") {
             Ok(val) => Self::from_str(&val),
@@ -84,9 +84,9 @@ impl Address {
         }
     }
 
-    /// Get the address for system bus respecting the DBUS_SYSTEM_BUS_ADDRESS environment
+    /// Get the address for the system bus respecting the `DBUS_SYSTEM_BUS_ADDRESS` environment
     /// variable. If we don't recognize the value (or it's not set) we fall back to
-    /// /var/run/dbus/system_bus_socket
+    /// `/var/run/dbus/system_bus_socket`.
     pub fn system() -> Result<Self> {
         match env::var("DBUS_SYSTEM_BUS_ADDRESS") {
             Ok(val) => Self::from_str(&val),

@@ -120,7 +120,7 @@ pub(crate) type MsgBroadcaster = Broadcaster<Result<Message>>;
 /// [`crate::blocking::MessageIterator`] instances are continuously polled and iterated on,
 /// respectively.
 ///
-/// For sending messages you can either use [`Connection::send`] method.
+/// For sending messages you can use the [`Connection::send`] method.
 ///
 /// To gracefully close a connection while waiting for any outstanding method calls to complete,
 /// use [`Connection::graceful_shutdown`]. To immediately close a connection in a way that will
@@ -495,7 +495,7 @@ impl Connection {
     /// Register a well-known name for this connection.
     ///
     /// When connecting to a bus, the name is requested from the bus. In case of p2p connection, the
-    /// name (if requested) is used of self-identification.
+    /// name (if requested) is used for self-identification.
     ///
     /// You can request multiple names for the same connection. Use [`Connection::release_name`] for
     /// deregistering names registered through this method.
@@ -504,7 +504,7 @@ impl Connection {
     /// [`RequestNameFlags::ReplaceExisting`] and [`RequestNameFlags::DoNotQueue`] flags) since that
     /// is the most typical case. If that is not what you want, you should use
     /// [`Connection::request_name_with_flags`] instead (but make sure then that name is requested
-    /// **after** you've setup your service implementation with the `ObjectServer`).
+    /// **after** you've set up your service implementation with the `ObjectServer`).
     ///
     /// # Caveats
     ///
@@ -784,9 +784,9 @@ impl Connection {
             .map_err(Into::into)
     }
 
-    /// Checks if `self` is a connection to a message bus.
+    /// Check if `self` is a connection to a message bus.
     ///
-    /// This will return `false` for p2p connections. When the `p2p` feature is enabled, this will
+    /// This will return `false` for p2p connections. When the `p2p` feature is disabled, this will
     /// always return `true`.
     pub fn is_bus(&self) -> bool {
         #[cfg(feature = "p2p")]
@@ -807,7 +807,7 @@ impl Connection {
         self.inner.unique_name.get()
     }
 
-    /// Sets the unique name of the connection (if not already set).
+    /// Set the unique name of the connection (if not already set).
     ///
     /// This is mainly provided for bus implementations. All other users should not need to use this
     /// method. Hence why this method is only available when the `bus-impl` feature is enabled.
@@ -1198,14 +1198,14 @@ impl Connection {
         Builder::system()?.build().await
     }
 
-    /// Returns a listener, notified on various connection activity.
+    /// Return a listener, notified on various connection activity.
     ///
     /// This function is meant for the caller to implement idle or timeout on inactivity.
     pub fn monitor_activity(&self) -> EventListener {
         self.inner.activity_event.listen()
     }
 
-    /// Returns the peer credentials.
+    /// Return the peer credentials.
     ///
     /// The fields are populated on the best effort basis. Some or all fields may not even make
     /// sense for certain sockets or on certain platforms and hence will be set to `None`.

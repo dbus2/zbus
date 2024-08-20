@@ -32,7 +32,7 @@ macro_rules! gen_introspectable_proxy {
             gen_blocking = $gen_blocking,
         )]
         trait Introspectable {
-            /// Returns an XML description of the object, including its interfaces (with signals and
+            /// Return an XML description of the object, including its interfaces (with signals and
             /// methods), objects below it in the object path tree, and its properties.
             fn introspect(&self) -> Result<String>;
         }
@@ -42,7 +42,7 @@ macro_rules! gen_introspectable_proxy {
 gen_introspectable_proxy!(true, false);
 assert_impl_all!(IntrospectableProxy<'_>: Send, Sync, Unpin);
 
-/// Server-side implementation for the `org.freedesktop.DBus.Introspectable` interface.
+/// Service-side implementation for the `org.freedesktop.DBus.Introspectable` interface.
 /// This interface is implemented automatically for any object registered to the
 /// [ObjectServer](crate::ObjectServer).
 pub(crate) struct Introspectable;
@@ -109,7 +109,7 @@ macro_rules! gen_properties_proxy {
 gen_properties_proxy!(true, false);
 assert_impl_all!(PropertiesProxy<'_>: Send, Sync, Unpin);
 
-/// Server-side implementation for the `org.freedesktop.DBus.Properties` interface.
+/// Service-side implementation for the `org.freedesktop.DBus.Properties` interface.
 /// This interface is implemented automatically for any object registered to the
 /// [ObjectServer].
 pub struct Properties;
@@ -208,7 +208,7 @@ impl Properties {
         Ok(res)
     }
 
-    /// Emits the `org.freedesktop.DBus.Properties.PropertiesChanged` signal.
+    /// Emit the `org.freedesktop.DBus.Properties.PropertiesChanged` signal.
     #[zbus(signal)]
     #[rustfmt::skip]
     pub async fn properties_changed(
@@ -258,7 +258,7 @@ macro_rules! gen_object_manager_proxy {
             ) -> Result<()>;
 
             /// This signal is emitted whenever an object is removed or it loses one or more interfaces.
-            /// The `interfaces` parameters contains a list of the interfaces that were removed.
+            /// The `interfaces` parameter contains a list of the interfaces that were removed.
             #[zbus(signal)]
             fn interfaces_removed(
                 &self,
@@ -281,9 +281,9 @@ assert_impl_all!(ObjectManagerProxy<'_>: Send, Sync, Unpin);
 ///
 /// It is supported, but not recommended, to add this interface at the root path, `/`.
 ///
-/// When added to an `ObjectServer`, `InterfacesAdded` signal is emitted for all the objects under
-/// the `path` its added at. You can use this fact to minimize the signal emissions by populating
-/// the entire (sub)tree under `path` before registering an object manager.
+/// When added to an `ObjectServer`, the `InterfacesAdded` signal is emitted for all the objects
+/// under the `path` it's added at. You can use this fact to minimize the signal emissions by
+/// populating the entire (sub)tree under `path` before registering an object manager.
 ///
 /// [om]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-objectmanager
 #[derive(Debug, Clone)]
@@ -339,7 +339,7 @@ macro_rules! gen_peer_proxy {
             /// which object path a ping is sent to.
             fn ping(&self) -> Result<()>;
 
-            /// An application should reply the containing a hex-encoded UUID representing the identity of
+            /// An application should reply with a hex-encoded UUID representing the identity of
             /// the machine the process is running on. This UUID must be the same for all processes on a
             /// single system at least until that system next reboots. It should be the same across reboots
             /// if possible, but this is not always possible to implement and is not guaranteed. It does not
@@ -354,7 +354,7 @@ assert_impl_all!(PeerProxy<'_>: Send, Sync, Unpin);
 
 pub(crate) struct Peer;
 
-/// Server-side implementation for the `org.freedesktop.DBus.Peer` interface.
+/// Service-side implementation for the `org.freedesktop.DBus.Peer` interface.
 /// This interface is implemented automatically for any object registered to the
 /// [ObjectServer](crate::ObjectServer).
 #[interface(name = "org.freedesktop.DBus.Peer")]
@@ -393,7 +393,7 @@ macro_rules! gen_monitoring_proxy {
             gen_blocking = $gen_blocking,
         )]
         trait Monitoring {
-            /// Converts the connection into a monitor connection which can be used as a
+            /// Convert the connection into a monitor connection which can be used as a
             /// debugging/monitoring tool.
             ///
             /// After this call successfully returns, sending any messages on the bus will result
@@ -485,12 +485,12 @@ pub enum RequestNameFlags {
     ///
     /// [`AllowReplacement`]: enum.RequestNameFlags.html#variant.AllowReplacement
     ReplaceExisting = 0x02,
-    ///  Without this flag, if an application requests a name that is already owned, the
-    /// application  will be placed in a queue to own the name when the current owner gives it
-    /// up. If this flag  is given, the application will not be placed in the queue, the
-    /// request for the name will  simply fail. This flag also affects behavior when an
-    /// application is replaced as name owner;  by default the application moves back into the
-    /// waiting queue, unless this flag was provided  when the application became the name
+    /// Without this flag, if an application requests a name that is already owned, the
+    /// application will be placed in a queue to own the name when the current owner gives it
+    /// up. If this flag is given, the application will not be placed in the queue; the
+    /// request for the name will simply fail. This flag also affects behavior when an
+    /// application is replaced as name owner; by default the application moves back into the
+    /// waiting queue, unless this flag was provided when the application became the name
     /// owner.
     DoNotQueue = 0x04,
 }
@@ -518,7 +518,7 @@ pub enum RequestNameReply {
     /// [`ReplaceExisting`]: enum.RequestNameFlags.html#variant.ReplaceExisting
     /// [`AllowReplacement`]: enum.RequestNameFlags.html#variant.AllowReplacement
     InQueue = 0x02,
-    /// The name already has an owner, [`DoNotQueue`] was specified, and either
+    /// The name already had an owner, [`DoNotQueue`] was specified, and either
     /// [`AllowReplacement`] was not specified by the current owner, or [`ReplaceExisting`] was
     /// not specified by the requesting application.
     ///
@@ -704,52 +704,52 @@ macro_rules! gen_dbus_proxy {
             gen_blocking = $gen_blocking,
         )]
         trait DBus {
-            /// Adds a match rule to match messages going through the message bus
+            /// Add a match rule to match messages going through the message bus.
             #[zbus(name = "AddMatch")]
             fn add_match_rule(&self, rule: crate::MatchRule<'_>) -> Result<()>;
 
-            /// Returns auditing data used by Solaris ADT, in an unspecified binary format.
+            /// Return auditing data used by Solaris ADT, in an unspecified binary format.
             fn get_adt_audit_session_data(&self, bus_name: BusName<'_>) -> Result<Vec<u8>>;
 
-            /// Returns as many credentials as possible for the process connected to the server.
+            /// Return as many credentials as possible for the process connected to the server.
             fn get_connection_credentials(
                 &self,
                 bus_name: BusName<'_>,
             ) -> Result<ConnectionCredentials>;
 
-            /// Returns the security context used by SELinux, in an unspecified format.
+            /// Return the security context used by SELinux, in an unspecified format.
             #[zbus(name = "GetConnectionSELinuxSecurityContext")]
             fn get_connection_selinux_security_context(
                 &self,
                 bus_name: BusName<'_>,
             ) -> Result<Vec<u8>>;
 
-            /// Returns the Unix process ID of the process connected to the server.
+            /// Return the Unix process ID of the process connected to the server.
             #[zbus(name = "GetConnectionUnixProcessID")]
             fn get_connection_unix_process_id(&self, bus_name: BusName<'_>) -> Result<u32>;
 
-            /// Returns the Unix user ID of the process connected to the server.
+            /// Return the Unix user ID of the process connected to the server.
             fn get_connection_unix_user(&self, bus_name: BusName<'_>) -> Result<u32>;
 
-            /// Gets the unique ID of the bus.
+            /// Get the unique ID of the bus.
             fn get_id(&self) -> Result<OwnedGuid>;
 
-            /// Returns the unique connection name of the primary owner of the name given.
+            /// Return the unique connection name of the primary owner of the name given.
             fn get_name_owner(&self, name: BusName<'_>) -> Result<OwnedUniqueName>;
 
-            /// Returns the unique name assigned to the connection.
+            /// Return the unique name assigned to the connection.
             fn hello(&self) -> Result<OwnedUniqueName>;
 
-            /// Returns a list of all names that can be activated on the bus.
+            /// Return a list of all names that can be activated on the bus.
             fn list_activatable_names(&self) -> Result<Vec<OwnedBusName>>;
 
-            /// Returns a list of all currently-owned names on the bus.
+            /// Return a list of all currently-owned names on the bus.
             fn list_names(&self) -> Result<Vec<OwnedBusName>>;
 
             /// List the connections currently queued for a bus name.
             fn list_queued_owners(&self, name: WellKnownName<'_>) -> Result<Vec<OwnedUniqueName>>;
 
-            /// Checks if the specified name exists (currently has an owner).
+            /// Check if the specified name exists (currently has an owner).
             fn name_has_owner(&self, name: BusName<'_>) -> Result<bool>;
 
             /// Ask the message bus to release the method caller's claim to the given name.
@@ -758,7 +758,7 @@ macro_rules! gen_dbus_proxy {
             /// Reload server configuration.
             fn reload_config(&self) -> Result<()>;
 
-            /// Removes the first rule that matches.
+            /// Remove the first rule that matches.
             #[zbus(name = "RemoveMatch")]
             fn remove_match_rule(&self, rule: crate::MatchRule<'_>) -> Result<()>;
 
@@ -769,7 +769,7 @@ macro_rules! gen_dbus_proxy {
                 flags: BitFlags<RequestNameFlags>,
             ) -> Result<RequestNameReply>;
 
-            /// Tries to launch the executable associated with a name (service
+            /// Try to launch the executable associated with a name (service
             /// activation), as an explicit request.
             fn start_service_by_name(&self, name: WellKnownName<'_>, flags: u32) -> Result<u32>;
 
@@ -933,11 +933,11 @@ pub enum Error {
     #[zbus(name = "Spawn.Failed")]
     SpawnFailed(String),
 
-    /// We failed to setup the environment correctly.
+    /// We failed to set up the environment correctly.
     #[zbus(name = "Spawn.FailedToSetup")]
     SpawnFailedToSetup(String),
 
-    /// We failed to setup the config parser correctly.
+    /// We failed to set up the config parser correctly.
     #[zbus(name = "Spawn.ConfigInvalid")]
     SpawnConfigInvalid(String),
 
@@ -979,7 +979,7 @@ pub enum Error {
     /// There's already an object with the requested object path.
     ObjectPathInUse(String),
 
-    /// The message meta data does not match the payload. e.g. expected number of file descriptors
+    /// The message metadata does not match the payload. e.g. expected number of file descriptors
     /// were not sent over the socket this message was received on.
     InconsistentMessage(String),
 

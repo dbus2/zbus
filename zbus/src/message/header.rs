@@ -92,7 +92,7 @@ pub enum Type {
 
 assert_impl_all!(Type: Send, Sync, Unpin);
 
-/// Pre-defined flags that can be passed in Message header.
+/// Pre-defined flags that can be passed in message headers.
 #[bitflags]
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, VariantType)]
@@ -302,7 +302,7 @@ impl<'m> Header<'m> {
         &mut self.fields
     }
 
-    /// The message type
+    /// The message type.
     pub fn message_type(&self) -> Type {
         self.primary().msg_type()
     }

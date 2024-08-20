@@ -22,7 +22,7 @@ impl Launchd {
         &self.env
     }
 
-    /// Determine the actual transport details behin a launchd address.
+    /// Determine the actual transport details behind a launchd address.
     pub(super) async fn bus_address(&self) -> Result<Transport> {
         let output = run("launchctl", ["getenv", self.env()])
             .await

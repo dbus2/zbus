@@ -20,7 +20,7 @@ use tracing::trace;
 
 /// A helper type returned by [`Interface`] callbacks.
 pub enum DispatchResult<'a> {
-    /// This interface does not support the given method
+    /// This interface does not support the given method.
     NotFound,
 
     /// Retry with [Interface::call_mut].
@@ -28,12 +28,12 @@ pub enum DispatchResult<'a> {
     /// This is equivalent to NotFound if returned by call_mut.
     RequiresMut,
 
-    /// The method was found and will be completed by running this Future
+    /// The method was found and will be completed by running this Future.
     Async(Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>),
 }
 
 impl<'a> DispatchResult<'a> {
-    /// Helper for creating the Async variant
+    /// Helper for creating the Async variant.
     pub fn new_async<F, T, E>(conn: &'a Connection, msg: &'a Message, f: F) -> Self
     where
         F: Future<Output = ::std::result::Result<T, E>> + Send + 'a,
@@ -57,13 +57,13 @@ impl<'a> DispatchResult<'a> {
     }
 }
 
-/// The trait is used to dispatch messages to an interface instance.
+/// This trait is used to dispatch messages to an interface instance.
 ///
-/// This trait should be treated as unstable API and compatibility may break in minor
+/// This trait should be treated as an unstable API and compatibility may break in minor
 /// version bumps. Because of this and other reasons, it is not recommended to manually implement
-/// this trait. The [`crate::dbus_interface`] macro implements it for you.
+/// this trait. The [`crate::interface`] macro implements it for you.
 ///
-/// If you have an advanced use case where `dbus_interface` is inadequate, consider using
+/// If you have an advanced use case where `interface` is inadequate, consider using
 /// [`crate::MessageStream`] or [`crate::blocking::MessageIterator`] instead.
 #[async_trait]
 pub trait Interface: Any + Send + Sync {
@@ -89,7 +89,7 @@ pub trait Interface: Any + Send + Sync {
     /// Set a property value.
     ///
     /// Return [`DispatchResult::NotFound`] if the property doesn't exist, or
-    /// [`DispatchResult::RequiresMut`] if `set_mut` should be used instead.  The default
+    /// [`DispatchResult::RequiresMut`] if `set_mut` should be used instead. The default
     /// implementation just returns `RequiresMut`.
     fn set<'call>(
         &'call self,
@@ -142,7 +142,7 @@ pub trait Interface: Any + Send + Sync {
     fn introspect_to_writer(&self, writer: &mut dyn Write, level: usize);
 }
 
-/// A type for a reference counted Interface trait-object, with associated run-time details and a
+/// A type for a reference-counted Interface trait-object, with associated run-time details and a
 /// manual Debug impl.
 #[derive(Clone)]
 pub(crate) struct ArcInterface {

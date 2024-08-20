@@ -59,23 +59,23 @@ pub use vsock_transport::Vsock;
 pub enum Transport {
     /// A Unix Domain Socket address.
     Unix(Unix),
-    /// TCP address details
+    /// A TCP address.
     Tcp(Tcp),
-    /// autolaunch D-Bus address.
+    /// An autolaunch D-Bus address.
     #[cfg(windows)]
     Autolaunch(Autolaunch),
-    /// launchd D-Bus address.
+    /// A launchd D-Bus address.
     #[cfg(target_os = "macos")]
     Launchd(Launchd),
     #[cfg(any(
         all(feature = "vsock", not(feature = "tokio")),
         feature = "tokio-vsock"
     ))]
-    /// VSOCK address
+    /// A VSOCK address.
     ///
-    /// This variant is only available when either `vsock` or `tokio-vsock` feature is enabled. The
-    /// type of `stream` is `vsock::VsockStream` with `vsock` feature and
-    /// `tokio_vsock::VsockStream` with `tokio-vsock` feature.
+    /// This variant is only available when either the `vsock` or `tokio-vsock` feature is enabled.
+    /// The type of `stream` is `vsock::VsockStream` with the `vsock` feature and
+    /// `tokio_vsock::VsockStream` with the `tokio-vsock` feature.
     Vsock(Vsock),
 }
 

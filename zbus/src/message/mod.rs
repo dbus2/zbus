@@ -40,7 +40,7 @@ impl Sequence {
 
 /// A D-Bus Message.
 ///
-/// The content of the message are stored in serialized format. To get the body of the message, use
+/// The contents of the message are stored in serialized format. To get the body of the message, use
 /// the [`Message::body`] method, and use [`Body`] methods to deserialize it. You may also access
 /// the header and other details with the various other getters.
 ///
@@ -49,7 +49,7 @@ impl Sequence {
 /// and hence use the API provided by [`Connection`], even when using the low-level API.
 ///
 /// **Note**: The message owns the received FDs and will close them when dropped. You can
-/// deserialize to [`zvariant::OwnedFd`] the body (that you get using [`Message::body`]) if you want
+/// deserialize the body (that you get using [`Message::body`]) to [`zvariant::OwnedFd`] if you want
 /// to keep the FDs around after the containing message is dropped.
 ///
 /// [`Connection`]: struct.Connection#method.call_method
@@ -69,7 +69,7 @@ pub(super) struct Inner {
 assert_impl_all!(Message: Send, Sync, Unpin);
 
 impl Message {
-    /// Create a builder for message of type [`Type::MethodCall`].
+    /// Create a builder for a message of type [`Type::MethodCall`].
     pub fn method<'b, 'p: 'b, 'm: 'b, P, M>(path: P, method_name: M) -> Result<Builder<'b>>
     where
         P: TryInto<ObjectPath<'p>>,
@@ -81,7 +81,7 @@ impl Message {
         Builder::method_call(path, method_name)
     }
 
-    /// Create a builder for message of type [`Type::Signal`].
+    /// Create a builder for a message of type [`Type::Signal`].
     pub fn signal<'b, 'p: 'b, 'i: 'b, 'm: 'b, P, I, M>(
         path: P,
         iface: I,
@@ -99,13 +99,13 @@ impl Message {
         Builder::signal(path, iface, signal_name)
     }
 
-    /// Create a builder for message of type [`Type::MethodReturn`].
+    /// Create a builder for a message of type [`Type::MethodReturn`].
     pub fn method_reply(call: &Self) -> Result<Builder<'_>> {
         #[allow(deprecated)]
         Builder::method_return(&call.header())
     }
 
-    /// Create a builder for message of type [`Type::Error`].
+    /// Create a builder for a message of type [`Type::Error`].
     pub fn method_error<'b, 'e: 'b, E>(call: &Self, name: E) -> Result<Builder<'b>>
     where
         E: TryInto<ErrorName<'e>>,
@@ -117,7 +117,7 @@ impl Message {
 
     /// Create a message from bytes.
     ///
-    /// **Note:** Since the constructed message is not construct by zbus, the receive sequence,
+    /// **Note:** Since the message is not constructed by zbus, the receive sequence,
     /// which can be acquired from [`Message::recv_position`], is not applicable and hence set
     /// to `0`.
     ///
@@ -128,7 +128,7 @@ impl Message {
         Self::from_raw_parts(bytes, 0)
     }
 
-    /// Create a message from its full contents
+    /// Create a message from its full contents.
     pub(crate) fn from_raw_parts(
         bytes: serialized::Data<'static, 'static>,
         recv_seq: u64,
@@ -162,7 +162,7 @@ impl Message {
 
     /// The message header.
     ///
-    /// Note: This method does not deserialize the header but it does currently allocate so its not
+    /// Note: This method does not deserialize the header but it does currently allocate so it's not
     /// zero-cost. While the allocation is small and will hopefully be removed in the future, it's
     /// best to keep the header around if you need to access it a lot.
     pub fn header(&self) -> Header<'_> {
@@ -280,7 +280,7 @@ impl Message {
 
     /// Get the receive ordering of a message.
     ///
-    /// This may be used to identify how two events were ordered on the bus.  It only produces a
+    /// This may be used to identify how two events were ordered on the bus. It only produces a
     /// useful ordering for messages that were produced by the same [`zbus::Connection`].
     ///
     /// This is completely unrelated to the serial number on the message, which is set by the peer

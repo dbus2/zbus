@@ -66,7 +66,7 @@ impl<'s> SignalContext<'s> {
         self.destination.as_ref()
     }
 
-    /// Creates an owned clone of `self`.
+    /// Create an owned clone of `self`.
     pub fn to_owned(&self) -> SignalContext<'static> {
         SignalContext {
             conn: self.conn.clone(),
@@ -75,7 +75,7 @@ impl<'s> SignalContext<'s> {
         }
     }
 
-    /// Creates an owned clone of `self`.
+    /// Convert into an owned clone of `self`.
     pub fn into_owned(self) -> SignalContext<'static> {
         SignalContext {
             conn: self.conn,

@@ -111,7 +111,7 @@ impl<'m> Builder<'m> {
         Ok(self)
     }
 
-    /// Append an arguments.
+    /// Append an argument.
     ///
     /// Use this in instead of [`Builder::arg`] if you want to sequentially add args.
     ///
@@ -202,8 +202,8 @@ impl<'m> Builder<'m> {
 
     /// Set 0th argument's namespace.
     ///
-    /// The namespace be a valid bus name or a valid element of a bus name. For more information,
-    /// see [the spec](https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus).
+    /// The namespace must be a valid bus name or a valid element of a bus name. For more
+    /// information, see [the spec](https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus).
     ///
     /// # Examples
     ///

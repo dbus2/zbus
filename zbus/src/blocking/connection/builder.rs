@@ -37,7 +37,7 @@ impl<'a> Builder<'a> {
         crate::connection::Builder::system().map(Self)
     }
 
-    /// Create a builder for connection that will use the given [D-Bus bus address].
+    /// Create a builder for a connection that will use the given [D-Bus bus address].
     ///
     /// [D-Bus bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub fn address<A>(address: A) -> Result<Self>
@@ -48,9 +48,9 @@ impl<'a> Builder<'a> {
         crate::connection::Builder::address(address).map(Self)
     }
 
-    /// Create a builder for connection that will use the given unix stream.
+    /// Create a builder for a connection that will use the given unix stream.
     ///
-    /// If the default `async-io` feature is disabled, this method will expect
+    /// If the default `async-io` feature is disabled, this method will expect a
     /// [`tokio::net::UnixStream`](https://docs.rs/tokio/latest/tokio/net/struct.UnixStream.html)
     /// argument.
     ///
@@ -63,9 +63,9 @@ impl<'a> Builder<'a> {
         Self(crate::connection::Builder::unix_stream(stream))
     }
 
-    /// Create a builder for connection that will use the given TCP stream.
+    /// Create a builder for a connection that will use the given TCP stream.
     ///
-    /// If the default `async-io` feature is disabled, this method will expect
+    /// If the default `async-io` feature is disabled, this method will expect a
     /// [`tokio::net::TcpStream`](https://docs.rs/tokio/latest/tokio/net/struct.TcpStream.html)
     /// argument.
     pub fn tcp_stream(stream: TcpStream) -> Self {
@@ -85,7 +85,7 @@ impl<'a> Builder<'a> {
         crate::connection::Builder::authenticated_socket(socket, guid).map(Self)
     }
 
-    /// Create a builder for connection that will use the given socket.
+    /// Create a builder for a connection that will use the given socket.
     pub fn socket<S: Into<BoxedSplit>>(socket: S) -> Self {
         Self(crate::connection::Builder::socket(socket))
     }
@@ -105,7 +105,7 @@ impl<'a> Builder<'a> {
     /// The cookie context to use during authentication.
     ///
     /// This is only used when the `cookie` authentication mechanism is enabled and only valid for
-    /// server connection.
+    /// server connections.
     ///
     /// If not specified, the default cookie context of `org_freedesktop_general` will be used.
     ///
@@ -122,7 +122,7 @@ impl<'a> Builder<'a> {
     /// The ID of the cookie to use during authentication.
     ///
     /// This is only used when the `cookie` authentication mechanism is enabled and only valid for
-    /// server connection.
+    /// server connections.
     ///
     /// If not specified, the first cookie found in the cookie context file will be used.
     pub fn cookie_id(self, id: usize) -> Self {
@@ -208,7 +208,7 @@ impl<'a> Builder<'a> {
         self.0.name(well_known_name).map(Self)
     }
 
-    /// Sets the unique name of the connection.
+    /// Set the unique name of the connection.
     ///
     /// This method is only available when the `bus-impl` feature is enabled.
     ///
@@ -232,7 +232,7 @@ impl<'a> Builder<'a> {
     /// # Errors
     ///
     /// Until server-side bus connection is supported, attempting to build such a connection will
-    /// result in [`Error::Unsupported`] error.
+    /// result in a [`Error::Unsupported`] error.
     pub fn build(self) -> Result<Connection> {
         block_on(self.0.build()).map(Into::into)
     }
