@@ -5,11 +5,13 @@ use std::{collections::HashMap, vec};
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
-use zvariant::{serialized::Context, to_bytes_for_signature, Type, Value, LE};
+use zvariant::{serialized::Context, to_bytes_for_parsed_signature, Type, Value, LE};
 
 macro_rules! benchmark {
     ($c:ident, $data:ident, $data_type:ty, $func_prefix:literal) => {
         let signature = <$data_type>::signature();
+        // FIXME: Make use of `Type` once it has `SIGNATURE` associated constant.
+        let signature = signature.clone().into();
 
         let ser_function_name = format!("{}_ser", $func_prefix);
         let de_function_name = format!("{}_de", $func_prefix);
@@ -20,7 +22,7 @@ macro_rules! benchmark {
         group.measurement_time(std::time::Duration::from_secs(30));
         group.bench_function(&ser_function_name, |b| {
             b.iter(|| {
-                let encoded = to_bytes_for_signature(
+                let encoded = to_bytes_for_parsed_signature(
                     black_box(ctxt),
                     black_box(&signature),
                     black_box(&$data),
@@ -30,11 +32,11 @@ macro_rules! benchmark {
             })
         });
 
-        let encoded = to_bytes_for_signature(ctxt, &signature, &$data).unwrap();
+        let encoded = to_bytes_for_parsed_signature(ctxt, &signature, &$data).unwrap();
         group.bench_function(&de_function_name, |b| {
             b.iter(|| {
                 let (s, _): ($data_type, _) = encoded
-                    .deserialize_for_signature(black_box(&signature))
+                    .deserialize_for_parsed_signature(black_box(&signature))
                     .unwrap();
                 black_box(s);
             })
@@ -50,7 +52,7 @@ macro_rules! benchmark {
 
             group.bench_function(&ser_function_name, |b| {
                 b.iter(|| {
-                    let encoded = to_bytes_for_signature(
+                    let encoded = to_bytes_for_parsed_signature(
                         black_box(ctxt),
                         black_box(&signature),
                         black_box(&$data),
@@ -60,11 +62,11 @@ macro_rules! benchmark {
                 })
             });
 
-            let encoded = to_bytes_for_signature(ctxt, &signature, &$data).unwrap();
+            let encoded = to_bytes_for_parsed_signature(ctxt, &signature, &$data).unwrap();
             group.bench_function(&de_function_name, |b| {
                 b.iter(|| {
                     let (s, _): ($data_type, _) = encoded
-                        .deserialize_for_signature(black_box(&signature))
+                        .deserialize_for_parsed_signature(black_box(&signature))
                         .unwrap();
                     black_box(s);
                 })
