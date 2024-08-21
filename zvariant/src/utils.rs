@@ -146,16 +146,6 @@ pub(crate) fn is_fixed_sized_signature<'a>(signature: &'a Signature<'a>) -> Resu
     }
 }
 
-// Given an &str, create an owned (String-based) Signature w/ appropriate capacity
-macro_rules! signature_string {
-    ($signature:expr) => {{
-        let mut s = String::with_capacity(255);
-        s.push_str($signature);
-
-        Signature::from_string_unchecked(s)
-    }};
-}
-
 macro_rules! check_child_value_signature {
     ($expected_signature:expr, $child_signature:expr, $child_name:literal) => {{
         if $child_signature != $expected_signature {
