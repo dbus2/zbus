@@ -367,10 +367,7 @@ impl<'a> Basic for Signature<'a> {
 }
 
 impl<'a> Type for Signature<'a> {
-    #[inline]
-    fn parsed_signature() -> crate::parsed::Signature {
-        crate::parsed::Signature::Signature
-    }
+    const SIGNATURE: &'static crate::parsed::Signature = &crate::parsed::Signature::Signature;
 }
 
 impl<'a> From<&Signature<'a>> for Signature<'a> {

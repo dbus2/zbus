@@ -670,7 +670,7 @@ mod tests {
         // Array of u8
         //
         // First a normal Rust array that is actually serialized as a struct (thank you Serde!)
-        assert_eq!(<[u8; 2]>::signature(), "(yy)");
+        assert_eq!(<[u8; 2]>::SIGNATURE, "(yy)");
         let ay = [77u8, 88];
         let ctxt = Context::new_dbus(LE, 0);
         let encoded = to_bytes(ctxt, &ay).unwrap();
@@ -1101,7 +1101,7 @@ mod tests {
         #[derive(Serialize, Deserialize, Type, PartialEq, Debug)]
         struct Unit;
 
-        assert_eq!(Unit::signature(), "");
+        assert_eq!(Unit::SIGNATURE, "");
         let encoded = to_bytes(ctxt, &Unit).unwrap();
         assert_eq!(encoded.len(), 0);
         let _decoded: Unit = encoded.deserialize().unwrap().0;
@@ -1110,7 +1110,7 @@ mod tests {
         #[derive(Serialize, Deserialize, Type, PartialEq, Debug)]
         struct NoFields {}
 
-        assert_eq!(NoFields::signature(), "y");
+        assert_eq!(NoFields::SIGNATURE, "y");
         let encoded = to_bytes(ctxt, &NoFields {}).unwrap();
         assert_eq!(encoded.len(), 1);
         let _decoded: NoFields = encoded.deserialize().unwrap().0;
@@ -1252,7 +1252,7 @@ mod tests {
         let ctxt = Context::new_dbus(LE, 0);
 
         // Now a hand-crafted Dict Value but with a Value as value
-        let mut dict = Dict::new(<&str>::signature(), Value::signature());
+        let mut dict = Dict::new(<&str>::SIGNATURE.into(), Value::SIGNATURE.into());
         dict.add("hello", Value::new("there")).unwrap();
         dict.add("bye", Value::new("now")).unwrap();
         let v: Value<'_> = dict.into();
@@ -1346,11 +1346,11 @@ mod tests {
     fn dict_compare() {
         // the order in which a dict has been constructed must not play a role
         // https://github.com/dbus2/zbus/issues/484
-        let mut dict1 = Dict::new(<&str>::signature(), Value::signature());
+        let mut dict1 = Dict::new(<&str>::SIGNATURE.into(), Value::SIGNATURE.into());
         dict1.add("first", Value::new("value")).unwrap();
         dict1.add("second", Value::new("value")).unwrap();
 
-        let mut dict2 = Dict::new(<&str>::signature(), Value::signature());
+        let mut dict2 = Dict::new(<&str>::SIGNATURE.into(), Value::SIGNATURE.into());
         dict2.add("second", Value::new("value")).unwrap();
         dict2.add("first", Value::new("value")).unwrap();
 
@@ -1564,7 +1564,7 @@ mod tests {
             field3: &'s str,
         }
 
-        assert_eq!(Struct::signature(), "(qxs)");
+        assert_eq!(Struct::SIGNATURE, "(qxs)");
         let s = Struct {
             field1: 0xFF_FF,
             field2: 0xFF_FF_FF_FF_FF_FF,
@@ -1579,7 +1579,7 @@ mod tests {
         #[derive(Deserialize, Serialize, Type)]
         struct UnitStruct;
 
-        assert_eq!(UnitStruct::signature(), <()>::signature());
+        assert_eq!(UnitStruct::SIGNATURE, <()>::SIGNATURE);
         let encoded = to_bytes(ctxt, &UnitStruct).unwrap();
         assert_eq!(encoded.len(), 0);
         let _: UnitStruct = encoded.deserialize().unwrap().0;
@@ -1592,7 +1592,7 @@ mod tests {
             Variant3,
         }
 
-        assert_eq!(Enum::signature(), u8::signature());
+        assert_eq!(Enum::SIGNATURE, u8::SIGNATURE);
         let encoded = to_bytes(ctxt, &Enum::Variant3).unwrap();
         assert_eq!(encoded.len(), 1);
         let decoded: Enum = encoded.deserialize().unwrap().0;
@@ -1606,7 +1606,7 @@ mod tests {
             Variant3,
         }
 
-        assert_eq!(Enum2::signature(), i64::signature());
+        assert_eq!(Enum2::SIGNATURE, i64::SIGNATURE);
         let encoded = to_bytes(ctxt, &Enum2::Variant2).unwrap();
         assert_eq!(encoded.len(), 8);
         let decoded: Enum2 = encoded.deserialize().unwrap().0;
@@ -1623,7 +1623,7 @@ mod tests {
         let encoded = to_bytes(ctxt, &(NoReprEnum::Variant2,)).unwrap();
         let _: (NoReprEnum,) = encoded.deserialize().unwrap().0;
 
-        assert_eq!(NoReprEnum::signature(), u32::signature());
+        assert_eq!(NoReprEnum::SIGNATURE, u32::SIGNATURE);
         let encoded = to_bytes(ctxt, &NoReprEnum::Variant2).unwrap();
         assert_eq!(encoded.len(), 4);
         let decoded: NoReprEnum = encoded.deserialize().unwrap().0;
@@ -1637,7 +1637,7 @@ mod tests {
             Variant3,
         }
 
-        assert_eq!(StrEnum::signature(), <&str>::signature());
+        assert_eq!(StrEnum::SIGNATURE, <&str>::SIGNATURE);
         let encoded = to_bytes(ctxt, &StrEnum::Variant2).unwrap();
         assert_eq!(encoded.len(), 13);
         let decoded: StrEnum = encoded.deserialize().unwrap().0;
@@ -1648,7 +1648,7 @@ mod tests {
             Variant1(f64),
             Variant2(f64),
         }
-        assert_eq!(NewType::signature(), "(ud)");
+        assert_eq!(NewType::SIGNATURE, "(ud)");
 
         #[derive(Deserialize, Serialize, Type)]
         enum StructFields {
@@ -1659,7 +1659,7 @@ mod tests {
                 field3: &'static str,
             },
         }
-        assert_eq!(StructFields::signature(), "(u(qxs))");
+        assert_eq!(StructFields::SIGNATURE, "(u(qxs))");
 
         #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
         struct AStruct<'s> {
@@ -1668,7 +1668,7 @@ mod tests {
             field3: &'s [u8],
             field4: i64,
         }
-        assert_eq!(AStruct::signature(), "(qayayx)");
+        assert_eq!(AStruct::SIGNATURE, "(qayayx)");
         let s = AStruct {
             field1: 0xFF_FF,
             field2: &[77u8; 8],
@@ -1723,7 +1723,7 @@ mod tests {
             field2: &'s [u8],
             field3: i64,
         }
-        assert_eq!(Struct::signature(), "(qayx)");
+        assert_eq!(Struct::SIGNATURE, "(qayx)");
         let s = Struct {
             field1: 0xFF_FF,
             field2: &[77u8; 512],
@@ -1755,7 +1755,7 @@ mod tests {
             field2: &'s [u8],
             field3: i64,
         }
-        assert_eq!(Struct::signature(), "(qayx)");
+        assert_eq!(Struct::SIGNATURE, "(qayx)");
         let s = Struct {
             field1: 0xFF_FF,
             field2: &[77u8; 512],
@@ -2019,7 +2019,7 @@ mod tests {
         }
 
         let foo = Foo { hmap };
-        assert_eq!(Foo::signature(), "(a{ss})");
+        assert_eq!(Foo::SIGNATURE, "(a{ss})");
 
         let ctxt = Context::new_dbus(LE, 0);
         let encoded = to_bytes(ctxt, &(&foo, 1)).unwrap();
@@ -2039,6 +2039,8 @@ mod tests {
     #[test]
     #[cfg(feature = "gvariant")]
     fn issue_99() {
+        use crate::to_bytes_for_parsed_signature;
+
         #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
         struct ZVStruct<'s>(#[serde(borrow)] HashMap<&'s str, Value<'s>>);
 
@@ -2049,10 +2051,13 @@ mod tests {
         let element = ZVStruct(dict);
 
         let ctxt = Context::new_gvariant(LE, 0);
-        let signature = ZVStruct::signature();
+        let signature = ZVStruct::SIGNATURE;
 
-        let encoded = to_bytes_for_signature(ctxt, &signature, &element).unwrap();
-        let _: ZVStruct<'_> = encoded.deserialize_for_signature(signature).unwrap().0;
+        let encoded = to_bytes_for_parsed_signature(ctxt, signature, &element).unwrap();
+        let _: ZVStruct<'_> = encoded
+            .deserialize_for_parsed_signature(signature)
+            .unwrap()
+            .0;
     }
 
     #[cfg(feature = "ostree-tests")]

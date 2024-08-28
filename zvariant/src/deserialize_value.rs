@@ -63,7 +63,7 @@ impl<'de, T: Type + Deserialize<'de>> Visitor<'de> for DeserializeValueVisitor<T
         let sig: Signature<'_> = seq
             .next_element()?
             .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
-        if sig != T::signature() {
+        if T::SIGNATURE != &sig {
             return Err(serde::de::Error::invalid_value(
                 serde::de::Unexpected::Str(&sig),
                 &"the value signature",
@@ -76,8 +76,5 @@ impl<'de, T: Type + Deserialize<'de>> Visitor<'de> for DeserializeValueVisitor<T
 }
 
 impl<'de, T: Type + Deserialize<'de>> Type for DeserializeValue<'de, T> {
-    #[inline]
-    fn parsed_signature() -> crate::parsed::Signature {
-        crate::parsed::Signature::Variant
-    }
+    const SIGNATURE: &'static crate::parsed::Signature = &crate::parsed::Signature::Variant;
 }

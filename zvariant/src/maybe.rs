@@ -175,7 +175,7 @@ where
     fn from(value: Option<T>) -> Self {
         value
             .map(|v| Self::just(Value::new(v)))
-            .unwrap_or_else(|| Self::nothing(T::signature()))
+            .unwrap_or_else(|| Self::nothing(T::SIGNATURE.into()))
     }
 }
 
@@ -187,7 +187,7 @@ where
         value
             .as_ref()
             .map(|v| Self::just(Value::new(v.clone())))
-            .unwrap_or_else(|| Self::nothing(T::signature()))
+            .unwrap_or_else(|| Self::nothing(T::SIGNATURE.into()))
     }
 }
 

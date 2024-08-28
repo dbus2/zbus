@@ -252,18 +252,18 @@ impl<'a> Value<'a> {
     /// Get the signature of the enclosed value.
     pub fn value_signature(&self) -> Signature<'_> {
         match self {
-            Value::U8(_) => u8::signature(),
-            Value::Bool(_) => bool::signature(),
-            Value::I16(_) => i16::signature(),
-            Value::U16(_) => u16::signature(),
-            Value::I32(_) => i32::signature(),
-            Value::U32(_) => u32::signature(),
-            Value::I64(_) => i64::signature(),
-            Value::U64(_) => u64::signature(),
-            Value::F64(_) => f64::signature(),
-            Value::Str(_) => <&str>::signature(),
-            Value::Signature(_) => Signature::signature(),
-            Value::ObjectPath(_) => ObjectPath::signature(),
+            Value::U8(_) => u8::SIGNATURE.into(),
+            Value::Bool(_) => bool::SIGNATURE.into(),
+            Value::I16(_) => i16::SIGNATURE.into(),
+            Value::U16(_) => u16::SIGNATURE.into(),
+            Value::I32(_) => i32::SIGNATURE.into(),
+            Value::U32(_) => u32::SIGNATURE.into(),
+            Value::I64(_) => i64::SIGNATURE.into(),
+            Value::U64(_) => u64::SIGNATURE.into(),
+            Value::F64(_) => f64::SIGNATURE.into(),
+            Value::Str(_) => <&str>::SIGNATURE.into(),
+            Value::Signature(_) => Signature::SIGNATURE.into(),
+            Value::ObjectPath(_) => ObjectPath::SIGNATURE.into(),
             Value::Value(_) => Signature::from_static_str_unchecked("v"),
 
             // Container types
@@ -274,7 +274,7 @@ impl<'a> Value<'a> {
             Value::Maybe(value) => value.full_signature().as_ref(),
 
             #[cfg(unix)]
-            Value::Fd(_) => Fd::signature(),
+            Value::Fd(_) => Fd::SIGNATURE.into(),
         }
     }
 
@@ -969,10 +969,7 @@ where
 }
 
 impl<'a> Type for Value<'a> {
-    #[inline]
-    fn parsed_signature() -> crate::parsed::Signature {
-        crate::parsed::Signature::Variant
-    }
+    const SIGNATURE: &'static crate::parsed::Signature = &crate::parsed::Signature::Variant;
 }
 
 impl<'a> TryFrom<&Value<'a>> for Value<'a> {

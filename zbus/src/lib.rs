@@ -354,7 +354,7 @@ mod tests {
             .unwrap();
 
         let body = reply.body();
-        assert!(body.signature().map(|s| s == <&str>::signature()).unwrap());
+        assert!(body.signature().map(|s| <&str>::SIGNATURE == &s).unwrap());
         let id: &str = body.deserialize().unwrap();
         debug!("Unique ID of the bus: {}", id);
 
@@ -369,7 +369,7 @@ mod tests {
             .unwrap();
 
         let body = reply.body();
-        assert!(body.signature().map(|s| s == bool::signature()).unwrap());
+        assert!(body.signature().map(|s| bool::SIGNATURE == &s).unwrap());
         assert!(body.deserialize::<bool>().unwrap());
 
         let reply = connection
@@ -383,7 +383,7 @@ mod tests {
             .unwrap();
 
         let body = reply.body();
-        assert!(body.signature().map(|s| s == <&str>::signature()).unwrap());
+        assert!(body.signature().map(|s| <&str>::SIGNATURE == &s).unwrap());
         assert_eq!(
             body.deserialize::<UniqueName<'_>>().unwrap(),
             *connection.unique_name().unwrap(),
@@ -454,7 +454,7 @@ mod tests {
             .unwrap();
 
         let body = reply.body();
-        assert!(body.signature().map(|s| s == <&str>::signature()).unwrap());
+        assert!(body.signature().map(|s| <&str>::SIGNATURE == &s).unwrap());
         let id: &str = body.deserialize().unwrap();
         debug!("Unique ID of the bus: {}", id);
 
@@ -470,7 +470,7 @@ mod tests {
             .unwrap();
 
         let body = reply.body();
-        assert!(body.signature().map(|s| s == bool::signature()).unwrap());
+        assert!(body.signature().map(|s| bool::SIGNATURE == &s).unwrap());
         assert!(body.deserialize::<bool>().unwrap());
 
         let reply = connection
@@ -485,7 +485,7 @@ mod tests {
             .unwrap();
 
         let body = reply.body();
-        assert!(body.signature().map(|s| s == <&str>::signature()).unwrap());
+        assert!(body.signature().map(|s| <&str>::SIGNATURE == &s).unwrap());
         assert_eq!(
             body.deserialize::<UniqueName<'_>>().unwrap(),
             *connection.unique_name().unwrap(),

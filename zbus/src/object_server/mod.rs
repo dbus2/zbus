@@ -905,10 +905,7 @@ impl<R> Type for ResponseDispatchNotifier<R>
 where
     R: Type,
 {
-    #[inline]
-    fn parsed_signature() -> Signature {
-        R::parsed_signature()
-    }
+    const SIGNATURE: &'static Signature = R::SIGNATURE;
 }
 
 impl<T> Drop for ResponseDispatchNotifier<T> {

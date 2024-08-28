@@ -1098,7 +1098,7 @@ fn introspect_input_args<'i>(
             Some(quote!(
                 #(#cfg_attrs)*
                 ::std::writeln!(writer, "{:indent$}<arg name=\"{}\" type=\"{}\"{}/>", "",
-                         #arg_name, <#ty>::signature(), #dir, indent = level).unwrap();
+                         #arg_name, <#ty>::SIGNATURE, #dir, indent = level).unwrap();
             ))
         })
 }
@@ -1116,7 +1116,7 @@ fn introspect_output_arg(
     quote!(
         #(#cfg_attrs)*
         ::std::writeln!(writer, "{:indent$}<arg {}type=\"{}\" direction=\"out\"/>", "",
-                 #arg_name, <#ty>::signature(), indent = level).unwrap();
+                 #arg_name, <#ty>::SIGNATURE, indent = level).unwrap();
     )
 }
 
@@ -1230,7 +1230,7 @@ fn introspect_properties(
                 ::std::writeln!(
                     writer,
                     "{:indent$}<property name=\"{}\" type=\"{}\" access=\"{}\"/>",
-                    "", #name, <#ty>::signature(), #access, indent = level,
+                    "", #name, <#ty>::SIGNATURE, #access, indent = level,
                 ).unwrap();
             ));
         } else {
@@ -1240,7 +1240,7 @@ fn introspect_properties(
                 ::std::writeln!(
                     writer,
                     "{:indent$}<property name=\"{}\" type=\"{}\" access=\"{}\">",
-                    "", #name, <#ty>::signature(), #access, indent = level,
+                    "", #name, <#ty>::SIGNATURE, #access, indent = level,
                 ).unwrap();
                 ::std::writeln!(
                     writer,

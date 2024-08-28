@@ -67,7 +67,7 @@ impl<'k, 'v> Dict<'k, 'v> {
         K: Basic + Into<Value<'k>> + Ord,
         V: Into<Value<'v>> + DynamicType,
     {
-        check_child_value_signature!(self.key_signature, K::signature(), "key");
+        check_child_value_signature!(&self.key_signature, K::SIGNATURE, "key");
         check_child_value_signature!(self.value_signature, value.dynamic_signature(), "value");
 
         self.map.insert(Value::new(key), Value::new(value));
@@ -280,8 +280,8 @@ macro_rules! to_dict {
                     .into_iter()
                     .map(|(key, value)| (Value::new(key), Value::new(value)))
                     .collect();
-                let key_signature = K::signature();
-                let value_signature = V::signature();
+                let key_signature = K::SIGNATURE.into();
+                let value_signature = V::SIGNATURE.into();
                 let signature = create_signature(&key_signature, &value_signature);
 
                 Self {

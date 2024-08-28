@@ -126,10 +126,7 @@ impl<'a> Basic for Str<'a> {
 }
 
 impl<'a> Type for Str<'a> {
-    #[inline]
-    fn parsed_signature() -> crate::parsed::Signature {
-        crate::parsed::Signature::Str
-    }
+    const SIGNATURE: &'static crate::parsed::Signature = &crate::parsed::Signature::Str;
 }
 
 impl<'a> From<&'a str> for Str<'a> {

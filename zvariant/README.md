@@ -66,7 +66,7 @@ struct Struct<'s> {
     field3: &'s str,
 }
 
-assert_eq!(Struct::signature(), "(qxs)");
+assert_eq!(Struct::SIGNATURE, "(qxs)");
 let s = Struct {
     field1: 42,
     field2: i64::max_value(),
@@ -90,7 +90,7 @@ enum Enum<'s> {
 // Enum encoding uses a `u32` to denote the variant index. For unit-type enums that's all that's
 // needed so the signature is just `u` but complex enums are encoded as a structure whose first
 // field is the variant index and the second one is the field(s).
-assert_eq!(Enum::signature(), "(u(qxs))");
+assert_eq!(Enum::SIGNATURE, "(u(qxs))");
 let e = Enum::Variant3 {
     f1: 42,
     f2: i64::max_value(),
@@ -112,7 +112,7 @@ enum UnitEnum {
     Variant3,
 }
 
-assert_eq!(UnitEnum::signature(), "y");
+assert_eq!(UnitEnum::SIGNATURE, "y");
 let encoded = to_bytes(ctxt, &UnitEnum::Variant2).unwrap();
 let e: UnitEnum = encoded.deserialize().unwrap().0;
 assert_eq!(e, UnitEnum::Variant2);
@@ -126,7 +126,7 @@ enum StrEnum {
     Variant3,
 }
 
-assert_eq!(StrEnum::signature(), "s");
+assert_eq!(StrEnum::SIGNATURE, "s");
 ```
 
 Apart from the obvious requirement of [`serialized::Context`] instance by the main serialization and
