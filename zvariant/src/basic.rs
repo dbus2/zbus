@@ -1,4 +1,4 @@
-use crate::{parsed, serialized::Format, Signature, Type};
+use crate::{parsed, serialized::Format, Type};
 
 /// Trait for basic types.
 ///
@@ -55,8 +55,9 @@ where
 macro_rules! impl_type {
     ($for:ty) => {
         impl Type for $for {
-            fn signature() -> Signature<'static> {
-                Signature::from_static_str_unchecked(<$for>::SIGNATURE_STR)
+            #[inline]
+            fn parsed_signature() -> parsed::Signature {
+                <$for as Basic>::SIGNATURE.clone()
             }
         }
     };

@@ -104,6 +104,7 @@ fn validate_strings() {
             }),
         ])
     );
+    #[cfg(unix)]
     validate!("h" => Signature::Fd);
 }
 

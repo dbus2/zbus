@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use serde::de::{Deserialize, Deserializer, SeqAccess, Visitor};
 use static_assertions::assert_impl_all;
 
-use crate::{Signature, Type, Value};
+use crate::{Signature, Type};
 
 /// A wrapper to deserialize a value to `T: Type + Deserialize`.
 ///
@@ -76,7 +76,8 @@ impl<'de, T: Type + Deserialize<'de>> Visitor<'de> for DeserializeValueVisitor<T
 }
 
 impl<'de, T: Type + Deserialize<'de>> Type for DeserializeValue<'de, T> {
-    fn signature() -> Signature<'static> {
-        Value::signature()
+    #[inline]
+    fn parsed_signature() -> crate::parsed::Signature {
+        crate::parsed::Signature::Variant
     }
 }

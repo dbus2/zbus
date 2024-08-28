@@ -80,8 +80,9 @@ impl<T> Type for Optional<T>
 where
     T: Type,
 {
-    fn signature() -> crate::Signature<'static> {
-        T::signature()
+    #[inline]
+    fn parsed_signature() -> crate::parsed::Signature {
+        T::parsed_signature()
     }
 }
 

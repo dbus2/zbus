@@ -1,4 +1,4 @@
-use crate::{utils::*, Signature};
+use crate::{utils::*, parsed, Signature};
 use serde::de::{Deserialize, DeserializeSeed};
 use std::{
     cell::{Cell, RefCell},
@@ -33,6 +33,12 @@ use std::{
 /// [DynamicType] trait instead, which is otherwise automatically implemented if you implement this
 /// trait.
 ///
+/// # Caveats
+///
+/// The default implementation of [`Type::signature`] and [`Type::parsed_signature`] rely on each
+/// other. You must implement at least one of them directly to avoid infinite recursion and hence
+/// stack overflow. It is recommended to implement [`Type::parsed_signature`] only.
+///
 /// [D-Bus type system]: https://dbus.freedesktop.org/doc/dbus-specification.html#type-system
 /// [serialization and deserialization]: index.html#functions
 /// [`Serialize`]: https://docs.serde.rs/serde/trait.Serialize.html
@@ -56,7 +62,55 @@ pub trait Type {
     /// assert_eq!(<(u32, &str, &[u64])>::signature(), "(usat)");
     /// assert_eq!(<HashMap<u8, &str>>::signature(), "a{ys}");
     /// ```
-    fn signature() -> Signature<'static>;
+    #[inline]
+    fn signature() -> Signature<'static> {
+        Self::parsed_signature().into()
+    }
+
+    /// Get the signature for the implementing type, in parsed format.
+    ///
+    /// This method provides a default implementation in order to not break the API. The default
+    /// implementation parses the return value of [`Self::signature`] and hence is not the most
+    /// efficient. Implementing this method directly is recommended.
+    ///
+    /// Moreover, the default implementation of [`Type::signature`] relies on this method. You must
+    /// implement at least one of them directly to avoid infinite recursion and hence stack
+    /// overflow. It is recommended to implement this method only.
+    ///
+    /// In the next major version of zvariant:
+    ///
+    /// * The default implementation will be removed.
+    /// * It will be turned into an associated const.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use std::collections::HashMap;
+    /// use zvariant::{Type, parsed::{ChildSignature, Signature}};
+    ///
+    /// assert_eq!(u32::parsed_signature(), Signature::U32);
+    /// assert_eq!(String::parsed_signature(), Signature::Str);
+    /// assert_eq!(
+    ///     <(u32, &str, u64)>::parsed_signature(),
+    ///     Signature::static_structure(&[&Signature::U32, &Signature::Str, &Signature::U64]),
+    /// );
+    /// assert_eq!(
+    ///     <(u32, &str, &[u64])>::parsed_signature(),
+    ///     Signature::static_structure(&[
+    ///         &Signature::U32,
+    ///         &Signature::Str,
+    ///         &Signature::Array(ChildSignature::Static { child: &Signature::U64 }),
+    ///     ]),
+    /// );
+    /// assert_eq!(
+    ///     <HashMap<u8, &str>>::parsed_signature(),
+    ///     Signature::static_dict(&Signature::U8, &Signature::Str),
+    /// );
+    /// ```
+    #[inline]
+    fn parsed_signature() -> parsed::Signature {
+        Self::signature().into()
+    }
 }
 
 /// Types with dynamic signatures.
@@ -116,9 +170,7 @@ macro_rules! impl_type_with_repr {
     }) => {
         impl $(<$typaram $(: $($tbound)::+)?>)? crate::Type for $($ty)::+ $(<$typaram>)? {
             #[inline]
-            fn signature() -> crate::Signature<'static> {
-                <$repr>::signature()
-            }
+            fn parsed_signature() -> parsed::Signature { <$repr>::parsed_signature() }
         }
 
         #[cfg(test)]
@@ -213,8 +265,9 @@ impl<T> Type for PhantomData<T>
 where
     T: Type + ?Sized,
 {
-    fn signature() -> Signature<'static> {
-        T::signature()
+    #[inline]
+    fn parsed_signature() -> parsed::Signature {
+        T::parsed_signature()
     }
 }
 
@@ -270,8 +323,8 @@ macro_rules! array_type {
             T: Type,
         {
             #[inline]
-            fn signature() -> Signature<'static> {
-                Signature::from_string_unchecked(format!("a{}", T::signature()))
+            fn parsed_signature() -> parsed::Signature {
+                parsed::Signature::array(T::parsed_signature())
             }
         }
     };
@@ -288,8 +341,8 @@ where
     S: BuildHasher,
 {
     #[inline]
-    fn signature() -> Signature<'static> {
-        <[T]>::signature()
+    fn parsed_signature() -> parsed::Signature {
+        <[T]>::parsed_signature()
     }
 }
 
@@ -298,8 +351,8 @@ where
     T: Type + Ord,
 {
     #[inline]
-    fn signature() -> Signature<'static> {
-        <[T]>::signature()
+    fn parsed_signature() -> parsed::Signature {
+        <[T]>::parsed_signature()
     }
 }
 
@@ -308,8 +361,8 @@ where
     T: Type + Ord,
 {
     #[inline]
-    fn signature() -> Signature<'static> {
-        <[T]>::signature()
+    fn parsed_signature() -> parsed::Signature {
+        <[T]>::parsed_signature()
     }
 }
 
@@ -319,16 +372,16 @@ where
     T: Type,
 {
     #[inline]
-    fn signature() -> Signature<'static> {
-        <[T]>::signature()
+    fn parsed_signature() -> parsed::Signature {
+        <[T]>::parsed_signature()
     }
 }
 
 #[cfg(feature = "arrayvec")]
 impl<const CAP: usize> Type for arrayvec::ArrayString<CAP> {
     #[inline]
-    fn signature() -> Signature<'static> {
-        <&str>::signature()
+    fn parsed_signature() -> parsed::Signature {
+        parsed::Signature::Str
     }
 }
 
@@ -338,24 +391,24 @@ where
     T: Type,
 {
     #[inline]
-    fn signature() -> Signature<'static> {
-        <[T]>::signature()
+    fn parsed_signature() -> parsed::Signature {
+        <[T]>::parsed_signature()
     }
 }
 
 #[cfg(feature = "heapless")]
 impl<const CAP: usize> Type for heapless::String<CAP> {
     #[inline]
-    fn signature() -> Signature<'static> {
-        <&str>::signature()
+    fn parsed_signature() -> parsed::Signature {
+        parsed::Signature::Str
     }
 }
 
 // Empty type deserves empty signature
 impl Type for () {
     #[inline]
-    fn signature() -> Signature<'static> {
-        Signature::from_static_str_unchecked("")
+    fn parsed_signature() -> parsed::Signature {
+        parsed::Signature::Unit
     }
 }
 
@@ -366,9 +419,7 @@ macro_rules! deref_impl {
     ) => {
         impl <$($desc)+ {
             #[inline]
-            fn signature() -> Signature<'static> {
-                <$type>::signature()
-            }
+            fn parsed_signature() -> parsed::Signature { <$type>::parsed_signature() }
         }
     };
 }
@@ -392,8 +443,8 @@ where
     T: Type,
 {
     #[inline]
-    fn signature() -> Signature<'static> {
-        Signature::from_string_unchecked(format!("m{}", T::signature()))
+    fn parsed_signature() -> parsed::Signature {
+        parsed::Signature::maybe(T::parsed_signature())
     }
 }
 
@@ -403,8 +454,8 @@ where
     T: Type,
 {
     #[inline]
-    fn signature() -> Signature<'static> {
-        Signature::from_string_unchecked(format!("a{}", T::signature()))
+    fn parsed_signature() -> parsed::Signature {
+        parsed::Signature::array(T::parsed_signature())
     }
 }
 
@@ -417,15 +468,13 @@ macro_rules! tuple_impls {
             where
                 $($name: Type,)+
             {
-                fn signature() -> Signature<'static> {
-                    let mut sig = String::with_capacity(255);
-                    sig.push(STRUCT_SIG_START_CHAR);
-                    $(
-                        sig.push_str($name::signature().as_str());
-                    )+
-                    sig.push(STRUCT_SIG_END_CHAR);
-
-                    Signature::from_string_unchecked(sig)
+                #[inline]
+                fn parsed_signature() -> parsed::Signature {
+                    parsed::Signature::structure([
+                        $(
+                            $name::parsed_signature(),
+                        )+
+                    ])
                 }
             }
         )+
@@ -460,16 +509,13 @@ impl<T, const N: usize> Type for [T; N]
 where
     T: Type,
 {
-    #[allow(clippy::reversed_empty_ranges)]
-    fn signature() -> Signature<'static> {
-        let mut sig = String::with_capacity(255);
-        sig.push(STRUCT_SIG_START_CHAR);
-        for _ in 0..N {
-            sig.push_str(T::signature().as_str());
-        }
-        sig.push(STRUCT_SIG_END_CHAR);
+    #[inline]
+    fn parsed_signature() -> parsed::Signature {
+        let elmement_signature = T::parsed_signature();
 
-        Signature::from_string_unchecked(sig)
+        parsed::Signature::structure(core::array::from_fn::<_, N, _>(|_| {
+            elmement_signature.clone()
+        }))
     }
 }
 
@@ -490,9 +536,8 @@ macro_rules! map_impl {
             V: Type,
             $($typaram: $bound,)*
         {
-            #[inline]
-            fn signature() -> Signature<'static> {
-                Signature::from_string_unchecked(format!("a{{{}{}}}", K::signature(), V::signature()))
+            fn parsed_signature() -> parsed::Signature {
+                parsed::Signature::dict(K::parsed_signature(), V::parsed_signature())
             }
         }
     }
@@ -606,22 +651,24 @@ where
     F: Type + enumflags2::BitFlag,
 {
     #[inline]
-    fn signature() -> Signature<'static> {
-        F::signature()
+    fn parsed_signature() -> parsed::Signature {
+        F::parsed_signature()
     }
 }
 
 #[cfg(feature = "serde_bytes")]
 impl Type for serde_bytes::Bytes {
-    fn signature() -> Signature<'static> {
-        Signature::from_static_str_unchecked("ay")
+    #[inline]
+    fn parsed_signature() -> parsed::Signature {
+        parsed::Signature::static_array(&parsed::Signature::U8)
     }
 }
 
 #[cfg(feature = "serde_bytes")]
 impl Type for serde_bytes::ByteBuf {
-    fn signature() -> Signature<'static> {
-        Signature::from_static_str_unchecked("ay")
+    #[inline]
+    fn parsed_signature() -> parsed::Signature {
+        parsed::Signature::static_array(&parsed::Signature::U8)
     }
 }
 
@@ -629,8 +676,9 @@ impl Type for serde_bytes::ByteBuf {
 macro_rules! static_str_type {
     ($ty:ty) => {
         impl Type for $ty {
-            fn signature() -> Signature<'static> {
-                <&str>::signature()
+            #[inline]
+            fn parsed_signature() -> parsed::Signature {
+                parsed::Signature::Str
             }
         }
     };
@@ -846,9 +894,7 @@ macro_rules! impl_type_for_wrapper {
         $(
             impl<$T: Type> Type for $wrapper<$T> {
                 #[inline]
-                fn signature() -> Signature<'static> {
-                    <$T>::signature()
-                }
+                fn parsed_signature() -> parsed::Signature { <$T>::parsed_signature() }
             }
         )+
     };
@@ -866,9 +912,7 @@ macro_rules! atomic_impl {
             #[cfg(target_has_atomic = $size)]
             impl Type for $ty {
                 #[inline]
-                fn signature() -> Signature<'static> {
-                    <$primitive as Type>::signature()
-                }
+                fn parsed_signature() -> parsed::Signature { <$primitive as Type>::parsed_signature() }
             }
         )*
     }

@@ -364,8 +364,9 @@ impl<'a> Basic for Signature<'a> {
 }
 
 impl<'a> Type for Signature<'a> {
-    fn signature() -> Signature<'static> {
-        Signature::from_static_str_unchecked(Self::SIGNATURE_STR)
+    #[inline]
+    fn parsed_signature() -> crate::parsed::Signature {
+        crate::parsed::Signature::Signature
     }
 }
 

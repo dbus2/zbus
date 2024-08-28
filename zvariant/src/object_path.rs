@@ -6,7 +6,7 @@ use serde::{
 use static_assertions::assert_impl_all;
 use std::borrow::Cow;
 
-use crate::{serialized::Format, Basic, Error, Result, Signature, Str, Type};
+use crate::{serialized::Format, Basic, Error, Result, Str, Type};
 
 /// String that identifies objects at a given destination on the D-Bus bus.
 ///
@@ -134,8 +134,9 @@ impl<'a> Basic for ObjectPath<'a> {
 }
 
 impl<'a> Type for ObjectPath<'a> {
-    fn signature() -> Signature<'static> {
-        Signature::from_static_str_unchecked(Self::SIGNATURE_STR)
+    #[inline]
+    fn parsed_signature() -> crate::parsed::Signature {
+        crate::parsed::Signature::ObjectPath
     }
 }
 
