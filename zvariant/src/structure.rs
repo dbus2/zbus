@@ -7,8 +7,8 @@ use static_assertions::assert_impl_all;
 use std::fmt::{Display, Write};
 
 use crate::{
-    signature_parser::SignatureParser, value::SignatureSeed, value_display_fmt, DynamicDeserialize,
-    DynamicType, OwnedValue, Signature, Value,
+    parsed, value::SignatureSeed, value_display_fmt, DynamicDeserialize, DynamicType, OwnedValue,
+    Signature, Value,
 };
 
 /// Use this to efficiently build a [`Structure`].
@@ -276,26 +276,15 @@ impl<'a> DynamicType for StructureSeed<'a> {
 impl<'a> DynamicDeserialize<'a> for Structure<'a> {
     type Deserializer = StructureSeed<'a>;
 
-    fn deserializer_for_signature<S>(signature: S) -> zvariant::Result<Self::Deserializer>
-    where
-        S: TryInto<Signature<'a>>,
-        S::Error: Into<zvariant::Error>,
-    {
-        let mut signature = signature.try_into().map_err(Into::into)?;
-        if !signature.starts_with(zvariant::STRUCT_SIG_START_CHAR) {
-            // This is certainly not a valid struct signature
-            signature = format!("({signature})").try_into()?;
-            return signature.try_into();
-        }
+    fn deserializer_for_parsed_signature(
+        parsed_signature: &parsed::Signature,
+    ) -> zvariant::Result<Self::Deserializer> {
+        let parsed_signature = match parsed_signature {
+            parsed::Signature::Structure(_) => parsed_signature.clone(),
+            s => parsed::Signature::structure([s.clone()]),
+        };
 
-        // The signature might be something like "(i)u(i)" - we need to parse it to check.
-        let mut parser = SignatureParser::new(signature.as_ref());
-        parser.parse_next_signature()?;
-        if !parser.done() {
-            // more than one element - we must wrap it
-            signature = format!("({signature})").try_into()?;
-        }
-        signature.try_into()
+        Ok(StructureSeed(parsed_signature.into()))
     }
 }
 
@@ -429,12 +418,10 @@ impl DynamicType for OwnedStructureSeed {
 impl<'de> DynamicDeserialize<'de> for OwnedStructure {
     type Deserializer = OwnedStructureSeed;
 
-    fn deserializer_for_signature<S>(signature: S) -> zvariant::Result<Self::Deserializer>
-    where
-        S: TryInto<Signature<'de>>,
-        S::Error: Into<zvariant::Error>,
-    {
-        Structure::deserializer_for_signature(signature)
+    fn deserializer_for_parsed_signature(
+        parsed_signature: &parsed::Signature,
+    ) -> zvariant::Result<Self::Deserializer> {
+        Structure::deserializer_for_parsed_signature(parsed_signature)
             .map(|StructureSeed(s)| OwnedStructureSeed(s.to_owned()))
     }
 }

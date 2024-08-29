@@ -1,4 +1,4 @@
-use crate::{utils::*, parsed, DynamicDeserialize, DynamicType, Signature};
+use crate::{parsed, DynamicDeserialize, DynamicType};
 use serde::{
     de::{Deserialize, DeserializeSeed, Deserializer, Error, Visitor},
     Serialize, Serializer,
@@ -37,13 +37,13 @@ impl<'de> Deserialize<'de> for DynamicTuple<()> {
 /// A helper type for [DynamicTuple]'s [DynamicDeserialize] implementation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TupleSeed<'a, T, S> {
-    sig: Signature<'a>,
+    sig: parsed::Signature,
     seeds: S,
-    marker: PhantomData<T>,
+    markers: (PhantomData<T>, PhantomData<&'a ()>),
 }
 
 impl<'a, T, S> DynamicType for TupleSeed<'a, T, S> {
-    fn dynamic_signature(&self) -> Signature<'_> {
+    fn dynamic_parsed_signature(&self) -> parsed::Signature {
         self.sig.clone()
     }
 }
@@ -78,7 +78,7 @@ macro_rules! tuple_impls {
                 type Value = DynamicTuple<($($name,)+)>;
 
                 fn deserialize<D: Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
-                    deserializer.deserialize_tuple($len, TupleVisitor { seeds: self.seeds, marker: self.marker })
+                    deserializer.deserialize_tuple($len, TupleVisitor { seeds: self.seeds, marker: self.markers.0 })
                 }
             }
 
@@ -112,26 +112,20 @@ macro_rules! tuple_impls {
             {
                 type Deserializer = TupleSeed<'de, ($($name,)+), ($(<$name as DynamicDeserialize<'de>>::Deserializer,)+)>;
 
-                fn deserializer_for_signature<S>(signature: S) -> zvariant::Result<Self::Deserializer>
-                    where S: TryInto<Signature<'de>>, S::Error: Into<zvariant::Error>
-                {
-                    let sig = signature.try_into().map_err(Into::into)?;
-                    if !sig.starts_with(zvariant::STRUCT_SIG_START_CHAR) {
-                        return Err(zvariant::Error::IncorrectType);
-                    }
-                    if !sig.ends_with(zvariant::STRUCT_SIG_END_CHAR) {
-                        return Err(zvariant::Error::IncorrectType);
-                    }
-
-                    let end = sig.len() - 1;
-                    let mut sig_parser = SignatureParser::new(sig.slice(1..end));
+                fn deserializer_for_parsed_signature(
+                    parsed_signature: &parsed::Signature,
+                ) -> zvariant::Result<Self::Deserializer> {
+                    let mut fields_iter = match &parsed_signature {
+                        crate::parsed::Signature::Structure(fields) => fields.iter(),
+                        _ => return Err(zvariant::Error::IncorrectType),
+                    };
 
                     let seeds = ($({
-                        let elt_sig = sig_parser.parse_next_signature()?;
-                        $name::deserializer_for_signature(elt_sig)?
+                        let elt_sig = fields_iter.next().ok_or(zvariant::Error::IncorrectType)?;
+                        $name::deserializer_for_parsed_signature(elt_sig)?
                     },)+);
 
-                    Ok(TupleSeed { sig, seeds, marker: PhantomData })
+                    Ok(TupleSeed { sig: parsed_signature.clone(), seeds, markers: (PhantomData, PhantomData) })
                 }
             }
         )+

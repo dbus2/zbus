@@ -1,4 +1,4 @@
-use crate::{utils::*, parsed, Signature};
+use crate::{parsed, Signature};
 use serde::de::{Deserialize, DeserializeSeed};
 use std::{
     cell::{Cell, RefCell},
@@ -143,6 +143,11 @@ pub trait DynamicType {
 /// Prefer implementing [Type] and [Deserialize] if possible, but if the actual signature of your
 /// type cannot be determined until runtime, you should implement this type to support
 /// deserialization given a signature.
+///
+/// The warning about the default implementation of [`Type::parsed_signature`] applies here as
+/// well since the default implementations of
+/// [`DynamicDeserialize::deserializer_for_signature`] and
+/// [`DynamicDeserialize::deserializer_for_parsed_signature`] rely on each other.
 pub trait DynamicDeserialize<'de>: DynamicType {
     /// A [DeserializeSeed] implementation for this type.
     type Deserializer: DeserializeSeed<'de, Value = Self> + DynamicType;
@@ -151,7 +156,26 @@ pub trait DynamicDeserialize<'de>: DynamicType {
     fn deserializer_for_signature<S>(signature: S) -> zvariant::Result<Self::Deserializer>
     where
         S: TryInto<Signature<'de>>,
-        S::Error: Into<zvariant::Error>;
+        S::Error: Into<zvariant::Error>,
+    {
+        let parsed_sig = signature.try_into().map_err(Into::into)?.into();
+
+        Self::deserializer_for_parsed_signature(&parsed_sig)
+    }
+
+    /// Get a deserializer compatible with this parsed signature.
+    ///
+    /// The default implementation converts the parsed signature to a regular signature and calls
+    /// [`DynamicDeserialize::deserializer_for_signature`]. This is done to avoid breaking changes
+    /// in the API. The default implementation will be removed in the next major version of
+    /// zvariant, along with `deserializer_for_signature`.
+    fn deserializer_for_parsed_signature(
+        parsed_signature: &parsed::Signature,
+    ) -> zvariant::Result<Self::Deserializer> {
+        let signature = Signature::from(parsed_signature);
+
+        Self::deserializer_for_signature(signature)
+    }
 }
 
 /// Implements the [`Type`] trait by delegating the signature to a simpler type (usually a tuple).
@@ -294,39 +318,17 @@ where
 {
     type Deserializer = PhantomData<T>;
 
-    fn deserializer_for_signature<S>(signature: S) -> zvariant::Result<Self::Deserializer>
-    where
-        S: TryInto<Signature<'de>>,
-        S::Error: Into<zvariant::Error>,
-    {
-        let mut expected = <T as Type>::signature();
-        let original = signature.try_into().map_err(Into::into)?;
+    fn deserializer_for_parsed_signature(
+        parsed_signature: &parsed::Signature,
+    ) -> zvariant::Result<Self::Deserializer> {
+        let expected = <T as Type>::parsed_signature();
 
-        if original == expected {
-            return Ok(PhantomData);
-        }
-
-        let mut signature = original.as_ref();
-        while expected.len() < signature.len()
-            && signature.starts_with(STRUCT_SIG_START_CHAR)
-            && signature.ends_with(STRUCT_SIG_END_CHAR)
-        {
-            signature = signature.slice(1..signature.len() - 1);
-        }
-
-        while signature.len() < expected.len()
-            && expected.starts_with(STRUCT_SIG_START_CHAR)
-            && expected.ends_with(STRUCT_SIG_END_CHAR)
-        {
-            expected = expected.slice(1..expected.len() - 1);
-        }
-
-        if signature == expected {
+        if &expected == parsed_signature {
             Ok(PhantomData)
         } else {
             let expected = <T as Type>::signature();
             Err(zvariant::Error::SignatureMismatch(
-                original.to_owned(),
+                parsed_signature.into(),
                 format!("`{expected}`"),
             ))
         }

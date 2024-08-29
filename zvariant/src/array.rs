@@ -7,6 +7,7 @@ use static_assertions::assert_impl_all;
 use std::fmt::{Display, Write};
 
 use crate::{
+    parsed,
     value::{value_display_fmt, SignatureSeed},
     DynamicDeserialize, DynamicType, Error, Result, Signature, Type, Value,
 };
@@ -223,20 +224,18 @@ impl<'a> DynamicType for ArraySeed<'a> {
 impl<'a> DynamicDeserialize<'a> for Array<'a> {
     type Deserializer = ArraySeed<'a>;
 
-    fn deserializer_for_signature<S>(signature: S) -> zvariant::Result<Self::Deserializer>
-    where
-        S: TryInto<Signature<'a>>,
-        S::Error: Into<zvariant::Error>,
-    {
-        let signature = signature.try_into().map_err(Into::into)?;
-        if signature.starts_with(zvariant::ARRAY_SIGNATURE_CHAR) {
-            Ok(ArraySeed::new_full_signature(signature))
-        } else {
-            Err(zvariant::Error::SignatureMismatch(
-                signature.to_owned(),
+    fn deserializer_for_parsed_signature(
+        parsed_signature: &parsed::Signature,
+    ) -> zvariant::Result<Self::Deserializer> {
+        let signature = parsed_signature.into();
+        if !matches!(parsed_signature, parsed::Signature::Array(_)) {
+            return Err(zvariant::Error::SignatureMismatch(
+                signature,
                 "an array signature".to_owned(),
-            ))
-        }
+            ));
+        };
+
+        Ok(ArraySeed::new_full_signature(signature))
     }
 }
 
