@@ -118,11 +118,24 @@ pub trait Type {
 /// Prefer implementing [Type] if possible, but if the actual signature of your type cannot be
 /// determined until runtime, you can implement this type to support serialization.  You should
 /// also implement [DynamicDeserialize] for deserialization.
+///
+/// The warning about the default implementation of [`Type::parsed_signature`] applies here as
+/// well since the default implementations of [`DynamicType::dynamic_signature`] and
+/// [`DynamicType::dynamic_parsed_signature`] rely on each other.
 pub trait DynamicType {
     /// Get the signature for the implementing type.
     ///
-    /// See [Type::signature] for details.
-    fn dynamic_signature(&self) -> Signature<'_>;
+    /// See [`Type::signature`] for details.
+    fn dynamic_signature(&self) -> Signature<'_> {
+        self.dynamic_parsed_signature().into()
+    }
+
+    /// Get the signature for the implementing type, in parsed format.
+    ///
+    /// See [`Type::parsed_signature`] for details.
+    fn dynamic_parsed_signature(&self) -> parsed::Signature {
+        self.dynamic_signature().into()
+    }
 }
 
 /// Types that deserialize based on dynamic signatures.
@@ -258,6 +271,10 @@ where
 {
     fn dynamic_signature(&self) -> Signature<'_> {
         <T as Type>::signature()
+    }
+
+    fn dynamic_parsed_signature(&self) -> parsed::Signature {
+        <T as Type>::parsed_signature().clone()
     }
 }
 

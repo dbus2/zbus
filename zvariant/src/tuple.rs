@@ -1,6 +1,4 @@
-use crate::{
-    signature_parser::SignatureParser, utils::*, DynamicDeserialize, DynamicType, Signature,
-};
+use crate::{utils::*, parsed, DynamicDeserialize, DynamicType, Signature};
 use serde::{
     de::{Deserialize, DeserializeSeed, Deserializer, Error, Visitor},
     Serialize, Serializer,
@@ -19,8 +17,8 @@ use std::marker::PhantomData;
 pub struct DynamicTuple<T>(pub T);
 
 impl DynamicType for DynamicTuple<()> {
-    fn dynamic_signature(&self) -> Signature<'_> {
-        Signature::from_static_str_unchecked("")
+    fn dynamic_parsed_signature(&self) -> parsed::Signature {
+        parsed::Signature::Unit
     }
 }
 
@@ -62,15 +60,14 @@ macro_rules! tuple_impls {
             where
                 $($name: DynamicType,)+
             {
-                fn dynamic_signature(&self) -> Signature<'_> {
-                    let mut sig = String::with_capacity(255);
-                    sig.push(STRUCT_SIG_START_CHAR);
-                    $(
-                        sig.push_str(DynamicType::dynamic_signature(&self.0.$n).as_str());
-                    )+
-                    sig.push(STRUCT_SIG_END_CHAR);
-
-                    Signature::from_string_unchecked(sig)
+                fn dynamic_parsed_signature(&self) -> parsed::Signature {
+                    parsed::Signature::structure(
+                        [
+                            $(
+                                self.0.$n.dynamic_parsed_signature(),
+                            )+
+                        ]
+                    )
                 }
             }
 
