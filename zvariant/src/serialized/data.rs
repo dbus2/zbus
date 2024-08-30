@@ -144,8 +144,8 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
     where
         T: Deserialize<'d> + Type,
     {
-        let signature = T::signature();
-        self.deserialize_for_signature(&signature)
+        let signature = T::parsed_signature();
+        self.deserialize_for_parsed_signature(&signature)
     }
 
     /// Deserialize `T` from `self` with the given parsed signature.
@@ -328,7 +328,7 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
     where
         S: DeserializeSeed<'d> + DynamicType,
     {
-        let signature = S::dynamic_signature(&seed).to_owned().into();
+        let signature = S::dynamic_parsed_signature(&seed);
 
         #[cfg(unix)]
         let fds = &self.inner.fds;
