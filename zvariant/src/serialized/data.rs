@@ -302,6 +302,23 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
         self.deserialize_with_seed(seed)
     }
 
+    /// Deserialize `T` from `self`, with the given dynamic parsed signature.
+    ///
+    /// # Return value
+    ///
+    /// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
+    pub fn deserialize_for_dynamic_parsed_signature<'d, T>(
+        &'d self,
+        signature: parsed::Signature,
+    ) -> Result<(T, usize)>
+    where
+        T: DynamicDeserialize<'d>,
+    {
+        let seed = T::deserializer_for_parsed_signature(&signature)?;
+
+        self.deserialize_with_seed(seed)
+    }
+
     /// Deserialize `T` from `self`, using the given seed.
     ///
     /// # Return value
