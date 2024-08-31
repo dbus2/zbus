@@ -89,50 +89,63 @@ impl<'a> StructureBuilder<'a> {
 
 /// Use this to deserialize a [`Structure`].
 ///
-/// [`Structure`]: struct.Structure.html
+/// The lifetime `'a` is now redundant and kept only for backward compatibility. All instances now
+/// has a `'static` lifetime. This will be removed in the next major release.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StructureSeed<'a>(Signature<'a>);
+pub struct StructureSeed<'a> {
+    signature: parsed::Signature,
+    phantom: std::marker::PhantomData<&'a ()>,
+}
 
-assert_impl_all!(StructureSeed<'_>: Send, Sync, Unpin);
+assert_impl_all!(StructureSeed<'_>: Unpin);
 
-impl<'a> StructureSeed<'a> {
+impl StructureSeed<'static> {
     /// Create a new `StructureSeed`
     ///
     /// The given signature must be a valid structure signature.
     #[must_use]
-    pub fn new_unchecked(signature: Signature<'a>) -> Self {
-        StructureSeed(signature)
-    }
-}
-
-impl<'a> TryFrom<Signature<'a>> for StructureSeed<'a> {
-    type Error = zvariant::Error;
-
-    fn try_from(signature: Signature<'a>) -> Result<Self, zvariant::Error> {
-        if signature.starts_with(zvariant::STRUCT_SIG_START_CHAR) {
-            Ok(StructureSeed(signature))
-        } else {
-            Err(zvariant::Error::IncorrectType)
+    pub fn new_unchecked(signature: Signature<'_>) -> Self {
+        StructureSeed {
+            signature: signature.into(),
+            phantom: std::marker::PhantomData,
         }
     }
 }
 
-impl<'de> DeserializeSeed<'de> for StructureSeed<'de> {
+impl TryFrom<Signature<'_>> for StructureSeed<'static> {
+    type Error = zvariant::Error;
+
+    fn try_from(signature: Signature<'_>) -> Result<Self, zvariant::Error> {
+        let signature = signature.into();
+        if !matches!(signature, parsed::Signature::Structure(_)) {
+            return Err(zvariant::Error::IncorrectType);
+        }
+
+        Ok(StructureSeed {
+            signature,
+            phantom: std::marker::PhantomData,
+        })
+    }
+}
+
+impl<'de> DeserializeSeed<'de> for StructureSeed<'_> {
     type Value = Structure<'de>;
     fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_seq(StructureVisitor { signature: self.0 })
+        deserializer.deserialize_seq(StructureVisitor {
+            signature: self.signature,
+        })
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct StructureVisitor<'a> {
-    signature: Signature<'a>,
+struct StructureVisitor {
+    signature: parsed::Signature,
 }
 
-impl<'de> Visitor<'de> for StructureVisitor<'de> {
+impl<'de> Visitor<'de> for StructureVisitor {
     type Value = Structure<'de>;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -268,13 +281,13 @@ impl<'a> DynamicType for Structure<'a> {
 }
 
 impl<'a> DynamicType for StructureSeed<'a> {
-    fn dynamic_signature(&self) -> Signature<'_> {
-        self.0.as_ref()
+    fn dynamic_parsed_signature(&self) -> parsed::Signature {
+        self.signature.clone()
     }
 }
 
 impl<'a> DynamicDeserialize<'a> for Structure<'a> {
-    type Deserializer = StructureSeed<'a>;
+    type Deserializer = StructureSeed<'static>;
 
     fn deserializer_for_parsed_signature(
         parsed_signature: &parsed::Signature,
@@ -284,7 +297,10 @@ impl<'a> DynamicDeserialize<'a> for Structure<'a> {
             s => parsed::Signature::structure([s.clone()]),
         };
 
-        Ok(StructureSeed(parsed_signature.into()))
+        Ok(StructureSeed {
+            signature: parsed_signature,
+            phantom: std::marker::PhantomData,
+        })
     }
 }
 
@@ -401,7 +417,7 @@ pub struct OwnedStructure(pub Structure<'static>);
 
 /// Use this to deserialize an [`OwnedStructure`].
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OwnedStructureSeed(Signature<'static>);
+pub struct OwnedStructureSeed(parsed::Signature);
 
 impl DynamicType for OwnedStructure {
     fn dynamic_signature(&self) -> Signature<'_> {
@@ -410,7 +426,7 @@ impl DynamicType for OwnedStructure {
 }
 
 impl DynamicType for OwnedStructureSeed {
-    fn dynamic_signature(&self) -> Signature<'_> {
+    fn dynamic_parsed_signature(&self) -> parsed::Signature {
         self.0.clone()
     }
 }
@@ -422,7 +438,7 @@ impl<'de> DynamicDeserialize<'de> for OwnedStructure {
         parsed_signature: &parsed::Signature,
     ) -> zvariant::Result<Self::Deserializer> {
         Structure::deserializer_for_parsed_signature(parsed_signature)
-            .map(|StructureSeed(s)| OwnedStructureSeed(s.to_owned()))
+            .map(|StructureSeed { signature, .. }| OwnedStructureSeed(signature))
     }
 }
 

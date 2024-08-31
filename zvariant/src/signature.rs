@@ -15,7 +15,11 @@ use std::{
     sync::Arc,
 };
 
-use crate::{serialized::Format, signature_parser::SignatureParser, Basic, Error, Result, Type};
+use crate::{
+    parsed::{self, signature::validate},
+    serialized::Format,
+    Basic, Error, Result, Type,
+};
 
 // A data type similar to Cow and [`bytes::Bytes`] but unlike the former won't allow us to only keep
 // the owned bytes in Arc and latter doesn't have a notion of borrowed data and would require API
@@ -226,7 +230,7 @@ impl<'a> Signature<'a> {
     /// [`Signature::into_owned`] do not clone the underlying bytes.
     pub fn from_static_str(signature: &'static str) -> Result<Self> {
         let bytes = signature.as_bytes();
-        SignatureParser::validate(bytes)?;
+        validate(bytes)?;
 
         Ok(Self {
             bytes: Bytes::Static(bytes),
@@ -241,7 +245,7 @@ impl<'a> Signature<'a> {
     /// `&'static [u8]`. The former will ensure that [`Signature::to_owned`] and
     /// [`Signature::into_owned`] do not clone the underlying bytes.
     pub fn from_static_bytes(bytes: &'static [u8]) -> Result<Self> {
-        SignatureParser::validate(bytes)?;
+        validate(bytes)?;
 
         Ok(Self {
             bytes: Bytes::Static(bytes),
@@ -334,13 +338,21 @@ impl<'a> Signature<'a> {
     ///
     /// If the signature is invalid, returns the first error.
     pub fn n_complete_types(&self) -> Result<usize> {
-        let mut count = 0;
-        // SAFETY: the parser is only used to do counting
-        for s in unsafe { SignatureParser::from_bytes_unchecked(self.as_bytes())? } {
-            s?;
-            count += 1;
+        use std::str::FromStr;
+
+        match parsed::Signature::from_str(self.as_str())? {
+            parsed::Signature::Structure(fields) => {
+                // Parsed signature treats both "(..)" the same as ".." and we want to count "(..)"
+                // as one complete type.
+                if self.starts_with("(") && self.ends_with(")") {
+                    Ok(1)
+                } else {
+                    Ok(fields.iter().count())
+                }
+            }
+            parsed::Signature::Unit => Ok(0),
+            _ => Ok(1),
         }
-        Ok(count)
     }
 }
 
@@ -380,7 +392,7 @@ impl<'a> TryFrom<&'a [u8]> for Signature<'a> {
     type Error = Error;
 
     fn try_from(value: &'a [u8]) -> Result<Self> {
-        SignatureParser::validate(value)?;
+        validate(value)?;
 
         // SAFETY: validate checks UTF8
         unsafe { Ok(Self::from_bytes_unchecked(value)) }
@@ -412,7 +424,7 @@ impl<'a> TryFrom<String> for Signature<'a> {
     type Error = Error;
 
     fn try_from(value: String) -> Result<Self> {
-        SignatureParser::validate(value.as_bytes())?;
+        validate(value.as_bytes())?;
 
         Ok(Self::from_string_unchecked(value))
     }
