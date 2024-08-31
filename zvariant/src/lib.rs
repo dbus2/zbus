@@ -104,7 +104,6 @@ pub mod parsed;
 mod framing_offset_size;
 #[cfg(feature = "gvariant")]
 mod framing_offsets;
-mod signature_parser;
 
 mod container_depths;
 
