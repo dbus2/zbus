@@ -3,10 +3,6 @@ macro_rules! impl_str_basic {
         impl zvariant::Basic for $type {
             const SIGNATURE_CHAR: char = <zvariant::Str<'_>>::SIGNATURE_CHAR;
             const SIGNATURE_STR: &'static str = <zvariant::Str<'_>>::SIGNATURE_STR;
-
-            fn alignment(format: zvariant::serialized::Format) -> usize {
-                <zvariant::Str<'_>>::alignment(format)
-            }
         }
     };
 }

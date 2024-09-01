@@ -17,7 +17,6 @@ use std::{
 
 use crate::{
     parsed::{self, signature::validate},
-    serialized::Format,
     Basic, Error, Result, Type,
 };
 
@@ -365,14 +364,6 @@ impl<'a> Debug for Signature<'a> {
 impl<'a> Basic for Signature<'a> {
     const SIGNATURE_CHAR: char = 'g';
     const SIGNATURE_STR: &'static str = "g";
-
-    fn alignment(format: Format) -> usize {
-        match format {
-            Format::DBus => 1,
-            #[cfg(feature = "gvariant")]
-            Format::GVariant => 1,
-        }
-    }
 }
 
 impl<'a> Type for Signature<'a> {
@@ -539,10 +530,6 @@ impl OwnedSignature {
 impl Basic for OwnedSignature {
     const SIGNATURE_CHAR: char = Signature::SIGNATURE_CHAR;
     const SIGNATURE_STR: &'static str = Signature::SIGNATURE_STR;
-
-    fn alignment(format: Format) -> usize {
-        Signature::alignment(format)
-    }
 }
 
 impl std::ops::Deref for OwnedSignature {
