@@ -2308,6 +2308,7 @@ dependencies = [
  "async-task",
  "async-trait",
  "blocking",
+ "criterion",
  "doc-comment",
  "enumflags2",
  "event-listener",
