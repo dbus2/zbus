@@ -592,6 +592,37 @@ mod tests {
     }
 
     #[test]
+    fn parsed_signature() {
+        use crate::parsed;
+        use std::str::FromStr;
+
+        let sig = parsed::Signature::from_str("yys").unwrap();
+        // parsed::Structure will always add () around the signature if it's a struct.
+        basic_type_test!(LE, DBus, sig, 7, parsed::Signature, 1);
+
+        #[cfg(feature = "gvariant")]
+        {
+            let encoded = basic_type_test!(LE, GVariant, sig, 6, parsed::Signature, 1);
+            decode_with_gvariant::<_, String>(encoded, Some(String::from("yys")));
+        }
+
+        // As Value
+        let v: Value<'_> = sig.into();
+        assert_eq!(v.value_signature(), "g");
+        let encoded = value_test!(LE, DBus, v, 10);
+        let v = encoded.deserialize::<Value<'_>>().unwrap().0;
+        assert_eq!(v, Value::Signature(Signature::try_from("yys").unwrap()));
+
+        // GVariant format now
+        #[cfg(feature = "gvariant")]
+        {
+            let encoded = value_test!(LE, GVariant, v, 8);
+            let v = encoded.deserialize::<Value<'_>>().unwrap().0;
+            assert_eq!(v, Value::Signature(Signature::try_from("yys").unwrap()));
+        }
+    }
+
+    #[test]
     fn object_path_value() {
         let o = ObjectPath::try_from("/hello/world").unwrap();
         basic_type_test!(LE, DBus, o, 17, ObjectPath<'_>, 4);
