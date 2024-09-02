@@ -447,9 +447,7 @@ fn parse(bytes: &[u8], check_only: bool) -> crate::Result<Signature> {
                 }
             }
 
-            Signature::Structure(FieldsSignatures::Dynamic {
-                fields: signatures.into(),
-            })
+            Signature::structure(signatures)
         })(bytes)
     }
 
