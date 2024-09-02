@@ -139,6 +139,7 @@ tracing-subscriber = { version = "0.3.18", features = [
   "ansi",
 ], default-features = false }
 tempfile = "3.10.1"
+criterion = "0.5.1"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -147,3 +148,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 [lints]
 workspace = true
 
+[lib]
+bench = false
+
+[[bench]]
+name = "benchmarks"
+harness = false
