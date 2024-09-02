@@ -740,3 +740,9 @@ impl Basic for Signature {
     const SIGNATURE_CHAR: char = 'g';
     const SIGNATURE_STR: &'static str = "g";
 }
+
+impl From<Signature> for crate::Value<'static> {
+    fn from(value: Signature) -> Self {
+        crate::Value::Signature(value.into())
+    }
+}
