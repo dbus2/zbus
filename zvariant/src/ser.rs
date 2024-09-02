@@ -9,10 +9,10 @@ use crate::gvariant::Serializer as GVSerializer;
 use crate::{
     container_depths::ContainerDepths,
     dbus::Serializer as DBusSerializer,
+    parsed,
     serialized::{Context, Data, Format, Size, Written},
-    signature_parser::SignatureParser,
     utils::*,
-    Basic, DynamicType, Error, Result, Signature, WriteBytes,
+    Basic, DynamicType, Error, Result, Signature,
 };
 
 struct NullWriteSeek;
@@ -52,14 +52,14 @@ where
     T: ?Sized + Serialize + DynamicType,
 {
     let mut null = NullWriteSeek;
-    let signature = value.dynamic_signature();
+    let signature = value.dynamic_parsed_signature();
     #[cfg(unix)]
     let mut fds = FdList::Number(0);
 
     let len = match ctxt.format() {
         Format::DBus => {
             let mut ser = DBusSerializer::<NullWriteSeek>::new(
-                signature,
+                &signature,
                 &mut null,
                 #[cfg(unix)]
                 &mut fds,
@@ -71,7 +71,7 @@ where
         #[cfg(feature = "gvariant")]
         Format::GVariant => {
             let mut ser = GVSerializer::<NullWriteSeek>::new(
-                signature,
+                &signature,
                 &mut null,
                 #[cfg(unix)]
                 &mut fds,
@@ -124,9 +124,9 @@ where
     W: Write + Seek,
     T: ?Sized + Serialize + DynamicType,
 {
-    let signature = value.dynamic_signature();
+    let signature = value.dynamic_parsed_signature();
 
-    to_writer_for_signature(writer, ctxt, &signature, value)
+    to_writer_for_parsed_signature(writer, ctxt, &signature, value)
 }
 
 /// Serialize `T` as a byte vector.
@@ -136,7 +136,7 @@ pub fn to_bytes<T>(ctxt: Context, value: &T) -> Result<Data<'static, 'static>>
 where
     T: ?Sized + Serialize + DynamicType,
 {
-    to_bytes_for_signature(ctxt, value.dynamic_signature(), value)
+    to_bytes_for_parsed_signature(ctxt, &value.dynamic_parsed_signature(), value)
 }
 
 /// Serialize `T` that has the given signature, to the given `writer`.
@@ -165,6 +165,37 @@ where
     W: Write + Seek,
     S: TryInto<Signature<'s>>,
     S::Error: Into<Error>,
+    T: ?Sized + Serialize,
+{
+    let signature = parsed::Signature::from(signature.try_into().map_err(Into::into)?);
+
+    to_writer_for_parsed_signature(writer, ctxt, &signature, value)
+}
+
+/// Serialize `T` that has the given parsed signature, to the given `writer`.
+///
+/// Use this function instead of [`to_writer`] if the value being serialized does not implement
+/// [`DynamicType`].
+///
+/// # Safety
+///
+/// On Unix systems, the returned [`Written`] instance can contain file descriptors and therefore
+/// the caller is responsible for not dropping the returned [`Written`] instance before the
+/// `writer`. Otherwise, the file descriptors in the `Written` instance will be closed while
+/// serialized data will still refer to them. Hence why this function is marked unsafe.
+///
+/// On non-Unix systems, the returned [`Written`] instance will not contain any file descriptors and
+/// hence is safe to drop.
+///
+/// [`to_writer`]: fn.to_writer.html
+pub unsafe fn to_writer_for_parsed_signature<W, T>(
+    writer: &mut W,
+    ctxt: Context,
+    signature: &parsed::Signature,
+    value: &T,
+) -> Result<Written>
+where
+    W: Write + Seek,
     T: ?Sized + Serialize,
 {
     #[cfg(unix)]
@@ -224,10 +255,31 @@ where
     S::Error: Into<Error>,
     T: ?Sized + Serialize,
 {
+    let signature = parsed::Signature::from(signature.try_into().map_err(Into::into)?);
+
+    to_bytes_for_parsed_signature(ctxt, &signature, value)
+}
+
+/// Serialize `T` that has the given parsed signature, to a new byte vector.
+///
+/// Use this function instead of [`to_bytes`] if the value being serialized does not implement
+/// [`DynamicType`]. See [`from_slice_for_signature`] documentation for an example of how to use
+/// this function.
+///
+/// [`to_bytes`]: fn.to_bytes.html
+/// [`from_slice_for_signature`]: fn.from_slice_for_signature.html#examples
+pub fn to_bytes_for_parsed_signature<T>(
+    ctxt: Context,
+    signature: &parsed::Signature,
+    value: &T,
+) -> Result<Data<'static, 'static>>
+where
+    T: ?Sized + Serialize,
+{
     let mut cursor = std::io::Cursor::new(vec![]);
     // SAFETY: We put the bytes and FDs in the `Data` to ensure that the data and FDs are only
     // dropped together.
-    let ret = unsafe { to_writer_for_signature(&mut cursor, ctxt, signature, value) }?;
+    let ret = unsafe { to_writer_for_parsed_signature(&mut cursor, ctxt, signature, value) }?;
     #[cfg(unix)]
     let encoded = Data::new_fds(cursor.into_inner(), ctxt, ret.into_fds());
     #[cfg(not(unix))]
@@ -240,16 +292,16 @@ where
 }
 
 /// Context for all our serializers and provides shared functionality.
-pub(crate) struct SerializerCommon<'ser, 'sig, W> {
+pub(crate) struct SerializerCommon<'ser, W> {
     pub(crate) ctxt: Context,
     pub(crate) writer: &'ser mut W,
     pub(crate) bytes_written: usize,
     #[cfg(unix)]
     pub(crate) fds: &'ser mut FdList,
 
-    pub(crate) sig_parser: SignatureParser<'sig>,
+    pub(crate) signature: &'ser parsed::Signature,
 
-    pub(crate) value_sign: Option<Signature<'static>>,
+    pub(crate) value_sign: Option<parsed::Signature>,
 
     pub(crate) container_depths: ContainerDepths,
 }
@@ -260,7 +312,7 @@ pub(crate) enum FdList {
     Number(u32),
 }
 
-impl<'ser, 'sig, W> SerializerCommon<'ser, 'sig, W>
+impl<'ser, W> SerializerCommon<'ser, W>
 where
     W: Write + Seek,
 {
@@ -307,34 +359,7 @@ where
     where
         T: Basic,
     {
-        self.sig_parser.skip_char()?;
         self.add_padding(T::alignment(self.ctxt.format()))?;
-
-        Ok(())
-    }
-
-    /// This starts the enum serialization.
-    ///
-    /// It's up to the caller to do the rest: serialize the variant payload and skip the `).
-    pub(crate) fn prep_serialize_enum_variant(&mut self, variant_index: u32) -> Result<()> {
-        // Encode enum variants as a struct with first field as variant index
-        let signature = self.sig_parser.next_signature()?;
-        if self.sig_parser.next_char()? != STRUCT_SIG_START_CHAR {
-            return Err(Error::SignatureMismatch(
-                signature.to_owned(),
-                format!("expected `{STRUCT_SIG_START_CHAR}`"),
-            ));
-        }
-
-        let alignment = alignment_for_signature(&signature, self.ctxt.format())?;
-        self.add_padding(alignment)?;
-
-        // Now serialize the veriant index.
-        self.write_u32(self.ctxt.endian(), variant_index)
-            .map_err(|e| Error::InputOutput(e.into()))?;
-
-        // Skip the `(`, `u`.
-        self.sig_parser.skip_chars(2)?;
 
         Ok(())
     }
@@ -344,7 +369,7 @@ where
     }
 }
 
-impl<'ser, 'sig, W> Write for SerializerCommon<'ser, 'sig, W>
+impl<'ser, W> Write for SerializerCommon<'ser, W>
 where
     W: Write + Seek,
 {

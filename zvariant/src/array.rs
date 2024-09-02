@@ -7,6 +7,7 @@ use static_assertions::assert_impl_all;
 use std::fmt::{Display, Write};
 
 use crate::{
+    parsed,
     value::{value_display_fmt, SignatureSeed},
     DynamicDeserialize, DynamicType, Error, Result, Signature, Type, Value,
 };
@@ -190,23 +191,35 @@ pub(crate) fn array_display_fmt(
 }
 
 /// Use this to deserialize an [Array].
+///
+/// The lifetime `'a` is now redundant and kept only for backward compatibility. All instances now
+/// has a `'static` lifetime. This will be removed in the next major release.
 pub struct ArraySeed<'a> {
-    signature: Signature<'a>,
+    signature: parsed::Signature,
+    phantom: std::marker::PhantomData<&'a ()>,
 }
 
-impl<'a> ArraySeed<'a> {
+impl ArraySeed<'static> {
     /// Create a new empty `Array`, given the signature of the elements.
     pub fn new(element_signature: Signature<'_>) -> ArraySeed<'_> {
-        let signature = create_signature(&element_signature);
-        ArraySeed { signature }
+        let parsed_signature = parsed::Signature::from(element_signature);
+        let signature = parsed::Signature::array(parsed_signature);
+
+        ArraySeed {
+            signature,
+            phantom: std::marker::PhantomData,
+        }
     }
 
     pub(crate) fn new_full_signature(signature: Signature<'_>) -> ArraySeed<'_> {
-        ArraySeed { signature }
+        ArraySeed {
+            signature: signature.into(),
+            phantom: std::marker::PhantomData,
+        }
     }
 }
 
-assert_impl_all!(ArraySeed<'_>: Send, Sync, Unpin);
+assert_impl_all!(ArraySeed<'_>: Unpin);
 
 impl<'a> DynamicType for Array<'a> {
     fn dynamic_signature(&self) -> Signature<'_> {
@@ -215,28 +228,26 @@ impl<'a> DynamicType for Array<'a> {
 }
 
 impl<'a> DynamicType for ArraySeed<'a> {
-    fn dynamic_signature(&self) -> Signature<'_> {
+    fn dynamic_parsed_signature(&self) -> parsed::Signature {
         self.signature.clone()
     }
 }
 
 impl<'a> DynamicDeserialize<'a> for Array<'a> {
-    type Deserializer = ArraySeed<'a>;
+    type Deserializer = ArraySeed<'static>;
 
-    fn deserializer_for_signature<S>(signature: S) -> zvariant::Result<Self::Deserializer>
-    where
-        S: TryInto<Signature<'a>>,
-        S::Error: Into<zvariant::Error>,
-    {
-        let signature = signature.try_into().map_err(Into::into)?;
-        if signature.starts_with(zvariant::ARRAY_SIGNATURE_CHAR) {
-            Ok(ArraySeed::new_full_signature(signature))
-        } else {
-            Err(zvariant::Error::SignatureMismatch(
-                signature.to_owned(),
+    fn deserializer_for_parsed_signature(
+        parsed_signature: &parsed::Signature,
+    ) -> zvariant::Result<Self::Deserializer> {
+        let signature = parsed_signature.into();
+        if !matches!(parsed_signature, parsed::Signature::Array(_)) {
+            return Err(zvariant::Error::SignatureMismatch(
+                signature,
                 "an array signature".to_owned(),
-            ))
-        }
+            ));
+        };
+
+        Ok(ArraySeed::new_full_signature(signature))
     }
 }
 
@@ -335,7 +346,7 @@ impl<'a> Serialize for Array<'a> {
     }
 }
 
-impl<'de> DeserializeSeed<'de> for ArraySeed<'de> {
+impl<'de> DeserializeSeed<'de> for ArraySeed<'_> {
     type Value = Array<'de>;
     fn deserialize<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
     where
@@ -348,11 +359,11 @@ impl<'de> DeserializeSeed<'de> for ArraySeed<'de> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct ArrayVisitor<'a> {
-    signature: Signature<'a>,
+struct ArrayVisitor {
+    signature: parsed::Signature,
 }
 
-impl<'de> Visitor<'de> for ArrayVisitor<'de> {
+impl<'de> Visitor<'de> for ArrayVisitor {
     type Value = Array<'de>;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

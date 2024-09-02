@@ -98,11 +98,12 @@ mod into_value;
 mod owned_value;
 pub use owned_value::*;
 
+pub mod parsed;
+
 #[cfg(feature = "gvariant")]
 mod framing_offset_size;
 #[cfg(feature = "gvariant")]
 mod framing_offsets;
-mod signature_parser;
 
 mod container_depths;
 

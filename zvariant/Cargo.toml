@@ -21,13 +21,17 @@ ostree-tests = ["gvariant"]
 option-as-array = []
 
 [dependencies]
+zvariant_derive = { version = "=4.2.0", path = "../zvariant_derive" }
 endi = "1.1.0"
 serde = { version = "1.0.200", features = ["derive"] }
+static_assertions = "1.1.0"
+nom = "7"
+
+# Optional dependencies
+
 arrayvec = { version = "0.7.4", features = ["serde"], optional = true }
 enumflags2 = { version = "0.7.9", features = ["serde"], optional = true }
-zvariant_derive = { version = "=4.2.0", path = "../zvariant_derive" }
 serde_bytes = { version = "0.11.14", optional = true }
-static_assertions = "1.1.0"
 uuid = { version = "1.8.0", features = ["serde"], optional = true }
 url = { version = "2.5.0", features = ["serde"], optional = true }
 time = { version = "0.3.36", features = ["serde"], optional = true }
@@ -59,4 +63,3 @@ all-features = true
 
 [lints]
 workspace = true
-

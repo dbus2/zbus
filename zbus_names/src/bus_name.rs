@@ -195,8 +195,9 @@ impl<'de: 'name, 'name> Deserialize<'de> for BusName<'name> {
 }
 
 impl Type for BusName<'_> {
-    fn signature() -> zvariant::Signature<'static> {
-        <&str>::signature()
+    #[inline]
+    fn parsed_signature() -> zvariant::parsed::Signature {
+        zvariant::parsed::Signature::Str
     }
 }
 

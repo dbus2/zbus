@@ -2,7 +2,7 @@ use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use static_assertions::assert_impl_all;
 use std::os::fd::{self, AsFd, AsRawFd, BorrowedFd, RawFd};
 
-use crate::{serialized::Format, Basic, Signature, Type};
+use crate::{Basic, Type};
 
 /// A file-descriptor type wrapper.
 ///
@@ -102,15 +102,12 @@ macro_rules! fd_impl {
         impl Basic for $i {
             const SIGNATURE_CHAR: char = 'h';
             const SIGNATURE_STR: &'static str = "h";
-
-            fn alignment(format: Format) -> usize {
-                u32::alignment(format)
-            }
         }
 
         impl Type for $i {
-            fn signature() -> Signature<'static> {
-                Signature::from_static_str_unchecked(Self::SIGNATURE_STR)
+            #[inline]
+            fn parsed_signature() -> crate::parsed::Signature {
+                crate::parsed::Signature::Fd
             }
         }
     };

@@ -39,26 +39,21 @@ vsock = ["dep:vsock", "dep:async-io"]
 tokio-vsock = ["dep:tokio-vsock", "tokio"]
 
 [dependencies]
-serde = { version = "1.0.200", features = ["derive"] }
-serde_repr = "0.1.19"
+zbus_macros = { path = "../zbus_macros", version = "=4.4.0" }
 zvariant = { path = "../zvariant", version = "4.2.0", default-features = false, features = [
   "enumflags2",
 ] }
 zbus_names = { path = "../zbus_names", version = "3.0" }
-zbus_macros = { path = "../zbus_macros", version = "=4.4.0" }
+serde = { version = "1.0.200", features = ["derive"] }
+serde_repr = "0.1.19"
 enumflags2 = { version = "0.7.9", features = ["serde"] }
-async-io = { version = "2.3.2", optional = true }
 futures-core = "0.3.30"
 futures-sink = "0.3.30"
 futures-util = { version = "0.3.30", default-features = false, features = [
   "sink",
   "std",
 ] }
-async-lock = { version = "3.3.0", optional = true }
 async-broadcast = "0.7.0"
-async-executor = { version = "1.11.0", optional = true }
-blocking = { version = "1.6.0", optional = true }
-async-task = { version = "4.7.1", optional = true }
 hex = "0.4.3"
 ordered-stream = "0.2"
 rand = "0.8.5"
@@ -66,6 +61,16 @@ sha1 = { version = "0.10.6", features = ["std"] }
 event-listener = "5.3.0"
 static_assertions = "1.1.0"
 async-trait = "0.1.80"
+xdg-home = "1.1.0"
+tracing = "0.1.40"
+
+# Optional and target-specific dependencies.
+
+async-io = { version = "2.3.2", optional = true }
+async-lock = { version = "3.3.0", optional = true }
+async-executor = { version = "1.11.0", optional = true }
+blocking = { version = "1.6.0", optional = true }
+async-task = { version = "4.7.1", optional = true }
 async-fs = { version = "2.1.2", optional = true }
 # FIXME: We should only enable process feature for Mac OS. See comment on async-process below for why we can't.
 tokio = { version = "1.37.0", optional = true, features = [
@@ -78,10 +83,8 @@ tokio = { version = "1.37.0", optional = true, features = [
   "sync",
   "tracing",
 ] }
-tracing = "0.1.40"
 vsock = { version = "0.5.0", optional = true }
 tokio-vsock = { version = "0.4", optional = true }
-xdg-home = "1.1.0"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [

@@ -496,8 +496,9 @@ pub fn create_proxy<M: AttrParse + Into<MethodAttrs>>(
         }
 
         impl<'p> #zbus::zvariant::Type for #proxy_name<'p> {
-            fn signature() -> #zbus::zvariant::Signature<'static> {
-                #zbus::zvariant::OwnedObjectPath::signature()
+            #[inline]
+            fn parsed_signature() -> #zbus::zvariant::parsed::Signature {
+                #zbus::zvariant::parsed::Signature::ObjectPath
             }
         }
 

@@ -7,7 +7,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::{serialized::Format, Basic, Signature, Type};
+use crate::{Basic, Type};
 
 /// A string wrapper.
 ///
@@ -124,15 +124,12 @@ impl<'a> Str<'a> {
 impl<'a> Basic for Str<'a> {
     const SIGNATURE_CHAR: char = <&str>::SIGNATURE_CHAR;
     const SIGNATURE_STR: &'static str = <&str>::SIGNATURE_STR;
-
-    fn alignment(format: Format) -> usize {
-        <&str>::alignment(format)
-    }
 }
 
 impl<'a> Type for Str<'a> {
-    fn signature() -> Signature<'static> {
-        Signature::from_static_str_unchecked(Self::SIGNATURE_STR)
+    #[inline]
+    fn parsed_signature() -> crate::parsed::Signature {
+        crate::parsed::Signature::Str
     }
 }
 

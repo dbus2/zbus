@@ -8,7 +8,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use static_assertions::assert_impl_all;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
-use zvariant::{ObjectPath, Signature, Type, Value};
+use zvariant::{parsed, ObjectPath, Signature, Type, Value};
 
 /// The message field code.
 ///
@@ -97,8 +97,9 @@ pub(crate) enum Field<'f> {
 assert_impl_all!(Field<'_>: Send, Sync, Unpin);
 
 impl<'f> Type for Field<'f> {
-    fn signature() -> Signature<'static> {
-        Signature::from_static_str_unchecked("(yv)")
+    #[inline]
+    fn parsed_signature() -> parsed::Signature {
+        parsed::Signature::static_structure(&[&parsed::Signature::U8, &parsed::Signature::Variant])
     }
 }
 

@@ -1,7 +1,7 @@
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 use static_assertions::assert_impl_all;
 
-use crate::{Signature, Type, Value};
+use crate::Type;
 
 /// A wrapper to serialize `T: Type + Serialize` as a value.
 ///
@@ -37,7 +37,8 @@ impl<'a, T: Type + Serialize> Serialize for SerializeValue<'a, T> {
 }
 
 impl<'a, T: Type + Serialize> Type for SerializeValue<'a, T> {
-    fn signature() -> Signature<'static> {
-        Value::signature()
+    #[inline]
+    fn parsed_signature() -> crate::parsed::Signature {
+        crate::parsed::Signature::Variant
     }
 }
