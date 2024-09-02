@@ -8,7 +8,7 @@ use std::{
     str::FromStr,
 };
 
-use crate::{serialized::Format, Type};
+use crate::{serialized::Format, Basic, Type};
 
 /// A D-Bus signature in parsed form.
 ///
@@ -733,5 +733,16 @@ impl<'de> Deserialize<'de> for Signature {
         <&str>::deserialize(deserializer).and_then(|s| {
             Signature::from_str(s).map_err(|e| serde::de::Error::custom(e.to_string()))
         })
+    }
+}
+
+impl Basic for Signature {
+    const SIGNATURE_CHAR: char = 'g';
+    const SIGNATURE_STR: &'static str = "g";
+}
+
+impl From<Signature> for crate::Value<'static> {
+    fn from(value: Signature) -> Self {
+        crate::Value::Signature(value.into())
     }
 }
