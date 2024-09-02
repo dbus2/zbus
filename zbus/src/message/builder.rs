@@ -320,9 +320,7 @@ impl<'a> Builder<'a> {
 
         // SAFETY: There are no FDs involved.
         unsafe { zvariant::to_writer(&mut cursor, ctxt, &header) }?;
-        for _ in 0..body_padding {
-            cursor.write_all(&[0u8])?;
-        }
+        cursor.write_all(&[0u8; 8][..body_padding])?;
         #[cfg(unix)]
         let fds: Vec<_> = write_body(&mut cursor)?.into_iter().collect();
         #[cfg(not(unix))]
