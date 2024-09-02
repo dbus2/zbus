@@ -148,3 +148,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 [lints]
 workspace = true
 
+[lib]
+bench = false
+
+[[bench]]
+name = "benchmarks"
+harness = false
