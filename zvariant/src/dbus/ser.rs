@@ -167,12 +167,14 @@ where
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<()> {
-        let seq = self.serialize_seq(Some(v.len()))?;
-        seq.ser
-            .0
-            .write(v)
+        self.0.add_padding(ARRAY_ALIGNMENT_DBUS)?;
+        self.0
+            .write_u32(self.0.ctxt.endian(), v.len() as u32)
             .map_err(|e| Error::InputOutput(e.into()))?;
-        seq.end()
+        self.0
+            .write(v)
+            .map(|_| ())
+            .map_err(|e| Error::InputOutput(e.into()))
     }
 
     fn serialize_none(self) -> Result<()> {
