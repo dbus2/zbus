@@ -10,13 +10,13 @@ use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 use zvariant::{serialized, Endian};
 
 use crate::{
-    message::{Field, FieldCode, Fields, Flags, Header, Message, PrimaryHeader, Sequence, Type},
+    message::{Fields, Flags, Header, Message, PrimaryHeader, Sequence, Type},
     utils::padding_for_8_bytes,
     zvariant::{serialized::Context, DynamicType, ObjectPath, Signature},
     EndianSig, Error, Result,
 };
 
-use crate::message::{fields::QuickFields, header::MAX_MESSAGE_SIZE};
+use crate::message::header::MAX_MESSAGE_SIZE;
 
 #[cfg(unix)]
 type BuildGenericResult = Vec<OwnedFd>;
@@ -111,9 +111,7 @@ impl<'a> Builder<'a> {
         S: TryInto<UniqueName<'s>>,
         S::Error: Into<Error>,
     {
-        self.header
-            .fields_mut()
-            .replace(Field::Sender(sender.try_into().map_err(Into::into)?));
+        self.header.fields_mut().sender = Some(sender.try_into().map_err(Into::into)?);
         Ok(self)
     }
 
@@ -123,9 +121,7 @@ impl<'a> Builder<'a> {
         P: TryInto<ObjectPath<'p>>,
         P::Error: Into<Error>,
     {
-        self.header
-            .fields_mut()
-            .replace(Field::Path(path.try_into().map_err(Into::into)?));
+        self.header.fields_mut().path = Some(path.try_into().map_err(Into::into)?);
         Ok(self)
     }
 
@@ -135,9 +131,7 @@ impl<'a> Builder<'a> {
         I: TryInto<InterfaceName<'i>>,
         I::Error: Into<Error>,
     {
-        self.header
-            .fields_mut()
-            .replace(Field::Interface(interface.try_into().map_err(Into::into)?));
+        self.header.fields_mut().interface = Some(interface.try_into().map_err(Into::into)?);
         Ok(self)
     }
 
@@ -147,9 +141,7 @@ impl<'a> Builder<'a> {
         M: TryInto<MemberName<'m>>,
         M::Error: Into<Error>,
     {
-        self.header
-            .fields_mut()
-            .replace(Field::Member(member.try_into().map_err(Into::into)?));
+        self.header.fields_mut().member = Some(member.try_into().map_err(Into::into)?);
         Ok(self)
     }
 
@@ -158,9 +150,7 @@ impl<'a> Builder<'a> {
         E: TryInto<ErrorName<'e>>,
         E::Error: Into<Error>,
     {
-        self.header
-            .fields_mut()
-            .replace(Field::ErrorName(error.try_into().map_err(Into::into)?));
+        self.header.fields_mut().error_name = Some(error.try_into().map_err(Into::into)?);
         Ok(self)
     }
 
@@ -170,15 +160,13 @@ impl<'a> Builder<'a> {
         D: TryInto<BusName<'d>>,
         D::Error: Into<Error>,
     {
-        self.header.fields_mut().replace(Field::Destination(
-            destination.try_into().map_err(Into::into)?,
-        ));
+        self.header.fields_mut().destination = Some(destination.try_into().map_err(Into::into)?);
         Ok(self)
     }
 
     fn reply_to(mut self, reply_to: &Header<'_>) -> Result<Self> {
         let serial = reply_to.primary().serial_num();
-        self.header.fields_mut().replace(Field::ReplySerial(serial));
+        self.header.fields_mut().reply_serial = Some(serial);
         self = self.endian(reply_to.primary().endian_sig().into());
 
         if let Some(sender) = reply_to.sender() {
@@ -293,7 +281,7 @@ impl<'a> Builder<'a> {
                 // Remove leading and trailing STRUCT delimiters
                 signature = signature.slice(1..signature.len() - 1);
             }
-            header.fields_mut().add(Field::Signature(signature));
+            header.fields_mut().signature = Some(signature);
         }
 
         let body_len_u32 = body_size.size().try_into().map_err(|_| Error::ExcessData)?;
@@ -303,7 +291,7 @@ impl<'a> Builder<'a> {
         {
             let fds_len = body_size.num_fds();
             if fds_len != 0 {
-                header.fields_mut().add(Field::UnixFDs(fds_len));
+                header.fields_mut().unix_fds = Some(fds_len);
             }
         }
 
@@ -331,14 +319,11 @@ impl<'a> Builder<'a> {
         let bytes = serialized::Data::new_fds(bytes, ctxt, fds);
         #[cfg(not(unix))]
         let bytes = serialized::Data::new(bytes, ctxt);
-        let (header, actual_hdr_len): (Header<'_>, _) = bytes.deserialize()?;
-        assert_eq!(hdr_len, actual_hdr_len);
-        let quick_fields = QuickFields::new(&bytes, &header)?;
 
         Ok(Message {
             inner: Arc::new(super::Inner {
                 primary_header,
-                quick_fields,
+                quick_fields: std::sync::OnceLock::new(),
                 bytes,
                 body_offset,
                 recv_seq: Sequence::default(),
@@ -351,8 +336,8 @@ impl<'m> From<Header<'m>> for Builder<'m> {
     fn from(mut header: Header<'m>) -> Self {
         // Signature and Fds are added by body* methods.
         let fields = header.fields_mut();
-        fields.remove(FieldCode::Signature);
-        fields.remove(FieldCode::UnixFDs);
+        fields.signature = None;
+        fields.unix_fds = None;
 
         Self { header }
     }

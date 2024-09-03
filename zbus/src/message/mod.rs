@@ -10,8 +10,8 @@ use crate::{utils::padding_for_8_bytes, zvariant::ObjectPath, Error, Result};
 mod builder;
 pub use builder::Builder;
 
-mod field;
-pub(crate) use field::{Field, FieldCode};
+mod field_code;
+pub(crate) use field_code::FieldCode;
 
 mod fields;
 pub(crate) use fields::Fields;
@@ -21,8 +21,8 @@ mod body;
 pub use body::Body;
 
 pub(crate) mod header;
-use header::MIN_MESSAGE_SIZE;
 pub use header::{EndianSig, Flags, Header, PrimaryHeader, Type, NATIVE_ENDIAN_SIG};
+use header::{MIN_MESSAGE_SIZE, PRIMARY_HEADER_SIZE};
 
 /// A position in the stream of [`Message`] objects received by a single [`zbus::Connection`].
 ///
@@ -60,7 +60,7 @@ pub struct Message {
 
 pub(super) struct Inner {
     pub(crate) primary_header: PrimaryHeader,
-    pub(crate) quick_fields: QuickFields,
+    pub(crate) quick_fields: std::sync::OnceLock<QuickFields>,
     pub(crate) bytes: serialized::Data<'static, 'static>,
     pub(crate) body_offset: usize,
     pub(crate) recv_seq: Sequence,
@@ -139,11 +139,13 @@ impl Message {
         }
 
         let (primary_header, fields_len) = PrimaryHeader::read_from_data(&bytes)?;
-        let (header, _) = bytes.deserialize()?;
+        let fields_bytes = bytes.slice(PRIMARY_HEADER_SIZE..);
+        let (fields, _) = fields_bytes.deserialize()?;
+        let header = Header::new(primary_header.clone(), fields);
 
         let header_len = MIN_MESSAGE_SIZE + fields_len as usize;
         let body_offset = header_len + padding_for_8_bytes(header_len);
-        let quick_fields = QuickFields::new(&bytes, &header)?;
+        let quick_fields = QuickFields::new(&bytes, &header).into();
 
         Ok(Self {
             inner: Arc::new(Inner {
@@ -161,40 +163,19 @@ impl Message {
     }
 
     /// The message header.
-    ///
-    /// Note: This method does not deserialize the header but it does currently allocate so it's not
-    /// zero-cost. While the allocation is small and will hopefully be removed in the future, it's
-    /// best to keep the header around if you need to access it a lot.
     pub fn header(&self) -> Header<'_> {
-        let mut fields = Fields::new();
-        let quick_fields = &self.inner.quick_fields;
-        if let Some(p) = quick_fields.path(self) {
-            fields.add(Field::Path(p));
-        }
-        if let Some(i) = quick_fields.interface(self) {
-            fields.add(Field::Interface(i));
-        }
-        if let Some(m) = quick_fields.member(self) {
-            fields.add(Field::Member(m));
-        }
-        if let Some(e) = quick_fields.error_name(self) {
-            fields.add(Field::ErrorName(e));
-        }
-        if let Some(r) = quick_fields.reply_serial() {
-            fields.add(Field::ReplySerial(r));
-        }
-        if let Some(d) = quick_fields.destination(self) {
-            fields.add(Field::Destination(d));
-        }
-        if let Some(s) = quick_fields.sender(self) {
-            fields.add(Field::Sender(s));
-        }
-        if let Some(s) = quick_fields.signature(self) {
-            fields.add(Field::Signature(s));
-        }
-        if let Some(u) = quick_fields.unix_fds() {
-            fields.add(Field::UnixFDs(u));
-        }
+        let quick_fields = self.quick_fields();
+        let fields = Fields {
+            path: quick_fields.path(self),
+            interface: quick_fields.interface(self),
+            member: quick_fields.member(self),
+            error_name: quick_fields.error_name(self),
+            reply_serial: quick_fields.reply_serial(),
+            destination: quick_fields.destination(self),
+            sender: quick_fields.sender(self),
+            signature: quick_fields.signature(self),
+            unix_fds: quick_fields.unix_fds(),
+        };
 
         Header::new(self.inner.primary_header.clone(), fields)
     }
@@ -210,7 +191,7 @@ impl Message {
         note = "Use `Message::header` with `message::Header::path` instead"
     )]
     pub fn path(&self) -> Option<ObjectPath<'_>> {
-        self.inner.quick_fields.path(self)
+        self.header().path().cloned()
     }
 
     /// The interface to invoke a method call on, or that a signal is emitted from.
@@ -219,7 +200,7 @@ impl Message {
         note = "Use `Message::header` with `message::Header::interface` instead"
     )]
     pub fn interface(&self) -> Option<InterfaceName<'_>> {
-        self.inner.quick_fields.interface(self)
+        self.header().interface().cloned()
     }
 
     /// The member, either the method name or signal name.
@@ -228,7 +209,7 @@ impl Message {
         note = "Use `Message::header` with `message::Header::member` instead"
     )]
     pub fn member(&self) -> Option<MemberName<'_>> {
-        self.inner.quick_fields.member(self)
+        self.header().member().cloned()
     }
 
     /// The serial number of the message this message is a reply to.
@@ -237,7 +218,7 @@ impl Message {
         note = "Use `Message::header` with `message::Header::reply_serial` instead"
     )]
     pub fn reply_serial(&self) -> Option<NonZeroU32> {
-        self.inner.quick_fields.reply_serial()
+        self.header().reply_serial()
     }
 
     /// The body that you can deserialize using [`Body::deserialize`].
@@ -287,6 +268,17 @@ impl Message {
     /// and might not be ordered at all.
     pub fn recv_position(&self) -> Sequence {
         self.inner.recv_seq
+    }
+
+    fn quick_fields(&self) -> &QuickFields {
+        self.inner.quick_fields.get_or_init(|| {
+            let bytes = &self.inner.bytes;
+            // SAFETY: We ensure that by the time `quick_fields` is called, the header has already
+            // been checked.
+            let (header, _): (Header<'_>, _) = bytes.deserialize().unwrap();
+
+            QuickFields::new(bytes, &header)
+        })
     }
 }
 
