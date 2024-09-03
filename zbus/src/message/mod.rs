@@ -10,8 +10,8 @@ use crate::{utils::padding_for_8_bytes, zvariant::ObjectPath, Error, Result};
 mod builder;
 pub use builder::Builder;
 
-mod field;
-pub(crate) use field::FieldCode;
+mod field_code;
+pub(crate) use field_code::FieldCode;
 
 mod fields;
 pub(crate) use fields::Fields;
