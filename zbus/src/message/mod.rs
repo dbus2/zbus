@@ -11,7 +11,7 @@ mod builder;
 pub use builder::Builder;
 
 mod field;
-pub(crate) use field::{Field, FieldCode};
+pub(crate) use field::FieldCode;
 
 mod fields;
 pub(crate) use fields::Fields;

@@ -13,9 +13,6 @@ use zvariant::{
 
 use crate::message::{FieldCode, Header, Message};
 
-// It's actually 10 (and even not that) but let's round it to next 8-byte alignment
-const MAX_FIELDS_IN_MESSAGE: usize = 16;
-
 /// A collection of [`Field`] instances.
 ///
 /// [`Field`]: enum.Field.html
