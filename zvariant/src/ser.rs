@@ -345,11 +345,7 @@ where
     pub(crate) fn add_padding(&mut self, alignment: usize) -> Result<usize> {
         let padding = padding_for_n_bytes(self.abs_pos(), alignment);
         if padding > 0 {
-            let byte = [0_u8; 1];
-            for _ in 0..padding {
-                self.write_all(&byte)
-                    .map_err(|e| Error::InputOutput(e.into()))?;
-            }
+            self.write_all(&[0u8; 8][..padding])?;
         }
 
         Ok(padding)
