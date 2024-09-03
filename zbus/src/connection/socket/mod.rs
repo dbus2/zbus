@@ -184,14 +184,14 @@ pub trait ReadHalf: std::fmt::Debug + Send + Sync + 'static {
 
         #[cfg(unix)]
         if !already_received_fds.is_empty() {
-            use crate::message::{header::PRIMARY_HEADER_SIZE, Field};
+            use crate::message::header::PRIMARY_HEADER_SIZE;
 
             let ctxt = Context::new_dbus(endian, PRIMARY_HEADER_SIZE);
             let encoded_fields =
                 serialized::Data::new(&bytes[PRIMARY_HEADER_SIZE..header_len], ctxt);
             let fields: crate::message::Fields<'_> = encoded_fields.deserialize()?.0;
-            let num_required_fds = match fields.get_field(crate::message::FieldCode::UnixFDs) {
-                Some(Field::UnixFDs(num_fds)) => *num_fds as usize,
+            let num_required_fds = match fields.unix_fds {
+                Some(num_fds) => num_fds as usize,
                 _ => 0,
             };
             let num_pending = num_required_fds

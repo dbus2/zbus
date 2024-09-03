@@ -1,10 +1,17 @@
-use serde::{Deserialize, Serialize};
+use serde::{
+    de::{Error, SeqAccess, Visitor},
+    ser::SerializeSeq,
+    Deserialize, Deserializer, Serialize, Serializer,
+};
 use static_assertions::assert_impl_all;
 use std::num::NonZeroU32;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
-use zvariant::{ObjectPath, Signature, Type};
+use zvariant::{
+    parsed::{self, FieldsSignatures},
+    ObjectPath, Signature, Type, Value,
+};
 
-use crate::message::{Field, FieldCode, Header, Message};
+use crate::message::{FieldCode, Header, Message};
 
 // It's actually 10 (and even not that) but let's round it to next 8-byte alignment
 const MAX_FIELDS_IN_MESSAGE: usize = 16;
@@ -12,65 +19,137 @@ const MAX_FIELDS_IN_MESSAGE: usize = 16;
 /// A collection of [`Field`] instances.
 ///
 /// [`Field`]: enum.Field.html
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub(crate) struct Fields<'m>(#[serde(borrow)] Vec<Field<'m>>);
+#[derive(Debug, Default, Clone)]
+pub(crate) struct Fields<'f> {
+    pub path: Option<ObjectPath<'f>>,
+    pub interface: Option<InterfaceName<'f>>,
+    pub member: Option<MemberName<'f>>,
+    pub error_name: Option<ErrorName<'f>>,
+    pub reply_serial: Option<NonZeroU32>,
+    pub destination: Option<BusName<'f>>,
+    pub sender: Option<UniqueName<'f>>,
+    pub signature: Option<Signature<'f>>,
+    pub unix_fds: Option<u32>,
+}
 
 assert_impl_all!(Fields<'_>: Send, Sync, Unpin);
 
-impl<'m> Fields<'m> {
+impl Fields<'_> {
     /// Create an empty collection of fields.
     pub fn new() -> Self {
         Self::default()
     }
+}
 
-    /// Append a [`Field`] to the collection of fields in the message.
-    ///
-    /// [`Field`]: enum.Field.html
-    pub fn add<'f: 'm>(&mut self, field: Field<'f>) {
-        self.0.push(field);
+const FIELDS_SIGNATURE: &parsed::Signature =
+    &parsed::Signature::static_array(&parsed::Signature::Structure(FieldsSignatures::Static {
+        fields: &[&parsed::Signature::U8, &parsed::Signature::Variant],
+    }));
+
+impl<'f> Type for Fields<'f> {
+    #[inline]
+    fn parsed_signature() -> parsed::Signature {
+        FIELDS_SIGNATURE.clone()
     }
+}
 
-    /// Replace a [`Field`] from the collection of fields with one with the same code,
-    /// returning the old value if present.
-    ///
-    /// [`Field`]: enum.Field.html
-    pub fn replace<'f: 'm>(&mut self, field: Field<'f>) -> Option<Field<'m>> {
-        let code = field.code();
-        if let Some(found) = self.0.iter_mut().find(|f| f.code() == code) {
-            return Some(std::mem::replace(found, field));
+impl<'f> Serialize for Fields<'f> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut seq = serializer.serialize_seq(None)?;
+        if let Some(path) = &self.path {
+            seq.serialize_element(&(FieldCode::Path, Value::from(path)))?;
         }
-        self.add(field);
-        None
+        if let Some(interface) = &self.interface {
+            seq.serialize_element(&(FieldCode::Interface, Value::from(interface.as_str())))?;
+        }
+        if let Some(member) = &self.member {
+            seq.serialize_element(&(FieldCode::Member, Value::from(member.as_str())))?;
+        }
+        if let Some(error_name) = &self.error_name {
+            seq.serialize_element(&(FieldCode::ErrorName, Value::from(error_name.as_str())))?;
+        }
+        if let Some(reply_serial) = self.reply_serial {
+            seq.serialize_element(&(FieldCode::ReplySerial, Value::from(reply_serial.get())))?;
+        }
+        if let Some(destination) = &self.destination {
+            seq.serialize_element(&(FieldCode::Destination, Value::from(destination.as_str())))?;
+        }
+        if let Some(sender) = &self.sender {
+            seq.serialize_element(&(FieldCode::Sender, Value::from(sender.as_str())))?;
+        }
+        if let Some(signature) = &self.signature {
+            seq.serialize_element(&(FieldCode::Signature, Value::from(signature.as_ref())))?;
+        }
+        if let Some(unix_fds) = self.unix_fds {
+            seq.serialize_element(&(FieldCode::UnixFDs, Value::from(unix_fds)))?;
+        }
+        seq.end()
+    }
+}
+
+impl<'de: 'f, 'f> Deserialize<'de> for Fields<'f> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_seq(FieldsVisitor)
+    }
+}
+
+struct FieldsVisitor;
+
+impl<'de> Visitor<'de> for FieldsVisitor {
+    type Value = Fields<'de>;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("D-Bus message header fields")
     }
 
-    /// Return a slice with all the [`Field`] in the message.
-    ///
-    /// [`Field`]: enum.Field.html
-    pub fn get(&self) -> &[Field<'m>] {
-        &self.0
-    }
-
-    /// Get a reference to a specific [`Field`] by its code.
-    ///
-    /// Returns `None` if the message has no such field.
-    ///
-    /// [`Field`]: enum.Field.html
-    pub fn get_field(&self, code: FieldCode) -> Option<&Field<'m>> {
-        self.0.iter().find(|f| f.code() == code)
-    }
-
-    /// Remove the field matching the `code`.
-    ///
-    /// Returns `true` if a field was found and removed, `false` otherwise.
-    pub(crate) fn remove(&mut self, code: FieldCode) -> bool {
-        match self.0.iter().enumerate().find(|(_, f)| f.code() == code) {
-            Some((i, _)) => {
-                self.0.remove(i);
-
-                true
+    fn visit_seq<V>(self, mut visitor: V) -> Result<Fields<'de>, V::Error>
+    where
+        V: SeqAccess<'de>,
+    {
+        let mut fields = Fields::new();
+        while let Some((code, value)) = visitor.next_element::<(FieldCode, Value<'de>)>()? {
+            match code {
+                FieldCode::Path => {
+                    fields.path = Some(ObjectPath::try_from(value).map_err(V::Error::custom)?)
+                }
+                FieldCode::Interface => {
+                    fields.interface =
+                        Some(InterfaceName::try_from(value).map_err(V::Error::custom)?)
+                }
+                FieldCode::Member => {
+                    fields.member = Some(MemberName::try_from(value).map_err(V::Error::custom)?)
+                }
+                FieldCode::ErrorName => {
+                    fields.error_name = Some(ErrorName::try_from(value).map_err(V::Error::custom)?)
+                }
+                FieldCode::ReplySerial => {
+                    let value = u32::try_from(value)
+                        .map_err(V::Error::custom)
+                        .and_then(|v| v.try_into().map_err(V::Error::custom))?;
+                    fields.reply_serial = Some(value)
+                }
+                FieldCode::Destination => {
+                    fields.destination = Some(BusName::try_from(value).map_err(V::Error::custom)?)
+                }
+                FieldCode::Sender => {
+                    fields.sender = Some(UniqueName::try_from(value).map_err(V::Error::custom)?)
+                }
+                FieldCode::Signature => {
+                    fields.signature = Some(Signature::try_from(value).map_err(V::Error::custom)?)
+                }
+                FieldCode::UnixFDs => {
+                    fields.unix_fds = Some(u32::try_from(value).map_err(V::Error::custom)?)
+                }
             }
-            None => false,
         }
+
+        Ok(fields)
     }
 }
 
@@ -200,41 +279,5 @@ impl QuickFields {
 
     pub fn unix_fds(&self) -> Option<u32> {
         self.unix_fds
-    }
-}
-
-impl<'m> Default for Fields<'m> {
-    fn default() -> Self {
-        Self(Vec::with_capacity(MAX_FIELDS_IN_MESSAGE))
-    }
-}
-
-impl<'m> std::ops::Deref for Fields<'m> {
-    type Target = [Field<'m>];
-
-    fn deref(&self) -> &Self::Target {
-        self.get()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{Field, Fields};
-
-    #[test]
-    fn test() {
-        let mut mf = Fields::new();
-        assert_eq!(mf.len(), 0);
-        mf.add(Field::ReplySerial(42.try_into().unwrap()));
-        assert_eq!(mf.len(), 1);
-        mf.add(Field::ReplySerial(43.try_into().unwrap()));
-        assert_eq!(mf.len(), 2);
-
-        let mut mf = Fields::new();
-        assert_eq!(mf.len(), 0);
-        mf.replace(Field::ReplySerial(42.try_into().unwrap()));
-        assert_eq!(mf.len(), 1);
-        mf.replace(Field::ReplySerial(43.try_into().unwrap()));
-        assert_eq!(mf.len(), 1);
     }
 }
