@@ -410,7 +410,7 @@ fn parse(bytes: &[u8], check_only: bool) -> crate::Result<Signature> {
     use nom::{
         branch::alt,
         combinator::{all_consuming, eof, map},
-        multi::{many1, many1_count},
+        multi::{fold_many1, many1_count},
         sequence::{delimited, pair},
     };
 
@@ -434,21 +434,37 @@ fn parse(bytes: &[u8], check_only: bool) -> crate::Result<Signature> {
             return map(many1_count(parser), |_| Signature::Unit)(bytes);
         }
 
-        map(many1(parser), |mut signatures| {
-            if top_level {
-                // On the top-level, we want to return:
-                //
-                // * unit signature if there are none.
-                // * the signature directly if there is only one.
-                if signatures.is_empty() {
-                    return Signature::Unit;
-                } else if signatures.len() == 1 {
-                    return signatures.remove(0);
-                }
-            }
+        // Avoid the allocation of `Vec<Signature>` in case of a single signature on the top-level.
+        // This is a a very common case, especially in variants, where the signature needs to be
+        // parsed at runtime.
+        enum SignatureList {
+            Unit,
+            One(Signature),
+            Structure(Vec<Signature>),
+        }
 
-            Signature::structure(signatures)
-        })(bytes)
+        map(
+            fold_many1(
+                parser,
+                || SignatureList::Unit,
+                |acc, signature| match acc {
+                    // On the top-level, we want to return the signature directly if there is only
+                    // one.
+                    SignatureList::Unit if top_level => SignatureList::One(signature),
+                    SignatureList::Unit => SignatureList::Structure(vec![signature]),
+                    SignatureList::One(one) => SignatureList::Structure(vec![one, signature]),
+                    SignatureList::Structure(mut signatures) => {
+                        signatures.push(signature);
+                        SignatureList::Structure(signatures)
+                    }
+                },
+            ),
+            |sig_list| match sig_list {
+                SignatureList::Unit => Signature::Unit,
+                SignatureList::One(sig) => sig,
+                SignatureList::Structure(signatures) => Signature::structure(signatures),
+            },
+        )(bytes)
     }
 
     fn parse_signature(bytes: &[u8], check_only: bool) -> nom::IResult<&[u8], Signature> {
