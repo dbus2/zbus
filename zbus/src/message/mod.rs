@@ -163,10 +163,6 @@ impl Message {
     }
 
     /// The message header.
-    ///
-    /// Note: This method does not deserialize the header but it does currently allocate so it's not
-    /// zero-cost. While the allocation is small and will hopefully be removed in the future, it's
-    /// best to keep the header around if you need to access it a lot.
     pub fn header(&self) -> Header<'_> {
         let quick_fields = self.quick_fields();
         let fields = Fields {
