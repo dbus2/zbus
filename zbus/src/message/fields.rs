@@ -4,10 +4,7 @@ use std::num::NonZeroU32;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 use zvariant::{ObjectPath, Signature, Type};
 
-use crate::{
-    message::{Field, FieldCode, Header, Message},
-    Result,
-};
+use crate::message::{Field, FieldCode, Header, Message};
 
 // It's actually 10 (and even not that) but let's round it to next 8-byte alignment
 const MAX_FIELDS_IN_MESSAGE: usize = 16;
@@ -155,8 +152,8 @@ pub(crate) struct QuickFields {
 }
 
 impl QuickFields {
-    pub fn new(buf: &[u8], header: &Header<'_>) -> Result<Self> {
-        Ok(Self {
+    pub fn new(buf: &[u8], header: &Header<'_>) -> Self {
+        Self {
             path: FieldPos::new(buf, header.path()),
             interface: FieldPos::new(buf, header.interface()),
             member: FieldPos::new(buf, header.member()),
@@ -166,7 +163,7 @@ impl QuickFields {
             sender: FieldPos::new(buf, header.sender()),
             signature: FieldPos::new(buf, header.signature()),
             unix_fds: header.unix_fds(),
-        })
+        }
     }
 
     pub fn path<'m>(&self, msg: &'m Message) -> Option<ObjectPath<'m>> {

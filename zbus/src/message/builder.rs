@@ -16,7 +16,7 @@ use crate::{
     EndianSig, Error, Result,
 };
 
-use crate::message::{fields::QuickFields, header::MAX_MESSAGE_SIZE};
+use crate::message::header::MAX_MESSAGE_SIZE;
 
 #[cfg(unix)]
 type BuildGenericResult = Vec<OwnedFd>;
@@ -331,14 +331,11 @@ impl<'a> Builder<'a> {
         let bytes = serialized::Data::new_fds(bytes, ctxt, fds);
         #[cfg(not(unix))]
         let bytes = serialized::Data::new(bytes, ctxt);
-        let (header, actual_hdr_len): (Header<'_>, _) = bytes.deserialize()?;
-        assert_eq!(hdr_len, actual_hdr_len);
-        let quick_fields = QuickFields::new(&bytes, &header)?;
 
         Ok(Message {
             inner: Arc::new(super::Inner {
                 primary_header,
-                quick_fields,
+                quick_fields: std::sync::OnceLock::new(),
                 bytes,
                 body_offset,
                 recv_seq: Sequence::default(),

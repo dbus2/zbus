@@ -1,7 +1,10 @@
 use zvariant::{
+    parsed,
     serialized::{self, Data},
     Signature, Type,
 };
+
+use std::str::FromStr;
 
 use crate::{Error, Message, Result};
 
@@ -25,11 +28,15 @@ impl Body {
         B: zvariant::DynamicDeserialize<'s>,
     {
         let body_sig = self
+            .msg
+            .header()
             .signature()
-            .unwrap_or_else(|| Signature::from_static_str_unchecked(""));
+            .map(|s| parsed::Signature::from_str(s))
+            .transpose()?
+            .unwrap_or(parsed::Signature::Unit);
 
         self.data
-            .deserialize_for_dynamic_signature(body_sig)
+            .deserialize_for_dynamic_parsed_signature(body_sig)
             .map_err(Error::from)
             .map(|b| b.0)
     }
@@ -49,7 +56,7 @@ impl Body {
     /// D-Bus, the trailing and leading STRUCT signature parenthesis will not be present in case of
     /// multiple arguments.
     pub fn signature(&self) -> Option<Signature<'_>> {
-        self.msg.inner.quick_fields.signature(&self.msg)
+        self.msg.header().signature().cloned()
     }
 
     /// The length of the body in bytes.
