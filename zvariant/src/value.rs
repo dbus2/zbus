@@ -627,7 +627,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
                 Error::invalid_value(Unexpected::Other("nothing"), &"a Value signature")
             })?;
         let seed = ValueSeed::<Value<'_>> {
-            signature,
+            signature: &signature,
             phantom: PhantomData,
         };
 
@@ -648,24 +648,24 @@ impl<'de> Visitor<'de> for ValueVisitor {
         let _ = visitor.next_key::<&str>()?;
 
         let seed = ValueSeed::<Value<'_>> {
-            signature,
+            signature: &signature,
             phantom: PhantomData,
         };
         visitor.next_value_seed(seed)
     }
 }
 
-pub(crate) struct SignatureSeed {
-    pub signature: parsed::Signature,
+pub(crate) struct SignatureSeed<'sig> {
+    pub signature: &'sig parsed::Signature,
 }
 
-impl SignatureSeed {
+impl SignatureSeed<'_> {
     pub(crate) fn visit_array<'de, V>(self, mut visitor: V) -> Result<Array<'de>, V::Error>
     where
         V: SeqAccess<'de>,
     {
-        let element_signature = match &self.signature {
-            parsed::Signature::Array(child) => child.signature().clone(),
+        let element_signature = match self.signature {
+            parsed::Signature::Array(child) => child.signature(),
             _ => {
                 return Err(Error::invalid_type(
                     Unexpected::Str(&self.signature.to_string()),
@@ -673,10 +673,10 @@ impl SignatureSeed {
                 ))
             }
         };
-        let mut array = Array::new_full_signature(self.signature.into());
+        let mut array = Array::new_full_signature(self.signature.clone().into());
 
         while let Some(elem) = visitor.next_element_seed(ValueSeed::<Value<'_>> {
-            signature: element_signature.clone(),
+            signature: element_signature,
             phantom: PhantomData,
         })? {
             elem.value_signature();
@@ -690,7 +690,7 @@ impl SignatureSeed {
     where
         V: SeqAccess<'de>,
     {
-        let fields_signatures = match &self.signature {
+        let fields_signatures = match self.signature {
             parsed::Signature::Structure(fields) => fields.iter(),
             _ => {
                 return Err(Error::invalid_type(
@@ -703,7 +703,7 @@ impl SignatureSeed {
         let mut builder = StructureBuilder::new();
         for field_signature in fields_signatures {
             if let Some(field) = visitor.next_element_seed(ValueSeed::<Value<'_>> {
-                signature: field_signature.clone(),
+                signature: field_signature,
                 phantom: PhantomData,
             })? {
                 builder = builder.append_field(field);
@@ -713,20 +713,20 @@ impl SignatureSeed {
     }
 }
 
-impl<T> From<ValueSeed<T>> for SignatureSeed {
-    fn from(seed: ValueSeed<T>) -> Self {
+impl<'sig, T> From<ValueSeed<'sig, T>> for SignatureSeed<'sig> {
+    fn from(seed: ValueSeed<'sig, T>) -> Self {
         SignatureSeed {
             signature: seed.signature,
         }
     }
 }
 
-struct ValueSeed<T> {
-    signature: parsed::Signature,
+struct ValueSeed<'sig, T> {
+    signature: &'sig parsed::Signature,
     phantom: PhantomData<T>,
 }
 
-impl<'de, T> ValueSeed<T>
+impl<'sig, 'de, T> ValueSeed<'sig, T>
 where
     T: Deserialize<'de>,
 {
@@ -783,7 +783,7 @@ macro_rules! value_seed_basic_method {
     };
 }
 
-impl<'de, T> Visitor<'de> for ValueSeed<T>
+impl<'de, T> Visitor<'de> for ValueSeed<'_, T>
 where
     T: Deserialize<'de>,
 {
@@ -889,11 +889,11 @@ where
 
         while let Some((key, value)) = visitor.next_entry_seed(
             ValueSeed::<Value<'_>> {
-                signature: key_signature.clone(),
+                signature: &key_signature,
                 phantom: PhantomData,
             },
             ValueSeed::<Value<'_>> {
-                signature: value_signature.clone(),
+                signature: &value_signature,
                 phantom: PhantomData,
             },
         )? {
@@ -918,7 +918,7 @@ where
             }
         };
         let visitor = ValueSeed::<T> {
-            signature: child_signature,
+            signature: &child_signature,
             phantom: PhantomData,
         };
 
@@ -954,7 +954,7 @@ where
     }
 }
 
-impl<'de, T> DeserializeSeed<'de> for ValueSeed<T>
+impl<'de, T> DeserializeSeed<'de> for ValueSeed<'_, T>
 where
     T: Deserialize<'de>,
 {
