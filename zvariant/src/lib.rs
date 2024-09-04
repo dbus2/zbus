@@ -128,6 +128,7 @@ mod tests {
 
     #[cfg(feature = "arrayvec")]
     use arrayvec::{ArrayString, ArrayVec};
+    use serde_json::json;
     #[cfg(feature = "arrayvec")]
     use std::str::FromStr;
 
@@ -1415,6 +1416,42 @@ mod tests {
         let encoded = serde_json::to_string(&v).unwrap();
         let v = serde_json::from_str::<Value<'_>>(&encoded).unwrap();
         assert_eq!(v, Value::U64(0xFEFE));
+
+        // Now a test case for https://github.com/dbus2/zbus/issues/549
+        #[derive(Deserialize, Serialize, Debug, PartialEq)]
+        struct Data {
+            inner: zvariant::OwnedValue,
+        }
+
+        let value = zvariant::Value::new("variant-value");
+        let inner = zvariant::StructureBuilder::new()
+            .add_field("value1".to_string())
+            .add_field("value2")
+            .append_field(zvariant::Value::new(value)) // let's try to get a variant
+            .build()
+            .try_into()
+            .unwrap();
+
+        let data = Data { inner };
+        let as_json = serde_json::to_value(&data).unwrap();
+        let expected_json = json!(
+            {
+                "inner": {
+                    "signature": "(ssv)",
+                    "value": [
+                        "value1",
+                        "value2",
+                        {
+                            "signature": "s",
+                            "value": "variant-value"
+                        }
+                    ]
+                }
+            }
+        );
+        assert_eq!(expected_json, as_json);
+        let data_again: Data = serde_json::from_str(&as_json.to_string()).unwrap();
+        assert_eq!(data, data_again);
     }
 
     #[test]
