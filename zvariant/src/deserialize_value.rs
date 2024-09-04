@@ -35,10 +35,10 @@ impl<'de, T: Type + Deserialize<'de>> Deserialize<'de> for DeserializeValue<'de,
     where
         D: Deserializer<'de>,
     {
-        const FIELDS: &[&str] = &["zvariant::Value::Signature", "zvariant::Value::Value"];
+        const FIELDS: &[&str] = &["signature", "value"];
         Ok(DeserializeValue(
             deserializer.deserialize_struct(
-                "zvariant::Value",
+                "Variant",
                 FIELDS,
                 DeserializeValueVisitor(PhantomData),
             )?,
@@ -53,7 +53,7 @@ impl<'de, T: Type + Deserialize<'de>> Visitor<'de> for DeserializeValueVisitor<T
     type Value = T;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("zvariant::Value")
+        formatter.write_str("Variant")
     }
 
     fn visit_seq<V>(self, mut seq: V) -> Result<Self::Value, V::Error>

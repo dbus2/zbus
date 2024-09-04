@@ -26,11 +26,11 @@ impl<'a, T: Type + Serialize> Serialize for SerializeValue<'a, T> {
         S: Serializer,
     {
         // Serializer implementation needs to ensure padding isn't added for Value.
-        let mut structure = serializer.serialize_struct("zvariant::Value", 2)?;
+        let mut structure = serializer.serialize_struct("Variant", 2)?;
 
         let signature = T::signature();
-        structure.serialize_field("zvariant::Value::Signature", &signature)?;
-        structure.serialize_field("zvariant::Value::Value", self.0)?;
+        structure.serialize_field("signature", &signature)?;
+        structure.serialize_field("value", self.0)?;
 
         structure.end()
     }

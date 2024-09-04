@@ -582,12 +582,12 @@ impl<'a> Serialize for Value<'a> {
         S: Serializer,
     {
         // Serializer implementation needs to ensure padding isn't added for Value.
-        let mut structure = serializer.serialize_struct("zvariant::Value", 2)?;
+        let mut structure = serializer.serialize_struct("Variant", 2)?;
 
         let signature = self.value_signature();
-        structure.serialize_field("zvariant::Value::Signature", &signature)?;
+        structure.serialize_field("signature", &signature)?;
 
-        self.serialize_value_as_struct_field("zvariant::Value::Value", &mut structure)?;
+        self.serialize_value_as_struct_field("value", &mut structure)?;
 
         structure.end()
     }
@@ -751,12 +751,22 @@ where
     }
 
     #[inline]
-    fn visit_variant<V>(self, visitor: V) -> Result<Value<'de>, V::Error>
+    fn visit_variant_as_seq<V>(self, visitor: V) -> Result<Value<'de>, V::Error>
     where
         V: SeqAccess<'de>,
     {
         ValueVisitor
             .visit_seq(visitor)
+            .map(|v| Value::Value(Box::new(v)))
+    }
+
+    #[inline]
+    fn visit_variant_as_map<V>(self, visitor: V) -> Result<Value<'de>, V::Error>
+    where
+        V: MapAccess<'de>,
+    {
+        ValueVisitor
+            .visit_map(visitor)
             .map(|v| Value::Value(Box::new(v)))
     }
 }
@@ -850,7 +860,7 @@ where
             // For some reason rustc doesn't like us using ARRAY_SIGNATURE_CHAR const
             parsed::Signature::Array(_) => self.visit_array(visitor),
             parsed::Signature::Structure(_) => self.visit_struct(visitor),
-            parsed::Signature::Variant => self.visit_variant(visitor),
+            parsed::Signature::Variant => self.visit_variant_as_seq(visitor),
             s => Err(Error::invalid_value(
                 Unexpected::Str(&s.to_string()),
                 &"a Value signature",
@@ -866,6 +876,7 @@ where
             parsed::Signature::Dict { key, value } => {
                 (key.signature().clone(), value.signature().clone())
             }
+            parsed::Signature::Variant => return self.visit_variant_as_map(visitor),
             _ => {
                 return Err(Error::invalid_type(
                     Unexpected::Str(&self.signature.to_string()),
