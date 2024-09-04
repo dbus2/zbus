@@ -309,8 +309,7 @@ impl<'a> Serialize for Structure<'a> {
     where
         S: Serializer,
     {
-        let mut structure =
-            serializer.serialize_tuple_struct("zvariant::Structure", self.fields.len())?;
+        let mut structure = serializer.serialize_tuple_struct("Structure", self.fields.len())?;
         for field in &self.fields {
             field.serialize_value_as_tuple_struct_field(&mut structure)?;
         }

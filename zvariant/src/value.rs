@@ -582,12 +582,12 @@ impl<'a> Serialize for Value<'a> {
         S: Serializer,
     {
         // Serializer implementation needs to ensure padding isn't added for Value.
-        let mut structure = serializer.serialize_struct("zvariant::Value", 2)?;
+        let mut structure = serializer.serialize_struct("Variant", 2)?;
 
         let signature = self.value_signature();
-        structure.serialize_field("zvariant::Value::Signature", &signature)?;
+        structure.serialize_field("signature", &signature)?;
 
-        self.serialize_value_as_struct_field("zvariant::Value::Value", &mut structure)?;
+        self.serialize_value_as_struct_field("value", &mut structure)?;
 
         structure.end()
     }
