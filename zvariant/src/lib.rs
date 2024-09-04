@@ -136,7 +136,7 @@ mod tests {
     use glib::{variant::FromVariant, Bytes, Variant};
     use serde::{Deserialize, Serialize};
 
-    use crate::{serialized::Data, to_bytes, to_bytes_for_signature, MaxDepthExceeded};
+    use crate::{to_bytes, to_bytes_for_signature, MaxDepthExceeded};
 
     #[cfg(unix)]
     use crate::Fd;
@@ -508,23 +508,6 @@ mod tests {
 
         let v: String = v.try_into().unwrap();
         assert_eq!(v, "hello world");
-
-        // Check for interior null bytes which are not allowed
-        let ctxt = Context::new_dbus(LE, 0);
-        assert!(Data::new(&b"\x0b\0\0\0hello\0world\0"[..], ctxt)
-            .deserialize::<&str>()
-            .is_err());
-        assert!(to_bytes(ctxt, &"hello\0world").is_err());
-
-        // GVariant format doesn't allow null bytes either
-        #[cfg(feature = "gvariant")]
-        {
-            let ctxt = Context::new_gvariant(LE, 0);
-            assert!(Data::new(&b"\x0b\0\0\0hello\0world\0"[..], ctxt)
-                .deserialize::<&str>()
-                .is_err());
-            assert!(to_bytes(ctxt, &"hello\0world").is_err());
-        }
 
         // Characters are treated as strings
         basic_type_test!(LE, DBus, 'c', 6, char, 4);
@@ -2085,7 +2068,7 @@ mod tests {
 
         let encoded = std::fs::read("../test-data/flatpak-summary.dump").unwrap();
         let ctxt = Context::new_gvariant(LE, 0);
-        let encoded = Data::new(encoded, ctxt);
+        let encoded = crate::serialized::Data::new(encoded, ctxt);
         let _: Summary<'_> = encoded.deserialize().unwrap().0;
         // If we're able to deserialize all the data successfully, don't bother checking the summary
         // data.

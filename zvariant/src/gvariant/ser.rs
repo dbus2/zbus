@@ -157,12 +157,6 @@ where
     }
 
     fn serialize_str(self, v: &str) -> Result<()> {
-        if v.contains('\0') {
-            return Err(serde::de::Error::invalid_value(
-                serde::de::Unexpected::Char('\0'),
-                &"GVariant string type must not contain interior null bytes",
-            ));
-        }
         // Strings in GVariant format require no alignment.
 
         if matches!(self.0.signature, Signature::Variant) {

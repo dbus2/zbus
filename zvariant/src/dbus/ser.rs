@@ -119,12 +119,6 @@ where
     }
 
     fn serialize_str(self, v: &str) -> Result<()> {
-        if v.contains('\0') {
-            return Err(serde::de::Error::invalid_value(
-                serde::de::Unexpected::Char('\0'),
-                &"D-Bus string type must not contain interior null bytes",
-            ));
-        }
         self.0
             .add_padding(self.0.signature.alignment(Format::DBus))?;
 
