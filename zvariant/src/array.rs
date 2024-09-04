@@ -375,7 +375,7 @@ impl<'de> Visitor<'de> for ArrayVisitor {
         V: SeqAccess<'de>,
     {
         SignatureSeed {
-            signature: self.signature,
+            signature: &self.signature,
         }
         .visit_array(visitor)
     }
