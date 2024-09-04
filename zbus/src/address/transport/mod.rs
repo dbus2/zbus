@@ -1,6 +1,6 @@
 //! D-Bus transport Information module.
 //!
-//! This module provides the trasport information for D-Bus addresses.
+//! This module provides the transport information for D-Bus addresses.
 
 #[cfg(windows)]
 use crate::win32::autolaunch_bus_address;
