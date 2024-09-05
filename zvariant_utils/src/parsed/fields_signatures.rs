@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use super::Signature;
 
 /// Signatures of the fields of a [`Signature::Structure`].
@@ -9,9 +7,10 @@ pub enum FieldsSignatures {
         fields: &'static [&'static Signature],
     },
     Dynamic {
-        fields: Rc<[Signature]>,
+        fields: Box<[Signature]>,
     },
 }
+static_assertions::assert_impl_all!(FieldsSignatures: Send, Sync, Unpin);
 
 impl FieldsSignatures {
     /// A iterator over the fields' signatures.
@@ -41,8 +40,8 @@ impl FieldsSignatures {
     }
 }
 
-impl From<Rc<[Signature]>> for FieldsSignatures {
-    fn from(fields: Rc<[Signature]>) -> Self {
+impl From<Box<[Signature]>> for FieldsSignatures {
+    fn from(fields: Box<[Signature]>) -> Self {
         FieldsSignatures::Dynamic { fields }
     }
 }

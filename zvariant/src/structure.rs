@@ -102,7 +102,18 @@ pub struct StructureSeed<'a> {
 
 assert_impl_all!(StructureSeed<'_>: Unpin);
 
-impl StructureSeed<'static> {}
+impl StructureSeed<'static> {
+    /// Create a new `StructureSeed`
+    ///
+    /// The given signature must be a valid structure signature.
+    #[must_use]
+    pub fn new_unchecked(signature: Signature<'_>) -> Self {
+        StructureSeed {
+            signature: signature.into(),
+            phantom: std::marker::PhantomData,
+        }
+    }
+}
 
 impl TryFrom<Signature<'_>> for StructureSeed<'static> {
     type Error = zvariant::Error;

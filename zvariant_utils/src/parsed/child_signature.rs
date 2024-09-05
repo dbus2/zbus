@@ -1,4 +1,4 @@
-use std::{ops::Deref, rc::Rc};
+use std::ops::Deref;
 
 use super::Signature;
 
@@ -8,8 +8,9 @@ pub enum ChildSignature {
     /// A static child signature.
     Static { child: &'static Signature },
     /// A dynamic child signature.
-    Dynamic { child: Rc<Signature> },
+    Dynamic { child: Box<Signature> },
 }
+static_assertions::assert_impl_all!(ChildSignature: Send, Sync, Unpin);
 
 impl ChildSignature {
     /// The underlying child `Signature`.
@@ -29,8 +30,8 @@ impl Deref for ChildSignature {
     }
 }
 
-impl From<Rc<Signature>> for ChildSignature {
-    fn from(child: Rc<Signature>) -> Self {
+impl From<Box<Signature>> for ChildSignature {
+    fn from(child: Box<Signature>) -> Self {
         ChildSignature::Dynamic { child }
     }
 }
@@ -38,7 +39,7 @@ impl From<Rc<Signature>> for ChildSignature {
 impl From<Signature> for ChildSignature {
     fn from(child: Signature) -> Self {
         ChildSignature::Dynamic {
-            child: Rc::new(child),
+            child: Box::new(child),
         }
     }
 }
