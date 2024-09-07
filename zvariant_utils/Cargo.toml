@@ -22,4 +22,3 @@ quote = "1.0.36"
 
 [lints]
 workspace = true
-
