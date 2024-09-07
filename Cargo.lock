@@ -2437,6 +2437,7 @@ dependencies = [
  "nom",
  "proc-macro2",
  "quote",
+ "serde",
  "static_assertions",
  "syn 2.0.76",
 ]
