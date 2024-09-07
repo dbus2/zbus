@@ -13,11 +13,13 @@ pub fn expand_derive(ast: DeriveInput) -> Result<TokenStream, Error> {
     if let Some(signature) = signature {
         // Signature already provided, easy then!
 
-        let name = ast.ident;
         let signature = match signature.as_str() {
             "dict" => "a{sv}".to_string(),
             _ => signature,
         };
+        zvariant_utils::parsed::signature::validate(signature.as_bytes())
+            .map_err(|e| Error::new(ast.span(), e))?;
+        let name = ast.ident;
         let parsed_signature = match signature.as_str() {
             "a{sv}" => quote! {
                 #zv::parsed::Signature::static_dict(
@@ -34,8 +36,6 @@ pub fn expand_derive(ast: DeriveInput) -> Result<TokenStream, Error> {
             impl #impl_generics #zv::Type for #name #ty_generics #where_clause {
                 #[inline]
                 fn signature() -> #zv::Signature<'static> {
-                    // TODO: Move the parsed signature API into `zvariant_utils` and use it here to
-                    // verify the signature string from user at compile time.
                     #zv::Signature::from_static_str(#signature).unwrap()
                 }
 
