@@ -16,6 +16,10 @@ readme = "README.md"
 [lib]
 proc-macro = true
 
+[features]
+default = []
+gvariant = ["zvariant_utils/gvariant", "zvariant/gvariant"]
+
 [dependencies]
 proc-macro2 = "1.0.81"
 syn = { version = "2.0.64", features = ["extra-traits", "full"] }

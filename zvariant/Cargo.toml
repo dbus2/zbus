@@ -15,7 +15,7 @@ readme = "README.md"
 [features]
 default = []
 # FIXME: Also allow disabling D-Bus support
-gvariant = ["zvariant_utils/gvariant"]
+gvariant = ["zvariant_derive/gvariant", "zvariant_utils/gvariant"]
 ostree-tests = ["gvariant"]
 # Enables ser/de of `Option<T>` as an array of 0 or 1 elements.
 option-as-array = []
