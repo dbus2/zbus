@@ -60,8 +60,8 @@ pub enum Error {
     OutOfBounds,
     /// The maximum allowed depth for containers in encoding was exceeded.
     MaxDepthExceeded(MaxDepthExceeded),
-    /// Invalid signature.
-    InvalidSignature,
+    /// Error from parsing a signature.
+    SignatureParse(crate::parsed::Error),
 }
 
 assert_impl_all!(Error: Send, Sync, Unpin);
@@ -118,7 +118,7 @@ impl fmt::Display for Error {
                 "Out of bounds range specified",
             ),
             Error::MaxDepthExceeded(max) => write!(f, "{max}"),
-            Error::InvalidSignature => write!(f, "Invalid signature"),
+            Error::SignatureParse(e) => write!(f, "{e}"),
         }
     }
 }
@@ -141,7 +141,7 @@ impl Clone for Error {
             }
             Error::OutOfBounds => Error::OutOfBounds,
             Error::MaxDepthExceeded(max) => Error::MaxDepthExceeded(*max),
-            Error::InvalidSignature => Error::InvalidSignature,
+            Error::SignatureParse(e) => Error::SignatureParse(*e),
         }
     }
 }

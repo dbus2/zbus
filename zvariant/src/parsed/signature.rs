@@ -147,7 +147,7 @@ impl Signature {
     }
 
     /// Parse signature from a byte slice.
-    pub fn from_bytes(bytes: &[u8]) -> crate::Result<Self> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, super::Error> {
         parse(bytes, false)
     }
 
@@ -390,15 +390,15 @@ impl From<Signature> for crate::Signature<'static> {
 }
 
 impl FromStr for Signature {
-    type Err = crate::Error;
+    type Err = super::Error;
 
-    fn from_str(s: &str) -> crate::Result<Self> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         parse(s.as_bytes(), false)
     }
 }
 
 /// Validate the given signature string.
-pub fn validate(bytes: &[u8]) -> crate::Result<()> {
+pub fn validate(bytes: &[u8]) -> Result<(), super::Error> {
     parse(bytes, true).map(|_| ())
 }
 
@@ -406,7 +406,7 @@ pub fn validate(bytes: &[u8]) -> crate::Result<()> {
 ///
 /// When `check_only` is true, the function will not allocate memory for the dynamic types.
 /// Instead it will return dummy values in the parsed Signature.
-fn parse(bytes: &[u8], check_only: bool) -> crate::Result<Signature> {
+fn parse(bytes: &[u8], check_only: bool) -> Result<Signature, super::Error> {
     use nom::{
         branch::alt,
         combinator::{all_consuming, eof, map},
@@ -542,7 +542,7 @@ fn parse(bytes: &[u8], check_only: bool) -> crate::Result<Signature> {
     }
 
     let (_, signature) = all_consuming(alt((empty, |s| many(s, check_only, true))))(bytes)
-        .map_err(|_| crate::Error::InvalidSignature)?;
+        .map_err(|_| super::Error::InvalidSignature)?;
 
     Ok(signature)
 }
