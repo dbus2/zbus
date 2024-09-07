@@ -2412,6 +2412,7 @@ dependencies = [
  "url",
  "uuid",
  "zvariant_derive",
+ "zvariant_utils",
 ]
 
 [[package]]
