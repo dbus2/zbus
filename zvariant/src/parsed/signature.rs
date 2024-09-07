@@ -30,8 +30,7 @@ use crate::{serialized::Format, Basic, Type};
 /// let sig = Signature::from_str("(xa{bs}as)").unwrap();
 /// assert_eq!(sig.to_string(), "(xa{bs}as)");
 /// ```
-#[derive(Debug, Clone, Type)]
-#[zvariant(signature = "g")]
+#[derive(Debug, Clone)]
 pub enum Signature {
     // Basic types
     /// The signature for the unit type (`()`). This is not a valid D-Bus signature, but is used to
@@ -747,6 +746,12 @@ impl<'de> Deserialize<'de> for Signature {
         <&str>::deserialize(deserializer).and_then(|s| {
             Signature::from_str(s).map_err(|e| serde::de::Error::custom(e.to_string()))
         })
+    }
+}
+
+impl Type for Signature {
+    fn parsed_signature() -> Signature {
+        Signature::Signature
     }
 }
 
