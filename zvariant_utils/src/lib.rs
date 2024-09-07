@@ -2,3 +2,4 @@
 
 pub mod case;
 pub mod macros;
+pub mod serialized;
