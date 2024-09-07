@@ -2434,6 +2434,7 @@ dependencies = [
 name = "zvariant_utils"
 version = "2.2.0"
 dependencies = [
+ "nom",
  "proc-macro2",
  "quote",
  "static_assertions",
