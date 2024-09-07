@@ -212,7 +212,7 @@ impl Signature {
     }
 
     /// The required padding alignment for the given format.
-    pub(crate) fn alignment(&self, format: Format) -> usize {
+    pub fn alignment(&self, format: Format) -> usize {
         match format {
             Format::DBus => self.alignment_dbus(),
             #[cfg(feature = "gvariant")]
