@@ -27,5 +27,8 @@ static_assertions = "1.1.0"
 serde = "1.0.200"
 nom = "7"
 
+[dev-dependencies]
+zvariant = { path = "../zvariant" }
+
 [lints]
 workspace = true
