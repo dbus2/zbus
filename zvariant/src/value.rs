@@ -250,31 +250,31 @@ impl<'a> Value<'a> {
     }
 
     /// Get the signature of the enclosed value.
-    pub fn value_signature(&self) -> Signature<'_> {
+    pub fn value_signature(&self) -> &parsed::Signature {
         match self {
-            Value::U8(_) => u8::SIGNATURE.into(),
-            Value::Bool(_) => bool::SIGNATURE.into(),
-            Value::I16(_) => i16::SIGNATURE.into(),
-            Value::U16(_) => u16::SIGNATURE.into(),
-            Value::I32(_) => i32::SIGNATURE.into(),
-            Value::U32(_) => u32::SIGNATURE.into(),
-            Value::I64(_) => i64::SIGNATURE.into(),
-            Value::U64(_) => u64::SIGNATURE.into(),
-            Value::F64(_) => f64::SIGNATURE.into(),
-            Value::Str(_) => <&str>::SIGNATURE.into(),
-            Value::Signature(_) => Signature::SIGNATURE.into(),
-            Value::ObjectPath(_) => ObjectPath::SIGNATURE.into(),
-            Value::Value(_) => Signature::from_static_str_unchecked("v"),
+            Value::U8(_) => u8::SIGNATURE,
+            Value::Bool(_) => bool::SIGNATURE,
+            Value::I16(_) => i16::SIGNATURE,
+            Value::U16(_) => u16::SIGNATURE,
+            Value::I32(_) => i32::SIGNATURE,
+            Value::U32(_) => u32::SIGNATURE,
+            Value::I64(_) => i64::SIGNATURE,
+            Value::U64(_) => u64::SIGNATURE,
+            Value::F64(_) => f64::SIGNATURE,
+            Value::Str(_) => <&str>::SIGNATURE,
+            Value::Signature(_) => Signature::SIGNATURE,
+            Value::ObjectPath(_) => ObjectPath::SIGNATURE,
+            Value::Value(_) => &parsed::Signature::Variant,
 
             // Container types
-            Value::Array(value) => value.full_signature().as_ref(),
-            Value::Dict(value) => value.full_signature().as_ref(),
-            Value::Structure(value) => value.full_signature().as_ref(),
+            Value::Array(value) => value.signature(),
+            Value::Dict(value) => value.signature(),
+            Value::Structure(value) => value.signature(),
             #[cfg(feature = "gvariant")]
-            Value::Maybe(value) => value.full_signature().as_ref(),
+            Value::Maybe(value) => value.signature(),
 
             #[cfg(unix)]
-            Value::Fd(_) => Fd::SIGNATURE.into(),
+            Value::Fd(_) => Fd::SIGNATURE,
         }
     }
 
@@ -673,7 +673,7 @@ impl SignatureSeed<'_> {
                 ))
             }
         };
-        let mut array = Array::new_full_signature(self.signature.clone().into());
+        let mut array = Array::new_full_signature(self.signature);
 
         while let Some(elem) = visitor.next_element_seed(ValueSeed::<Value<'_>> {
             signature: element_signature,
@@ -709,7 +709,7 @@ impl SignatureSeed<'_> {
                 builder = builder.append_field(field);
             }
         }
-        Ok(builder.build_with_signature(self.signature.into()))
+        Ok(builder.build_with_signature(self.signature))
     }
 }
 
@@ -885,7 +885,7 @@ where
             }
         };
 
-        let mut dict = Dict::new_full_signature(self.signature.into());
+        let mut dict = Dict::new_full_signature(self.signature);
 
         while let Some((key, value)) = visitor.next_entry_seed(
             ValueSeed::<Value<'_>> {
@@ -924,7 +924,7 @@ where
 
         deserializer
             .deserialize_any(visitor)
-            .map(|v| Value::Maybe(Maybe::just_full_signature(v, self.signature.into())))
+            .map(|v| Value::Maybe(Maybe::just_full_signature(v, self.signature)))
     }
 
     #[cfg(not(feature = "gvariant"))]
@@ -940,7 +940,7 @@ where
     where
         E: Error,
     {
-        let value = Maybe::nothing_full_signature(self.signature.into());
+        let value = Maybe::nothing_full_signature(self.signature);
 
         Ok(Value::Maybe(value))
     }

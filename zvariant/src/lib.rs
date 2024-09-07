@@ -1252,7 +1252,7 @@ mod tests {
         let ctxt = Context::new_dbus(LE, 0);
 
         // Now a hand-crafted Dict Value but with a Value as value
-        let mut dict = Dict::new(<&str>::SIGNATURE.into(), Value::SIGNATURE.into());
+        let mut dict = Dict::new(<&str>::SIGNATURE, Value::SIGNATURE);
         dict.add("hello", Value::new("there")).unwrap();
         dict.add("bye", Value::new("now")).unwrap();
         let v: Value<'_> = dict.into();
@@ -1346,11 +1346,11 @@ mod tests {
     fn dict_compare() {
         // the order in which a dict has been constructed must not play a role
         // https://github.com/dbus2/zbus/issues/484
-        let mut dict1 = Dict::new(<&str>::SIGNATURE.into(), Value::SIGNATURE.into());
+        let mut dict1 = Dict::new(<&str>::SIGNATURE, Value::SIGNATURE);
         dict1.add("first", Value::new("value")).unwrap();
         dict1.add("second", Value::new("value")).unwrap();
 
-        let mut dict2 = Dict::new(<&str>::SIGNATURE.into(), Value::SIGNATURE.into());
+        let mut dict2 = Dict::new(<&str>::SIGNATURE, Value::SIGNATURE);
         dict2.add("second", Value::new("value")).unwrap();
         dict2.add("first", Value::new("value")).unwrap();
 

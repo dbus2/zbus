@@ -7,7 +7,7 @@ use std::{
 use serde::ser::{Serialize, SerializeMap, Serializer};
 use static_assertions::assert_impl_all;
 
-use crate::{value_display_fmt, Basic, DynamicType, Error, Signature, Type, Value};
+use crate::{parsed::Signature, value_display_fmt, Basic, DynamicType, Error, Type, Value};
 
 /// A helper type to wrap dictionaries in a [`Value`].
 ///
@@ -18,23 +18,18 @@ use crate::{value_display_fmt, Basic, DynamicType, Error, Signature, Type, Value
 #[derive(Debug, Hash, PartialEq, PartialOrd, Eq, Ord)]
 pub struct Dict<'k, 'v> {
     map: BTreeMap<Value<'k>, Value<'v>>,
-    key_signature: Signature<'k>,
-    value_signature: Signature<'v>,
-    // should use a separate lifetime or everything should use the same but API break.
-    signature: Signature<'k>,
+    signature: Signature,
 }
 
 assert_impl_all!(Dict<'_, '_>: Send, Sync, Unpin);
 
 impl<'k, 'v> Dict<'k, 'v> {
     /// Create a new empty `Dict`, given the signature of the keys and values.
-    pub fn new(key_signature: Signature<'k>, value_signature: Signature<'v>) -> Self {
-        let signature = create_signature(&key_signature, &value_signature);
+    pub fn new(key_signature: &Signature, value_signature: &Signature) -> Self {
+        let signature = Signature::dict(key_signature.clone(), value_signature.clone());
 
         Self {
             map: BTreeMap::new(),
-            key_signature,
-            value_signature,
             signature,
         }
     }
@@ -53,8 +48,26 @@ impl<'k, 'v> Dict<'k, 'v> {
         key: Value<'kv>,
         value: Value<'vv>,
     ) -> Result<(), Error> {
-        check_child_value_signature!(self.key_signature, key.value_signature(), "key");
-        check_child_value_signature!(self.value_signature, value.value_signature(), "value");
+        match &self.signature {
+            Signature::Dict { key: key_sig, .. }
+                if key.value_signature() != key_sig.signature() =>
+            {
+                return Err(Error::SignatureMismatch(
+                    key.value_signature().into(),
+                    key_sig.signature().clone().to_string(),
+                ))
+            }
+            Signature::Dict {
+                value: value_sig, ..
+            } if value.value_signature() != value_sig.signature() => {
+                return Err(Error::SignatureMismatch(
+                    value.value_signature().into(),
+                    value_sig.signature().clone().to_string(),
+                ))
+            }
+            Signature::Dict { .. } => (),
+            _ => unreachable!("Incorrect `Dict` signature"),
+        }
 
         self.map.insert(key, value);
 
@@ -67,12 +80,7 @@ impl<'k, 'v> Dict<'k, 'v> {
         K: Basic + Into<Value<'k>> + Ord,
         V: Into<Value<'v>> + DynamicType,
     {
-        check_child_value_signature!(&self.key_signature, K::SIGNATURE, "key");
-        check_child_value_signature!(self.value_signature, value.dynamic_signature(), "value");
-
-        self.map.insert(Value::new(key), Value::new(value));
-
-        Ok(())
+        self.append(Value::new(key), Value::new(value))
     }
 
     /// Get the value for the given key.
@@ -90,25 +98,13 @@ impl<'k, 'v> Dict<'k, 'v> {
     }
 
     /// Get the signature of this `Dict`.
-    ///
-    /// NB: This method potentially allocates and copies. Use [`full_signature`] if you'd like to
-    /// avoid that.
-    ///
-    /// [`full_signature`]: #method.full_signature
-    pub fn signature(&self) -> Signature<'static> {
-        self.signature.to_owned()
-    }
-
-    /// Get the signature of this `Dict`.
-    pub fn full_signature(&self) -> &Signature<'_> {
+    pub fn signature(&self) -> &Signature {
         &self.signature
     }
 
     pub(crate) fn try_to_owned(&self) -> crate::Result<Dict<'static, 'static>> {
         Ok(Dict {
-            key_signature: self.key_signature.to_owned(),
-            value_signature: self.value_signature.to_owned(),
-            signature: self.signature.to_owned(),
+            signature: self.signature.clone(),
             map: self
                 .map
                 .iter()
@@ -132,22 +128,17 @@ impl<'k, 'v> Dict<'k, 'v> {
 
         Ok(Self {
             map: entries,
-            key_signature: self.key_signature.clone(),
-            value_signature: self.value_signature.clone(),
             signature: self.signature.clone(),
         })
     }
 
     /// Create a new empty `Dict`, given the complete signature.
-    pub(crate) fn new_full_signature<'s: 'k + 'v>(signature: Signature<'s>) -> Self {
-        let key_signature = signature.slice(2..3);
-        let value_signature = signature.slice(3..signature.len() - 1);
+    pub(crate) fn new_full_signature(signature: &Signature) -> Self {
+        assert!(matches!(signature, Signature::Dict { .. }));
 
         Self {
             map: BTreeMap::new(),
-            key_signature,
-            value_signature,
-            signature,
+            signature: signature.clone(),
         }
     }
 
@@ -184,7 +175,7 @@ pub(crate) fn dict_display_fmt(
 ) -> std::fmt::Result {
     if dict.map.is_empty() {
         if type_annotate {
-            write!(f, "@{} ", dict.full_signature())?;
+            write!(f, "@{} ", dict.signature())?;
         }
         f.write_str("{}")?;
     } else {
@@ -280,14 +271,12 @@ macro_rules! to_dict {
                     .into_iter()
                     .map(|(key, value)| (Value::new(key), Value::new(value)))
                     .collect();
-                let key_signature = K::SIGNATURE.into();
-                let value_signature = V::SIGNATURE.into();
-                let signature = create_signature(&key_signature, &value_signature);
+                let key_signature = K::SIGNATURE.clone();
+                let value_signature = V::SIGNATURE.clone();
+                let signature = Signature::dict(key_signature, value_signature);
 
                 Self {
                     map: entries,
-                    key_signature,
-                    value_signature,
                     signature,
                 }
             }
@@ -296,10 +285,3 @@ macro_rules! to_dict {
 }
 to_dict!(HashMap<K: Eq + Hash, V, H>);
 to_dict!(BTreeMap<K: Ord, V>);
-
-fn create_signature(
-    key_signature: &Signature<'_>,
-    value_signature: &Signature<'_>,
-) -> Signature<'static> {
-    Signature::from_string_unchecked(format!("a{{{key_signature}{value_signature}}}",))
-}
