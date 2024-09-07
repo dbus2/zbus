@@ -275,8 +275,9 @@ impl Signature {
         }
     }
 
+    /// Check if the signature is of a fixed-sized type.
     #[cfg(feature = "gvariant")]
-    pub(crate) fn is_fixed_sized(&self) -> bool {
+    pub fn is_fixed_sized(&self) -> bool {
         match self {
             Signature::Unit
             | Signature::U8
