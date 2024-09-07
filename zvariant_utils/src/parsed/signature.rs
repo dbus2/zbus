@@ -12,7 +12,7 @@ use crate::serialized::Format;
 
 /// A D-Bus signature in parsed form.
 ///
-/// This is similar to the [`crate::Signature`] type, but unlike `crate::Signature`, this is a
+/// This is similar to the [`zvariant::Signature`] type, but unlike `zvariant::Signature`, this is a
 /// parsed representation of a signature. Our (de)serialization API primarily uses this type for
 /// efficiency.
 ///
@@ -30,6 +30,8 @@ use crate::serialized::Format;
 /// let sig = Signature::from_str("(xa{bs}as)").unwrap();
 /// assert_eq!(sig.to_string(), "(xa{bs}as)");
 /// ```
+///
+/// [`zvariant::Signature`]: https://docs.rs/zvariant/latest/zvariant/struct.Signature.html
 #[derive(Debug, Clone)]
 pub enum Signature {
     // Basic types
