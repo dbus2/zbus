@@ -1106,7 +1106,6 @@ mod tests {
             .iter()
             .any(|str| str.contains("100") && str.contains(": ") && str.contains("200")));
 
-        assert_eq!(Value::new(Structure::default()).to_string(), "()");
         assert_eq!(
             Value::new(((true,), (true, false), (true, true, false))).to_string(),
             "((true,), (true, false), (true, true, false))"

@@ -252,17 +252,6 @@ pub(crate) fn structure_display_fmt(
     f.write_char(')')
 }
 
-impl<'a> Default for Structure<'a> {
-    fn default() -> Self {
-        let signature = Signature::from_static_str_unchecked("()");
-
-        Self {
-            fields: vec![],
-            signature,
-        }
-    }
-}
-
 impl<'a> DynamicType for Structure<'a> {
     fn dynamic_signature(&self) -> Signature<'_> {
         self.signature.as_ref()
