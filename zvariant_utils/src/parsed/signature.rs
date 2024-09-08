@@ -596,18 +596,17 @@ impl PartialEq<&str> for Signature {
             }
             Self::Structure(fields) => {
                 let string_len = self.string_len();
-                if string_len < other.len() {
-                    // self.string_len() will always take `()` into account so it can't be a smaller
-                    // number than `other.len()`.
+                // self.string_len() will always take `()` into account so it can't be a smaller
+                // number than `other.len()`.
+                if string_len < other.len()
+                    // Their length is either equal (i-e `other` has outer `()`) or `other` has no
+                    // outer `()`.
+                    || (string_len != other.len() && string_len != other.len() + 2)
+                {
                     return false;
                 }
 
                 let fields_str = if string_len == other.len() {
-                    // `other` has to have outer `()`.
-                    if other.len() < 3 {
-                        return false;
-                    }
-
                     &other[1..other.len() - 1]
                 } else {
                     // No outer `()`.
@@ -622,6 +621,9 @@ impl PartialEq<&str> for Signature {
                 for field in fields.iter() {
                     let len = field.string_len();
                     let end = start + len;
+                    if end > fields_str.len() {
+                        return false;
+                    }
                     if !field.eq(&fields_str[start..end]) {
                         return false;
                     }
