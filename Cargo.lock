@@ -2401,7 +2401,6 @@ dependencies = [
  "enumflags2",
  "glib",
  "heapless",
- "nom",
  "rand",
  "serde",
  "serde_bytes",
@@ -2412,6 +2411,7 @@ dependencies = [
  "url",
  "uuid",
  "zvariant_derive",
+ "zvariant_utils",
 ]
 
 [[package]]
@@ -2431,9 +2431,13 @@ dependencies = [
 
 [[package]]
 name = "zvariant_utils"
-version = "2.1.0"
+version = "2.2.0"
 dependencies = [
+ "nom",
  "proc-macro2",
  "quote",
+ "serde",
+ "static_assertions",
  "syn 2.0.76",
+ "zvariant",
 ]

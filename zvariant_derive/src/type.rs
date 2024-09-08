@@ -1,8 +1,11 @@
+use std::str::FromStr;
+
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use syn::{
     spanned::Spanned, Attribute, Data, DataEnum, DeriveInput, Error, Fields, Generics, Ident,
 };
+use zvariant_utils::parsed::Signature;
 
 use crate::utils::*;
 
@@ -10,38 +13,22 @@ pub fn expand_derive(ast: DeriveInput) -> Result<TokenStream, Error> {
     let StructAttributes { signature, .. } = StructAttributes::parse(&ast.attrs)?;
 
     let zv = zvariant_path();
-    if let Some(signature) = signature {
+    if let Some(signature_str) = signature {
         // Signature already provided, easy then!
 
-        let name = ast.ident;
-        let signature = match signature.as_str() {
-            "dict" => "a{sv}".to_string(),
-            _ => signature,
+        let parsed_signature = match signature_str.as_str() {
+            "dict" => Signature::dict(Signature::Str, Signature::Variant),
+            s => Signature::from_str(s).map_err(|e| Error::new(ast.span(), e))?,
         };
-        let parsed_signature = match signature.as_str() {
-            "a{sv}" => quote! {
-                #zv::parsed::Signature::static_dict(
-                    &#zv::parsed::Signature::Str,
-                    &#zv::parsed::Signature::Variant,
-                )
-            },
-            // revert to parsing `signature` method's return.
-            _ => quote! { #zv::parsed::Signature::from(#name::signature()) },
-        };
+        let signature_tokens = parsed_signature_to_tokens(&parsed_signature, &zv);
 
+        let name = ast.ident;
         let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
         return Ok(quote! {
             impl #impl_generics #zv::Type for #name #ty_generics #where_clause {
                 #[inline]
-                fn signature() -> #zv::Signature<'static> {
-                    // TODO: Move the parsed signature API into `zvariant_utils` and use it here to
-                    // verify the signature string from user at compile time.
-                    #zv::Signature::from_static_str(#signature).unwrap()
-                }
-
-                #[inline]
                 fn parsed_signature() -> #zv::parsed::Signature {
-                    #parsed_signature
+                    #signature_tokens
                 }
             }
         });
@@ -215,5 +202,65 @@ fn signature_for_variant(
         }
         Fields::Named(_) => Ok(signature_for_struct(&variant.fields, zv, true)),
         Fields::Unnamed(_) => Ok(signature_for_struct(&variant.fields, zv, true)),
+    }
+}
+
+fn parsed_signature_to_tokens(signature: &Signature, zv: &TokenStream) -> TokenStream {
+    match signature {
+        Signature::Unit => quote! { #zv::parsed::Signature::Unit },
+        Signature::Bool => quote! { #zv::parsed::Signature::Bool },
+        Signature::U8 => quote! { #zv::parsed::Signature::U8 },
+        Signature::I16 => quote! { #zv::parsed::Signature::I16 },
+        Signature::U16 => quote! { #zv::parsed::Signature::U16 },
+        Signature::I32 => quote! { #zv::parsed::Signature::I32 },
+        Signature::U32 => quote! { #zv::parsed::Signature::U32 },
+        Signature::I64 => quote! { #zv::parsed::Signature::I64 },
+        Signature::U64 => quote! { #zv::parsed::Signature::U64 },
+        Signature::F64 => quote! { #zv::parsed::Signature::F64 },
+        Signature::Str => quote! { #zv::parsed::Signature::Str },
+        Signature::Signature => quote! { #zv::parsed::Signature::Signature },
+        Signature::ObjectPath => quote! { #zv::parsed::Signature::ObjectPath },
+        Signature::Variant => quote! { #zv::parsed::Signature::Variant },
+        #[cfg(unix)]
+        Signature::Fd => quote! { #zv::parsed::Signature::Fd },
+        Signature::Array(child) => {
+            let signature = parsed_signature_to_tokens(child.signature(), zv);
+            quote! {
+                #zv::parsed::Signature::Array(#zv::parsed::ChildSignature::Static {
+                    child: &#signature,
+                })
+            }
+        }
+        Signature::Dict { key, value } => {
+            let key_sig = parsed_signature_to_tokens(key.signature(), zv);
+            let value_sig = parsed_signature_to_tokens(value.signature(), zv);
+            quote! {
+                #zv::parsed::Signature::Dict {
+                    key: #zv::parsed::ChildSignature::Static {
+                        child: &#key_sig,
+                    },
+                    value: #zv::parsed::ChildSignature::Static {
+                        child: &#value_sig,
+                    },
+                }
+            }
+        }
+        Signature::Structure(fields) => {
+            let fields = fields.iter().map(|f| parsed_signature_to_tokens(f, zv));
+            quote! {
+                #zv::parsed::Signature::Structure(#zv::parsed::FieldsSignatures::Static {
+                    fields: &[#(&#fields),*],
+                })
+            }
+        }
+        #[cfg(feature = "gvariant")]
+        Signature::Maybe(child) => {
+            let signature = parsed_signature_to_tokens(child.signature(), zv);
+            quote! {
+                #zv::parsed::Signature::Maybe(#zv::parsed::ChildSignature::Static {
+                    child: &#signature,
+                })
+            }
+        }
     }
 }

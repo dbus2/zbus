@@ -4,7 +4,6 @@ mod size;
 pub use size::Size;
 mod written;
 pub use written::Written;
-mod format;
-pub use format::Format;
+pub use zvariant_utils::serialized::Format;
 mod context;
 pub use context::Context;

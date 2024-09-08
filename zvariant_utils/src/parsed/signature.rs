@@ -8,11 +8,11 @@ use std::{
     str::FromStr,
 };
 
-use crate::{serialized::Format, Basic, Type};
+use crate::serialized::Format;
 
 /// A D-Bus signature in parsed form.
 ///
-/// This is similar to the [`crate::Signature`] type, but unlike `crate::Signature`, this is a
+/// This is similar to the [`zvariant::Signature`] type, but unlike `zvariant::Signature`, this is a
 /// parsed representation of a signature. Our (de)serialization API primarily uses this type for
 /// efficiency.
 ///
@@ -30,8 +30,9 @@ use crate::{serialized::Format, Basic, Type};
 /// let sig = Signature::from_str("(xa{bs}as)").unwrap();
 /// assert_eq!(sig.to_string(), "(xa{bs}as)");
 /// ```
-#[derive(Debug, Clone, Type)]
-#[zvariant(signature = "g")]
+///
+/// [`zvariant::Signature`]: https://docs.rs/zvariant/latest/zvariant/struct.Signature.html
+#[derive(Debug, Clone)]
 pub enum Signature {
     // Basic types
     /// The signature for the unit type (`()`). This is not a valid D-Bus signature, but is used to
@@ -147,7 +148,7 @@ impl Signature {
     }
 
     /// Parse signature from a byte slice.
-    pub fn from_bytes(bytes: &[u8]) -> crate::Result<Self> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, super::Error> {
         parse(bytes, false)
     }
 
@@ -213,7 +214,7 @@ impl Signature {
     }
 
     /// The required padding alignment for the given format.
-    pub(crate) fn alignment(&self, format: Format) -> usize {
+    pub fn alignment(&self, format: Format) -> usize {
         match format {
             Format::DBus => self.alignment_dbus(),
             #[cfg(feature = "gvariant")]
@@ -276,8 +277,9 @@ impl Signature {
         }
     }
 
+    /// Check if the signature is of a fixed-sized type.
     #[cfg(feature = "gvariant")]
-    pub(crate) fn is_fixed_sized(&self) -> bool {
+    pub fn is_fixed_sized(&self) -> bool {
         match self {
             Signature::Unit
             | Signature::U8
@@ -351,54 +353,16 @@ impl Display for Signature {
     }
 }
 
-impl From<crate::Signature<'_>> for Signature {
-    fn from(value: crate::Signature<'_>) -> Self {
-        Self::from_str(value.as_str()).expect("valid signature")
-    }
-}
-
-impl From<&Signature> for crate::Signature<'static> {
-    fn from(value: &Signature) -> Self {
-        match value {
-            Signature::Unit => crate::Signature::from_static_str_unchecked(""),
-            Signature::U8 => crate::Signature::from_static_str_unchecked("y"),
-            Signature::Bool => crate::Signature::from_static_str_unchecked("b"),
-            Signature::I16 => crate::Signature::from_static_str_unchecked("n"),
-            Signature::U16 => crate::Signature::from_static_str_unchecked("q"),
-            Signature::I32 => crate::Signature::from_static_str_unchecked("i"),
-            Signature::U32 => crate::Signature::from_static_str_unchecked("u"),
-            Signature::I64 => crate::Signature::from_static_str_unchecked("x"),
-            Signature::U64 => crate::Signature::from_static_str_unchecked("t"),
-            Signature::F64 => crate::Signature::from_static_str_unchecked("d"),
-            Signature::Str => crate::Signature::from_static_str_unchecked("s"),
-            Signature::Signature => crate::Signature::from_static_str_unchecked("g"),
-            Signature::ObjectPath => crate::Signature::from_static_str_unchecked("o"),
-            Signature::Variant => crate::Signature::from_static_str_unchecked("v"),
-            #[cfg(unix)]
-            Signature::Fd => crate::Signature::from_static_str_unchecked("h"),
-            container_signature => {
-                crate::Signature::from_string_unchecked(container_signature.to_string())
-            }
-        }
-    }
-}
-
-impl From<Signature> for crate::Signature<'static> {
-    fn from(value: Signature) -> Self {
-        Self::from(&value)
-    }
-}
-
 impl FromStr for Signature {
-    type Err = crate::Error;
+    type Err = super::Error;
 
-    fn from_str(s: &str) -> crate::Result<Self> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         parse(s.as_bytes(), false)
     }
 }
 
 /// Validate the given signature string.
-pub fn validate(bytes: &[u8]) -> crate::Result<()> {
+pub fn validate(bytes: &[u8]) -> Result<(), super::Error> {
     parse(bytes, true).map(|_| ())
 }
 
@@ -406,7 +370,7 @@ pub fn validate(bytes: &[u8]) -> crate::Result<()> {
 ///
 /// When `check_only` is true, the function will not allocate memory for the dynamic types.
 /// Instead it will return dummy values in the parsed Signature.
-fn parse(bytes: &[u8], check_only: bool) -> crate::Result<Signature> {
+fn parse(bytes: &[u8], check_only: bool) -> Result<Signature, super::Error> {
     use nom::{
         branch::alt,
         combinator::{all_consuming, eof, map},
@@ -542,7 +506,7 @@ fn parse(bytes: &[u8], check_only: bool) -> crate::Result<Signature> {
     }
 
     let (_, signature) = all_consuming(alt((empty, |s| many(s, check_only, true))))(bytes)
-        .map_err(|_| crate::Error::InvalidSignature)?;
+        .map_err(|_| super::Error::InvalidSignature)?;
 
     Ok(signature)
 }
@@ -677,18 +641,6 @@ impl PartialEq<str> for Signature {
     }
 }
 
-impl PartialEq<crate::Signature<'_>> for Signature {
-    fn eq(&self, other: &crate::Signature<'_>) -> bool {
-        self.eq(other.as_str())
-    }
-}
-
-impl PartialEq<crate::OwnedSignature> for Signature {
-    fn eq(&self, other: &crate::OwnedSignature) -> bool {
-        self.eq(other.as_str())
-    }
-}
-
 impl PartialOrd for Signature {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
@@ -747,16 +699,5 @@ impl<'de> Deserialize<'de> for Signature {
         <&str>::deserialize(deserializer).and_then(|s| {
             Signature::from_str(s).map_err(|e| serde::de::Error::custom(e.to_string()))
         })
-    }
-}
-
-impl Basic for Signature {
-    const SIGNATURE_CHAR: char = 'g';
-    const SIGNATURE_STR: &'static str = "g";
-}
-
-impl From<Signature> for crate::Value<'static> {
-    fn from(value: Signature) -> Self {
-        crate::Value::Signature(value.into())
     }
 }

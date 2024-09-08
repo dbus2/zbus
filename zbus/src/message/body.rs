@@ -31,7 +31,7 @@ impl Body {
             .msg
             .header()
             .signature()
-            .map(|s| parsed::Signature::from_str(s))
+            .map(|s| parsed::Signature::from_str(s).map_err(zvariant::Error::from))
             .transpose()?
             .unwrap_or(parsed::Signature::Unit);
 
