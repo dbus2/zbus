@@ -69,13 +69,16 @@ impl<'a> StructureBuilder<'a> {
     /// Build the `Structure`.
     ///
     /// [`Structure`]: struct.Structure.html
-    pub fn build(self) -> Structure<'a> {
+    pub fn build(self) -> crate::Result<Structure<'a>> {
+        if self.0.is_empty() {
+            return Err(crate::Error::EmptyStructure);
+        }
         let signature = create_signature_from_fields(&self.0);
 
-        Structure {
+        Ok(Structure {
             fields: self.0,
             signature,
-        }
+        })
     }
 
     /// Same as `build` except Signature is provided.
@@ -308,7 +311,7 @@ macro_rules! tuple_impls {
                     $(
                         .add_field(value. $n)
                     )+
-                    .build()
+                    .build().unwrap()
                 }
             }
 

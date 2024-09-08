@@ -1412,6 +1412,7 @@ mod tests {
             .add_field("value2")
             .append_field(zvariant::Value::new(value)) // let's try to get a variant
             .build()
+            .unwrap()
             .try_into()
             .unwrap();
 
