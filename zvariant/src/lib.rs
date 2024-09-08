@@ -587,7 +587,7 @@ mod tests {
         #[cfg(feature = "gvariant")]
         {
             let encoded = basic_type_test!(LE, GVariant, sig, 6, parsed::Signature, 1);
-            decode_with_gvariant::<_, String>(encoded, Some(String::from("yys")));
+            decode_with_gvariant::<_, String>(encoded, Some(String::from("(yys)")));
         }
 
         // As Value

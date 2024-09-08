@@ -94,6 +94,8 @@ jobs:
               --features tokio-vsock -- --skip fdpass_systemd
           dbus-run-session --config-file /tmp/dbus-session.conf -- \
             cargo --locked test --profile "$PROFILE" --verbose --doc --no-default-features connection::Connection::executor
+          # zvariant only with ostree tests (which implicitly enables `gvariant` feature too).
+          cargo --locked t -p zvariant --features ostree-tests
 
   windows_test:
     runs-on: windows-latest
@@ -203,6 +205,8 @@ jobs:
           cargo --locked test
           # tokio feature
           cargo --locked test --no-default-features --features tokio
+          # zvariant only with ostree tests (which implicitly enables `gvariant` feature too).
+          cargo --locked t -p zvariant --features ostree-tests
 
   zvariant_fuzz:
     runs-on: ubuntu-latest
