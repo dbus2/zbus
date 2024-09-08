@@ -47,13 +47,13 @@ impl ContainerDepths {
         self.check()
     }
 
-    #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
+    #[cfg(feature = "gvariant")]
     pub fn inc_maybe(mut self) -> Result<Self> {
         self.maybe += 1;
         self.check()
     }
 
-    #[cfg(all(feature = "gvariant", not(feature = "option-as-array")))]
+    #[cfg(feature = "gvariant")]
     pub fn dec_maybe(mut self) -> Self {
         self.maybe -= 1;
         self
