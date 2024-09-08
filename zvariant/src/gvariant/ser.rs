@@ -47,7 +47,6 @@ where
         }))
     }
 
-    #[cfg(not(feature = "option-as-array"))]
     fn serialize_maybe<T>(&mut self, value: Option<&T>) -> Result<()>
     where
         T: ?Sized + Serialize,
@@ -185,30 +184,15 @@ where
         seq.end()
     }
 
-    #[cfg(not(feature = "option-as-array"))]
     fn serialize_none(self) -> Result<()> {
         self.serialize_maybe::<()>(None)
     }
 
-    #[cfg(feature = "option-as-array")]
-    fn serialize_none(self) -> Result<()> {
-        panic!("`option-as-array` and `gvariant` features are incompatible. Don't enable both.");
-    }
-
-    #[cfg(not(feature = "option-as-array"))]
     fn serialize_some<T>(self, value: &T) -> Result<()>
     where
         T: ?Sized + Serialize,
     {
         self.serialize_maybe(Some(value))
-    }
-
-    #[cfg(feature = "option-as-array")]
-    fn serialize_some<T>(self, _value: &T) -> Result<()>
-    where
-        T: ?Sized + Serialize,
-    {
-        panic!("`option-as-array` and `gvariant` features are incompatible. Don't enable both.");
     }
 
     fn serialize_unit(self) -> Result<()> {

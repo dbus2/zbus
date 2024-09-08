@@ -184,15 +184,6 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
         visitor.visit_borrowed_str(s)
     }
 
-    #[cfg(feature = "option-as-array")]
-    fn deserialize_option<V>(self, _visitor: V) -> Result<V::Value>
-    where
-        V: Visitor<'de>,
-    {
-        panic!("`option-as-array` and `gvariant` features are incompatible. Don't enable both.");
-    }
-
-    #[cfg(not(feature = "option-as-array"))]
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
