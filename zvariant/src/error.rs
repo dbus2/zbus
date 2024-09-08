@@ -62,6 +62,8 @@ pub enum Error {
     MaxDepthExceeded(MaxDepthExceeded),
     /// Error from parsing a signature.
     SignatureParse(crate::parsed::Error),
+    /// Attempted to create an empty structure (which is not allowed by the D-Bus specification).
+    EmptyStructure,
 }
 
 assert_impl_all!(Error: Send, Sync, Unpin);
@@ -119,6 +121,7 @@ impl fmt::Display for Error {
             ),
             Error::MaxDepthExceeded(max) => write!(f, "{max}"),
             Error::SignatureParse(e) => write!(f, "{e}"),
+            Error::EmptyStructure => write!(f, "Attempted to create an empty structure"),
         }
     }
 }
@@ -142,6 +145,7 @@ impl Clone for Error {
             Error::OutOfBounds => Error::OutOfBounds,
             Error::MaxDepthExceeded(max) => Error::MaxDepthExceeded(*max),
             Error::SignatureParse(e) => Error::SignatureParse(*e),
+            Error::EmptyStructure => Error::EmptyStructure,
         }
     }
 }
