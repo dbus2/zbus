@@ -5,6 +5,7 @@ use super::{child_signature::ChildSignature, fields_signatures::FieldsSignatures
 use core::fmt;
 use std::{
     fmt::{Display, Formatter},
+    hash::Hash,
     str::FromStr,
 };
 
@@ -709,5 +710,46 @@ impl<'de> Deserialize<'de> for Signature {
         <&str>::deserialize(deserializer).and_then(|s| {
             Signature::from_str(s).map_err(|e| serde::de::Error::custom(e.to_string()))
         })
+    }
+}
+
+impl Hash for Signature {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Signature::Unit => 0.hash(state),
+            Signature::U8 => 1.hash(state),
+            Signature::Bool => 2.hash(state),
+            Signature::I16 => 3.hash(state),
+            Signature::U16 => 4.hash(state),
+            Signature::I32 => 5.hash(state),
+            Signature::U32 => 6.hash(state),
+            Signature::I64 => 7.hash(state),
+            Signature::U64 => 8.hash(state),
+            Signature::F64 => 9.hash(state),
+            Signature::Str => 10.hash(state),
+            Signature::Signature => 11.hash(state),
+            Signature::ObjectPath => 12.hash(state),
+            Signature::Variant => 13.hash(state),
+            #[cfg(unix)]
+            Signature::Fd => 14.hash(state),
+            Signature::Array(child) => {
+                15.hash(state);
+                child.hash(state);
+            }
+            Signature::Dict { key, value } => {
+                16.hash(state);
+                key.hash(state);
+                value.hash(state);
+            }
+            Signature::Structure(fields) => {
+                17.hash(state);
+                fields.iter().for_each(|f| f.hash(state));
+            }
+            #[cfg(feature = "gvariant")]
+            Signature::Maybe(child) => {
+                18.hash(state);
+                child.hash(state);
+            }
+        }
     }
 }
