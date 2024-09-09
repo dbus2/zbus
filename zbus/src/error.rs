@@ -205,6 +205,12 @@ impl From<VariantError> for Error {
     }
 }
 
+impl From<zvariant::parsed::Error> for Error {
+    fn from(e: zvariant::parsed::Error) -> Self {
+        zvariant::Error::from(e).into()
+    }
+}
+
 impl From<NamesError> for Error {
     fn from(val: NamesError) -> Self {
         match val {
