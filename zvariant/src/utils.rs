@@ -72,20 +72,6 @@ pub(crate) fn f64_to_f32(value: f64) -> f32 {
     value as f32
 }
 
-macro_rules! check_child_value_signature {
-    ($expected_signature:expr, $child_signature:expr, $child_name:literal) => {{
-        if $child_signature != $expected_signature {
-            let unexpected = format!("{} with signature `{}`", $child_name, $child_signature,);
-            let expected = format!("{} with signature `{}`", $child_name, $expected_signature);
-
-            return Err(serde::de::Error::invalid_type(
-                serde::de::Unexpected::Str(&unexpected),
-                &expected.as_str(),
-            ));
-        }
-    }};
-}
-
 /// Slice the given slice of bytes safely and return an error if the slice is too small.
 pub(crate) fn subslice<I, T>(input: &[T], index: I) -> Result<&I::Output>
 where
