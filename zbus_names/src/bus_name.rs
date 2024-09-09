@@ -217,16 +217,14 @@ impl<'s> TryFrom<Str<'s>> for BusName<'s> {
     type Error = Error;
 
     fn try_from(value: Str<'s>) -> Result<Self> {
-        match UniqueName::try_from(value.clone()) {
-            Err(Error::InvalidUniqueName(unique_err)) => match WellKnownName::try_from(value) {
-                Err(Error::InvalidWellKnownName(well_known_err)) => {
-                    Err(Error::InvalidBusName(unique_err, well_known_err))
-                }
-                Err(e) => Err(e),
-                Ok(name) => Ok(BusName::WellKnown(name)),
-            },
-            Err(e) => Err(e),
-            Ok(name) => Ok(BusName::Unique(name)),
+        if value.starts_with(':') {
+            UniqueName::try_from(value).map(BusName::Unique)
+        } else if value == "org.freedesktop.DBus" {
+            Ok(BusName::Unique(UniqueName::from_static_str_unchecked(
+                "org.freedesktop.DBus",
+            )))
+        } else {
+            WellKnownName::try_from(value).map(BusName::WellKnown)
         }
     }
 }
