@@ -20,7 +20,7 @@ struct Struct<'s> {
     field3: &'s str,
 }
 
-assert_eq!(Struct::signature(), "(qxs)");
+assert_eq!(Struct::SIGNATURE, "(qxs)");
 let s = Struct {
     field1: 42,
     field2: i64::max_value(),

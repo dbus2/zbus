@@ -11,30 +11,6 @@ pub trait Basic: Type {
     const SIGNATURE_CHAR: char;
     /// The type signature, as a string.
     const SIGNATURE_STR: &'static str;
-    /// The parsed signature.
-    ///
-    /// The default value is determined through the `SIGNATURE_CHAR` constant and in most cases, is
-    /// exactly what you want.
-    const SIGNATURE: &'static parsed::Signature = {
-        match Self::SIGNATURE_CHAR {
-            'y' => &parsed::Signature::U8,
-            'b' => &parsed::Signature::Bool,
-            'n' => &parsed::Signature::I16,
-            'q' => &parsed::Signature::U16,
-            'i' => &parsed::Signature::I32,
-            'u' => &parsed::Signature::U32,
-            'x' => &parsed::Signature::I64,
-            't' => &parsed::Signature::U64,
-            'd' => &parsed::Signature::F64,
-            's' => &parsed::Signature::Str,
-            'g' => &parsed::Signature::Signature,
-            'o' => &parsed::Signature::ObjectPath,
-            'v' => &parsed::Signature::Variant,
-            #[cfg(unix)]
-            'h' => &parsed::Signature::Fd,
-            _ => unreachable!(),
-        }
-    };
 
     /// The required padding alignment for the given format.
     ///
@@ -56,10 +32,26 @@ where
 macro_rules! impl_type {
     ($for:ty) => {
         impl Type for $for {
-            #[inline]
-            fn parsed_signature() -> parsed::Signature {
-                <$for as Basic>::SIGNATURE.clone()
-            }
+            const SIGNATURE: &'static parsed::Signature = {
+                match Self::SIGNATURE_CHAR {
+                    'y' => &parsed::Signature::U8,
+                    'b' => &parsed::Signature::Bool,
+                    'n' => &parsed::Signature::I16,
+                    'q' => &parsed::Signature::U16,
+                    'i' => &parsed::Signature::I32,
+                    'u' => &parsed::Signature::U32,
+                    'x' => &parsed::Signature::I64,
+                    't' => &parsed::Signature::U64,
+                    'd' => &parsed::Signature::F64,
+                    's' => &parsed::Signature::Str,
+                    'g' => &parsed::Signature::Signature,
+                    'o' => &parsed::Signature::ObjectPath,
+                    'v' => &parsed::Signature::Variant,
+                    #[cfg(unix)]
+                    'h' => &parsed::Signature::Fd,
+                    _ => unreachable!(),
+                }
+            };
         }
     };
 }

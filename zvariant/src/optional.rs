@@ -80,10 +80,7 @@ impl<T> Type for Optional<T>
 where
     T: Type,
 {
-    #[inline]
-    fn parsed_signature() -> crate::parsed::Signature {
-        T::parsed_signature()
-    }
+    const SIGNATURE: &'static crate::parsed::Signature = T::SIGNATURE;
 }
 
 impl<T> Serialize for Optional<T>
@@ -95,7 +92,7 @@ where
     where
         S: Serializer,
     {
-        if T::signature() == bool::signature() {
+        if T::SIGNATURE == bool::SIGNATURE {
             panic!("`Optional<bool>` type is not supported");
         }
 
@@ -116,7 +113,7 @@ where
     where
         D: Deserializer<'de>,
     {
-        if T::signature() == bool::signature() {
+        if T::SIGNATURE == bool::SIGNATURE {
             panic!("`Optional<bool>` type is not supported");
         }
 

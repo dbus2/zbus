@@ -164,7 +164,7 @@ fn impl_struct(
                         #(
                             .add_field(s.#field_names)
                         )*
-                        .build())
+                        .build().unwrap())
                         #into_value_error_transform
                     },
                 ),

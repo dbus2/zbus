@@ -38,16 +38,11 @@ impl Fields<'_> {
     }
 }
 
-const FIELDS_SIGNATURE: &parsed::Signature =
-    &parsed::Signature::static_array(&parsed::Signature::Structure(FieldsSignatures::Static {
-        fields: &[&parsed::Signature::U8, &parsed::Signature::Variant],
-    }));
-
 impl<'f> Type for Fields<'f> {
-    #[inline]
-    fn parsed_signature() -> parsed::Signature {
-        FIELDS_SIGNATURE.clone()
-    }
+    const SIGNATURE: &'static parsed::Signature =
+        &parsed::Signature::static_array(&parsed::Signature::Structure(FieldsSignatures::Static {
+            fields: &[&parsed::Signature::U8, &parsed::Signature::Variant],
+        }));
 }
 
 impl<'f> Serialize for Fields<'f> {

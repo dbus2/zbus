@@ -222,13 +222,13 @@ impl ArraySeed<'static> {
 assert_impl_all!(ArraySeed<'_>: Unpin);
 
 impl<'a> DynamicType for Array<'a> {
-    fn dynamic_signature(&self) -> Signature<'_> {
-        self.signature.clone()
+    fn dynamic_signature(&self) -> parsed::Signature {
+        self.signature.clone().into()
     }
 }
 
 impl<'a> DynamicType for ArraySeed<'a> {
-    fn dynamic_parsed_signature(&self) -> parsed::Signature {
+    fn dynamic_signature(&self) -> parsed::Signature {
         self.signature.clone()
     }
 }
@@ -236,7 +236,7 @@ impl<'a> DynamicType for ArraySeed<'a> {
 impl<'a> DynamicDeserialize<'a> for Array<'a> {
     type Deserializer = ArraySeed<'static>;
 
-    fn deserializer_for_parsed_signature(
+    fn deserializer_for_signature(
         parsed_signature: &parsed::Signature,
     ) -> zvariant::Result<Self::Deserializer> {
         let signature = parsed_signature.into();
@@ -264,7 +264,7 @@ where
     T: Type + Into<Value<'a>>,
 {
     fn from(values: Vec<T>) -> Self {
-        let element_signature = T::signature();
+        let element_signature = T::SIGNATURE.into();
         let elements = values.into_iter().map(Value::new).collect();
         let signature = create_signature(&element_signature);
 
@@ -281,7 +281,7 @@ where
     T: Type + Into<Value<'a>> + Clone,
 {
     fn from(values: &[T]) -> Self {
-        let element_signature = T::signature();
+        let element_signature = T::SIGNATURE.into();
         let elements = values
             .iter()
             .map(|value| Value::new(value.clone()))

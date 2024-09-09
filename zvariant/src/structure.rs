@@ -69,13 +69,16 @@ impl<'a> StructureBuilder<'a> {
     /// Build the `Structure`.
     ///
     /// [`Structure`]: struct.Structure.html
-    pub fn build(self) -> Structure<'a> {
+    pub fn build(self) -> crate::Result<Structure<'a>> {
+        if self.0.is_empty() {
+            return Err(crate::Error::EmptyStructure);
+        }
         let signature = create_signature_from_fields(&self.0);
 
-        Structure {
+        Ok(Structure {
             fields: self.0,
             signature,
-        }
+        })
     }
 
     /// Same as `build` except Signature is provided.
@@ -252,25 +255,14 @@ pub(crate) fn structure_display_fmt(
     f.write_char(')')
 }
 
-impl<'a> Default for Structure<'a> {
-    fn default() -> Self {
-        let signature = Signature::from_static_str_unchecked("()");
-
-        Self {
-            fields: vec![],
-            signature,
-        }
-    }
-}
-
 impl<'a> DynamicType for Structure<'a> {
-    fn dynamic_signature(&self) -> Signature<'_> {
-        self.signature.as_ref()
+    fn dynamic_signature(&self) -> parsed::Signature {
+        self.signature.clone().into()
     }
 }
 
 impl<'a> DynamicType for StructureSeed<'a> {
-    fn dynamic_parsed_signature(&self) -> parsed::Signature {
+    fn dynamic_signature(&self) -> parsed::Signature {
         self.signature.clone()
     }
 }
@@ -278,7 +270,7 @@ impl<'a> DynamicType for StructureSeed<'a> {
 impl<'a> DynamicDeserialize<'a> for Structure<'a> {
     type Deserializer = StructureSeed<'static>;
 
-    fn deserializer_for_parsed_signature(
+    fn deserializer_for_signature(
         parsed_signature: &parsed::Signature,
     ) -> zvariant::Result<Self::Deserializer> {
         let parsed_signature = match parsed_signature {
@@ -319,7 +311,7 @@ macro_rules! tuple_impls {
                     $(
                         .add_field(value. $n)
                     )+
-                    .build()
+                    .build().unwrap()
                 }
             }
 
@@ -408,13 +400,13 @@ pub struct OwnedStructure(pub Structure<'static>);
 pub struct OwnedStructureSeed(parsed::Signature);
 
 impl DynamicType for OwnedStructure {
-    fn dynamic_signature(&self) -> Signature<'_> {
+    fn dynamic_signature(&self) -> parsed::Signature {
         self.0.dynamic_signature()
     }
 }
 
 impl DynamicType for OwnedStructureSeed {
-    fn dynamic_parsed_signature(&self) -> parsed::Signature {
+    fn dynamic_signature(&self) -> parsed::Signature {
         self.0.clone()
     }
 }
@@ -422,10 +414,10 @@ impl DynamicType for OwnedStructureSeed {
 impl<'de> DynamicDeserialize<'de> for OwnedStructure {
     type Deserializer = OwnedStructureSeed;
 
-    fn deserializer_for_parsed_signature(
+    fn deserializer_for_signature(
         parsed_signature: &parsed::Signature,
     ) -> zvariant::Result<Self::Deserializer> {
-        Structure::deserializer_for_parsed_signature(parsed_signature)
+        Structure::deserializer_for_signature(parsed_signature)
             .map(|StructureSeed { signature, .. }| OwnedStructureSeed(signature))
     }
 }

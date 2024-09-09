@@ -496,10 +496,8 @@ pub fn create_proxy<M: AttrParse + Into<MethodAttrs>>(
         }
 
         impl<'p> #zbus::zvariant::Type for #proxy_name<'p> {
-            #[inline]
-            fn parsed_signature() -> #zbus::zvariant::parsed::Signature {
-                #zbus::zvariant::parsed::Signature::ObjectPath
-            }
+            const SIGNATURE: &'static #zbus::zvariant::parsed::Signature =
+                &#zbus::zvariant::parsed::Signature::ObjectPath;
         }
 
         impl<'p> #zbus::export::serde::ser::Serialize for #proxy_name<'p> {

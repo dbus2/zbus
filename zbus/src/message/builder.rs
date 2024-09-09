@@ -7,7 +7,7 @@ use zvariant::OwnedFd;
 
 use enumflags2::BitFlags;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
-use zvariant::{serialized, Endian};
+use zvariant::{parsed, serialized, Endian};
 
 use crate::{
     message::{Fields, Flags, Header, Message, PrimaryHeader, Sequence, Type},
@@ -231,17 +231,17 @@ impl<'a> Builder<'a> {
     /// # Safety
     ///
     /// This method is unsafe because it can be used to build an invalid message.
-    pub unsafe fn build_raw_body<'b, S>(
+    pub unsafe fn build_raw_body<S>(
         self,
         body_bytes: &[u8],
         signature: S,
         #[cfg(unix)] fds: Vec<OwnedFd>,
     ) -> Result<Message>
     where
-        S: TryInto<Signature<'b>>,
+        S: TryInto<parsed::Signature>,
         S::Error: Into<Error>,
     {
-        let signature: Signature<'b> = signature.try_into().map_err(Into::into)?;
+        let signature = signature.try_into().map_err(Into::into)?;
         let body_size = serialized::Size::new(body_bytes.len(), dbus_context!(self, 0));
         #[cfg(unix)]
         let body_size = {
@@ -266,7 +266,7 @@ impl<'a> Builder<'a> {
 
     fn build_generic<WriteFunc>(
         self,
-        mut signature: Signature<'_>,
+        signature: parsed::Signature,
         body_size: serialized::Size,
         write_body: WriteFunc,
     ) -> Result<Message>
@@ -276,11 +276,10 @@ impl<'a> Builder<'a> {
         let ctxt = dbus_context!(self, 0);
         let mut header = self.header;
 
-        if !signature.is_empty() {
-            if signature.starts_with(zvariant::STRUCT_SIG_START_STR) {
-                // Remove leading and trailing STRUCT delimiters
-                signature = signature.slice(1..signature.len() - 1);
-            }
+        if !matches!(signature, parsed::Signature::Unit) {
+            let signature = signature.to_string_no_parens();
+            let signature = Signature::from_string_unchecked(signature);
+
             header.fields_mut().signature = Some(signature);
         }
 

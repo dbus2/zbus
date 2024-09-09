@@ -105,10 +105,7 @@ macro_rules! fd_impl {
         }
 
         impl Type for $i {
-            #[inline]
-            fn parsed_signature() -> crate::parsed::Signature {
-                crate::parsed::Signature::Fd
-            }
+            const SIGNATURE: &'static crate::parsed::Signature = &crate::parsed::Signature::Fd;
         }
     };
 }

@@ -26,10 +26,7 @@ pub fn expand_derive(ast: DeriveInput) -> Result<TokenStream, Error> {
         let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
         return Ok(quote! {
             impl #impl_generics #zv::Type for #name #ty_generics #where_clause {
-                #[inline]
-                fn parsed_signature() -> #zv::parsed::Signature {
-                    #signature_tokens
-                }
+                const SIGNATURE: &'static #zv::parsed::Signature = &#signature_tokens;
             }
         });
     }
@@ -69,10 +66,7 @@ fn impl_struct(
 
     Ok(quote! {
         impl #impl_generics #zv::Type for #name #ty_generics #where_clause {
-            #[inline]
-            fn parsed_signature() -> #zv::parsed::Signature {
-                #parsed_signature
-            }
+            const SIGNATURE: &'static #zv::parsed::Signature = #parsed_signature;
         }
     })
 }
@@ -92,24 +86,26 @@ fn signature_for_struct(
     let field_types_clone = field_types.clone();
     let parsed_signature = if new_type {
         quote! {#(
-            <#field_types_clone as #zv::Type>::parsed_signature()
-        ),*}
+            <#field_types_clone as #zv::Type>::SIGNATURE
+        )*}
     } else {
         quote! {
-            #zv::parsed::Signature::structure(
-                [#(
-                    <#field_types_clone as #zv::Type>::parsed_signature()
+            &#zv::parsed::Signature::Structure(#zv::parsed::FieldsSignatures::Static {
+                fields: &[#(
+                    <#field_types_clone as #zv::Type>::SIGNATURE
                 ),*],
-            )
+            })
         }
     };
 
     if insert_enum_variant {
         quote! {
-            #zv::parsed::Signature::structure([
-                <u32 as #zv::Type>::parsed_signature(),
-                #parsed_signature,
-            ])
+            &#zv::parsed::Signature::Structure(#zv::parsed::FieldsSignatures::Static {
+                fields: &[
+                    <u32 as #zv::Type>::SIGNATURE,
+                    #parsed_signature
+                ],
+            })
         }
     } else {
         parsed_signature
@@ -125,10 +121,7 @@ fn impl_unit_struct(
 
     Ok(quote! {
         impl #impl_generics #zv::Type for #name #ty_generics #where_clause {
-            #[inline]
-            fn parsed_signature() -> #zv::parsed::Signature {
-                #zv::parsed::Signature::Unit
-            }
+            const SIGNATURE: &'static #zv::parsed::Signature = &#zv::parsed::Signature::Unit;
         }
     })
 }
@@ -142,10 +135,7 @@ fn impl_empty_struct(
 
     Ok(quote! {
         impl #impl_generics #zv::Type for #name #ty_generics #where_clause {
-            #[inline]
-            fn parsed_signature() -> #zv::parsed::Signature {
-                #zv::parsed::Signature::U8
-            }
+            const SIGNATURE: &'static #zv::parsed::Signature = &#zv::parsed::Signature::U8;
         }
     })
 }
@@ -177,10 +167,7 @@ fn impl_enum(
 
     Ok(quote! {
         impl #impl_generics #zv::Type for #name #ty_generics #where_clause {
-            #[inline]
-            fn parsed_signature() -> #zv::parsed::Signature {
-                #parsed_signature
-            }
+            const SIGNATURE: &'static #zv::parsed::Signature = #parsed_signature;
         }
     })
 }
@@ -198,7 +185,7 @@ fn signature_for_variant(
                 None => quote! { u32 },
             };
 
-            Ok(quote! { <#repr as #zv::Type>::parsed_signature() })
+            Ok(quote! { <#repr as #zv::Type>::SIGNATURE })
         }
         Fields::Named(_) => Ok(signature_for_struct(&variant.fields, zv, true)),
         Fields::Unnamed(_) => Ok(signature_for_struct(&variant.fields, zv, true)),

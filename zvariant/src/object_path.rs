@@ -126,10 +126,7 @@ impl<'a> Basic for ObjectPath<'a> {
 }
 
 impl<'a> Type for ObjectPath<'a> {
-    #[inline]
-    fn parsed_signature() -> crate::parsed::Signature {
-        crate::parsed::Signature::ObjectPath
-    }
+    const SIGNATURE: &'static crate::parsed::Signature = &crate::parsed::Signature::ObjectPath;
 }
 
 impl<'a> TryFrom<&'a [u8]> for ObjectPath<'a> {

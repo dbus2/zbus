@@ -61,9 +61,7 @@ impl From<Signature> for crate::Signature<'static> {
 }
 
 impl Type for Signature {
-    fn parsed_signature() -> Signature {
-        Signature::Signature
-    }
+    const SIGNATURE: &'static Signature = &Signature::Signature;
 }
 
 impl Basic for Signature {

@@ -167,7 +167,7 @@ where
     V: Into<Value<'v>> + Type,
 {
     fn from(v: Option<V>) -> Value<'v> {
-        let mut array = Array::new(V::signature());
+        let mut array = Array::new(V::SIGNATURE.into());
         if let Some(v) = v {
             // We got the signature from the `Type` impl, so this should never panic.
             array.append(v.into()).expect("signature mismatch");

@@ -28,8 +28,7 @@ impl<'a, T: Type + Serialize> Serialize for SerializeValue<'a, T> {
         // Serializer implementation needs to ensure padding isn't added for Value.
         let mut structure = serializer.serialize_struct("Variant", 2)?;
 
-        let signature = T::signature();
-        structure.serialize_field("signature", &signature)?;
+        structure.serialize_field("signature", T::SIGNATURE)?;
         structure.serialize_field("value", self.0)?;
 
         structure.end()
@@ -37,8 +36,5 @@ impl<'a, T: Type + Serialize> Serialize for SerializeValue<'a, T> {
 }
 
 impl<'a, T: Type + Serialize> Type for SerializeValue<'a, T> {
-    #[inline]
-    fn parsed_signature() -> crate::parsed::Signature {
-        crate::parsed::Signature::Variant
-    }
+    const SIGNATURE: &'static crate::parsed::Signature = &crate::parsed::Signature::Variant;
 }

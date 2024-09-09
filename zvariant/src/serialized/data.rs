@@ -144,8 +144,7 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
     where
         T: Deserialize<'d> + Type,
     {
-        let signature = T::parsed_signature();
-        self.deserialize_for_parsed_signature(&signature)
+        self.deserialize_for_parsed_signature(T::SIGNATURE)
     }
 
     /// Deserialize `T` from `self` with the given parsed signature.
@@ -297,7 +296,8 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
         S: TryInto<Signature<'d>>,
         S::Error: Into<Error>,
     {
-        let seed = T::deserializer_for_signature(signature)?;
+        let signature = signature.try_into().map_err(Into::into)?.into();
+        let seed = T::deserializer_for_signature(&signature)?;
 
         self.deserialize_with_seed(seed)
     }
@@ -309,12 +309,12 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
     /// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
     pub fn deserialize_for_dynamic_parsed_signature<'d, T>(
         &'d self,
-        signature: parsed::Signature,
+        signature: &parsed::Signature,
     ) -> Result<(T, usize)>
     where
         T: DynamicDeserialize<'d>,
     {
-        let seed = T::deserializer_for_parsed_signature(&signature)?;
+        let seed = T::deserializer_for_signature(signature)?;
 
         self.deserialize_with_seed(seed)
     }
@@ -328,7 +328,7 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
     where
         S: DeserializeSeed<'d> + DynamicType,
     {
-        let signature = S::dynamic_parsed_signature(&seed);
+        let signature = S::dynamic_signature(&seed);
 
         #[cfg(unix)]
         let fds = &self.inner.fds;

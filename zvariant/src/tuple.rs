@@ -17,7 +17,7 @@ use std::marker::PhantomData;
 pub struct DynamicTuple<T>(pub T);
 
 impl DynamicType for DynamicTuple<()> {
-    fn dynamic_parsed_signature(&self) -> parsed::Signature {
+    fn dynamic_signature(&self) -> parsed::Signature {
         parsed::Signature::Unit
     }
 }
@@ -43,7 +43,7 @@ pub struct TupleSeed<'a, T, S> {
 }
 
 impl<'a, T, S> DynamicType for TupleSeed<'a, T, S> {
-    fn dynamic_parsed_signature(&self) -> parsed::Signature {
+    fn dynamic_signature(&self) -> parsed::Signature {
         self.sig.clone()
     }
 }
@@ -60,11 +60,11 @@ macro_rules! tuple_impls {
             where
                 $($name: DynamicType,)+
             {
-                fn dynamic_parsed_signature(&self) -> parsed::Signature {
+                fn dynamic_signature(&self) -> parsed::Signature {
                     parsed::Signature::structure(
                         [
                             $(
-                                self.0.$n.dynamic_parsed_signature(),
+                                self.0.$n.dynamic_signature(),
                             )+
                         ]
                     )
@@ -112,7 +112,7 @@ macro_rules! tuple_impls {
             {
                 type Deserializer = TupleSeed<'de, ($($name,)+), ($(<$name as DynamicDeserialize<'de>>::Deserializer,)+)>;
 
-                fn deserializer_for_parsed_signature(
+                fn deserializer_for_signature(
                     parsed_signature: &parsed::Signature,
                 ) -> zvariant::Result<Self::Deserializer> {
                     let mut fields_iter = match &parsed_signature {
@@ -122,7 +122,7 @@ macro_rules! tuple_impls {
 
                     let seeds = ($({
                         let elt_sig = fields_iter.next().ok_or(zvariant::Error::IncorrectType)?;
-                        $name::deserializer_for_parsed_signature(elt_sig)?
+                        $name::deserializer_for_signature(elt_sig)?
                     },)+);
 
                     Ok(TupleSeed { sig: parsed_signature.clone(), seeds, markers: (PhantomData, PhantomData) })

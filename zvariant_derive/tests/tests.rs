@@ -11,7 +11,7 @@ fn derive_unit_struct() {
     #[derive(Type)]
     struct FooF(f64);
 
-    assert_eq!(FooF::signature(), "d")
+    assert_eq!(FooF::SIGNATURE, "d")
 }
 
 #[test]
@@ -23,7 +23,7 @@ fn derive_struct() {
         blob: Vec<u8>,
     }
 
-    assert_eq!(TestStruct::signature(), "(syay)")
+    assert_eq!(TestStruct::SIGNATURE, "(syay)")
 }
 
 #[test]
@@ -36,7 +36,7 @@ fn derive_enum() {
         DoNotQueue = 0x04,
     }
 
-    assert_eq!(RequestNameFlags::signature(), "u")
+    assert_eq!(RequestNameFlags::SIGNATURE, "u")
 }
 
 #[test]
@@ -80,5 +80,5 @@ fn derive_dict() {
     assert_eq!(deserialized.field_b.as_str(), "foo");
     assert_eq!(deserialized.field_c.as_slice(), &[1u8, 2, 3][..]);
 
-    assert_eq!(Test::signature(), "a{sv}")
+    assert_eq!(Test::SIGNATURE, "a{sv}")
 }

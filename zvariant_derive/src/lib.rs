@@ -36,7 +36,7 @@ mod value;
 ///     field3: &'s str,
 /// }
 ///
-/// assert_eq!(Struct::signature(), "(qxs)");
+/// assert_eq!(Struct::SIGNATURE, "(qxs)");
 /// let s = Struct {
 ///     field1: 42,
 ///     field2: i64::max_value(),
@@ -63,7 +63,7 @@ mod value;
 ///     Variant1,
 ///     Variant2,
 /// }
-/// assert_eq!(Enum::signature(), u8::signature());
+/// assert_eq!(Enum::SIGNATURE, u8::SIGNATURE);
 /// let ctxt = Context::new_dbus(LE, 0);
 /// let encoded = to_bytes(ctxt, &Enum::Variant2).unwrap();
 /// let decoded: Enum = encoded.deserialize().unwrap().0;
@@ -75,7 +75,7 @@ mod value;
 ///     Variant1,
 ///     Variant2,
 /// }
-/// assert_eq!(Enum2::signature(), i64::signature());
+/// assert_eq!(Enum2::SIGNATURE, i64::SIGNATURE);
 ///
 /// // w/o repr attribute, u32 representation is chosen
 /// #[derive(Deserialize, Serialize, Type)]
@@ -83,7 +83,7 @@ mod value;
 ///     Variant1,
 ///     Variant2,
 /// }
-/// assert_eq!(NoReprEnum::signature(), u32::signature());
+/// assert_eq!(NoReprEnum::SIGNATURE, u32::SIGNATURE);
 ///
 /// // Not-unit enums are represented as a structure, with the first field being a u32 denoting the
 /// // variant and the second as the actual value.
@@ -92,14 +92,14 @@ mod value;
 ///     Variant1(f64),
 ///     Variant2(f64),
 /// }
-/// assert_eq!(NewType::signature(), "(ud)");
+/// assert_eq!(NewType::SIGNATURE, "(ud)");
 ///
 /// #[derive(Deserialize, Serialize, Type)]
 /// enum StructFields {
 ///     Variant1(u16, i64, &'static str),
 ///     Variant2 { field1: u16, field2: i64, field3: &'static str },
 /// }
-/// assert_eq!(StructFields::signature(), "(u(qxs))");
+/// assert_eq!(StructFields::SIGNATURE, "(u(qxs))");
 /// ```
 ///
 /// # Custom signatures
@@ -121,7 +121,7 @@ mod value;
 ///     field3: String,
 /// }
 ///
-/// assert_eq!(Struct::signature(), "a{sv}");
+/// assert_eq!(Struct::SIGNATURE, "a{sv}");
 /// let s = Struct {
 ///     field1: 42,
 ///     field2: i64::max_value(),
@@ -147,7 +147,7 @@ mod value;
 ///     Variant3,
 /// }
 ///
-/// assert_eq!(StrEnum::signature(), "s");
+/// assert_eq!(StrEnum::SIGNATURE, "s");
 /// let ctxt = Context::new_dbus(LE, 0);
 /// let encoded = to_bytes(ctxt, &StrEnum::Variant2).unwrap();
 /// assert_eq!(encoded.len(), 13);

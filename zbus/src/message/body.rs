@@ -36,7 +36,7 @@ impl Body {
             .unwrap_or(parsed::Signature::Unit);
 
         self.data
-            .deserialize_for_dynamic_parsed_signature(body_sig)
+            .deserialize_for_dynamic_parsed_signature(&body_sig)
             .map_err(Error::from)
             .map(|b| b.0)
     }
