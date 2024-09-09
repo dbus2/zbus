@@ -361,6 +361,14 @@ impl FromStr for Signature {
     }
 }
 
+impl TryFrom<&str> for Signature {
+    type Error = super::Error;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Signature::from_str(value)
+    }
+}
+
 /// Validate the given signature string.
 pub fn validate(bytes: &[u8]) -> Result<(), super::Error> {
     parse(bytes, true).map(|_| ())
