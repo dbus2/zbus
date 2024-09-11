@@ -2051,7 +2051,7 @@ mod tests {
     #[test]
     #[cfg(feature = "gvariant")]
     fn issue_99() {
-        use crate::to_bytes_for_parsed_signature;
+        use crate::to_bytes_for_signature;
 
         #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
         struct ZVStruct<'s>(#[serde(borrow)] HashMap<&'s str, Value<'s>>);
@@ -2065,11 +2065,8 @@ mod tests {
         let ctxt = Context::new_gvariant(LE, 0);
         let signature = ZVStruct::SIGNATURE;
 
-        let encoded = to_bytes_for_parsed_signature(ctxt, signature, &element).unwrap();
-        let _: ZVStruct<'_> = encoded
-            .deserialize_for_parsed_signature(signature)
-            .unwrap()
-            .0;
+        let encoded = to_bytes_for_signature(ctxt, signature, &element).unwrap();
+        let _: ZVStruct<'_> = encoded.deserialize_for_signature(signature).unwrap().0;
     }
 
     #[cfg(feature = "ostree-tests")]
