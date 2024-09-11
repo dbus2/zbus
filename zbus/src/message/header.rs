@@ -10,8 +10,9 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use static_assertions::assert_impl_all;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 use zvariant::{
+    parsed::Signature,
     serialized::{self, Context},
-    Endian, ObjectPath, Signature, Type as VariantType,
+    Endian, ObjectPath, Type as VariantType,
 };
 
 use crate::{message::Fields, Error};
@@ -314,7 +315,7 @@ impl<'m> Header<'m> {
     }
 
     /// The signature of the message body.
-    pub fn signature(&self) -> Option<&Signature<'m>> {
+    pub fn signature(&self) -> Option<&Signature> {
         self.fields.signature.as_ref()
     }
 
@@ -333,7 +334,7 @@ mod tests {
     use std::error::Error;
     use test_log::test;
     use zbus_names::{InterfaceName, MemberName};
-    use zvariant::{ObjectPath, Signature};
+    use zvariant::ObjectPath;
 
     #[test]
     fn header() -> Result<(), Box<dyn Error>> {
@@ -362,7 +363,7 @@ mod tests {
         f.error_name = Some("org.zbus.Error".try_into()?);
         f.destination = Some(":1.11".try_into()?);
         f.reply_serial = Some(88.try_into()?);
-        f.signature = Some(Signature::from_str_unchecked("say"));
+        f.signature = Some("say".try_into().unwrap());
         f.unix_fds = Some(12);
         let h = Header::new(PrimaryHeader::new(Type::MethodReturn, 77), f);
 
@@ -374,7 +375,7 @@ mod tests {
         assert_eq!(h.destination().unwrap(), ":1.11");
         assert_eq!(h.reply_serial().map(Into::into), Some(88));
         assert_eq!(h.sender(), None);
-        assert_eq!(h.signature(), Some(&Signature::from_str_unchecked("say")));
+        assert_eq!(h.signature(), Some(&"say".try_into().unwrap()));
         assert_eq!(h.unix_fds(), Some(12));
 
         Ok(())

@@ -2,7 +2,7 @@ use std::{collections::HashMap, hash::BuildHasher};
 
 #[cfg(feature = "gvariant")]
 use crate::Maybe;
-use crate::{Array, Dict, NoneValue, ObjectPath, Optional, Signature, Str, Structure, Type, Value};
+use crate::{Array, Dict, NoneValue, ObjectPath, Optional, Str, Structure, Type, Value};
 
 #[cfg(unix)]
 use crate::Fd;
@@ -51,7 +51,6 @@ into_value_from_both!(f64, F64);
 
 into_value_from_both!(&'a str, Str);
 into_value_from_both!(Str<'a>, Str);
-into_value_from_both!(Signature<'a>, Signature);
 into_value_from_both!(ObjectPath<'a>, ObjectPath);
 
 macro_rules! try_into_value_from_ref {

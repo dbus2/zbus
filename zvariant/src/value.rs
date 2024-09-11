@@ -19,8 +19,12 @@ use serde::{
 use static_assertions::assert_impl_all;
 
 use crate::{
-    array_display_fmt, dict_display_fmt, parsed, structure_display_fmt, utils::*, Array, Basic,
-    Dict, DynamicType, ObjectPath, OwnedValue, Signature, Str, Structure, StructureBuilder, Type,
+    array_display_fmt, dict_display_fmt,
+    parsed::{self, Signature},
+    structure_display_fmt,
+    utils::*,
+    Array, Basic, Dict, DynamicType, ObjectPath, OwnedValue, Str, Structure, StructureBuilder,
+    Type,
 };
 #[cfg(feature = "gvariant")]
 use crate::{maybe_display_fmt, Maybe};
@@ -89,7 +93,7 @@ pub enum Value<'a> {
     U64(u64),
     F64(f64),
     Str(Str<'a>),
-    Signature(Signature<'a>),
+    Signature(Signature),
     ObjectPath(ObjectPath<'a>),
     Value(Box<Value<'a>>),
 
@@ -250,7 +254,7 @@ impl<'a> Value<'a> {
     }
 
     /// Get the signature of the enclosed value.
-    pub fn value_signature(&self) -> &parsed::Signature {
+    pub fn value_signature(&self) -> &Signature {
         match self {
             Value::U8(_) => u8::SIGNATURE,
             Value::Bool(_) => bool::SIGNATURE,
@@ -264,7 +268,7 @@ impl<'a> Value<'a> {
             Value::Str(_) => <&str>::SIGNATURE,
             Value::Signature(_) => Signature::SIGNATURE,
             Value::ObjectPath(_) => ObjectPath::SIGNATURE,
-            Value::Value(_) => &parsed::Signature::Variant,
+            Value::Value(_) => &Signature::Variant,
 
             // Container types
             Value::Array(value) => value.signature(),
@@ -543,7 +547,7 @@ pub(crate) fn value_display_fmt(
             if type_annotate {
                 f.write_str("signature ")?;
             }
-            write!(f, "{:?}", val.as_str())
+            write!(f, "{:?}", val.to_string())
         }
         Value::ObjectPath(val) => {
             if type_annotate {
@@ -621,11 +625,9 @@ impl<'de> Visitor<'de> for ValueVisitor {
     where
         V: SeqAccess<'de>,
     {
-        let signature = visitor
-            .next_element::<parsed::Signature>()?
-            .ok_or_else(|| {
-                Error::invalid_value(Unexpected::Other("nothing"), &"a Value signature")
-            })?;
+        let signature = visitor.next_element::<Signature>()?.ok_or_else(|| {
+            Error::invalid_value(Unexpected::Other("nothing"), &"a Value signature")
+        })?;
         let seed = ValueSeed::<Value<'_>> {
             signature: &signature,
             phantom: PhantomData,
@@ -640,11 +642,9 @@ impl<'de> Visitor<'de> for ValueVisitor {
     where
         V: MapAccess<'de>,
     {
-        let (_, signature) = visitor
-            .next_entry::<&str, parsed::Signature>()?
-            .ok_or_else(|| {
-                Error::invalid_value(Unexpected::Other("nothing"), &"a Value signature")
-            })?;
+        let (_, signature) = visitor.next_entry::<&str, Signature>()?.ok_or_else(|| {
+            Error::invalid_value(Unexpected::Other("nothing"), &"a Value signature")
+        })?;
         let _ = visitor.next_key::<&str>()?;
 
         let seed = ValueSeed::<Value<'_>> {
@@ -656,7 +656,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
 }
 
 pub(crate) struct SignatureSeed<'sig> {
-    pub signature: &'sig parsed::Signature,
+    pub signature: &'sig Signature,
 }
 
 impl SignatureSeed<'_> {
@@ -665,7 +665,7 @@ impl SignatureSeed<'_> {
         V: SeqAccess<'de>,
     {
         let element_signature = match self.signature {
-            parsed::Signature::Array(child) => child.signature(),
+            Signature::Array(child) => child.signature(),
             _ => {
                 return Err(Error::invalid_type(
                     Unexpected::Str(&self.signature.to_string()),
@@ -691,7 +691,7 @@ impl SignatureSeed<'_> {
         V: SeqAccess<'de>,
     {
         let fields_signatures = match self.signature {
-            parsed::Signature::Structure(fields) => fields.iter(),
+            Signature::Structure(fields) => fields.iter(),
             _ => {
                 return Err(Error::invalid_type(
                     Unexpected::Str(&self.signature.to_string()),
@@ -722,7 +722,7 @@ impl<'sig, T> From<ValueSeed<'sig, T>> for SignatureSeed<'sig> {
 }
 
 struct ValueSeed<'sig, T> {
-    signature: &'sig parsed::Signature,
+    signature: &'sig Signature,
     phantom: PhantomData<T>,
 }
 
@@ -808,7 +808,7 @@ where
     {
         let v = match &self.signature {
             #[cfg(unix)]
-            parsed::Signature::Fd => {
+            Signature::Fd => {
                 // SAFETY: The `'de` lifetimes will ensure the borrow won't outlive the raw FD.
                 let fd = unsafe { std::os::fd::BorrowedFd::borrow_raw(value) };
                 Fd::Borrowed(fd).into()
@@ -832,16 +832,16 @@ where
         E: Error,
     {
         match &self.signature {
-            parsed::Signature::Str => Ok(Value::Str(Str::from(v))),
-            parsed::Signature::Signature => Ok(Value::Signature(Signature::from_str_unchecked(v))),
-            parsed::Signature::ObjectPath => {
-                Ok(Value::ObjectPath(ObjectPath::from_str_unchecked(v)))
-            }
+            Signature::Str => Ok(Value::Str(Str::from(v))),
+            Signature::Signature => Signature::try_from(v)
+                .map(Value::Signature)
+                .map_err(Error::custom),
+            Signature::ObjectPath => Ok(Value::ObjectPath(ObjectPath::from_str_unchecked(v))),
             _ => {
                 let expected = format!(
                     "`{}`, `{}` or `{}`",
                     <&str>::SIGNATURE_STR,
-                    Signature::SIGNATURE_STR,
+                    parsed::Signature::SIGNATURE_STR,
                     ObjectPath::SIGNATURE_STR,
                 );
                 Err(Error::invalid_type(
@@ -858,9 +858,9 @@ where
     {
         match &self.signature {
             // For some reason rustc doesn't like us using ARRAY_SIGNATURE_CHAR const
-            parsed::Signature::Array(_) => self.visit_array(visitor),
-            parsed::Signature::Structure(_) => self.visit_struct(visitor),
-            parsed::Signature::Variant => self.visit_variant_as_seq(visitor),
+            Signature::Array(_) => self.visit_array(visitor),
+            Signature::Structure(_) => self.visit_struct(visitor),
+            Signature::Variant => self.visit_variant_as_seq(visitor),
             s => Err(Error::invalid_value(
                 Unexpected::Str(&s.to_string()),
                 &"a Value signature",
@@ -873,10 +873,8 @@ where
         V: MapAccess<'de>,
     {
         let (key_signature, value_signature) = match &self.signature {
-            parsed::Signature::Dict { key, value } => {
-                (key.signature().clone(), value.signature().clone())
-            }
-            parsed::Signature::Variant => return self.visit_variant_as_map(visitor),
+            Signature::Dict { key, value } => (key.signature().clone(), value.signature().clone()),
+            Signature::Variant => return self.visit_variant_as_map(visitor),
             _ => {
                 return Err(Error::invalid_type(
                     Unexpected::Str(&self.signature.to_string()),
@@ -909,7 +907,7 @@ where
         D: Deserializer<'de>,
     {
         let child_signature = match &self.signature {
-            parsed::Signature::Maybe(child) => child.signature().clone(),
+            Signature::Maybe(child) => child.signature().clone(),
             _ => {
                 return Err(Error::invalid_type(
                     Unexpected::Str(&self.signature.to_string()),
@@ -1026,8 +1024,8 @@ mod tests {
         assert_eq!(
             Value::new((
                 vec![
-                    Signature::from_static_str("").unwrap(),
-                    Signature::from_static_str("(ysa{sd})").unwrap(),
+                    parsed::Signature::try_from("").unwrap(),
+                    parsed::Signature::try_from("(ysa{sd})").unwrap(),
                 ],
                 vec![
                     ObjectPath::from_static_str("/").unwrap(),

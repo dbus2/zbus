@@ -71,6 +71,6 @@ impl Basic for Signature {
 
 impl From<Signature> for crate::Value<'static> {
     fn from(value: Signature) -> Self {
-        crate::Value::Signature(value.into())
+        crate::Value::Signature(value)
     }
 }

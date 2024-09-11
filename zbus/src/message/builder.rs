@@ -12,7 +12,7 @@ use zvariant::{parsed, serialized, Endian};
 use crate::{
     message::{Fields, Flags, Header, Message, PrimaryHeader, Sequence, Type},
     utils::padding_for_8_bytes,
-    zvariant::{serialized::Context, DynamicType, ObjectPath, Signature},
+    zvariant::{serialized::Context, DynamicType, ObjectPath},
     EndianSig, Error, Result,
 };
 
@@ -277,9 +277,6 @@ impl<'a> Builder<'a> {
         let mut header = self.header;
 
         if !matches!(signature, parsed::Signature::Unit) {
-            let signature = signature.to_string_no_parens();
-            let signature = Signature::from_string_unchecked(signature);
-
             header.fields_mut().signature = Some(signature);
         }
 

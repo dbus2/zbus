@@ -549,12 +549,6 @@ impl<'a> std::convert::From<Signature<'a>> for OwnedSignature {
     }
 }
 
-impl std::convert::From<OwnedSignature> for crate::Value<'static> {
-    fn from(o: OwnedSignature) -> Self {
-        o.into_inner().into()
-    }
-}
-
 impl TryFrom<String> for OwnedSignature {
     type Error = Error;
 

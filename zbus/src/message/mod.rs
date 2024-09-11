@@ -173,7 +173,7 @@ impl Message {
             reply_serial: quick_fields.reply_serial(),
             destination: quick_fields.destination(self),
             sender: quick_fields.sender(self),
-            signature: quick_fields.signature(self),
+            signature: quick_fields.signature().cloned(),
             unix_fds: quick_fields.unix_fds(),
         };
 
@@ -367,6 +367,7 @@ mod tests {
     #[cfg(unix)]
     use std::os::fd::{AsFd, AsRawFd};
     use test_log::test;
+    use zvariant::parsed::Signature;
     #[cfg(unix)]
     use zvariant::Fd;
 
@@ -387,10 +388,13 @@ mod tests {
                 "foo",
             ))
             .unwrap();
+        #[cfg(unix)]
         assert_eq!(
-            m.body().signature().unwrap().to_string(),
-            if cfg!(unix) { "hs" } else { "s" }
+            m.body().signature().unwrap(),
+            &Signature::static_structure(&[&Signature::Fd, &Signature::Str]),
         );
+        #[cfg(not(unix))]
+        assert_eq!(m.body().signature().unwrap(), &Signature::Str,);
         #[cfg(unix)]
         {
             let fds = m.data().fds();

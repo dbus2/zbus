@@ -560,18 +560,24 @@ mod tests {
         }
 
         // As Value
-        let v: Value<'_> = sig.into();
+        let v: Value<'_> = crate::parsed::Signature::from(sig).into();
         assert_eq!(v.value_signature(), "g");
-        let encoded = value_test!(LE, DBus, v, 8);
+        let encoded = value_test!(LE, DBus, v, 10);
         let v = encoded.deserialize::<Value<'_>>().unwrap().0;
-        assert_eq!(v, Value::Signature(Signature::try_from("yys").unwrap()));
+        assert_eq!(
+            v,
+            Value::Signature(Signature::try_from("yys").unwrap().into())
+        );
 
         // GVariant format now
         #[cfg(feature = "gvariant")]
         {
-            let encoded = value_test!(LE, GVariant, v, 6);
+            let encoded = value_test!(LE, GVariant, v, 8);
             let v = encoded.deserialize::<Value<'_>>().unwrap().0;
-            assert_eq!(v, Value::Signature(Signature::try_from("yys").unwrap()));
+            assert_eq!(
+                v,
+                Value::Signature(Signature::try_from("yys").unwrap().into())
+            );
         }
     }
 
@@ -595,14 +601,20 @@ mod tests {
         assert_eq!(v.value_signature(), "g");
         let encoded = value_test!(LE, DBus, v, 10);
         let v = encoded.deserialize::<Value<'_>>().unwrap().0;
-        assert_eq!(v, Value::Signature(Signature::try_from("yys").unwrap()));
+        assert_eq!(
+            v,
+            Value::Signature(parsed::Signature::try_from("yys").unwrap())
+        );
 
         // GVariant format now
         #[cfg(feature = "gvariant")]
         {
             let encoded = value_test!(LE, GVariant, v, 8);
             let v = encoded.deserialize::<Value<'_>>().unwrap().0;
-            assert_eq!(v, Value::Signature(Signature::try_from("yys").unwrap()));
+            assert_eq!(
+                v,
+                Value::Signature(parsed::Signature::try_from("yys").unwrap())
+            );
         }
     }
 
