@@ -16,7 +16,8 @@ use crate::message::{FieldCode, Header, Message};
 /// A collection of [`Field`] instances.
 ///
 /// [`Field`]: enum.Field.html
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Type)]
+#[zvariant(signature = "a(yv)")]
 pub(crate) struct Fields<'f> {
     pub path: Option<ObjectPath<'f>>,
     pub interface: Option<InterfaceName<'f>>,
@@ -36,13 +37,6 @@ impl Fields<'_> {
     pub fn new() -> Self {
         Self::default()
     }
-}
-
-impl<'f> Type for Fields<'f> {
-    const SIGNATURE: &'static parsed::Signature =
-        &parsed::Signature::static_array(&parsed::Signature::Structure(FieldsSignatures::Static {
-            fields: &[&parsed::Signature::U8, &parsed::Signature::Variant],
-        }));
 }
 
 impl<'f> Serialize for Fields<'f> {
