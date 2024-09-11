@@ -753,3 +753,9 @@ impl Hash for Signature {
         }
     }
 }
+
+impl From<&Signature> for Signature {
+    fn from(value: &Signature) -> Self {
+        value.clone()
+    }
+}
