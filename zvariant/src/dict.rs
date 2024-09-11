@@ -53,7 +53,7 @@ impl<'k, 'v> Dict<'k, 'v> {
                 if key.value_signature() != key_sig.signature() =>
             {
                 return Err(Error::SignatureMismatch(
-                    key.value_signature().into(),
+                    key.value_signature().clone(),
                     key_sig.signature().clone().to_string(),
                 ))
             }
@@ -61,7 +61,7 @@ impl<'k, 'v> Dict<'k, 'v> {
                 value: value_sig, ..
             } if value.value_signature() != value_sig.signature() => {
                 return Err(Error::SignatureMismatch(
-                    value.value_signature().into(),
+                    value.value_signature().clone(),
                     value_sig.signature().clone().to_string(),
                 ))
             }

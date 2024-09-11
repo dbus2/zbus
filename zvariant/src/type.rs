@@ -239,7 +239,7 @@ where
         } else {
             let expected = <T as Type>::SIGNATURE;
             Err(zvariant::Error::SignatureMismatch(
-                signature.into(),
+                signature.clone(),
                 format!("`{expected}`"),
             ))
         }

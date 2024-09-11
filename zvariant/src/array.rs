@@ -55,7 +55,7 @@ impl<'a> Array<'a> {
         match &self.signature {
             Signature::Array(child) if element.value_signature() != child.signature() => {
                 return Err(Error::SignatureMismatch(
-                    element.value_signature().into(),
+                    element.value_signature().clone(),
                     child.signature().clone().to_string(),
                 ))
             }
@@ -224,7 +224,7 @@ impl<'a> DynamicDeserialize<'a> for Array<'a> {
     fn deserializer_for_signature(signature: &Signature) -> zvariant::Result<Self::Deserializer> {
         if !matches!(signature, Signature::Array(_)) {
             return Err(zvariant::Error::SignatureMismatch(
-                signature.into(),
+                signature.clone(),
                 "an array signature".to_owned(),
             ));
         };

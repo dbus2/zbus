@@ -58,7 +58,7 @@ where
             Signature::Maybe(child) => child.signature(),
             _ => {
                 return Err(Error::SignatureMismatch(
-                    self.0.signature.clone().into(),
+                    self.0.signature.clone(),
                     "a maybe".to_string(),
                 ));
             }
@@ -254,7 +254,7 @@ where
             ),
             _ => {
                 return Err(Error::SignatureMismatch(
-                    self.0.signature.clone().into(),
+                    self.0.signature.clone(),
                     "an array or dict".to_string(),
                 ));
             }
@@ -311,7 +311,7 @@ where
             ),
             _ => {
                 return Err(Error::SignatureMismatch(
-                    self.0.signature.clone().into(),
+                    self.0.signature.clone(),
                     "a dict".to_string(),
                 ));
             }
@@ -342,7 +342,7 @@ where
             }
             _ => {
                 return Err(Error::SignatureMismatch(
-                    self.0.signature.clone().into(),
+                    self.0.signature.clone(),
                     "a struct, array or variant".to_string(),
                 ));
             }
@@ -501,7 +501,7 @@ where
         // Encode enum variants as a struct with first field as variant index
         let Signature::Structure(fields) = &ser.0.signature else {
             return Err(Error::SignatureMismatch(
-                ser.0.signature.clone().into(),
+                ser.0.signature.clone(),
                 "a struct".to_string(),
             ));
         };
@@ -546,7 +546,7 @@ where
             }
             Signature::Structure(fields) => {
                 let signature = fields.iter().nth(self.field_idx).ok_or_else(|| {
-                    Error::SignatureMismatch(signature.clone().into(), "a struct".to_string())
+                    Error::SignatureMismatch(signature.clone(), "a struct".to_string())
                 })?;
                 self.field_idx += 1;
 
