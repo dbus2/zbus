@@ -1,4 +1,4 @@
-use std::{io, os::fd::BorrowedFd};
+use std::{borrow::BorrowMut, io, os::fd::BorrowedFd, process::Stdio};
 
 #[cfg(not(feature = "tokio"))]
 use async_process::{Child, ChildStdin, ChildStdout};
@@ -133,5 +133,34 @@ impl WriteHalf for ChildStdin {
 
     async fn close(&mut self) -> io::Result<()> {
         tokio::io::AsyncWriteExt::shutdown(&mut self).await
+    }
+}
+
+pub(crate) async fn connect(
+    addr: &crate::address::transport::Unixexec<'_>,
+) -> crate::Result<Command> {
+    crate::process::Command::for_unixexec(addr)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()?
+        .borrow_mut()
+        .try_into()
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::address::{transport::Transport, Address};
+
+    #[test]
+    fn connect() {
+        let addr: Address<'_> = "unixexec:path=echo,argv1=hello,argv2=world"
+            .try_into()
+            .unwrap();
+        let unixexec = match addr.transport().unwrap() {
+            Transport::Unixexec(unixexec) => unixexec,
+            _ => unreachable!(),
+        };
+        crate::utils::block_on(super::connect(&unixexec)).unwrap();
     }
 }

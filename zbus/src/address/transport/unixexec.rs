@@ -1,4 +1,8 @@
-use std::{borrow::Cow, ffi::OsStr, fmt};
+use std::{
+    borrow::Cow,
+    ffi::OsStr,
+    fmt::{self},
+};
 
 use super::{
     percent::{decode_percents_os_str, decode_percents_str, EncOsStr},

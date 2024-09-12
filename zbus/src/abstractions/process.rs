@@ -6,6 +6,8 @@ use std::{ffi::OsStr, io::Error, process::Stdio};
 #[cfg(feature = "tokio")]
 use tokio::process::Child;
 
+use crate::address::transport::Unixexec;
+
 /// A wrapper around the command API of the underlying async runtime.
 pub struct Command(
     #[cfg(not(feature = "tokio"))] async_process::Command,
@@ -25,6 +27,34 @@ impl Command {
         return Self(tokio::process::Command::new(program));
     }
 
+    /// Constructs a new `Command` from a `unixexec` address.
+    pub fn for_unixexec(unixexec: &Unixexec<'_>) -> Self {
+        let mut command = Self::new(unixexec.path());
+
+        if let Some(arg0) = unixexec.arg0() {
+            command.arg0(arg0.as_ref());
+        }
+
+        let mut args: Vec<&str> = Vec::new();
+
+        let mut last_index = 0;
+        for (i, arg) in unixexec.argv() {
+            if *i == last_index {
+                args[*i] = arg.as_ref();
+                last_index = *i;
+            } else if *i == last_index + 1 {
+                args.push(arg.as_ref());
+                last_index = *i;
+            } else {
+                break;
+            }
+        }
+
+        command.args(args);
+
+        command
+    }
+
     /// Sets executable argument.
     ///
     /// Set the first process argument, `argv[0]`, to something other than the
@@ -38,7 +68,6 @@ impl Command {
     }
 
     /// Adds multiple arguments to pass to the program.
-    #[cfg(target_os = "macos")]
     pub fn args<I, S>(&mut self, args: I) -> &mut Self
     where
         I: IntoIterator<Item = S>,
