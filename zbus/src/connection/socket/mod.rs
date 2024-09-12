@@ -6,6 +6,8 @@ pub use channel::Channel;
 mod split;
 pub use split::{BoxedSplit, Split};
 
+#[cfg(unix)]
+pub(crate) mod command;
 pub(crate) mod tcp;
 pub(crate) mod unix;
 pub(crate) mod vsock;
