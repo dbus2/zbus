@@ -52,9 +52,6 @@ pub mod dbus;
 #[cfg(feature = "gvariant")]
 pub mod gvariant;
 
-mod signature;
-pub use crate::signature::*;
-
 mod str;
 pub use crate::str::*;
 
@@ -140,8 +137,7 @@ mod tests {
     use crate::{
         serialized::{Context, Format},
         Array, Basic, DeserializeDict, DeserializeValue, Dict, Error, ObjectPath, Result,
-        SerializeDict, SerializeValue, Signature, Str, Structure, Type, Value, BE, LE,
-        NATIVE_ENDIAN,
+        SerializeDict, SerializeValue, Str, Structure, Type, Value, BE, LE, NATIVE_ENDIAN,
     };
 
     // Test through both generic and specific API (wrt byte order)
@@ -543,39 +539,6 @@ mod tests {
         assert_eq!(encoded.len(), 17);
         let decoded: String<32> = encoded.deserialize().unwrap().0;
         assert_eq!(&decoded, "hello world!");
-    }
-
-    #[test]
-    fn signature_value() {
-        let sig = Signature::try_from("yys").unwrap();
-        basic_type_test!(LE, DBus, sig, 5, Signature<'_>, 1);
-
-        #[cfg(feature = "gvariant")]
-        {
-            let encoded = basic_type_test!(LE, GVariant, sig, 4, Signature<'_>, 1);
-            decode_with_gvariant::<_, String>(encoded, Some(String::from("yys")));
-        }
-
-        // As Value
-        let v: Value<'_> = crate::parsed::Signature::from(sig).into();
-        assert_eq!(v.value_signature(), "g");
-        let encoded = value_test!(LE, DBus, v, 10);
-        let v = encoded.deserialize::<Value<'_>>().unwrap().0;
-        assert_eq!(
-            v,
-            Value::Signature(Signature::try_from("yys").unwrap().into())
-        );
-
-        // GVariant format now
-        #[cfg(feature = "gvariant")]
-        {
-            let encoded = value_test!(LE, GVariant, v, 8);
-            let v = encoded.deserialize::<Value<'_>>().unwrap().0;
-            assert_eq!(
-                v,
-                Value::Signature(Signature::try_from("yys").unwrap().into())
-            );
-        }
     }
 
     #[test]

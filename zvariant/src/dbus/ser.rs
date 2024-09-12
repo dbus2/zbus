@@ -142,7 +142,7 @@ where
                 let expected = format!(
                     "`{}`, `{}`, `{}` or `{}`",
                     <&str>::SIGNATURE_STR,
-                    crate::Signature::SIGNATURE_STR,
+                    Signature::SIGNATURE_STR,
                     ObjectPath::SIGNATURE_STR,
                     VARIANT_SIGNATURE_CHAR,
                 );
