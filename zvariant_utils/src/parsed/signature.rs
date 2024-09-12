@@ -370,6 +370,14 @@ impl TryFrom<&str> for Signature {
     }
 }
 
+impl TryFrom<&[u8]> for Signature {
+    type Error = super::Error;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        parse(value, false)
+    }
+}
+
 /// Validate the given signature string.
 pub fn validate(bytes: &[u8]) -> Result<(), super::Error> {
     parse(bytes, true).map(|_| ())
