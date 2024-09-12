@@ -182,6 +182,8 @@ mod tests {
     };
     #[cfg(target_os = "macos")]
     use crate::address::transport::Launchd;
+    #[cfg(unix)]
+    use crate::address::transport::Unixexec;
     #[cfg(windows)]
     use crate::address::transport::{Autolaunch, AutolaunchScope};
     use crate::{
@@ -232,6 +234,11 @@ mod tests {
             }
             _ => panic!(),
         }
+        #[cfg(unix)]
+        match Address::from_str("unixexec:foo=blah").unwrap_err() {
+            Error::Address(e) => assert_eq!(e, "unixexec address is missing `path`"),
+            _ => panic!(),
+        }
         assert_eq!(
             Address::from_str("unix:path=/tmp/dbus-foo").unwrap(),
             Transport::Unix(Unix::new(UnixSocket::File("/tmp/dbus-foo".into()))).into(),
@@ -253,6 +260,11 @@ mod tests {
                 .unwrap(),
             );
         }
+        #[cfg(unix)]
+        assert_eq!(
+            Address::from_str("unixexec:path=/tmp/dbus-foo").unwrap(),
+            Transport::Unixexec(Unixexec::new("/tmp/dbus-foo".into(), None, Vec::new())).into(),
+        );
         assert_eq!(
             Address::from_str("tcp:host=localhost,port=4142").unwrap(),
             Transport::Tcp(Tcp::new("localhost", 4142)).into(),
