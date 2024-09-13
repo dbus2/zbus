@@ -21,7 +21,6 @@ use std::{
     io::{BufReader, Read, Write},
     ops::Deref,
 };
-use zvariant::parsed;
 
 use zbus_names::{InterfaceName, MemberName, PropertyName};
 
@@ -333,16 +332,16 @@ impl<'a> TryFrom<&'a str> for Node<'a> {
 /// This is to allow `Signature` to be deserialized from an owned string, which is what quick-xml2
 /// deserializer does.
 #[derive(Debug, Serialize, Clone, PartialEq)]
-pub struct Signature(parsed::Signature);
+pub struct Signature(zvariant::Signature);
 
 impl Signature {
-    /// Return the inner `zvariant::parsed::Signature`.
-    pub fn inner(&self) -> &parsed::Signature {
+    /// Return the inner `zvariant::Signature`.
+    pub fn inner(&self) -> &zvariant::Signature {
         &self.0
     }
 
     /// Convert this `Signature` into the inner `zvariant::parsed::Signature`.
-    pub fn into_inner(self) -> parsed::Signature {
+    pub fn into_inner(self) -> zvariant::Signature {
         self.0
     }
 }
@@ -353,7 +352,7 @@ impl<'de> serde::de::Deserialize<'de> for Signature {
         D: serde::de::Deserializer<'de>,
     {
         String::deserialize(deserializer).and_then(|s| {
-            parsed::Signature::try_from(s.as_bytes())
+            zvariant::Signature::try_from(s.as_bytes())
                 .map_err(serde::de::Error::custom)
                 .map(Signature)
         })
@@ -361,7 +360,7 @@ impl<'de> serde::de::Deserialize<'de> for Signature {
 }
 
 impl Deref for Signature {
-    type Target = parsed::Signature;
+    type Target = zvariant::Signature;
 
     fn deref(&self) -> &Self::Target {
         self.inner()

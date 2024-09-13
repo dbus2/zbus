@@ -10,9 +10,8 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use static_assertions::assert_impl_all;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 use zvariant::{
-    parsed::Signature,
     serialized::{self, Context},
-    Endian, ObjectPath, Type as VariantType,
+    Endian, ObjectPath, Signature, Type as VariantType,
 };
 
 use crate::{message::Fields, Error};

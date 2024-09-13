@@ -10,9 +10,8 @@ use serde::{de::DeserializeSeed, Deserialize};
 
 use crate::{
     de::Deserializer,
-    parsed::Signature,
     serialized::{Context, Format},
-    DynamicDeserialize, DynamicType, Error, Result, Type,
+    DynamicDeserialize, DynamicType, Error, Result, Signature, Type,
 };
 
 /// Represents serialized bytes in a specific format.
@@ -161,7 +160,7 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
     /// use serde::{Deserialize, Serialize};
     /// use zvariant::{
     ///     LE, to_bytes_for_signature, serialized::Context,
-    ///     parsed::{Signature, FieldsSignatures},
+    ///     {Signature, FieldsSignatures},
     /// };
     ///
     /// let ctxt = Context::new_dbus(LE, 0);

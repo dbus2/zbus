@@ -2,7 +2,7 @@ use serde::{de, ser};
 use static_assertions::assert_impl_all;
 use std::{convert::Infallible, error, fmt, io, result, sync::Arc};
 
-use crate::parsed::Signature;
+use crate::Signature;
 
 /// Enum representing the max depth exceeded error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,7 +63,7 @@ pub enum Error {
     /// The maximum allowed depth for containers in encoding was exceeded.
     MaxDepthExceeded(MaxDepthExceeded),
     /// Error from parsing a signature.
-    SignatureParse(crate::parsed::Error),
+    SignatureParse(crate::signature::Error),
     /// Attempted to create an empty structure (which is not allowed by the D-Bus specification).
     EmptyStructure,
 }

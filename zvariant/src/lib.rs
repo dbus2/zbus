@@ -52,6 +52,9 @@ pub mod dbus;
 #[cfg(feature = "gvariant")]
 pub mod gvariant;
 
+pub mod signature;
+pub use signature::{ChildSignature, FieldsSignatures, Signature};
+
 mod str;
 pub use crate::str::*;
 
@@ -91,8 +94,6 @@ mod into_value;
 
 mod owned_value;
 pub use owned_value::*;
-
-pub mod parsed;
 
 #[cfg(feature = "gvariant")]
 mod framing_offset_size;
@@ -542,17 +543,17 @@ mod tests {
     }
 
     #[test]
-    fn parsed_signature() {
-        use crate::parsed;
+    fn signature() {
+        use crate::Signature;
         use std::str::FromStr;
 
-        let sig = parsed::Signature::from_str("yys").unwrap();
-        // parsed::Structure will always add () around the signature if it's a struct.
-        basic_type_test!(LE, DBus, sig, 7, parsed::Signature, 1);
+        let sig = Signature::from_str("yys").unwrap();
+        // Structure will always add () around the signature if it's a struct.
+        basic_type_test!(LE, DBus, sig, 7, Signature, 1);
 
         #[cfg(feature = "gvariant")]
         {
-            let encoded = basic_type_test!(LE, GVariant, sig, 6, parsed::Signature, 1);
+            let encoded = basic_type_test!(LE, GVariant, sig, 6, Signature, 1);
             decode_with_gvariant::<_, String>(encoded, Some(String::from("(yys)")));
         }
 
@@ -561,20 +562,14 @@ mod tests {
         assert_eq!(v.value_signature(), "g");
         let encoded = value_test!(LE, DBus, v, 10);
         let v = encoded.deserialize::<Value<'_>>().unwrap().0;
-        assert_eq!(
-            v,
-            Value::Signature(parsed::Signature::try_from("yys").unwrap())
-        );
+        assert_eq!(v, Value::Signature(Signature::try_from("yys").unwrap()));
 
         // GVariant format now
         #[cfg(feature = "gvariant")]
         {
             let encoded = value_test!(LE, GVariant, v, 8);
             let v = encoded.deserialize::<Value<'_>>().unwrap().0;
-            assert_eq!(
-                v,
-                Value::Signature(parsed::Signature::try_from("yys").unwrap())
-            );
+            assert_eq!(v, Value::Signature(Signature::try_from("yys").unwrap()));
         }
     }
 

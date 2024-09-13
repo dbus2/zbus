@@ -3,8 +3,8 @@ use static_assertions::assert_impl_all;
 use std::{collections::HashMap, hash::BuildHasher};
 
 use crate::{
-    parsed::Signature, Array, Dict, NoneValue, ObjectPath, Optional, OwnedObjectPath, Str,
-    Structure, Type, Value,
+    Array, Dict, NoneValue, ObjectPath, Optional, OwnedObjectPath, Signature, Str, Structure, Type,
+    Value,
 };
 
 #[cfg(unix)]

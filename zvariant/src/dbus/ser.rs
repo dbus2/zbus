@@ -9,10 +9,9 @@ use std::{
 
 use crate::{
     container_depths::ContainerDepths,
-    parsed::Signature,
     serialized::{Context, Format},
     utils::*,
-    Basic, Error, ObjectPath, Result, WriteBytes,
+    Basic, Error, ObjectPath, Result, Signature, WriteBytes,
 };
 
 /// Our D-Bus serialization implementation.

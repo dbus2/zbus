@@ -7,7 +7,7 @@ use std::{
 use serde::ser::{Serialize, SerializeMap, Serializer};
 use static_assertions::assert_impl_all;
 
-use crate::{parsed::Signature, value_display_fmt, Basic, DynamicType, Error, Type, Value};
+use crate::{value_display_fmt, Basic, DynamicType, Error, Signature, Type, Value};
 
 /// A helper type to wrap dictionaries in a [`Value`].
 ///

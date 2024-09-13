@@ -9,11 +9,9 @@ use crate::gvariant::Serializer as GVSerializer;
 use crate::{
     container_depths::ContainerDepths,
     dbus::Serializer as DBusSerializer,
-    parsed,
-    parsed::Signature,
     serialized::{Context, Data, Format, Size, Written},
     utils::*,
-    Basic, DynamicType, Error, Result,
+    Basic, DynamicType, Error, Result, Signature,
 };
 
 struct NullWriteSeek;
@@ -250,9 +248,9 @@ pub(crate) struct SerializerCommon<'ser, W> {
     #[cfg(unix)]
     pub(crate) fds: &'ser mut FdList,
 
-    pub(crate) signature: &'ser parsed::Signature,
+    pub(crate) signature: &'ser Signature,
 
-    pub(crate) value_sign: Option<parsed::Signature>,
+    pub(crate) value_sign: Option<Signature>,
 
     pub(crate) container_depths: ContainerDepths,
 }

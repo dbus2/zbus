@@ -19,12 +19,8 @@ use serde::{
 use static_assertions::assert_impl_all;
 
 use crate::{
-    array_display_fmt, dict_display_fmt,
-    parsed::{self, Signature},
-    structure_display_fmt,
-    utils::*,
-    Array, Basic, Dict, DynamicType, ObjectPath, OwnedValue, Str, Structure, StructureBuilder,
-    Type,
+    array_display_fmt, dict_display_fmt, structure_display_fmt, utils::*, Array, Basic, Dict,
+    DynamicType, ObjectPath, OwnedValue, Signature, Str, Structure, StructureBuilder, Type,
 };
 #[cfg(feature = "gvariant")]
 use crate::{maybe_display_fmt, Maybe};
@@ -841,7 +837,7 @@ where
                 let expected = format!(
                     "`{}`, `{}` or `{}`",
                     <&str>::SIGNATURE_STR,
-                    parsed::Signature::SIGNATURE_STR,
+                    Signature::SIGNATURE_STR,
                     ObjectPath::SIGNATURE_STR,
                 );
                 Err(Error::invalid_type(
@@ -967,7 +963,7 @@ where
 }
 
 impl<'a> Type for Value<'a> {
-    const SIGNATURE: &'static crate::parsed::Signature = &crate::parsed::Signature::Variant;
+    const SIGNATURE: &'static Signature = &Signature::Variant;
 }
 
 impl<'a> TryFrom<&Value<'a>> for Value<'a> {
@@ -1024,8 +1020,8 @@ mod tests {
         assert_eq!(
             Value::new((
                 vec![
-                    parsed::Signature::try_from("").unwrap(),
-                    parsed::Signature::try_from("(ysa{sd})").unwrap(),
+                    Signature::try_from("").unwrap(),
+                    Signature::try_from("(ysa{sd})").unwrap(),
                 ],
                 vec![
                     ObjectPath::from_static_str("/").unwrap(),

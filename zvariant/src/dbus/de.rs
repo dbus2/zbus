@@ -7,10 +7,9 @@ use std::os::fd::AsFd;
 
 use crate::{
     de::{DeserializerCommon, ValueParseStage},
-    parsed::Signature,
     serialized::{Context, Format},
     utils::*,
-    Basic, Error, ObjectPath, Result,
+    Basic, Error, ObjectPath, Result, Signature,
 };
 
 /// Our D-Bus deserialization implementation.

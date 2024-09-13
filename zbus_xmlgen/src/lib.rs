@@ -7,7 +7,7 @@ use std::{
 
 use zbus::names::BusName;
 use zbus_xml::{Arg, ArgDirection, Interface};
-use zvariant::{parsed::Signature, ObjectPath};
+use zvariant::{ObjectPath, Signature};
 
 pub fn write_interfaces(
     interfaces: &[Interface<'_>],

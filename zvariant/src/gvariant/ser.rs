@@ -11,10 +11,9 @@ use crate::{
     container_depths::ContainerDepths,
     framing_offset_size::FramingOffsetSize,
     framing_offsets::FramingOffsets,
-    parsed::Signature,
     serialized::{Context, Format},
     utils::*,
-    Error, Result,
+    Error, Result, Signature,
 };
 
 /// Our serialization implementation.

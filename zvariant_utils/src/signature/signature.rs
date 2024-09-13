@@ -23,7 +23,7 @@ use crate::serialized::Format;
 ///
 /// ```
 /// use std::str::FromStr;
-/// use zvariant::parsed::Signature;
+/// use zvariant::Signature;
 ///
 /// let sig = Signature::from_str("a{sv}").unwrap();
 /// assert_eq!(sig.to_string(), "a{sv}");

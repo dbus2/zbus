@@ -367,9 +367,9 @@ mod tests {
     #[cfg(unix)]
     use std::os::fd::{AsFd, AsRawFd};
     use test_log::test;
-    use zvariant::parsed::Signature;
     #[cfg(unix)]
     use zvariant::Fd;
+    use zvariant::Signature;
 
     use super::Message;
     use crate::Error;

@@ -7,8 +7,8 @@ use static_assertions::assert_impl_all;
 use std::fmt::{Display, Write};
 
 use crate::{
-    parsed::Signature, value::SignatureSeed, value_display_fmt, DynamicDeserialize, DynamicType,
-    OwnedValue, Value,
+    value::SignatureSeed, value_display_fmt, DynamicDeserialize, DynamicType, OwnedValue,
+    Signature, Value,
 };
 
 /// Use this to efficiently build a [`Structure`].
@@ -273,16 +273,14 @@ impl<'a> DynamicType for StructureSeed<'a> {
 impl<'a> DynamicDeserialize<'a> for Structure<'a> {
     type Deserializer = StructureSeed<'static>;
 
-    fn deserializer_for_signature(
-        parsed_signature: &Signature,
-    ) -> zvariant::Result<Self::Deserializer> {
-        let parsed_signature = match parsed_signature {
-            Signature::Structure(_) => parsed_signature.clone(),
+    fn deserializer_for_signature(signature: &Signature) -> zvariant::Result<Self::Deserializer> {
+        let signature = match signature {
+            Signature::Structure(_) => signature.clone(),
             s => Signature::structure([s.clone()]),
         };
 
         Ok(StructureSeed {
-            signature: parsed_signature,
+            signature,
             phantom: std::marker::PhantomData,
         })
     }
@@ -406,10 +404,8 @@ impl DynamicType for OwnedStructureSeed {
 impl<'de> DynamicDeserialize<'de> for OwnedStructure {
     type Deserializer = OwnedStructureSeed;
 
-    fn deserializer_for_signature(
-        parsed_signature: &Signature,
-    ) -> zvariant::Result<Self::Deserializer> {
-        Structure::deserializer_for_signature(parsed_signature)
+    fn deserializer_for_signature(signature: &Signature) -> zvariant::Result<Self::Deserializer> {
+        Structure::deserializer_for_signature(signature)
             .map(|StructureSeed { signature, .. }| OwnedStructureSeed(signature))
     }
 }

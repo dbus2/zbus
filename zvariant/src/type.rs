@@ -1,4 +1,4 @@
-use crate::parsed::Signature;
+use crate::Signature;
 use serde::de::{Deserialize, DeserializeSeed};
 use std::{
     cell::{Cell, RefCell},
@@ -48,7 +48,7 @@ pub trait Type {
     ///
     /// ```
     /// use std::collections::HashMap;
-    /// use zvariant::{Type, parsed::{ChildSignature, Signature}};
+    /// use zvariant::{Type, {ChildSignature, Signature}};
     ///
     /// assert_eq!(u32::SIGNATURE, &Signature::U32);
     /// assert_eq!(String::SIGNATURE, &Signature::Str);
@@ -94,9 +94,7 @@ pub trait DynamicDeserialize<'de>: DynamicType {
     type Deserializer: DeserializeSeed<'de, Value = Self> + DynamicType;
 
     /// Get a deserializer compatible with this parsed signature.
-    fn deserializer_for_signature(
-        parsed_signature: &Signature,
-    ) -> zvariant::Result<Self::Deserializer>;
+    fn deserializer_for_signature(signature: &Signature) -> zvariant::Result<Self::Deserializer>;
 }
 
 /// Implements the [`Type`] trait by delegating the signature to a simpler type (usually a tuple).

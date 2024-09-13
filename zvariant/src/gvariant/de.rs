@@ -9,10 +9,9 @@ use crate::{
     de::{DeserializerCommon, ValueParseStage},
     framing_offset_size::FramingOffsetSize,
     framing_offsets::FramingOffsets,
-    parsed::Signature,
     serialized::{Context, Format},
     utils::*,
-    Basic, Error, ObjectPath, Result,
+    Basic, Error, ObjectPath, Result, Signature,
 };
 
 /// Our GVariant deserialization implementation.

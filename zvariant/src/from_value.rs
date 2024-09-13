@@ -1,7 +1,7 @@
 #[cfg(feature = "gvariant")]
 use crate::Maybe;
 use crate::{
-    parsed::Signature, Array, Dict, Error, NoneValue, ObjectPath, Optional, OwnedObjectPath, Str,
+    Array, Dict, Error, NoneValue, ObjectPath, Optional, OwnedObjectPath, Signature, Str,
     Structure, Value,
 };
 

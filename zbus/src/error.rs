@@ -205,8 +205,8 @@ impl From<VariantError> for Error {
     }
 }
 
-impl From<zvariant::parsed::Error> for Error {
-    fn from(e: zvariant::parsed::Error) -> Self {
+impl From<zvariant::signature::Error> for Error {
+    fn from(e: zvariant::signature::Error) -> Self {
         zvariant::Error::from(e).into()
     }
 }

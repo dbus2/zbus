@@ -1,7 +1,6 @@
 use zvariant::{
-    parsed,
     serialized::{self, Data},
-    Type,
+    Signature, Type,
 };
 
 use crate::{Error, Message, Result};
@@ -13,7 +12,7 @@ use crate::{Error, Message, Result};
 pub struct Body {
     data: Data<'static, 'static>,
     msg: Message,
-    signature: Option<parsed::Signature>,
+    signature: Option<Signature>,
 }
 
 impl Body {
@@ -37,7 +36,7 @@ impl Body {
             .header()
             .signature()
             .cloned()
-            .unwrap_or(parsed::Signature::Unit);
+            .unwrap_or(Signature::Unit);
 
         self.data
             .deserialize_for_dynamic_signature(&body_sig)
@@ -54,7 +53,7 @@ impl Body {
     }
 
     /// The signature of the body.
-    pub fn signature(&self) -> Option<&parsed::Signature> {
+    pub fn signature(&self) -> Option<&Signature> {
         self.signature.as_ref()
     }
 

@@ -7,9 +7,8 @@ use static_assertions::assert_impl_all;
 use std::fmt::{Display, Write};
 
 use crate::{
-    parsed::Signature,
     value::{value_display_fmt, SignatureSeed},
-    DynamicDeserialize, DynamicType, Error, Result, Type, Value,
+    DynamicDeserialize, DynamicType, Error, Result, Signature, Type, Value,
 };
 
 /// A helper type to wrap arrays in a [`Value`].

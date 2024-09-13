@@ -6,7 +6,7 @@ use serde::{
 use static_assertions::assert_impl_all;
 use std::num::NonZeroU32;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
-use zvariant::{parsed::Signature, ObjectPath, Type, Value};
+use zvariant::{ObjectPath, Signature, Type, Value};
 
 use crate::message::{FieldCode, Header, Message};
 
