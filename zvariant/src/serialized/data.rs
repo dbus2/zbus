@@ -160,7 +160,7 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
     /// use serde::{Deserialize, Serialize};
     /// use zvariant::{
     ///     LE, to_bytes_for_signature, serialized::Context,
-    ///     {Signature, FieldsSignatures},
+    ///     signature::{Signature, FieldsSignatures},
     /// };
     ///
     /// let ctxt = Context::new_dbus(LE, 0);

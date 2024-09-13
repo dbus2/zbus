@@ -90,7 +90,7 @@ fn signature_for_struct(
         )*}
     } else {
         quote! {
-            &#zv::Signature::Structure(#zv::FieldsSignatures::Static {
+            &#zv::Signature::Structure(#zv::signature::FieldsSignatures::Static {
                 fields: &[#(
                     <#field_types_clone as #zv::Type>::SIGNATURE
                 ),*],
@@ -100,7 +100,7 @@ fn signature_for_struct(
 
     if insert_enum_variant {
         quote! {
-            &#zv::Signature::Structure(#zv::FieldsSignatures::Static {
+            &#zv::Signature::Structure(#zv::signature::FieldsSignatures::Static {
                 fields: &[
                     <u32 as #zv::Type>::SIGNATURE,
                     #signature
@@ -213,7 +213,7 @@ fn signature_to_tokens(signature: &Signature, zv: &TokenStream) -> TokenStream {
         Signature::Array(child) => {
             let signature = signature_to_tokens(child.signature(), zv);
             quote! {
-                #zv::Signature::Array(#zv::ChildSignature::Static {
+                #zv::Signature::Array(#zv::signature::ChildSignature::Static {
                     child: &#signature,
                 })
             }
@@ -223,10 +223,10 @@ fn signature_to_tokens(signature: &Signature, zv: &TokenStream) -> TokenStream {
             let value_sig = signature_to_tokens(value.signature(), zv);
             quote! {
                 #zv::Signature::Dict {
-                    key: #zv::ChildSignature::Static {
+                    key: #zv::signature::ChildSignature::Static {
                         child: &#key_sig,
                     },
-                    value: #zv::ChildSignature::Static {
+                    value: #zv::signature::ChildSignature::Static {
                         child: &#value_sig,
                     },
                 }
@@ -235,7 +235,7 @@ fn signature_to_tokens(signature: &Signature, zv: &TokenStream) -> TokenStream {
         Signature::Structure(fields) => {
             let fields = fields.iter().map(|f| signature_to_tokens(f, zv));
             quote! {
-                #zv::Signature::Structure(#zv::FieldsSignatures::Static {
+                #zv::Signature::Structure(#zv::signature::FieldsSignatures::Static {
                     fields: &[#(&#fields),*],
                 })
             }
@@ -244,7 +244,7 @@ fn signature_to_tokens(signature: &Signature, zv: &TokenStream) -> TokenStream {
         Signature::Maybe(child) => {
             let signature = signature_to_tokens(child.signature(), zv);
             quote! {
-                #zv::Signature::Maybe(#zv::ChildSignature::Static {
+                #zv::Signature::Maybe(#zv::signature::ChildSignature::Static {
                     child: &#signature,
                 })
             }

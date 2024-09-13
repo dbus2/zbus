@@ -53,7 +53,7 @@ pub mod dbus;
 pub mod gvariant;
 
 pub mod signature;
-pub use signature::{ChildSignature, FieldsSignatures, Signature};
+pub use signature::Signature;
 
 mod str;
 pub use crate::str::*;
