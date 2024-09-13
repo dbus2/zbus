@@ -159,7 +159,7 @@ impl<'a> Proxy<'a> {
 
     /// Introspect the associated object, and return the XML description.
     ///
-    /// See the [xml](xml/index.html) module for parsing the result.
+    /// See the [xml](https://docs.rs/zbus_xml) crate for parsing the result.
     pub fn introspect(&self) -> fdo::Result<String> {
         block_on(self.inner().introspect())
     }

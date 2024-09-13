@@ -25,9 +25,9 @@ pub enum Error {
     InvalidField,
     /// Data too large.
     ExcessData,
-    /// A [zvariant](../zvariant/index.html) error.
+    /// A [zvariant](https://docs.rs/zvariant) error.
     Variant(VariantError),
-    /// A [zbus_names](../zbus_names/index.html) error.
+    /// A [zbus_names](https://docs.rs/zbus_names) error.
     Names(NamesError),
     /// Endian signature invalid or doesn't match expectation.
     IncorrectEndian,
