@@ -48,7 +48,7 @@ pub trait Type {
     ///
     /// ```
     /// use std::collections::HashMap;
-    /// use zvariant::{Type, signature::{ChildSignature, Signature}};
+    /// use zvariant::{Type, signature::{Child, Signature}};
     ///
     /// assert_eq!(u32::SIGNATURE, &Signature::U32);
     /// assert_eq!(String::SIGNATURE, &Signature::Str);
@@ -61,7 +61,7 @@ pub trait Type {
     ///     &Signature::static_structure(&[
     ///         &Signature::U32,
     ///         &Signature::Str,
-    ///         &Signature::Array(ChildSignature::Static { child: &Signature::U64 }),
+    ///         &Signature::Array(Child::Static { child: &Signature::U64 }),
     ///     ]),
     /// );
     /// assert_eq!(

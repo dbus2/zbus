@@ -4,25 +4,25 @@ use super::Signature;
 
 /// A child signature of a container signature.
 #[derive(Debug, Clone)]
-pub enum ChildSignature {
+pub enum Child {
     /// A static child signature.
     Static { child: &'static Signature },
     /// A dynamic child signature.
     Dynamic { child: Box<Signature> },
 }
-static_assertions::assert_impl_all!(ChildSignature: Send, Sync, Unpin);
+static_assertions::assert_impl_all!(Child: Send, Sync, Unpin);
 
-impl ChildSignature {
+impl Child {
     /// The underlying child `Signature`.
     pub fn signature(&self) -> &Signature {
         match self {
-            ChildSignature::Static { child } => child,
-            ChildSignature::Dynamic { child } => child,
+            Child::Static { child } => child,
+            Child::Dynamic { child } => child,
         }
     }
 }
 
-impl Deref for ChildSignature {
+impl Deref for Child {
     type Target = Signature;
 
     fn deref(&self) -> &Self::Target {
@@ -30,22 +30,22 @@ impl Deref for ChildSignature {
     }
 }
 
-impl From<Box<Signature>> for ChildSignature {
+impl From<Box<Signature>> for Child {
     fn from(child: Box<Signature>) -> Self {
-        ChildSignature::Dynamic { child }
+        Child::Dynamic { child }
     }
 }
 
-impl From<Signature> for ChildSignature {
+impl From<Signature> for Child {
     fn from(child: Signature) -> Self {
-        ChildSignature::Dynamic {
+        Child::Dynamic {
             child: Box::new(child),
         }
     }
 }
 
-impl From<&'static Signature> for ChildSignature {
+impl From<&'static Signature> for Child {
     fn from(child: &'static Signature) -> Self {
-        ChildSignature::Static { child }
+        Child::Static { child }
     }
 }

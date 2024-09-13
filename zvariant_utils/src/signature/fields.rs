@@ -2,7 +2,7 @@ use super::Signature;
 
 /// Signatures of the fields of a [`Signature::Structure`].
 #[derive(Debug, Clone)]
-pub enum FieldsSignatures {
+pub enum Fields {
     Static {
         fields: &'static [&'static Signature],
     },
@@ -10,9 +10,9 @@ pub enum FieldsSignatures {
         fields: Box<[Signature]>,
     },
 }
-static_assertions::assert_impl_all!(FieldsSignatures: Send, Sync, Unpin);
+static_assertions::assert_impl_all!(Fields: Send, Sync, Unpin);
 
-impl FieldsSignatures {
+impl Fields {
     /// A iterator over the fields' signatures.
     pub fn iter(&self) -> impl Iterator<Item = &Signature> {
         use std::slice::Iter;
@@ -34,36 +34,36 @@ impl FieldsSignatures {
         }
 
         match self {
-            FieldsSignatures::Static { fields } => Fields::Static(fields.iter()),
-            FieldsSignatures::Dynamic { fields } => Fields::Dynamic(fields.iter()),
+            Self::Static { fields } => Fields::Static(fields.iter()),
+            Self::Dynamic { fields } => Fields::Dynamic(fields.iter()),
         }
     }
 }
 
-impl From<Box<[Signature]>> for FieldsSignatures {
+impl From<Box<[Signature]>> for Fields {
     fn from(fields: Box<[Signature]>) -> Self {
-        FieldsSignatures::Dynamic { fields }
+        Fields::Dynamic { fields }
     }
 }
 
-impl From<Vec<Signature>> for FieldsSignatures {
+impl From<Vec<Signature>> for Fields {
     fn from(fields: Vec<Signature>) -> Self {
-        FieldsSignatures::Dynamic {
+        Fields::Dynamic {
             fields: fields.into(),
         }
     }
 }
 
-impl<const N: usize> From<[Signature; N]> for FieldsSignatures {
+impl<const N: usize> From<[Signature; N]> for Fields {
     fn from(fields: [Signature; N]) -> Self {
-        FieldsSignatures::Dynamic {
+        Fields::Dynamic {
             fields: fields.into(),
         }
     }
 }
 
-impl From<&'static [&'static Signature]> for FieldsSignatures {
+impl From<&'static [&'static Signature]> for Fields {
     fn from(fields: &'static [&'static Signature]) -> Self {
-        FieldsSignatures::Static { fields }
+        Fields::Static { fields }
     }
 }

@@ -1,7 +1,7 @@
-mod child_signature;
-pub use child_signature::ChildSignature;
-mod fields_signatures;
-pub use fields_signatures::FieldsSignatures;
+mod child;
+pub use child::Child;
+mod fields;
+pub use fields::Fields;
 mod error;
 pub use error::Error;
 
@@ -83,19 +83,19 @@ pub enum Signature {
 
     // Container types
     /// The signature for an array.
-    Array(ChildSignature),
+    Array(Child),
     /// The signature for a dictionary.
     Dict {
         /// The signature for the key.
-        key: ChildSignature,
+        key: Child,
         /// The signature for the value.
-        value: ChildSignature,
+        value: Child,
     },
     /// The signature for a structure.
-    Structure(FieldsSignatures),
+    Structure(Fields),
     /// The signature for a maybe type (gvariant-specific).
     #[cfg(feature = "gvariant")]
-    Maybe(ChildSignature),
+    Maybe(Child),
 }
 
 impl Signature {
@@ -161,34 +161,34 @@ impl Signature {
     /// Create a `Signature::Structure` for a given set of field signatures.
     pub fn structure<F>(fields: F) -> Self
     where
-        F: Into<FieldsSignatures>,
+        F: Into<Fields>,
     {
         Signature::Structure(fields.into())
     }
 
     /// Create a `Signature::Structure` for a given set of static field signatures.
     pub const fn static_structure(fields: &'static [&'static Signature]) -> Self {
-        Signature::Structure(FieldsSignatures::Static { fields })
+        Signature::Structure(Fields::Static { fields })
     }
 
     /// Create a `Signature::Array` for a given child signature.
     pub fn array<C>(child: C) -> Self
     where
-        C: Into<ChildSignature>,
+        C: Into<Child>,
     {
         Signature::Array(child.into())
     }
 
     /// Create a `Signature::Array` for a given static child signature.
     pub const fn static_array(child: &'static Signature) -> Self {
-        Signature::Array(ChildSignature::Static { child })
+        Signature::Array(Child::Static { child })
     }
 
     /// Create a `Signature::Dict` for a given key and value signatures.
     pub fn dict<K, V>(key: K, value: V) -> Self
     where
-        K: Into<ChildSignature>,
-        V: Into<ChildSignature>,
+        K: Into<Child>,
+        V: Into<Child>,
     {
         Signature::Dict {
             key: key.into(),
@@ -199,8 +199,8 @@ impl Signature {
     /// Create a `Signature::Dict` for a given static key and value signatures.
     pub const fn static_dict(key: &'static Signature, value: &'static Signature) -> Self {
         Signature::Dict {
-            key: ChildSignature::Static { child: key },
-            value: ChildSignature::Static { child: value },
+            key: Child::Static { child: key },
+            value: Child::Static { child: value },
         }
     }
 
@@ -208,7 +208,7 @@ impl Signature {
     #[cfg(feature = "gvariant")]
     pub fn maybe<C>(child: C) -> Self
     where
-        C: Into<ChildSignature>,
+        C: Into<Child>,
     {
         Signature::Maybe(child.into())
     }
@@ -216,7 +216,7 @@ impl Signature {
     /// Create a `Signature::Maybe` for a given static child signature.
     #[cfg(feature = "gvariant")]
     pub const fn static_maybe(child: &'static Signature) -> Self {
-        Signature::Maybe(ChildSignature::Static { child })
+        Signature::Maybe(Child::Static { child })
     }
 
     /// The required padding alignment for the given format.

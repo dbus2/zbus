@@ -160,7 +160,7 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
     /// use serde::{Deserialize, Serialize};
     /// use zvariant::{
     ///     LE, to_bytes_for_signature, serialized::Context,
-    ///     signature::{Signature, FieldsSignatures},
+    ///     signature::{Signature, Fields},
     /// };
     ///
     /// let ctxt = Context::new_dbus(LE, 0);
@@ -183,7 +183,7 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
     ///     Variant3(&'s str),
     /// }
     ///
-    /// let signature = Signature::Structure(FieldsSignatures::Static {
+    /// let signature = Signature::Structure(Fields::Static {
     ///     fields: &[&Signature::U32, &Signature::Str],
     /// });
     /// let encoded =
@@ -198,10 +198,10 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
     ///     Struct { y: u8, t: u64 },
     /// }
     ///
-    /// let signature = Signature::Structure(FieldsSignatures::Static {
+    /// let signature = Signature::Structure(Fields::Static {
     ///     fields: &[
     ///         &Signature::U32,
-    ///         &Signature::Structure(FieldsSignatures::Static {
+    ///         &Signature::Structure(Fields::Static {
     ///             fields: &[&Signature::U8, &Signature::U64],
     ///         }),
     ///     ],
