@@ -159,7 +159,7 @@ mod value;
 /// [`Serialize`]: https://docs.serde.rs/serde/trait.Serialize.html
 /// [`Deserialize`]: https://docs.serde.rs/serde/de/trait.Deserialize.html
 /// [serde_repr]: https://crates.io/crates/serde_repr
-#[proc_macro_derive(Type, attributes(zvariant))]
+#[proc_macro_derive(Type, attributes(zbus, zvariant))]
 pub fn type_macro_derive(input: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(input).unwrap();
     r#type::expand_derive(ast)
@@ -227,7 +227,7 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
 /// * `"kebab-case"`
 ///
 /// [`Serialize`]: https://docs.serde.rs/serde/trait.Serialize.html
-#[proc_macro_derive(SerializeDict, attributes(zvariant))]
+#[proc_macro_derive(SerializeDict, attributes(zbus, zvariant))]
 pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
     let input: DeriveInput = syn::parse(input).unwrap();
     dict::expand_serialize_derive(input)
@@ -296,7 +296,7 @@ pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// * `"kebab-case"`
 ///
 /// [`Deserialize`]: https://docs.serde.rs/serde/de/trait.Deserialize.html
-#[proc_macro_derive(DeserializeDict, attributes(zvariant))]
+#[proc_macro_derive(DeserializeDict, attributes(zbus, zvariant))]
 pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
     let input: DeriveInput = syn::parse(input).unwrap();
     dict::expand_deserialize_derive(input)
