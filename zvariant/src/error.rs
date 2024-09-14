@@ -2,6 +2,8 @@ use serde::{de, ser};
 use static_assertions::assert_impl_all;
 use std::{convert::Infallible, error, fmt, io, result, sync::Arc};
 
+use crate::Signature;
+
 /// Enum representing the max depth exceeded error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MaxDepthExceeded {
@@ -52,16 +54,16 @@ pub enum Error {
     /// Missing framing offset at the end of a GVariant-encoded container,
     MissingFramingOffset,
     /// The type (signature as first argument) being (de)serialized is not supported by the format.
-    IncompatibleFormat(crate::Signature<'static>, crate::serialized::Format),
+    IncompatibleFormat(Signature, crate::serialized::Format),
     /// The provided signature (first argument) was not valid for reading as the requested type.
     /// Details on the expected signatures are in the second argument.
-    SignatureMismatch(crate::Signature<'static>, String),
+    SignatureMismatch(Signature, String),
     /// Out of bounds range specified.
     OutOfBounds,
     /// The maximum allowed depth for containers in encoding was exceeded.
     MaxDepthExceeded(MaxDepthExceeded),
     /// Error from parsing a signature.
-    SignatureParse(crate::parsed::Error),
+    SignatureParse(crate::signature::Error),
     /// Attempted to create an empty structure (which is not allowed by the D-Bus specification).
     EmptyStructure,
 }

@@ -80,7 +80,7 @@ impl<T> Type for Optional<T>
 where
     T: Type,
 {
-    const SIGNATURE: &'static crate::parsed::Signature = T::SIGNATURE;
+    const SIGNATURE: &'static crate::Signature = T::SIGNATURE;
 }
 
 impl<T> Serialize for Optional<T>

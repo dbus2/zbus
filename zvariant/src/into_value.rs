@@ -2,7 +2,7 @@ use std::{collections::HashMap, hash::BuildHasher};
 
 #[cfg(feature = "gvariant")]
 use crate::Maybe;
-use crate::{Array, Dict, NoneValue, ObjectPath, Optional, Signature, Str, Structure, Type, Value};
+use crate::{Array, Dict, NoneValue, ObjectPath, Optional, Str, Structure, Type, Value};
 
 #[cfg(unix)]
 use crate::Fd;
@@ -51,7 +51,6 @@ into_value_from_both!(f64, F64);
 
 into_value_from_both!(&'a str, Str);
 into_value_from_both!(Str<'a>, Str);
-into_value_from_both!(Signature<'a>, Signature);
 into_value_from_both!(ObjectPath<'a>, ObjectPath);
 
 macro_rules! try_into_value_from_ref {
@@ -167,7 +166,7 @@ where
     V: Into<Value<'v>> + Type,
 {
     fn from(v: Option<V>) -> Value<'v> {
-        let mut array = Array::new(V::SIGNATURE.into());
+        let mut array = Array::new(V::SIGNATURE);
         if let Some(v) = v {
             // We got the signature from the `Type` impl, so this should never panic.
             array.append(v.into()).expect("signature mismatch");

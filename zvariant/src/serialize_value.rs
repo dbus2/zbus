@@ -36,5 +36,5 @@ impl<'a, T: Type + Serialize> Serialize for SerializeValue<'a, T> {
 }
 
 impl<'a, T: Type + Serialize> Type for SerializeValue<'a, T> {
-    const SIGNATURE: &'static crate::parsed::Signature = &crate::parsed::Signature::Variant;
+    const SIGNATURE: &'static crate::Signature = &crate::Signature::Variant;
 }

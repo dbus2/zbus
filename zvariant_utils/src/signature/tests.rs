@@ -1,5 +1,8 @@
-use super::{signature::*, *};
-use std::str::FromStr;
+use super::*;
+use std::{
+    hash::{DefaultHasher, Hash, Hasher},
+    str::FromStr,
+};
 
 macro_rules! validate {
         ($($signature:literal => $expected:expr),+) => {
@@ -35,13 +38,13 @@ fn validate_strings() {
                 &Signature::U8,
                 &Signature::Str,
                 &Signature::Dict {
-                    key: ChildSignature::Static { child: &Signature::Str },
-                    value: ChildSignature::Static { child: &Signature::F64 },
+                    key: Child::Static { child: &Signature::Str },
+                    value: Child::Static { child: &Signature::F64 },
                 },
             ]
         ),
         "a(y)" => Signature::static_array(
-            &Signature::Structure(FieldsSignatures::Static { fields: &[&Signature::U8] }),
+            &Signature::Structure(Fields::Static { fields: &[&Signature::U8] }),
         ),
         "a{yy}" => Signature::static_dict(&Signature::U8, &Signature::U8),
         "(yy)" => Signature::static_structure(&[&Signature::U8, &Signature::U8]),
@@ -51,18 +54,18 @@ fn validate_strings() {
         "a{sa{sv}}" => Signature::static_dict(
             &Signature::Str,
             &Signature::Dict {
-                key: ChildSignature::Static {
+                key: Child::Static {
                 child: &Signature::Str,
                 },
-                value: ChildSignature::Static {
+                value: Child::Static {
                 child: &Signature::Variant
                 }
             },
         ),
         "a{sa(ux)}" => Signature::static_dict(
             &Signature::Str,
-            &Signature::Array(ChildSignature::Static {
-                child: &Signature::Structure(FieldsSignatures::Static {
+            &Signature::Array(Child::Static {
+                child: &Signature::Structure(Fields::Static {
                     fields: &[&Signature::U32, &Signature::I64]
                 }),
             }),
@@ -70,35 +73,35 @@ fn validate_strings() {
         "(x)" => Signature::static_structure(&[&Signature::I64]),
         "(x(isy))" => Signature::static_structure(&[
             &Signature::I64,
-            &Signature::Structure(FieldsSignatures::Static {
+            &Signature::Structure(Fields::Static {
                 fields: &[&Signature::I32, &Signature::Str, &Signature::U8]
             }),
         ]),
         "(xa(isy))" => Signature::static_structure(&[
             &Signature::I64,
-            &Signature::Array(ChildSignature::Static {
-                child: &Signature::Structure(FieldsSignatures::Static {
+            &Signature::Array(Child::Static {
+                child: &Signature::Structure(Fields::Static {
                     fields: &[&Signature::I32, &Signature::Str, &Signature::U8]
                 }),
             }),
         ]),
         "(xa(s))" => Signature::static_structure(&[
             &Signature::I64,
-            &Signature::Array(ChildSignature::Static {
-                child: &Signature::Structure(FieldsSignatures::Static {
+            &Signature::Array(Child::Static {
+                child: &Signature::Structure(Fields::Static {
                     fields: &[&Signature::Str]
                 }),
             }),
         ]),
         "((yyyyuu)a(yv))" => Signature::static_structure(&[
-            &Signature::Structure(FieldsSignatures::Static {
+            &Signature::Structure(Fields::Static {
                 fields: &[
                     &Signature::U8, &Signature::U8, &Signature::U8, &Signature::U8,
                     &Signature::U32, &Signature::U32,
                 ],
             }),
-            &Signature::Array(ChildSignature::Static {
-                child: &Signature::Structure(FieldsSignatures::Static {
+            &Signature::Array(Child::Static {
+                child: &Signature::Structure(Fields::Static {
                     fields: &[&Signature::U8, &Signature::Variant],
                 }),
             }),
@@ -136,4 +139,36 @@ fn invalid_strings() {
         "s/",
         "a{yz}"
     );
+}
+
+#[test]
+fn hash() {
+    // We need to test if all variants of Signature hold this invariant:
+    test_hash(&Signature::U16, &Signature::U16);
+    test_hash(
+        &Signature::array(Signature::U16),
+        &Signature::static_array(&Signature::U16),
+    );
+    test_hash(
+        &Signature::dict(Signature::U32, Signature::Str),
+        &Signature::static_dict(&Signature::U32, &Signature::Str),
+    );
+    test_hash(
+        &Signature::structure([Signature::Str, Signature::U64]),
+        &Signature::static_structure(&[&Signature::Str, &Signature::U64]),
+    );
+}
+
+fn test_hash(signature1: &Signature, signature2: &Signature) {
+    assert_eq!(signature1, signature2);
+
+    let mut hasher = DefaultHasher::new();
+    signature1.hash(&mut hasher);
+    let hash1 = hasher.finish();
+
+    let mut hasher = DefaultHasher::new();
+    signature2.hash(&mut hasher);
+    let hash2 = hasher.finish();
+
+    assert_eq!(hash1, hash2);
 }

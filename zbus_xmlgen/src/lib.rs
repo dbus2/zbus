@@ -7,10 +7,7 @@ use std::{
 
 use zbus::names::BusName;
 use zbus_xml::{Arg, ArgDirection, Interface};
-use zvariant::{
-    Basic, CompleteType, ObjectPath, Signature, ARRAY_SIGNATURE_CHAR, DICT_ENTRY_SIG_END_CHAR,
-    DICT_ENTRY_SIG_START_CHAR, STRUCT_SIG_END_CHAR, STRUCT_SIG_START_CHAR, VARIANT_SIGNATURE_CHAR,
-};
+use zvariant::{ObjectPath, Signature};
 
 pub fn write_interfaces(
     interfaces: &[Interface<'_>],
@@ -216,7 +213,7 @@ impl<'i> GenTrait<'i> {
             if p.access().read() {
                 writeln!(w, "{}", fn_attribute)?;
                 let output = to_rust_type(p.ty(), false, false);
-                hide_clippy_type_complexity_lint(w, p.ty().signature())?;
+                hide_clippy_type_complexity_lint(w, p.ty())?;
                 writeln!(w, "    fn {name}(&self) -> zbus::Result<{output}>;",)?;
             }
 
@@ -242,7 +239,7 @@ fn hide_clippy_lints<W: Write>(write: &mut W, method: &zbus_xml::Method<'_>) -> 
 
     // check for <https://rust-lang.github.io/rust-clippy/master/index.html#/type_complexity>
     for arg in method.args() {
-        let signature = arg.ty().signature();
+        let signature = arg.ty();
         hide_clippy_type_complexity_lint(write, signature)?;
     }
 
@@ -251,10 +248,9 @@ fn hide_clippy_lints<W: Write>(write: &mut W, method: &zbus_xml::Method<'_>) -> 
 
 fn hide_clippy_type_complexity_lint<W: Write>(
     write: &mut W,
-    signature: &zvariant::Signature,
+    signature: &Signature,
 ) -> std::fmt::Result {
-    let mut it = signature.as_bytes().iter().peekable();
-    let complexity = estimate_type_complexity(&mut it);
+    let complexity = estimate_type_complexity(signature);
     if complexity >= 1700 {
         writeln!(write, "    #[allow(clippy::type_complexity)]")?;
     }
@@ -318,107 +314,82 @@ fn parse_signal_args(args: &[Arg]) -> String {
     inputs.join(", ")
 }
 
-fn to_rust_type(ty: &CompleteType, input: bool, as_ref: bool) -> String {
+fn to_rust_type(ty: &Signature, input: bool, as_ref: bool) -> String {
     // can't haz recursive closure, yet
-    fn iter_to_rust_type(
-        it: &mut std::iter::Peekable<std::slice::Iter<'_, u8>>,
-        input: bool,
-        as_ref: bool,
-    ) -> String {
-        let c = it.next().unwrap();
-        match *c as char {
-            u8::SIGNATURE_CHAR => "u8".into(),
-            bool::SIGNATURE_CHAR => "bool".into(),
-            i16::SIGNATURE_CHAR => "i16".into(),
-            u16::SIGNATURE_CHAR => "u16".into(),
-            i32::SIGNATURE_CHAR => "i32".into(),
-            u32::SIGNATURE_CHAR => "u32".into(),
-            i64::SIGNATURE_CHAR => "i64".into(),
-            u64::SIGNATURE_CHAR => "u64".into(),
-            f64::SIGNATURE_CHAR => "f64".into(),
-            // xmlgen accepts 'h' on Windows, only for code generation
-            'h' => (if input {
-                "zbus::zvariant::Fd<'_>"
-            } else {
-                "zbus::zvariant::OwnedFd"
-            })
-            .into(),
-            <&str>::SIGNATURE_CHAR => (if input || as_ref { "&str" } else { "String" }).into(),
-            ObjectPath::SIGNATURE_CHAR => (if input {
+    fn signature_to_rust_type(signature: &Signature, input: bool, as_ref: bool) -> String {
+        match signature {
+            Signature::Unit => "".into(),
+            Signature::U8 => "u8".into(),
+            Signature::Bool => "bool".into(),
+            Signature::I16 => "i16".into(),
+            Signature::U16 => "u16".into(),
+            Signature::I32 => "i32".into(),
+            Signature::U32 => "u32".into(),
+            Signature::I64 => "i64".into(),
+            Signature::U64 => "u64".into(),
+            Signature::F64 => "f64".into(),
+            #[cfg(unix)]
+            Signature::Fd if input => "zbus::zvariant::Fd<'_>".into(),
+            #[cfg(unix)]
+            Signature::Fd => "zbus::zvariant::OwnedFd".into(),
+            Signature::Str if input || as_ref => "&str".into(),
+            Signature::Str => "String".into(),
+            Signature::ObjectPath if input => {
                 if as_ref {
-                    "&zbus::zvariant::ObjectPath<'_>"
+                    "&zbus::zvariant::ObjectPath<'_>".into()
                 } else {
-                    "zbus::zvariant::ObjectPath<'_>"
-                }
-            } else {
-                "zbus::zvariant::OwnedObjectPath"
-            })
-            .into(),
-            Signature::SIGNATURE_CHAR => (if input {
-                if as_ref {
-                    "&zbus::zvariant::Signature<'_>"
-                } else {
-                    "zbus::zvariant::Signature<'_>"
-                }
-            } else {
-                "zbus::zvariant::OwnedSignature"
-            })
-            .into(),
-            VARIANT_SIGNATURE_CHAR => (if input {
-                if as_ref {
-                    "&zbus::zvariant::Value<'_>"
-                } else {
-                    "zbus::zvariant::Value<'_>"
-                }
-            } else {
-                "zbus::zvariant::OwnedValue"
-            })
-            .into(),
-            ARRAY_SIGNATURE_CHAR => {
-                let c = it.peek().unwrap();
-                match **c as char {
-                    '{' => format!(
-                        "std::collections::HashMap<{}>",
-                        iter_to_rust_type(it, input, as_ref)
-                    ),
-                    _ => {
-                        let ty = iter_to_rust_type(it, input, as_ref);
-                        if input && as_ref {
-                            format!("&[{ty}]")
-                        } else {
-                            format!("Vec<{ty}>")
-                        }
-                    }
+                    "zbus::zvariant::ObjectPath<'_>".into()
                 }
             }
-            c @ STRUCT_SIG_START_CHAR | c @ DICT_ENTRY_SIG_START_CHAR => {
-                let dict = c == '{';
-                let mut vec = vec![];
-                loop {
-                    let c = it.peek().unwrap();
-                    match **c as char {
-                        STRUCT_SIG_END_CHAR | DICT_ENTRY_SIG_END_CHAR => {
-                            // consume the closing character
-                            it.next().unwrap();
-                            break;
-                        }
-                        _ => vec.push(iter_to_rust_type(it, input, as_ref)),
-                    }
-                }
-                if dict {
-                    vec.join(", ")
-                } else if vec.len() > 1 {
-                    format!("{}({})", if as_ref { "&" } else { "" }, vec.join(", "))
+            Signature::ObjectPath => "zbus::zvariant::OwnedObjectPath".into(),
+            Signature::Signature if input => {
+                if as_ref {
+                    "&zbus::zvariant::Signature<'_>".into()
                 } else {
-                    format!("{}({},)", if as_ref { "&" } else { "" }, vec[0])
+                    "zbus::zvariant::Signature<'_>".into()
                 }
             }
-            _ => unimplemented!(),
+            Signature::Signature => "zbus::zvariant::OwnedSignature".into(),
+            Signature::Variant if input => {
+                if as_ref {
+                    "&zbus::zvariant::Value<'_>".into()
+                } else {
+                    "zbus::zvariant::Value<'_>".into()
+                }
+            }
+            Signature::Variant => "zbus::zvariant::OwnedValue".into(),
+            Signature::Array(child) => {
+                let child_ty = signature_to_rust_type(child, input, as_ref);
+                if input && as_ref {
+                    format!("&[{}]", child_ty)
+                } else {
+                    format!("Vec<{}>", child_ty)
+                }
+            }
+            Signature::Dict { key, value } => {
+                let key_ty = signature_to_rust_type(key, input, as_ref);
+                let value_ty = signature_to_rust_type(value, input, as_ref);
+
+                format!("std::collections::HashMap<{}, {}>", key_ty, value_ty)
+            }
+            Signature::Structure(fields) => {
+                let fields = fields
+                    .iter()
+                    .map(|f| signature_to_rust_type(f, input, as_ref))
+                    .collect::<Vec<_>>();
+
+                if fields.len() > 1 {
+                    format!("{}({})", if as_ref { "&" } else { "" }, fields.join(", "))
+                } else {
+                    format!("{}({},)", if as_ref { "&" } else { "" }, fields[0])
+                }
+            }
+            #[allow(unreachable_patterns)]
+            _ => unreachable!("Unsupported signature: {}", signature),
         }
     }
 
-    let mut it = ty.signature().as_bytes().iter().peekable();
-    iter_to_rust_type(&mut it, input, as_ref)
+    signature_to_rust_type(ty, input, as_ref)
 }
 
 static KWORDS: &[&str] = &[
@@ -454,54 +425,40 @@ pub fn pascal_case(s: &str) -> String {
     pascal
 }
 
-fn estimate_type_complexity(it: &mut std::iter::Peekable<std::slice::Iter<'_, u8>>) -> u32 {
+fn estimate_type_complexity(signature: &Signature) -> u32 {
     let mut score = 0;
-    let c = it.next().unwrap();
-    match *c as char {
-        u8::SIGNATURE_CHAR
-        | bool::SIGNATURE_CHAR
-        | i16::SIGNATURE_CHAR
-        | u16::SIGNATURE_CHAR
-        | i32::SIGNATURE_CHAR
-        | u32::SIGNATURE_CHAR
-        | i64::SIGNATURE_CHAR
-        | u64::SIGNATURE_CHAR
-        | f64::SIGNATURE_CHAR
-        | <&str>::SIGNATURE_CHAR => {
-            score += 1;
+
+    match signature {
+        Signature::Unit => (),
+        Signature::U8
+        | Signature::Bool
+        | Signature::I16
+        | Signature::U16
+        | Signature::I32
+        | Signature::U32
+        | Signature::I64
+        | Signature::U64
+        | Signature::F64
+        | Signature::Str => score += 1,
+        #[cfg(unix)]
+        Signature::Fd => score += 10,
+        Signature::ObjectPath | Signature::Signature | Signature::Variant => score += 10,
+        Signature::Array(child) => score += 5 * estimate_type_complexity(child),
+        Signature::Dict { key, value } => {
+            score *= 10 + 50;
+            score += 5 * estimate_type_complexity(key);
+            score += 5 * estimate_type_complexity(value);
         }
-        'h' => score += 10,
-        Signature::SIGNATURE_CHAR | VARIANT_SIGNATURE_CHAR | ObjectPath::SIGNATURE_CHAR => {
-            score *= 10
-        }
-        ARRAY_SIGNATURE_CHAR => {
-            let c = it.peek().unwrap();
-            match **c as char {
-                '{' => {
-                    score *= 10;
-                    score += estimate_type_complexity(it);
-                }
-                _ => {
-                    score += 5 * estimate_type_complexity(it);
-                }
-            }
-        }
-        STRUCT_SIG_START_CHAR | DICT_ENTRY_SIG_START_CHAR => {
+        Signature::Structure(fields) => {
             score += 50;
-            loop {
-                let c = it.peek().unwrap();
-                match **c as char {
-                    STRUCT_SIG_END_CHAR | DICT_ENTRY_SIG_END_CHAR => {
-                        // consume the closing character
-                        it.next().unwrap();
-                        break;
-                    }
-                    _ => score += 5 * estimate_type_complexity(it),
-                }
+            for field in fields.iter() {
+                score += 5 * estimate_type_complexity(field);
             }
         }
-        _ => {}
-    };
+        #[allow(unreachable_patterns)]
+        _ => unreachable!("Unsupported signature: {}", signature),
+    }
+
     score
 }
 

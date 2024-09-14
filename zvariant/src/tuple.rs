@@ -1,4 +1,4 @@
-use crate::{parsed, DynamicDeserialize, DynamicType};
+use crate::{DynamicDeserialize, DynamicType, Signature};
 use serde::{
     de::{Deserialize, DeserializeSeed, Deserializer, Error, Visitor},
     Serialize, Serializer,
@@ -17,8 +17,8 @@ use std::marker::PhantomData;
 pub struct DynamicTuple<T>(pub T);
 
 impl DynamicType for DynamicTuple<()> {
-    fn dynamic_signature(&self) -> parsed::Signature {
-        parsed::Signature::Unit
+    fn dynamic_signature(&self) -> Signature {
+        Signature::Unit
     }
 }
 
@@ -37,13 +37,13 @@ impl<'de> Deserialize<'de> for DynamicTuple<()> {
 /// A helper type for [DynamicTuple]'s [DynamicDeserialize] implementation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TupleSeed<'a, T, S> {
-    sig: parsed::Signature,
+    sig: Signature,
     seeds: S,
     markers: (PhantomData<T>, PhantomData<&'a ()>),
 }
 
 impl<'a, T, S> DynamicType for TupleSeed<'a, T, S> {
-    fn dynamic_signature(&self) -> parsed::Signature {
+    fn dynamic_signature(&self) -> Signature {
         self.sig.clone()
     }
 }
@@ -60,8 +60,8 @@ macro_rules! tuple_impls {
             where
                 $($name: DynamicType,)+
             {
-                fn dynamic_signature(&self) -> parsed::Signature {
-                    parsed::Signature::structure(
+                fn dynamic_signature(&self) -> Signature {
+                    Signature::structure(
                         [
                             $(
                                 self.0.$n.dynamic_signature(),
@@ -113,10 +113,10 @@ macro_rules! tuple_impls {
                 type Deserializer = TupleSeed<'de, ($($name,)+), ($(<$name as DynamicDeserialize<'de>>::Deserializer,)+)>;
 
                 fn deserializer_for_signature(
-                    parsed_signature: &parsed::Signature,
+                    signature: &Signature,
                 ) -> zvariant::Result<Self::Deserializer> {
-                    let mut fields_iter = match &parsed_signature {
-                        crate::parsed::Signature::Structure(fields) => fields.iter(),
+                    let mut fields_iter = match &signature {
+                        crate::Signature::Structure(fields) => fields.iter(),
                         _ => return Err(zvariant::Error::IncorrectType),
                     };
 
@@ -125,7 +125,7 @@ macro_rules! tuple_impls {
                         $name::deserializer_for_signature(elt_sig)?
                     },)+);
 
-                    Ok(TupleSeed { sig: parsed_signature.clone(), seeds, markers: (PhantomData, PhantomData) })
+                    Ok(TupleSeed { sig: signature.clone(), seeds, markers: (PhantomData, PhantomData) })
                 }
             }
         )+

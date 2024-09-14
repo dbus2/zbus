@@ -195,7 +195,7 @@ impl<'de: 'name, 'name> Deserialize<'de> for BusName<'name> {
 }
 
 impl Type for BusName<'_> {
-    const SIGNATURE: &'static zvariant::parsed::Signature = &zvariant::parsed::Signature::Str;
+    const SIGNATURE: &'static zvariant::Signature = &zvariant::Signature::Str;
 }
 
 impl<'name> From<UniqueName<'name>> for BusName<'name> {

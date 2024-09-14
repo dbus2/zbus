@@ -7,12 +7,12 @@ use zvariant::OwnedFd;
 
 use enumflags2::BitFlags;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
-use zvariant::{parsed, serialized, Endian};
+use zvariant::{serialized, Endian, Signature};
 
 use crate::{
     message::{Fields, Flags, Header, Message, PrimaryHeader, Sequence, Type},
     utils::padding_for_8_bytes,
-    zvariant::{serialized::Context, DynamicType, ObjectPath, Signature},
+    zvariant::{serialized::Context, DynamicType, ObjectPath},
     EndianSig, Error, Result,
 };
 
@@ -238,7 +238,7 @@ impl<'a> Builder<'a> {
         #[cfg(unix)] fds: Vec<OwnedFd>,
     ) -> Result<Message>
     where
-        S: TryInto<parsed::Signature>,
+        S: TryInto<Signature>,
         S::Error: Into<Error>,
     {
         let signature = signature.try_into().map_err(Into::into)?;
@@ -266,7 +266,7 @@ impl<'a> Builder<'a> {
 
     fn build_generic<WriteFunc>(
         self,
-        signature: parsed::Signature,
+        signature: Signature,
         body_size: serialized::Size,
         write_body: WriteFunc,
     ) -> Result<Message>
@@ -276,10 +276,7 @@ impl<'a> Builder<'a> {
         let ctxt = dbus_context!(self, 0);
         let mut header = self.header;
 
-        if !matches!(signature, parsed::Signature::Unit) {
-            let signature = signature.to_string_no_parens();
-            let signature = Signature::from_string_unchecked(signature);
-
+        if !matches!(signature, Signature::Unit) {
             header.fields_mut().signature = Some(signature);
         }
 

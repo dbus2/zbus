@@ -1,10 +1,16 @@
-use serde::{Deserialize, Serialize};
+mod child;
+pub use child::Child;
+mod fields;
+pub use fields::Fields;
+mod error;
+pub use error::Error;
 
-use super::{child_signature::ChildSignature, fields_signatures::FieldsSignatures};
+use serde::{Deserialize, Serialize};
 
 use core::fmt;
 use std::{
     fmt::{Display, Formatter},
+    hash::Hash,
     str::FromStr,
 };
 
@@ -22,7 +28,7 @@ use crate::serialized::Format;
 ///
 /// ```
 /// use std::str::FromStr;
-/// use zvariant::parsed::Signature;
+/// use zvariant::Signature;
 ///
 /// let sig = Signature::from_str("a{sv}").unwrap();
 /// assert_eq!(sig.to_string(), "a{sv}");
@@ -77,19 +83,19 @@ pub enum Signature {
 
     // Container types
     /// The signature for an array.
-    Array(ChildSignature),
+    Array(Child),
     /// The signature for a dictionary.
     Dict {
         /// The signature for the key.
-        key: ChildSignature,
+        key: Child,
         /// The signature for the value.
-        value: ChildSignature,
+        value: Child,
     },
     /// The signature for a structure.
-    Structure(FieldsSignatures),
+    Structure(Fields),
     /// The signature for a maybe type (gvariant-specific).
     #[cfg(feature = "gvariant")]
-    Maybe(ChildSignature),
+    Maybe(Child),
 }
 
 impl Signature {
@@ -148,41 +154,41 @@ impl Signature {
     }
 
     /// Parse signature from a byte slice.
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, super::Error> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
         parse(bytes, false)
     }
 
     /// Create a `Signature::Structure` for a given set of field signatures.
     pub fn structure<F>(fields: F) -> Self
     where
-        F: Into<FieldsSignatures>,
+        F: Into<Fields>,
     {
         Signature::Structure(fields.into())
     }
 
     /// Create a `Signature::Structure` for a given set of static field signatures.
     pub const fn static_structure(fields: &'static [&'static Signature]) -> Self {
-        Signature::Structure(FieldsSignatures::Static { fields })
+        Signature::Structure(Fields::Static { fields })
     }
 
     /// Create a `Signature::Array` for a given child signature.
     pub fn array<C>(child: C) -> Self
     where
-        C: Into<ChildSignature>,
+        C: Into<Child>,
     {
         Signature::Array(child.into())
     }
 
     /// Create a `Signature::Array` for a given static child signature.
     pub const fn static_array(child: &'static Signature) -> Self {
-        Signature::Array(ChildSignature::Static { child })
+        Signature::Array(Child::Static { child })
     }
 
     /// Create a `Signature::Dict` for a given key and value signatures.
     pub fn dict<K, V>(key: K, value: V) -> Self
     where
-        K: Into<ChildSignature>,
-        V: Into<ChildSignature>,
+        K: Into<Child>,
+        V: Into<Child>,
     {
         Signature::Dict {
             key: key.into(),
@@ -193,8 +199,8 @@ impl Signature {
     /// Create a `Signature::Dict` for a given static key and value signatures.
     pub const fn static_dict(key: &'static Signature, value: &'static Signature) -> Self {
         Signature::Dict {
-            key: ChildSignature::Static { child: key },
-            value: ChildSignature::Static { child: value },
+            key: Child::Static { child: key },
+            value: Child::Static { child: value },
         }
     }
 
@@ -202,7 +208,7 @@ impl Signature {
     #[cfg(feature = "gvariant")]
     pub fn maybe<C>(child: C) -> Self
     where
-        C: Into<ChildSignature>,
+        C: Into<Child>,
     {
         Signature::Maybe(child.into())
     }
@@ -210,7 +216,7 @@ impl Signature {
     /// Create a `Signature::Maybe` for a given static child signature.
     #[cfg(feature = "gvariant")]
     pub const fn static_maybe(child: &'static Signature) -> Self {
-        Signature::Maybe(ChildSignature::Static { child })
+        Signature::Maybe(Child::Static { child })
     }
 
     /// The required padding alignment for the given format.
@@ -354,7 +360,7 @@ impl Display for Signature {
 }
 
 impl FromStr for Signature {
-    type Err = super::Error;
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         parse(s.as_bytes(), false)
@@ -362,15 +368,23 @@ impl FromStr for Signature {
 }
 
 impl TryFrom<&str> for Signature {
-    type Error = super::Error;
+    type Error = Error;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Signature::from_str(value)
     }
 }
 
+impl TryFrom<&[u8]> for Signature {
+    type Error = Error;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        parse(value, false)
+    }
+}
+
 /// Validate the given signature string.
-pub fn validate(bytes: &[u8]) -> Result<(), super::Error> {
+pub fn validate(bytes: &[u8]) -> Result<(), Error> {
     parse(bytes, true).map(|_| ())
 }
 
@@ -378,7 +392,7 @@ pub fn validate(bytes: &[u8]) -> Result<(), super::Error> {
 ///
 /// When `check_only` is true, the function will not allocate memory for the dynamic types.
 /// Instead it will return dummy values in the parsed Signature.
-fn parse(bytes: &[u8], check_only: bool) -> Result<Signature, super::Error> {
+fn parse(bytes: &[u8], check_only: bool) -> Result<Signature, Error> {
     use nom::{
         branch::alt,
         combinator::{all_consuming, eof, map},
@@ -514,7 +528,7 @@ fn parse(bytes: &[u8], check_only: bool) -> Result<Signature, super::Error> {
     }
 
     let (_, signature) = all_consuming(alt((empty, |s| many(s, check_only, true))))(bytes)
-        .map_err(|_| super::Error::InvalidSignature)?;
+        .map_err(|_| Error::InvalidSignature)?;
 
     Ok(signature)
 }
@@ -711,3 +725,53 @@ impl<'de> Deserialize<'de> for Signature {
         })
     }
 }
+
+impl Hash for Signature {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Signature::Unit => 0.hash(state),
+            Signature::U8 => 1.hash(state),
+            Signature::Bool => 2.hash(state),
+            Signature::I16 => 3.hash(state),
+            Signature::U16 => 4.hash(state),
+            Signature::I32 => 5.hash(state),
+            Signature::U32 => 6.hash(state),
+            Signature::I64 => 7.hash(state),
+            Signature::U64 => 8.hash(state),
+            Signature::F64 => 9.hash(state),
+            Signature::Str => 10.hash(state),
+            Signature::Signature => 11.hash(state),
+            Signature::ObjectPath => 12.hash(state),
+            Signature::Variant => 13.hash(state),
+            #[cfg(unix)]
+            Signature::Fd => 14.hash(state),
+            Signature::Array(child) => {
+                15.hash(state);
+                child.hash(state);
+            }
+            Signature::Dict { key, value } => {
+                16.hash(state);
+                key.hash(state);
+                value.hash(state);
+            }
+            Signature::Structure(fields) => {
+                17.hash(state);
+                fields.iter().for_each(|f| f.hash(state));
+            }
+            #[cfg(feature = "gvariant")]
+            Signature::Maybe(child) => {
+                18.hash(state);
+                child.hash(state);
+            }
+        }
+    }
+}
+
+impl From<&Signature> for Signature {
+    fn from(value: &Signature) -> Self {
+        value.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests;

@@ -52,11 +52,8 @@ pub mod dbus;
 #[cfg(feature = "gvariant")]
 pub mod gvariant;
 
-mod signature;
-pub use crate::signature::*;
-
-mod complete_type;
-pub use complete_type::*;
+pub mod signature;
+pub use signature::Signature;
 
 mod str;
 pub use crate::str::*;
@@ -97,8 +94,6 @@ mod into_value;
 
 mod owned_value;
 pub use owned_value::*;
-
-pub mod parsed;
 
 #[cfg(feature = "gvariant")]
 mod framing_offset_size;
@@ -143,8 +138,7 @@ mod tests {
     use crate::{
         serialized::{Context, Format},
         Array, Basic, DeserializeDict, DeserializeValue, Dict, Error, ObjectPath, Result,
-        SerializeDict, SerializeValue, Signature, Str, Structure, Type, Value, BE, LE,
-        NATIVE_ENDIAN,
+        SerializeDict, SerializeValue, Str, Structure, Type, Value, BE, LE, NATIVE_ENDIAN,
     };
 
     // Test through both generic and specific API (wrt byte order)
@@ -549,44 +543,17 @@ mod tests {
     }
 
     #[test]
-    fn signature_value() {
-        let sig = Signature::try_from("yys").unwrap();
-        basic_type_test!(LE, DBus, sig, 5, Signature<'_>, 1);
-
-        #[cfg(feature = "gvariant")]
-        {
-            let encoded = basic_type_test!(LE, GVariant, sig, 4, Signature<'_>, 1);
-            decode_with_gvariant::<_, String>(encoded, Some(String::from("yys")));
-        }
-
-        // As Value
-        let v: Value<'_> = sig.into();
-        assert_eq!(v.value_signature(), "g");
-        let encoded = value_test!(LE, DBus, v, 8);
-        let v = encoded.deserialize::<Value<'_>>().unwrap().0;
-        assert_eq!(v, Value::Signature(Signature::try_from("yys").unwrap()));
-
-        // GVariant format now
-        #[cfg(feature = "gvariant")]
-        {
-            let encoded = value_test!(LE, GVariant, v, 6);
-            let v = encoded.deserialize::<Value<'_>>().unwrap().0;
-            assert_eq!(v, Value::Signature(Signature::try_from("yys").unwrap()));
-        }
-    }
-
-    #[test]
-    fn parsed_signature() {
-        use crate::parsed;
+    fn signature() {
+        use crate::Signature;
         use std::str::FromStr;
 
-        let sig = parsed::Signature::from_str("yys").unwrap();
-        // parsed::Structure will always add () around the signature if it's a struct.
-        basic_type_test!(LE, DBus, sig, 7, parsed::Signature, 1);
+        let sig = Signature::from_str("yys").unwrap();
+        // Structure will always add () around the signature if it's a struct.
+        basic_type_test!(LE, DBus, sig, 7, Signature, 1);
 
         #[cfg(feature = "gvariant")]
         {
-            let encoded = basic_type_test!(LE, GVariant, sig, 6, parsed::Signature, 1);
+            let encoded = basic_type_test!(LE, GVariant, sig, 6, Signature, 1);
             decode_with_gvariant::<_, String>(encoded, Some(String::from("(yys)")));
         }
 
@@ -1252,7 +1219,7 @@ mod tests {
         let ctxt = Context::new_dbus(LE, 0);
 
         // Now a hand-crafted Dict Value but with a Value as value
-        let mut dict = Dict::new(<&str>::SIGNATURE.into(), Value::SIGNATURE.into());
+        let mut dict = Dict::new(<&str>::SIGNATURE, Value::SIGNATURE);
         dict.add("hello", Value::new("there")).unwrap();
         dict.add("bye", Value::new("now")).unwrap();
         let v: Value<'_> = dict.into();
@@ -1346,11 +1313,11 @@ mod tests {
     fn dict_compare() {
         // the order in which a dict has been constructed must not play a role
         // https://github.com/dbus2/zbus/issues/484
-        let mut dict1 = Dict::new(<&str>::SIGNATURE.into(), Value::SIGNATURE.into());
+        let mut dict1 = Dict::new(<&str>::SIGNATURE, Value::SIGNATURE);
         dict1.add("first", Value::new("value")).unwrap();
         dict1.add("second", Value::new("value")).unwrap();
 
-        let mut dict2 = Dict::new(<&str>::SIGNATURE.into(), Value::SIGNATURE.into());
+        let mut dict2 = Dict::new(<&str>::SIGNATURE, Value::SIGNATURE);
         dict2.add("second", Value::new("value")).unwrap();
         dict2.add("first", Value::new("value")).unwrap();
 
@@ -2039,7 +2006,7 @@ mod tests {
     #[test]
     #[cfg(feature = "gvariant")]
     fn issue_99() {
-        use crate::to_bytes_for_parsed_signature;
+        use crate::to_bytes_for_signature;
 
         #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
         struct ZVStruct<'s>(#[serde(borrow)] HashMap<&'s str, Value<'s>>);
@@ -2053,11 +2020,8 @@ mod tests {
         let ctxt = Context::new_gvariant(LE, 0);
         let signature = ZVStruct::SIGNATURE;
 
-        let encoded = to_bytes_for_parsed_signature(ctxt, signature, &element).unwrap();
-        let _: ZVStruct<'_> = encoded
-            .deserialize_for_parsed_signature(signature)
-            .unwrap()
-            .0;
+        let encoded = to_bytes_for_signature(ctxt, signature, &element).unwrap();
+        let _: ZVStruct<'_> = encoded.deserialize_for_signature(signature).unwrap().0;
     }
 
     #[cfg(feature = "ostree-tests")]

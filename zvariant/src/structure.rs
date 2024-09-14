@@ -7,7 +7,7 @@ use static_assertions::assert_impl_all;
 use std::fmt::{Display, Write};
 
 use crate::{
-    parsed, value::SignatureSeed, value_display_fmt, DynamicDeserialize, DynamicType, OwnedValue,
+    value::SignatureSeed, value_display_fmt, DynamicDeserialize, DynamicType, OwnedValue,
     Signature, Value,
 };
 
@@ -73,7 +73,10 @@ impl<'a> StructureBuilder<'a> {
         if self.0.is_empty() {
             return Err(crate::Error::EmptyStructure);
         }
-        let signature = create_signature_from_fields(&self.0);
+
+        let fields_signatures: Box<[Signature]> =
+            self.0.iter().map(Value::value_signature).cloned().collect();
+        let signature = Signature::structure(fields_signatures);
 
         Ok(Structure {
             fields: self.0,
@@ -82,10 +85,10 @@ impl<'a> StructureBuilder<'a> {
     }
 
     /// Same as `build` except Signature is provided.
-    pub(crate) fn build_with_signature<'s: 'a>(self, signature: Signature<'s>) -> Structure<'a> {
+    pub(crate) fn build_with_signature<'s: 'a>(self, signature: &Signature) -> Structure<'a> {
         Structure {
             fields: self.0,
-            signature,
+            signature: signature.clone(),
         }
     }
 }
@@ -96,20 +99,30 @@ impl<'a> StructureBuilder<'a> {
 /// has a `'static` lifetime. This will be removed in the next major release.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StructureSeed<'a> {
-    signature: parsed::Signature,
+    signature: Signature,
     phantom: std::marker::PhantomData<&'a ()>,
 }
 
 assert_impl_all!(StructureSeed<'_>: Unpin);
 
-impl StructureSeed<'static> {}
+impl StructureSeed<'static> {
+    /// Create a new `StructureSeed`
+    ///
+    /// The given signature must be a valid structure signature.
+    #[must_use]
+    pub fn new_unchecked(signature: &Signature) -> Self {
+        StructureSeed {
+            signature: signature.clone(),
+            phantom: std::marker::PhantomData,
+        }
+    }
+}
 
-impl TryFrom<Signature<'_>> for StructureSeed<'static> {
+impl TryFrom<Signature> for StructureSeed<'static> {
     type Error = zvariant::Error;
 
-    fn try_from(signature: Signature<'_>) -> Result<Self, zvariant::Error> {
-        let signature = signature.into();
-        if !matches!(signature, parsed::Signature::Structure(_)) {
+    fn try_from(signature: Signature) -> Result<Self, zvariant::Error> {
+        if !matches!(signature, Signature::Structure(_)) {
             return Err(zvariant::Error::IncorrectType);
         }
 
@@ -134,7 +147,7 @@ impl<'de> DeserializeSeed<'de> for StructureSeed<'_> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct StructureVisitor {
-    signature: parsed::Signature,
+    signature: Signature,
 }
 
 impl<'de> Visitor<'de> for StructureVisitor {
@@ -163,7 +176,7 @@ impl<'de> Visitor<'de> for StructureVisitor {
 #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Structure<'a> {
     fields: Vec<Value<'a>>,
-    signature: Signature<'a>,
+    signature: Signature,
 }
 
 assert_impl_all!(Structure<'_>: Send, Sync, Unpin);
@@ -180,17 +193,7 @@ impl<'a> Structure<'a> {
     }
 
     /// Get the signature of this `Structure`.
-    ///
-    /// NB: This method potentially allocates and copies. Use [`full_signature`] if you'd like to
-    /// avoid that.
-    ///
-    /// [`full_signature`]: #method.full_signature
-    pub fn signature(&self) -> Signature<'static> {
-        self.signature.to_owned()
-    }
-
-    /// Get the signature of this `Structure`.
-    pub fn full_signature(&self) -> &Signature<'_> {
+    pub fn signature(&self) -> &Signature {
         &self.signature
     }
 
@@ -256,13 +259,13 @@ pub(crate) fn structure_display_fmt(
 }
 
 impl<'a> DynamicType for Structure<'a> {
-    fn dynamic_signature(&self) -> parsed::Signature {
-        self.signature.clone().into()
+    fn dynamic_signature(&self) -> Signature {
+        self.signature.clone()
     }
 }
 
 impl<'a> DynamicType for StructureSeed<'a> {
-    fn dynamic_signature(&self) -> parsed::Signature {
+    fn dynamic_signature(&self) -> Signature {
         self.signature.clone()
     }
 }
@@ -270,16 +273,14 @@ impl<'a> DynamicType for StructureSeed<'a> {
 impl<'a> DynamicDeserialize<'a> for Structure<'a> {
     type Deserializer = StructureSeed<'static>;
 
-    fn deserializer_for_signature(
-        parsed_signature: &parsed::Signature,
-    ) -> zvariant::Result<Self::Deserializer> {
-        let parsed_signature = match parsed_signature {
-            parsed::Signature::Structure(_) => parsed_signature.clone(),
-            s => parsed::Signature::structure([s.clone()]),
+    fn deserializer_for_signature(signature: &Signature) -> zvariant::Result<Self::Deserializer> {
+        let signature = match signature {
+            Signature::Structure(_) => signature.clone(),
+            s => Signature::structure([s.clone()]),
         };
 
         Ok(StructureSeed {
-            signature: parsed_signature,
+            signature,
             phantom: std::marker::PhantomData,
         })
     }
@@ -380,33 +381,22 @@ tuple_impls! {
     16 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11 12 T12 13 T13 14 T14 15 T15)
 }
 
-fn create_signature_from_fields(fields: &[Value<'_>]) -> Signature<'static> {
-    let mut signature = String::with_capacity(255);
-    signature.push('(');
-    for field in fields {
-        signature.push_str(&field.value_signature());
-    }
-    signature.push(')');
-
-    Signature::from_string_unchecked(signature)
-}
-
 /// Owned [`Structure`]
 #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct OwnedStructure(pub Structure<'static>);
 
 /// Use this to deserialize an [`OwnedStructure`].
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OwnedStructureSeed(parsed::Signature);
+pub struct OwnedStructureSeed(Signature);
 
 impl DynamicType for OwnedStructure {
-    fn dynamic_signature(&self) -> parsed::Signature {
+    fn dynamic_signature(&self) -> Signature {
         self.0.dynamic_signature()
     }
 }
 
 impl DynamicType for OwnedStructureSeed {
-    fn dynamic_signature(&self) -> parsed::Signature {
+    fn dynamic_signature(&self) -> Signature {
         self.0.clone()
     }
 }
@@ -414,10 +404,8 @@ impl DynamicType for OwnedStructureSeed {
 impl<'de> DynamicDeserialize<'de> for OwnedStructure {
     type Deserializer = OwnedStructureSeed;
 
-    fn deserializer_for_signature(
-        parsed_signature: &parsed::Signature,
-    ) -> zvariant::Result<Self::Deserializer> {
-        Structure::deserializer_for_signature(parsed_signature)
+    fn deserializer_for_signature(signature: &Signature) -> zvariant::Result<Self::Deserializer> {
+        Structure::deserializer_for_signature(signature)
             .map(|StructureSeed { signature, .. }| OwnedStructureSeed(signature))
     }
 }

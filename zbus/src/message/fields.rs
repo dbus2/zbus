@@ -1,22 +1,20 @@
 use serde::{
     de::{Error, SeqAccess, Visitor},
-    ser::SerializeSeq,
+    ser::{SerializeSeq, SerializeStruct},
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use static_assertions::assert_impl_all;
 use std::num::NonZeroU32;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
-use zvariant::{
-    parsed::{self, FieldsSignatures},
-    ObjectPath, Signature, Type, Value,
-};
+use zvariant::{ObjectPath, Signature, Type, Value};
 
 use crate::message::{FieldCode, Header, Message};
 
 /// A collection of [`Field`] instances.
 ///
 /// [`Field`]: enum.Field.html
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Type)]
+#[zvariant(signature = "a(yv)")]
 pub(crate) struct Fields<'f> {
     pub path: Option<ObjectPath<'f>>,
     pub interface: Option<InterfaceName<'f>>,
@@ -25,7 +23,7 @@ pub(crate) struct Fields<'f> {
     pub reply_serial: Option<NonZeroU32>,
     pub destination: Option<BusName<'f>>,
     pub sender: Option<UniqueName<'f>>,
-    pub signature: Option<Signature<'f>>,
+    pub signature: Option<Signature>,
     pub unix_fds: Option<u32>,
 }
 
@@ -36,13 +34,6 @@ impl Fields<'_> {
     pub fn new() -> Self {
         Self::default()
     }
-}
-
-impl<'f> Type for Fields<'f> {
-    const SIGNATURE: &'static parsed::Signature =
-        &parsed::Signature::static_array(&parsed::Signature::Structure(FieldsSignatures::Static {
-            fields: &[&parsed::Signature::U8, &parsed::Signature::Variant],
-        }));
 }
 
 impl<'f> Serialize for Fields<'f> {
@@ -73,12 +64,37 @@ impl<'f> Serialize for Fields<'f> {
             seq.serialize_element(&(FieldCode::Sender, Value::from(sender.as_str())))?;
         }
         if let Some(signature) = &self.signature {
-            seq.serialize_element(&(FieldCode::Signature, Value::from(signature.as_ref())))?;
+            seq.serialize_element(&(FieldCode::Signature, SignatureSerializer(signature)))?;
         }
         if let Some(unix_fds) = self.unix_fds {
             seq.serialize_element(&(FieldCode::UnixFDs, Value::from(unix_fds)))?;
         }
         seq.end()
+    }
+}
+
+/// Our special serializer for [`Value::Signature`].
+///
+/// Normally `Value` would use the default serializer for `Signature`, which will include the `()`
+/// for strucutures but for body signature, that's what what the D-Bus expects so we do the same as
+/// `Value` here, except we serialize signature value as string w/o the `()`.
+#[derive(Debug, Type)]
+#[zvariant(signature = "v")]
+struct SignatureSerializer<'a>(&'a Signature);
+
+impl<'a> Serialize for SignatureSerializer<'a> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut structure = serializer.serialize_struct("Variant", 2)?;
+
+        structure.serialize_field("signature", &Signature::Signature)?;
+
+        let signature_str = self.0.to_string_no_parens();
+        structure.serialize_field("value", &signature_str)?;
+
+        structure.end()
     }
 }
 
@@ -209,7 +225,7 @@ impl FieldPos {
 }
 
 /// A cache of the Message header fields.
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Default, Clone)]
 pub(crate) struct QuickFields {
     path: FieldPos,
     interface: FieldPos,
@@ -218,7 +234,7 @@ pub(crate) struct QuickFields {
     reply_serial: Option<NonZeroU32>,
     destination: FieldPos,
     sender: FieldPos,
-    signature: FieldPos,
+    signature: Option<Signature>,
     unix_fds: Option<u32>,
 }
 
@@ -232,7 +248,7 @@ impl QuickFields {
             reply_serial: header.reply_serial(),
             destination: FieldPos::new(buf, header.destination()),
             sender: FieldPos::new(buf, header.sender()),
-            signature: FieldPos::new(buf, header.signature()),
+            signature: header.signature().cloned(),
             unix_fds: header.unix_fds(),
         }
     }
@@ -265,8 +281,8 @@ impl QuickFields {
         self.sender.read(msg.data())
     }
 
-    pub fn signature<'m>(&self, msg: &'m Message) -> Option<Signature<'m>> {
-        self.signature.read(msg.data())
+    pub fn signature(&self) -> Option<&Signature> {
+        self.signature.as_ref()
     }
 
     pub fn unix_fds(&self) -> Option<u32> {

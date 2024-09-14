@@ -1,10 +1,7 @@
 use zvariant::{
-    parsed,
     serialized::{self, Data},
     Signature, Type,
 };
-
-use std::str::FromStr;
 
 use crate::{Error, Message, Result};
 
@@ -15,11 +12,18 @@ use crate::{Error, Message, Result};
 pub struct Body {
     data: Data<'static, 'static>,
     msg: Message,
+    signature: Option<Signature>,
 }
 
 impl Body {
     pub(super) fn new(data: Data<'static, 'static>, msg: Message) -> Self {
-        Self { data, msg }
+        let body_sig = msg.header().signature().cloned();
+
+        Self {
+            data,
+            msg,
+            signature: body_sig,
+        }
     }
 
     /// Deserialize the body using the contained signature.
@@ -31,12 +35,11 @@ impl Body {
             .msg
             .header()
             .signature()
-            .map(|s| parsed::Signature::from_str(s).map_err(zvariant::Error::from))
-            .transpose()?
-            .unwrap_or(parsed::Signature::Unit);
+            .cloned()
+            .unwrap_or(Signature::Unit);
 
         self.data
-            .deserialize_for_dynamic_parsed_signature(&body_sig)
+            .deserialize_for_dynamic_signature(&body_sig)
             .map_err(Error::from)
             .map(|b| b.0)
     }
@@ -50,13 +53,8 @@ impl Body {
     }
 
     /// The signature of the body.
-    ///
-    /// **Note:** While zbus treats multiple arguments as a struct (to allow you to use the tuple
-    /// syntax), D-Bus does not. Since this method gives you the signature expected on the wire by
-    /// D-Bus, the trailing and leading STRUCT signature parenthesis will not be present in case of
-    /// multiple arguments.
-    pub fn signature(&self) -> Option<Signature<'_>> {
-        self.msg.header().signature().cloned()
+    pub fn signature(&self) -> Option<&Signature> {
+        self.signature.as_ref()
     }
 
     /// The length of the body in bytes.

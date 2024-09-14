@@ -126,7 +126,7 @@ impl<'a> Basic for ObjectPath<'a> {
 }
 
 impl<'a> Type for ObjectPath<'a> {
-    const SIGNATURE: &'static crate::parsed::Signature = &crate::parsed::Signature::ObjectPath;
+    const SIGNATURE: &'static crate::Signature = &crate::Signature::ObjectPath;
 }
 
 impl<'a> TryFrom<&'a [u8]> for ObjectPath<'a> {

@@ -8,8 +8,8 @@ use std::os::fd::{AsFd, AsRawFd};
 #[cfg(feature = "gvariant")]
 use crate::gvariant::Deserializer as GVDeserializer;
 use crate::{
-    container_depths::ContainerDepths, dbus::Deserializer as DBusDeserializer, parsed,
-    serialized::Context, utils::*, Basic, Error, Result,
+    container_depths::ContainerDepths, dbus::Deserializer as DBusDeserializer, serialized::Context,
+    utils::*, Basic, Error, Result, Signature,
 };
 
 /// Our deserialization implementation.
@@ -25,7 +25,7 @@ pub(crate) struct DeserializerCommon<'de, 'sig, 'f, F> {
 
     pub(crate) pos: usize,
 
-    pub(crate) signature: &'sig parsed::Signature,
+    pub(crate) signature: &'sig Signature,
 
     pub(crate) container_depths: ContainerDepths,
 }
@@ -188,7 +188,7 @@ pub(crate) enum ValueParseStage {
 
 pub(crate) fn deserialize_any<'de, 'f, D, V>(
     de: D,
-    signature: &parsed::Signature,
+    signature: &Signature,
     visitor: V,
 ) -> Result<V::Value>
 where
@@ -196,27 +196,27 @@ where
     V: Visitor<'de>,
 {
     match signature {
-        parsed::Signature::Unit => de.deserialize_unit(visitor),
-        parsed::Signature::U8 => de.deserialize_u8(visitor),
-        parsed::Signature::Bool => de.deserialize_bool(visitor),
-        parsed::Signature::I16 => de.deserialize_i16(visitor),
-        parsed::Signature::U16 => de.deserialize_u16(visitor),
-        parsed::Signature::I32 => de.deserialize_i32(visitor),
+        Signature::Unit => de.deserialize_unit(visitor),
+        Signature::U8 => de.deserialize_u8(visitor),
+        Signature::Bool => de.deserialize_bool(visitor),
+        Signature::I16 => de.deserialize_i16(visitor),
+        Signature::U16 => de.deserialize_u16(visitor),
+        Signature::I32 => de.deserialize_i32(visitor),
         #[cfg(unix)]
-        parsed::Signature::Fd => de.deserialize_i32(visitor),
-        parsed::Signature::U32 => de.deserialize_u32(visitor),
-        parsed::Signature::I64 => de.deserialize_i64(visitor),
-        parsed::Signature::U64 => de.deserialize_u64(visitor),
-        parsed::Signature::F64 => de.deserialize_f64(visitor),
-        parsed::Signature::Str | parsed::Signature::ObjectPath | parsed::Signature::Signature => {
+        Signature::Fd => de.deserialize_i32(visitor),
+        Signature::U32 => de.deserialize_u32(visitor),
+        Signature::I64 => de.deserialize_i64(visitor),
+        Signature::U64 => de.deserialize_u64(visitor),
+        Signature::F64 => de.deserialize_f64(visitor),
+        Signature::Str | Signature::ObjectPath | Signature::Signature => {
             de.deserialize_str(visitor)
         }
-        parsed::Signature::Variant => de.deserialize_seq(visitor),
-        parsed::Signature::Array(_) => de.deserialize_seq(visitor),
-        parsed::Signature::Dict { .. } => de.deserialize_map(visitor),
-        parsed::Signature::Structure { .. } => de.deserialize_seq(visitor),
+        Signature::Variant => de.deserialize_seq(visitor),
+        Signature::Array(_) => de.deserialize_seq(visitor),
+        Signature::Dict { .. } => de.deserialize_map(visitor),
+        Signature::Structure { .. } => de.deserialize_seq(visitor),
         #[cfg(feature = "gvariant")]
-        parsed::Signature::Maybe(_) => de.deserialize_option(visitor),
+        Signature::Maybe(_) => de.deserialize_option(visitor),
     }
 }
 

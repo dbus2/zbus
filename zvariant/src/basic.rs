@@ -1,4 +1,4 @@
-use crate::{parsed, serialized::Format, Type};
+use crate::{serialized::Format, Signature, Type};
 
 /// Trait for basic types.
 ///
@@ -32,23 +32,23 @@ where
 macro_rules! impl_type {
     ($for:ty) => {
         impl Type for $for {
-            const SIGNATURE: &'static parsed::Signature = {
+            const SIGNATURE: &'static Signature = {
                 match Self::SIGNATURE_CHAR {
-                    'y' => &parsed::Signature::U8,
-                    'b' => &parsed::Signature::Bool,
-                    'n' => &parsed::Signature::I16,
-                    'q' => &parsed::Signature::U16,
-                    'i' => &parsed::Signature::I32,
-                    'u' => &parsed::Signature::U32,
-                    'x' => &parsed::Signature::I64,
-                    't' => &parsed::Signature::U64,
-                    'd' => &parsed::Signature::F64,
-                    's' => &parsed::Signature::Str,
-                    'g' => &parsed::Signature::Signature,
-                    'o' => &parsed::Signature::ObjectPath,
-                    'v' => &parsed::Signature::Variant,
+                    'y' => &Signature::U8,
+                    'b' => &Signature::Bool,
+                    'n' => &Signature::I16,
+                    'q' => &Signature::U16,
+                    'i' => &Signature::I32,
+                    'u' => &Signature::U32,
+                    'x' => &Signature::I64,
+                    't' => &Signature::U64,
+                    'd' => &Signature::F64,
+                    's' => &Signature::Str,
+                    'g' => &Signature::Signature,
+                    'o' => &Signature::ObjectPath,
+                    'v' => &Signature::Variant,
                     #[cfg(unix)]
-                    'h' => &parsed::Signature::Fd,
+                    'h' => &Signature::Fd,
                     _ => unreachable!(),
                 }
             };

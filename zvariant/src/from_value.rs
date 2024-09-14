@@ -1,8 +1,8 @@
 #[cfg(feature = "gvariant")]
 use crate::Maybe;
 use crate::{
-    Array, Dict, Error, NoneValue, ObjectPath, Optional, OwnedObjectPath, OwnedSignature,
-    Signature, Str, Structure, Value,
+    Array, Dict, Error, NoneValue, ObjectPath, Optional, OwnedObjectPath, Signature, Str,
+    Structure, Value,
 };
 
 #[cfg(unix)]
@@ -77,7 +77,7 @@ value_try_from_all!(U64, u64);
 value_try_from_all!(F64, f64);
 
 value_try_from_all!(Str, Str<'a>);
-value_try_from_all!(Signature, Signature<'a>);
+value_try_from_all!(Signature, Signature);
 value_try_from_all!(ObjectPath, ObjectPath<'a>);
 value_try_from!(Str, String);
 value_try_from_ref!(Str, str);
@@ -153,14 +153,6 @@ impl TryFrom<Value<'_>> for OwnedObjectPath {
 
     fn try_from(value: Value<'_>) -> Result<Self, Self::Error> {
         ObjectPath::try_from(value).map(OwnedObjectPath::from)
-    }
-}
-
-impl TryFrom<Value<'_>> for OwnedSignature {
-    type Error = Error;
-
-    fn try_from(value: Value<'_>) -> Result<Self, Self::Error> {
-        Signature::try_from(value).map(OwnedSignature::from)
     }
 }
 

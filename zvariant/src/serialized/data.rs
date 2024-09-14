@@ -10,7 +10,6 @@ use serde::{de::DeserializeSeed, Deserialize};
 
 use crate::{
     de::Deserializer,
-    parsed,
     serialized::{Context, Format},
     DynamicDeserialize, DynamicType, Error, Result, Signature, Type,
 };
@@ -144,10 +143,10 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
     where
         T: Deserialize<'d> + Type,
     {
-        self.deserialize_for_parsed_signature(T::SIGNATURE)
+        self.deserialize_for_signature(T::SIGNATURE)
     }
 
-    /// Deserialize `T` from `self` with the given parsed signature.
+    /// Deserialize `T` from `self` with the given signature.
     ///
     /// Use this method instead of [`Data::deserialize`] if the value being deserialized does not
     /// implement [`Type`].
@@ -160,8 +159,8 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
     /// ```rust
     /// use serde::{Deserialize, Serialize};
     /// use zvariant::{
-    ///     LE, to_bytes_for_parsed_signature, serialized::Context,
-    ///     parsed::{Signature, FieldsSignatures},
+    ///     LE, to_bytes_for_signature, serialized::Context,
+    ///     signature::{Signature, Fields},
     /// };
     ///
     /// let ctxt = Context::new_dbus(LE, 0);
@@ -172,9 +171,9 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
     ///     Variant3,
     /// }
     ///
-    /// let encoded = to_bytes_for_parsed_signature(ctxt, &Signature::U32, &Unit::Variant2).unwrap();
+    /// let encoded = to_bytes_for_signature(ctxt, &Signature::U32, &Unit::Variant2).unwrap();
     /// assert_eq!(encoded.len(), 4);
-    /// let decoded: Unit = encoded.deserialize_for_parsed_signature(&Signature::U32).unwrap().0;
+    /// let decoded: Unit = encoded.deserialize_for_signature(&Signature::U32).unwrap().0;
     /// assert_eq!(decoded, Unit::Variant2);
     ///
     /// #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -184,13 +183,13 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
     ///     Variant3(&'s str),
     /// }
     ///
-    /// let signature = Signature::Structure(FieldsSignatures::Static {
+    /// let signature = Signature::Structure(Fields::Static {
     ///     fields: &[&Signature::U32, &Signature::Str],
     /// });
     /// let encoded =
-    ///     to_bytes_for_parsed_signature(ctxt, &signature, &NewType::Variant2("hello")).unwrap();
+    ///     to_bytes_for_signature(ctxt, &signature, &NewType::Variant2("hello")).unwrap();
     /// assert_eq!(encoded.len(), 14);
-    /// let decoded: NewType<'_> = encoded.deserialize_for_parsed_signature(&signature).unwrap().0;
+    /// let decoded: NewType<'_> = encoded.deserialize_for_signature(&signature).unwrap().0;
     /// assert_eq!(decoded, NewType::Variant2("hello"));
     ///
     /// #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -199,36 +198,37 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
     ///     Struct { y: u8, t: u64 },
     /// }
     ///
-    /// let signature = Signature::Structure(FieldsSignatures::Static {
+    /// let signature = Signature::Structure(Fields::Static {
     ///     fields: &[
     ///         &Signature::U32,
-    ///         &Signature::Structure(FieldsSignatures::Static {
+    ///         &Signature::Structure(Fields::Static {
     ///             fields: &[&Signature::U8, &Signature::U64],
     ///         }),
     ///     ],
     /// });
-    /// let encoded = to_bytes_for_parsed_signature(ctxt, &signature, &Structs::Tuple(42, 42)).unwrap();
+    /// let encoded = to_bytes_for_signature(ctxt, &signature, &Structs::Tuple(42, 42)).unwrap();
     /// assert_eq!(encoded.len(), 24);
-    /// let decoded: Structs = encoded.deserialize_for_parsed_signature(&signature).unwrap().0;
+    /// let decoded: Structs = encoded.deserialize_for_signature(&signature).unwrap().0;
     /// assert_eq!(decoded, Structs::Tuple(42, 42));
     ///
     /// let s = Structs::Struct { y: 42, t: 42 };
-    /// let encoded = to_bytes_for_parsed_signature(ctxt, &signature, &s).unwrap();
+    /// let encoded = to_bytes_for_signature(ctxt, &signature, &s).unwrap();
     /// assert_eq!(encoded.len(), 24);
-    /// let decoded: Structs = encoded.deserialize_for_parsed_signature(&signature).unwrap().0;
+    /// let decoded: Structs = encoded.deserialize_for_signature(&signature).unwrap().0;
     /// assert_eq!(decoded, Structs::Struct { y: 42, t: 42 });
     /// ```
     ///
     /// # Return value
     ///
     /// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
-    pub fn deserialize_for_parsed_signature<'d, T>(
-        &'d self,
-        signature: &parsed::Signature,
-    ) -> Result<(T, usize)>
+    pub fn deserialize_for_signature<'d, S, T>(&'d self, signature: S) -> Result<(T, usize)>
     where
         T: Deserialize<'d>,
+        S: TryInto<Signature>,
+        S::Error: Into<Error>,
     {
+        let signature = signature.try_into().map_err(Into::into)?;
+
         #[cfg(unix)]
         let fds = &self.inner.fds;
         let mut de = match self.context.format() {
@@ -239,24 +239,29 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
                     crate::gvariant::Deserializer::new(
                         self.bytes(),
                         Some(fds),
-                        signature,
+                        &signature,
                         self.context,
                     )
                 }
                 #[cfg(not(unix))]
                 {
-                    crate::gvariant::Deserializer::<()>::new(self.bytes(), signature, self.context)
+                    crate::gvariant::Deserializer::<()>::new(self.bytes(), &signature, self.context)
                 }
             }
             .map(Deserializer::GVariant)?,
             Format::DBus => {
                 #[cfg(unix)]
                 {
-                    crate::dbus::Deserializer::new(self.bytes(), Some(fds), signature, self.context)
+                    crate::dbus::Deserializer::new(
+                        self.bytes(),
+                        Some(fds),
+                        &signature,
+                        self.context,
+                    )
                 }
                 #[cfg(not(unix))]
                 {
-                    crate::dbus::Deserializer::<()>::new(self.bytes(), signature, self.context)
+                    crate::dbus::Deserializer::<()>::new(self.bytes(), &signature, self.context)
                 }
             }
             .map(Deserializer::DBus)?,
@@ -269,22 +274,6 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
         })
     }
 
-    /// Deserialize `T` from `self` with the given (unparsed) signature.
-    ///
-    /// # Return value
-    ///
-    /// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
-    pub fn deserialize_for_signature<'d, S, T>(&'d self, signature: S) -> Result<(T, usize)>
-    where
-        T: Deserialize<'d>,
-        S: TryInto<Signature<'d>>,
-        S::Error: Into<Error>,
-    {
-        let signature = signature.try_into().map_err(Into::into)?.into();
-
-        self.deserialize_for_parsed_signature(&signature)
-    }
-
     /// Deserialize `T` from `self`, with the given dynamic signature.
     ///
     /// # Return value
@@ -293,28 +282,11 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
     pub fn deserialize_for_dynamic_signature<'d, S, T>(&'d self, signature: S) -> Result<(T, usize)>
     where
         T: DynamicDeserialize<'d>,
-        S: TryInto<Signature<'d>>,
+        S: TryInto<Signature>,
         S::Error: Into<Error>,
     {
-        let signature = signature.try_into().map_err(Into::into)?.into();
+        let signature = signature.try_into().map_err(Into::into)?;
         let seed = T::deserializer_for_signature(&signature)?;
-
-        self.deserialize_with_seed(seed)
-    }
-
-    /// Deserialize `T` from `self`, with the given dynamic parsed signature.
-    ///
-    /// # Return value
-    ///
-    /// A tuple containing the deserialized value and the number of bytes parsed from `bytes`.
-    pub fn deserialize_for_dynamic_parsed_signature<'d, T>(
-        &'d self,
-        signature: &parsed::Signature,
-    ) -> Result<(T, usize)>
-    where
-        T: DynamicDeserialize<'d>,
-    {
-        let seed = T::deserializer_for_signature(signature)?;
 
         self.deserialize_with_seed(seed)
     }

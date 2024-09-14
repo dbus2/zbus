@@ -9,10 +9,9 @@ use crate::{
     de::{DeserializerCommon, ValueParseStage},
     framing_offset_size::FramingOffsetSize,
     framing_offsets::FramingOffsets,
-    parsed::Signature,
     serialized::{Context, Format},
     utils::*,
-    Basic, Error, ObjectPath, Result,
+    Basic, Error, ObjectPath, Result, Signature,
 };
 
 /// Our GVariant deserialization implementation.
@@ -174,11 +173,11 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
                 let expected = format!(
                     "`{}`, `{}`, `{}` or `{}`",
                     <&str>::SIGNATURE_STR,
-                    crate::Signature::SIGNATURE_STR,
+                    Signature::SIGNATURE_STR,
                     ObjectPath::SIGNATURE_STR,
                     VARIANT_SIGNATURE_CHAR,
                 );
-                return Err(Error::SignatureMismatch(self.0.signature.into(), expected));
+                return Err(Error::SignatureMismatch(self.0.signature.clone(), expected));
             }
         };
         visitor.visit_borrowed_str(s)
@@ -195,7 +194,7 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
             Signature::Maybe(child) => child.signature(),
             _ => {
                 return Err(Error::SignatureMismatch(
-                    self.0.signature.clone().into(),
+                    self.0.signature.clone(),
                     "a maybe".to_string(),
                 ));
             }
@@ -312,7 +311,7 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
                 })
             }
             _ => Err(Error::SignatureMismatch(
-                self.0.signature.clone().into(),
+                self.0.signature.clone(),
                 "a variant, array, dict, structure or u8".to_string(),
             )),
         }
@@ -395,7 +394,7 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F>
                 ),
                 _ => {
                     return Err(Error::SignatureMismatch(
-                        de.0.signature.clone().into(),
+                        de.0.signature.clone(),
                         "an array or dict".to_string(),
                     ));
                 }
@@ -671,7 +670,7 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de
         let field_signature = match signature {
             Signature::Structure(fields) => {
                 let signature = fields.iter().nth(self.field_idx).ok_or_else(|| {
-                    Error::SignatureMismatch(signature.clone().into(), "a struct".to_string())
+                    Error::SignatureMismatch(signature.clone(), "a struct".to_string())
                 })?;
                 self.field_idx += 1;
 

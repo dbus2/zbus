@@ -7,10 +7,9 @@ use std::os::fd::AsFd;
 
 use crate::{
     de::{DeserializerCommon, ValueParseStage},
-    parsed::Signature,
     serialized::{Context, Format},
     utils::*,
-    Basic, Error, ObjectPath, Result,
+    Basic, Error, ObjectPath, Result, Signature,
 };
 
 /// Our D-Bus deserialization implementation.
@@ -213,11 +212,11 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
                 let expected = format!(
                     "`{}`, `{}`, `{}` or `{}`",
                     <&str>::SIGNATURE_STR,
-                    crate::Signature::SIGNATURE_STR,
+                    Signature::SIGNATURE_STR,
                     ObjectPath::SIGNATURE_STR,
                     VARIANT_SIGNATURE_CHAR,
                 );
-                return Err(Error::SignatureMismatch(self.0.signature.into(), expected));
+                return Err(Error::SignatureMismatch(self.0.signature.clone(), expected));
             }
         };
         let slice = self.0.next_slice(len)?;
@@ -312,7 +311,7 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
                 })
             }
             _ => Err(Error::SignatureMismatch(
-                self.0.signature.clone().into(),
+                self.0.signature.clone(),
                 "a variant, array, dict, structure or u8".to_string(),
             )),
         }
@@ -348,7 +347,7 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
                 let mut fields = fields.iter();
                 let index_signature = fields.next().ok_or_else(|| {
                     Error::SignatureMismatch(
-                        self.0.signature.clone().into(),
+                        self.0.signature.clone(),
                         "a structure with 2 fields and u32 as its first field".to_string(),
                     )
                 })?;
@@ -357,7 +356,7 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
 
                 self.0.signature = fields.next().ok_or_else(|| {
                     Error::SignatureMismatch(
-                        self.0.signature.clone().into(),
+                        self.0.signature.clone(),
                         "a structure with 2 fields and u32 as its first field".to_string(),
                     )
                 })?;
@@ -365,7 +364,7 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
                 v
             }
             _ => Err(Error::SignatureMismatch(
-                self.0.signature.clone().into(),
+                self.0.signature.clone(),
                 "a string, object path or signature".to_string(),
             )),
         }
@@ -401,7 +400,7 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F>
             Signature::Dict { key, .. } => (DICT_ENTRY_ALIGNMENT_DBUS, key.signature()),
             _ => {
                 return Err(Error::SignatureMismatch(
-                    de.0.signature.clone().into(),
+                    de.0.signature.clone(),
                     "an array or dict".to_string(),
                 ));
             }
@@ -508,7 +507,7 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F>
             Signature::Dict { key, value } => (key.signature(), value.signature()),
             _ => {
                 return Err(Error::SignatureMismatch(
-                    de.0.signature.clone().into(),
+                    de.0.signature.clone(),
                     "a dict".to_string(),
                 ));
             }
@@ -592,7 +591,7 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de
         let field_signature = match signature {
             Signature::Structure(fields) => {
                 let signature = fields.iter().nth(self.field_idx).ok_or_else(|| {
-                    Error::SignatureMismatch(signature.clone().into(), "a struct".to_string())
+                    Error::SignatureMismatch(signature.clone(), "a struct".to_string())
                 })?;
                 self.field_idx += 1;
 

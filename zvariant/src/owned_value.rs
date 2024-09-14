@@ -3,8 +3,8 @@ use static_assertions::assert_impl_all;
 use std::{collections::HashMap, hash::BuildHasher};
 
 use crate::{
-    Array, Dict, NoneValue, ObjectPath, Optional, OwnedObjectPath, OwnedSignature, Signature, Str,
-    Structure, Type, Value,
+    Array, Dict, NoneValue, ObjectPath, Optional, OwnedObjectPath, Signature, Str, Structure, Type,
+    Value,
 };
 
 #[cfg(unix)]
@@ -71,8 +71,7 @@ ov_try_from!(i64);
 ov_try_from!(u64);
 ov_try_from!(f64);
 ov_try_from!(String);
-ov_try_from!(Signature<'static>);
-ov_try_from!(OwnedSignature);
+ov_try_from!(Signature);
 ov_try_from!(ObjectPath<'static>);
 ov_try_from!(OwnedObjectPath);
 ov_try_from!(Array<'static>);
@@ -94,7 +93,7 @@ ov_try_from_ref!(i64);
 ov_try_from_ref!(u64);
 ov_try_from_ref!(f64);
 ov_try_from_ref!(&'a str);
-ov_try_from_ref!(&'a Signature<'a>);
+ov_try_from_ref!(&'a Signature);
 ov_try_from_ref!(&'a ObjectPath<'a>);
 ov_try_from_ref!(&'a Array<'a>);
 ov_try_from_ref!(&'a Dict<'a, 'a>);
@@ -224,8 +223,13 @@ to_value!(i64, I64);
 to_value!(u64, U64);
 to_value!(f64, F64);
 to_value!(Str<'a>, Str);
-to_value!(Signature<'a>, Signature);
 to_value!(ObjectPath<'a>, ObjectPath);
+
+impl From<Signature> for OwnedValue {
+    fn from(v: Signature) -> Self {
+        OwnedValue(<Value<'static>>::Signature(v))
+    }
+}
 
 macro_rules! try_to_value {
     ($from:ty) => {

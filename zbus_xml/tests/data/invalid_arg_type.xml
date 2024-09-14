@@ -4,7 +4,7 @@
  <node name="/com/example/sample_object0">
    <interface name="com.example.SampleInterface0">
      <method name="Frobate">
-       <arg name="foz" type="is"/>
+       <arg name="foz" type="z"/>
      </method>
    </interface>
  </node>

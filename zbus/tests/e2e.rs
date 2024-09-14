@@ -633,14 +633,14 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
 
         if method.name() == "TestSingleStructRet" {
             assert_eq!(args.len(), 1);
-            assert_eq!(out_args.next().unwrap().ty().signature(), "(is)");
+            assert_eq!(out_args.next().unwrap().ty(), "(is)");
             assert!(out_args.next().is_none());
         } else {
             assert_eq!(args.len(), 2);
             let foo = out_args.find(|a| a.name() == Some("foo")).unwrap();
-            assert_eq!(foo.ty().signature(), "i");
+            assert_eq!(foo.ty(), "i");
             let bar = out_args.find(|a| a.name() == Some("bar")).unwrap();
-            assert_eq!(bar.ty().signature(), "s");
+            assert_eq!(bar.ty(), "s");
         }
     }
     // build-time check to see if macro is doing the right thing.

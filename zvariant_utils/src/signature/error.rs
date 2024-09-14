@@ -1,13 +1,5 @@
 use core::fmt;
 
-mod child_signature;
-
-pub use child_signature::ChildSignature;
-mod fields_signatures;
-pub use fields_signatures::FieldsSignatures;
-pub mod signature;
-pub use signature::Signature;
-
 /// Enum representing the max depth exceeded error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
@@ -22,6 +14,3 @@ impl fmt::Display for Error {
         }
     }
 }
-
-#[cfg(test)]
-mod tests;

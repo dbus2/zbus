@@ -13,7 +13,7 @@ use tracing::{debug, instrument, trace, trace_span, Instrument};
 
 use static_assertions::assert_impl_all;
 use zbus_names::InterfaceName;
-use zvariant::{parsed::Signature, ObjectPath, OwnedObjectPath, OwnedValue, Type, Value};
+use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Signature, Type, Value};
 
 use crate::{
     async_lock::{RwLock, RwLockReadGuard, RwLockWriteGuard},
