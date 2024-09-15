@@ -1338,7 +1338,7 @@ impl<'a> From<crate::blocking::Proxy<'a>> for Proxy<'a> {
 }
 
 /// This trait is implemented by all async proxies, which are generated with the
-/// [`dbus_proxy`](zbus::dbus_proxy) macro.
+/// [`proxy`](macro@zbus::proxy) macro.
 pub trait ProxyImpl<'c>
 where
     Self: Sized,

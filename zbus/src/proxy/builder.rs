@@ -175,10 +175,10 @@ where
 
 /// Trait for the default associated values of a proxy.
 ///
-/// The trait is automatically implemented by the [`dbus_proxy`] macro on your behalf, and may be
-/// later used to retrieve the associated constants.
+/// The trait is automatically implemented by the [`proxy`] macro on your behalf, and may be later
+/// used to retrieve the associated constants.
 ///
-/// [`dbus_proxy`]: attr.dbus_proxy.html
+/// [`proxy`]: attr.proxy.html
 pub trait ProxyDefault {
     const INTERFACE: Option<&'static str>;
     const DESTINATION: Option<&'static str>;
