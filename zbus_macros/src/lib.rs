@@ -365,17 +365,7 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn interface(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr with Punctuated<Meta, Token![,]>::parse_terminated);
     let input = parse_macro_input!(item as ItemImpl);
-    iface::expand::<iface::ImplAttributes, iface::MethodAttributes>(args, input)
-        .unwrap_or_else(|err| err.to_compile_error())
-        .into()
-}
-
-#[deprecated = "Use `#[interface(...)]` proc macro with `#[zbus(...)]` item attributes instead."]
-#[proc_macro_attribute]
-pub fn dbus_interface(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(attr with Punctuated<Meta, Token![,]>::parse_terminated);
-    let input = parse_macro_input!(item as ItemImpl);
-    iface::expand::<iface::old::ImplAttributes, iface::old::MethodAttributes>(args, input)
+    iface::expand(args, input)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
 }
