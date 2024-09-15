@@ -13,33 +13,9 @@ use syn::{
     Meta, MetaNameValue, PatType, PathArguments, ReturnType, Signature, Token, Type, TypePath,
     Visibility,
 };
-use zvariant_utils::{case, def_attrs, macros::AttrParse, old_new};
+use zvariant_utils::{case, def_attrs};
 
 use crate::utils::*;
-
-pub mod old {
-    use super::def_attrs;
-    def_attrs! {
-        crate dbus_interface;
-
-        pub ImplAttributes("impl block") {
-            interface str,
-            name str,
-            spawn bool
-        };
-
-        pub MethodAttributes("method") {
-            name str,
-            signal none,
-            property {
-                pub PropertyAttributes("property") {
-                    emits_changed_signal str
-                }
-            },
-            out_args [str]
-        };
-    }
-}
 
 def_attrs! {
     crate zbus;
@@ -93,9 +69,6 @@ def_attrs! {
         signal_context none
     };
 }
-
-old_new!(ImplAttrs, old::ImplAttributes, ImplAttributes);
-old_new!(MethodAttrs, old::MethodAttributes, MethodAttributes);
 
 #[derive(Debug)]
 struct Property<'a> {
@@ -177,7 +150,7 @@ impl MethodInfo {
     fn new(
         zbus: &TokenStream,
         method: &ImplItemFn,
-        attrs: &MethodAttrs,
+        attrs: &MethodAttributes,
         cfg_attrs: &[&Attribute],
         doc_attrs: &[&Attribute],
     ) -> syn::Result<MethodInfo> {
@@ -205,22 +178,8 @@ impl MethodInfo {
             })
             .collect();
         let doc_comments = to_xml_docs(docs);
-        let (is_property, is_signal, out_args, attrs_name, proxy_attrs) = match attrs {
-            MethodAttrs::Old(old) => (
-                old.property.is_some(),
-                old.signal,
-                old.out_args.clone(),
-                old.name.clone(),
-                None,
-            ),
-            MethodAttrs::New(new) => (
-                new.property.is_some(),
-                new.signal,
-                new.out_args.clone(),
-                new.name.clone(),
-                new.proxy.clone(),
-            ),
-        };
+        let is_property = attrs.property.is_some();
+        let is_signal = attrs.signal;
         assert!(!is_property || !is_signal);
 
         let has_inputs = inputs.len() > 1;
@@ -263,8 +222,12 @@ impl MethodInfo {
 
         let mut intro_args = quote!();
         intro_args.extend(introspect_input_args(&typed_inputs, is_signal, cfg_attrs));
-        let is_result_output =
-            introspect_add_output_args(&mut intro_args, output, out_args.as_deref(), cfg_attrs)?;
+        let is_result_output = introspect_add_output_args(
+            &mut intro_args,
+            output,
+            attrs.out_args.as_deref(),
+            cfg_attrs,
+        )?;
 
         let (args_from_msg, args_names) = get_args_from_inputs(&typed_inputs, zbus)?;
 
@@ -282,7 +245,7 @@ impl MethodInfo {
             quote!(c.reply(m, &reply).await)
         };
 
-        let member_name = attrs_name.clone().unwrap_or_else(|| {
+        let member_name = attrs.name.clone().unwrap_or_else(|| {
             let mut name = ident.to_string();
             if is_property && has_inputs {
                 assert!(name.starts_with("set_"));
@@ -319,7 +282,7 @@ impl MethodInfo {
             args_names,
             reply,
             member_name,
-            proxy_attrs,
+            proxy_attrs: attrs.proxy.clone(),
             output: output.clone(),
             cfg_attrs: cfg_attrs.iter().cloned().cloned().collect(),
             doc_attrs: doc_attrs.iter().cloned().cloned().collect(),
@@ -327,10 +290,7 @@ impl MethodInfo {
     }
 }
 
-pub fn expand<T: AttrParse + Into<ImplAttrs>, M: AttrParse + Into<MethodAttrs>>(
-    args: Punctuated<Meta, Token![,]>,
-    mut input: ItemImpl,
-) -> syn::Result<TokenStream> {
+pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Result<TokenStream> {
     let zbus = zbus_path();
 
     let self_ty = &input.self_ty;
@@ -357,14 +317,10 @@ pub fn expand<T: AttrParse + Into<ImplAttrs>, M: AttrParse + Into<MethodAttrs>>(
     };
 
     let (iface_name, with_spawn, mut proxy) = {
-        let (name, interface, spawn, proxy) = match T::parse_nested_metas(args)?.into() {
-            ImplAttrs::New(new) => (new.name, new.interface, new.spawn, new.proxy),
-            // New proxy attributes are not supported for old `dbus_interface`.
-            ImplAttrs::Old(old) => (old.name, old.interface, old.spawn, None),
-        };
+        let impl_attrs = ImplAttributes::parse_nested_metas(args)?;
 
         let name =
-            match (name, interface) {
+            match (impl_attrs.name, impl_attrs.interface) {
                 (Some(name), None) | (None, Some(name)) => name,
                 (None, None) => format!("org.freedesktop.{ty}"),
                 (Some(_), Some(_)) => return Err(syn::Error::new(
@@ -372,9 +328,9 @@ pub fn expand<T: AttrParse + Into<ImplAttrs>, M: AttrParse + Into<MethodAttrs>>(
                     "`name` and `interface` attributes should not be specified at the same time",
                 )),
             };
-        let proxy = proxy.map(|p| Proxy::new(ty, &name, p, &zbus));
+        let proxy = impl_attrs.proxy.map(|p| Proxy::new(ty, &name, p, &zbus));
 
-        (name, spawn.unwrap_or(true), proxy)
+        (name, impl_attrs.spawn.unwrap_or(true), proxy)
     };
 
     // Store parsed information about each method
@@ -403,16 +359,11 @@ pub fn expand<T: AttrParse + Into<ImplAttrs>, M: AttrParse + Into<MethodAttrs>>(
             _ => continue,
         };
 
-        let attrs = M::parse(&method.attrs)?.into();
+        let method_attrs = MethodAttributes::parse(&method.attrs)?;
 
-        method.attrs.retain(|attr| {
-            !attr.path().is_ident("zbus") && !attr.path().is_ident("dbus_interface")
-        });
+        method.attrs.retain(|attr| !attr.path().is_ident("zbus"));
 
-        if is_signal
-            && !matches!(&attrs, MethodAttrs::Old(attrs) if attrs.signal)
-            && !matches!(&attrs, MethodAttrs::New(attrs) if attrs.signal)
-        {
+        if is_signal && !method_attrs.signal {
             return Err(syn::Error::new_spanned(
                 item,
                 "methods that are not signals must have a body",
@@ -430,13 +381,8 @@ pub fn expand<T: AttrParse + Into<ImplAttrs>, M: AttrParse + Into<MethodAttrs>>(
             .filter(|a| a.path().is_ident("doc"))
             .collect();
 
-        let method_info = MethodInfo::new(&zbus, method, &attrs, &cfg_attrs, &doc_attrs)?;
-        let attr_property = match attrs {
-            MethodAttrs::Old(o) => o.property.map(|op| PropertyAttributes {
-                emits_changed_signal: op.emits_changed_signal,
-            }),
-            MethodAttrs::New(n) => n.property,
-        };
+        let method_info = MethodInfo::new(&zbus, method, &method_attrs, &cfg_attrs, &doc_attrs)?;
+        let attr_property = method_attrs.property;
         if let Some(prop_attrs) = &attr_property {
             if method_info.method_type == MethodType::Property(PropertyType::NoInputs) {
                 let emits_changed_signal = if let Some(s) = &prop_attrs.emits_changed_signal {
@@ -1025,13 +971,11 @@ fn get_args_from_inputs(
     }
 }
 
-// Removes all `zbus` and `dbus_interface` attributes from the given inputs.
+// Removes all `zbus` attributes from the given inputs.
 fn clear_input_arg_attrs(inputs: &mut Punctuated<FnArg, Token![,]>) {
     for input in inputs {
         if let FnArg::Typed(t) = input {
-            t.attrs.retain(|attr| {
-                !attr.path().is_ident("zbus") && !attr.path().is_ident("dbus_interface")
-            });
+            t.attrs.retain(|attr| !attr.path().is_ident("zbus"));
         }
     }
 }
@@ -1067,7 +1011,7 @@ fn introspect_input_args<'i>(
         .iter()
         .filter_map(move |pat_type @ PatType { ty, attrs, .. }| {
             let is_special_arg = attrs.iter().any(|attr| {
-                if !attr.path().is_ident("zbus") && !attr.path().is_ident("dbus_interface") {
+                if !attr.path().is_ident("zbus") {
                     return false;
                 }
 

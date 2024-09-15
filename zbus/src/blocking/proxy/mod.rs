@@ -501,7 +501,7 @@ impl<'a> std::iter::Iterator for OwnerChangedIterator<'a> {
 }
 
 /// This trait is implemented by all blocking proxies, which are generated with the
-/// [`dbus_proxy`](zbus::dbus_proxy) macro.
+/// [`proxy`](macro@zbus::proxy) macro.
 pub trait ProxyImpl<'p>
 where
     Self: Sized,

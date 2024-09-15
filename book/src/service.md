@@ -434,8 +434,6 @@ While it's extremely useful to be able to generate the client-side proxy code di
   type to be returned from its methods.
 * Methods returning [`object_server::ResponseDispatchNotifier`] wrapper type will do the same for
   proxy as well.
-* Only `interface` macro supports this feature, while the deprecated `dbus_interface` macro does
-  not. Still haven't switched to `interface` and want to use this feature? Time to switch!
 
 [D-Bus concepts]: concepts.html#bus-name--service-name
 [didoc]: https://docs.rs/zbus/4/zbus/attr.interface.html

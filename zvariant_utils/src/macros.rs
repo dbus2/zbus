@@ -120,23 +120,6 @@ pub fn match_attribute_without_value(meta: &Meta, attr: &str) -> Result<bool> {
     }
 }
 
-/// The `AttrParse` trait is a generic interface for attribute structures.
-/// This is only implemented directly by the [`crate::def_attrs`] macro, within the `zbus_macros`
-/// crate. This macro allows the parsing of multiple variants when using the [`crate::old_new`]
-/// macro pattern, using `<T: AttrParse>` as a bounds check at compile time.
-pub trait AttrParse {
-    fn parse_meta(&mut self, meta: &::syn::Meta) -> ::syn::Result<()>;
-
-    fn parse_nested_metas<I>(iter: I) -> syn::Result<Self>
-    where
-        I: ::std::iter::IntoIterator<Item = ::syn::Meta>,
-        Self: Sized;
-
-    fn parse(attrs: &[::syn::Attribute]) -> ::syn::Result<Self>
-    where
-        Self: Sized;
-}
-
 /// Returns an iterator over the contents of all [`MetaList`]s with the specified identifier in an
 /// array of [`Attribute`]s.
 pub fn iter_meta_lists(
@@ -419,22 +402,6 @@ macro_rules! def_attrs {
             $(pub $attr_name: $crate::def_attrs!(@attr_ty $kind)),+
         }
 
-        impl ::zvariant_utils::macros::AttrParse for $name {
-          fn parse_meta(
-              &mut self,
-              meta: &::syn::Meta
-          ) -> ::syn::Result<()> { self.parse_meta(meta) }
-
-          fn parse_nested_metas<I>(iter: I) -> syn::Result<Self>
-          where
-              I: ::std::iter::IntoIterator<Item=::syn::Meta>,
-              Self: Sized { Self::parse_nested_metas(iter) }
-
-          fn parse(attrs: &[::syn::Attribute]) -> ::syn::Result<Self>
-          where
-              Self: Sized { Self::parse(attrs) }
-        }
-
         impl $name {
             pub fn parse_meta(
                 &mut self,
@@ -525,36 +492,4 @@ pub fn ty_is_option(ty: &Type) -> bool {
         }) => segments.last().unwrap().ident == "Option",
         _ => false,
     }
-}
-
-#[macro_export]
-/// The `old_new` macro desognates three structures:
-///
-/// 1. The enum wrapper name.
-/// 2. The old type name.
-/// 3. The new type name.
-///
-/// The macro creates a new enumeration with two variants: `::Old(...)` and `::New(...)`
-/// The old and new variants contain the old and new type, respectively.
-/// It also implements `From<$old>` and `From<$new>` for the new wrapper type.
-/// This is to facilitate the deprecation of extremely similar structures that have only a few
-/// differences, and to be able to warn the user of the library when the `::Old(...)` variant has
-/// been used.
-macro_rules! old_new {
-    ($attr_wrapper:ident, $old:ty, $new:ty) => {
-        pub enum $attr_wrapper {
-            Old($old),
-            New($new),
-        }
-        impl From<$old> for $attr_wrapper {
-            fn from(old: $old) -> Self {
-                Self::Old(old)
-            }
-        }
-        impl From<$new> for $attr_wrapper {
-            fn from(new: $new) -> Self {
-                Self::New(new)
-            }
-        }
-    };
 }

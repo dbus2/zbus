@@ -172,8 +172,6 @@ pub use connection::Socket;
 pub mod blocking;
 
 pub use zbus_macros::{interface, proxy, DBusError};
-// Old names used for backwards compatibility
-pub use zbus_macros::{dbus_interface, dbus_proxy};
 
 // Required for the macros to function within this crate.
 extern crate self as zbus;

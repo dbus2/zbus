@@ -5,42 +5,7 @@ use syn::{
     fold::Fold, parse_quote, parse_str, punctuated::Punctuated, spanned::Spanned, Error, FnArg,
     Ident, ItemTrait, Meta, Path, ReturnType, Token, TraitItemFn,
 };
-use zvariant_utils::{case, def_attrs, macros::AttrParse, old_new};
-
-pub mod old {
-    use super::def_attrs;
-    def_attrs! {
-        crate dbus_proxy;
-
-        pub TraitAttributes("trait") {
-            interface str,
-            name str,
-            assume_defaults bool,
-            default_path str,
-            default_service str,
-            async_name str,
-            blocking_name str,
-            gen_async bool,
-            gen_blocking bool
-        };
-
-        pub MethodAttributes("method") {
-            name str,
-            property {
-                pub PropertyAttributes("property") {
-                    emits_changed_signal str
-                }
-            },
-            signal none,
-            object str,
-            async_object str,
-            blocking_object str,
-            no_reply none,
-            no_autostart none,
-            allow_interactive_auth none
-        };
-    }
-}
+use zvariant_utils::{case, def_attrs};
 
 def_attrs! {
     crate zbus;
@@ -76,9 +41,6 @@ def_attrs! {
     };
 }
 
-old_new!(TraitAttrs, old::TraitAttributes, TraitAttributes);
-old_new!(MethodAttrs, old::MethodAttributes, MethodAttributes);
-
 struct AsyncOpts {
     blocking: bool,
     usage: TokenStream,
@@ -100,46 +62,10 @@ impl AsyncOpts {
     }
 }
 
-pub fn expand<I: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>(
-    args: Punctuated<Meta, Token![,]>,
-    input: ItemTrait,
-) -> Result<TokenStream, Error> {
-    let (
-        interface,
-        name,
-        assume_defaults,
-        default_path,
-        default_service,
-        async_name,
-        blocking_name,
-        gen_async,
-        gen_blocking,
-    ) = match I::parse_nested_metas(args)?.into() {
-        TraitAttrs::Old(old) => (
-            old.interface,
-            old.name,
-            old.assume_defaults,
-            old.default_path,
-            old.default_service,
-            old.async_name,
-            old.blocking_name,
-            old.gen_async,
-            old.gen_blocking,
-        ),
-        TraitAttrs::New(new) => (
-            new.interface,
-            new.name,
-            new.assume_defaults,
-            new.default_path,
-            new.default_service,
-            new.async_name,
-            new.blocking_name,
-            new.gen_async,
-            new.gen_blocking,
-        ),
-    };
+pub fn expand(args: Punctuated<Meta, Token![,]>, input: ItemTrait) -> Result<TokenStream, Error> {
+    let attrs = TraitAttributes::parse_nested_metas(args)?;
 
-    let iface_name = match (interface, name) {
+    let iface_name = match (attrs.interface, attrs.name) {
         (Some(name), None) | (None, Some(name)) => Ok(Some(name)),
         (None, None) => Ok(None),
         (Some(_), Some(_)) => Err(syn::Error::new(
@@ -147,8 +73,8 @@ pub fn expand<I: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>
             "both `interface` and `name` attributes shouldn't be specified at the same time",
         )),
     }?;
-    let gen_async = gen_async.unwrap_or(true);
-    let gen_blocking = gen_blocking.unwrap_or(true);
+    let gen_async = attrs.gen_async.unwrap_or(true);
+    let gen_blocking = attrs.gen_blocking.unwrap_or(true);
 
     // Some sanity checks
     assert!(
@@ -156,16 +82,16 @@ pub fn expand<I: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>
         "Can't disable both asynchronous and blocking proxy. 😸",
     );
     assert!(
-        gen_blocking || blocking_name.is_none(),
+        gen_blocking || attrs.blocking_name.is_none(),
         "Can't set blocking proxy's name if you disabled it. 😸",
     );
     assert!(
-        gen_async || async_name.is_none(),
+        gen_async || attrs.async_name.is_none(),
         "Can't set asynchronous proxy's name if you disabled it. 😸",
     );
 
     let blocking_proxy = if gen_blocking {
-        let proxy_name = blocking_name.unwrap_or_else(|| {
+        let proxy_name = attrs.blocking_name.unwrap_or_else(|| {
             if gen_async {
                 format!("{}ProxyBlocking", input.ident)
             } else {
@@ -173,12 +99,12 @@ pub fn expand<I: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>
                 format!("{}Proxy", input.ident)
             }
         });
-        create_proxy::<M>(
+        create_proxy(
             &input,
             iface_name.as_deref(),
-            assume_defaults,
-            default_path.as_deref(),
-            default_service.as_deref(),
+            attrs.assume_defaults,
+            attrs.default_path.as_deref(),
+            attrs.default_service.as_deref(),
             &proxy_name,
             true,
             // Signal args structs are shared between the two proxies so always generate it for
@@ -189,13 +115,15 @@ pub fn expand<I: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>
         quote! {}
     };
     let async_proxy = if gen_async {
-        let proxy_name = async_name.unwrap_or_else(|| format!("{}Proxy", input.ident));
-        create_proxy::<M>(
+        let proxy_name = attrs
+            .async_name
+            .unwrap_or_else(|| format!("{}Proxy", input.ident));
+        create_proxy(
             &input,
             iface_name.as_deref(),
-            assume_defaults,
-            default_path.as_deref(),
-            default_service.as_deref(),
+            attrs.assume_defaults,
+            attrs.default_path.as_deref(),
+            attrs.default_service.as_deref(),
             &proxy_name,
             false,
             true,
@@ -212,7 +140,7 @@ pub fn expand<I: AttrParse + Into<TraitAttrs>, M: AttrParse + Into<MethodAttrs>>
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn create_proxy<M: AttrParse + Into<MethodAttrs>>(
+pub fn create_proxy(
     input: &ItemTrait,
     iface_name: Option<&str>,
     assume_defaults: Option<bool>,
@@ -227,7 +155,7 @@ pub fn create_proxy<M: AttrParse + Into<MethodAttrs>>(
     let other_attrs: Vec<_> = input
         .attrs
         .iter()
-        .filter(|a| !a.path().is_ident("zbus") && !a.path().is_ident("dbus_proxy"))
+        .filter(|a| !a.path().is_ident("zbus"))
         .collect();
     let proxy_name = Ident::new(proxy_name, Span::call_site());
     let ident = input.ident.to_string();
@@ -257,26 +185,16 @@ pub fn create_proxy<M: AttrParse + Into<MethodAttrs>>(
 
     for i in input.items.iter() {
         if let syn::TraitItem::Fn(m) = i {
-            let (mut name, signal, property) = match <M>::parse(&m.attrs)?.into() {
-                MethodAttrs::Old(old) => (
-                    old.name,
-                    old.signal,
-                    old.property.map(|property| property.emits_changed_signal),
-                ),
-                MethodAttrs::New(new) => (
-                    new.name,
-                    new.signal,
-                    new.property.map(|property| property.emits_changed_signal),
-                ),
-            };
+            let method_attrs = MethodAttributes::parse(&m.attrs)?;
+            let property = method_attrs.property.as_ref();
 
             let method_name = m.sig.ident.to_string();
 
-            let is_signal = signal;
+            let is_signal = method_attrs.signal;
             let is_property = property.is_some();
             let has_inputs = m.sig.inputs.len() > 1;
 
-            let member_name = name.take().unwrap_or_else(|| {
+            let member_name = method_attrs.name.clone().unwrap_or_else(|| {
                 case::pascal_or_camel_case(
                     if is_property && has_inputs {
                         assert!(method_name.starts_with("set_"));
@@ -288,10 +206,10 @@ pub fn create_proxy<M: AttrParse + Into<MethodAttrs>>(
                 )
             });
 
-            let m = if let Some(prop_attrs) = &property {
+            let m = if let Some(prop_attrs) = property {
                 has_properties = true;
 
-                let emits_changed_signal = if let Some(s) = &prop_attrs {
+                let emits_changed_signal = if let Some(s) = &prop_attrs.emits_changed_signal {
                     PropertyEmitsChangedSignal::parse(s, m.span())?
                 } else {
                     PropertyEmitsChangedSignal::True
@@ -322,13 +240,7 @@ pub fn create_proxy<M: AttrParse + Into<MethodAttrs>>(
 
                 method
             } else {
-                gen_proxy_method_call::<M>(
-                    &member_name,
-                    &method_name,
-                    m,
-                    <M>::parse(&m.attrs)?,
-                    &async_opts,
-                )?
+                gen_proxy_method_call(&member_name, &method_name, m, method_attrs, &async_opts)?
             };
             methods.extend(m);
         }
@@ -516,32 +428,13 @@ pub fn create_proxy<M: AttrParse + Into<MethodAttrs>>(
     })
 }
 
-fn gen_proxy_method_call<M: AttrParse + Into<MethodAttrs>>(
+fn gen_proxy_method_call(
     method_name: &str,
     snake_case_name: &str,
     m: &TraitItemFn,
-    method_attrs: M,
+    method_attrs: MethodAttributes,
     async_opts: &AsyncOpts,
 ) -> Result<TokenStream, Error> {
-    let (object, blocking_object, async_object, no_reply, no_autostart, allow_interactive_auth) =
-        match method_attrs.into() {
-            MethodAttrs::Old(old) => (
-                old.object,
-                old.blocking_object,
-                old.async_object,
-                old.no_reply,
-                old.no_autostart,
-                old.allow_interactive_auth,
-            ),
-            MethodAttrs::New(new) => (
-                new.object,
-                new.blocking_object,
-                new.async_object,
-                new.no_reply,
-                new.no_autostart,
-                new.allow_interactive_auth,
-            ),
-        };
     let AsyncOpts {
         usage,
         wait,
@@ -551,7 +444,7 @@ fn gen_proxy_method_call<M: AttrParse + Into<MethodAttrs>>(
     let other_attrs: Vec<_> = m
         .attrs
         .iter()
-        .filter(|a| !a.path().is_ident("zbus") && !a.path().is_ident("dbus_proxy"))
+        .filter(|a| !a.path().is_ident("zbus"))
         .collect();
     let args: Vec<_> = m
         .sig
@@ -561,23 +454,29 @@ fn gen_proxy_method_call<M: AttrParse + Into<MethodAttrs>>(
         .filter_map(pat_ident)
         .collect();
 
-    let proxy_object = object.as_ref().map(|o| {
+    let proxy_object = method_attrs.object.as_ref().map(|o| {
         if *blocking {
             // FIXME: for some reason Rust doesn't let us move `blocking_proxy_object` so we've to
             // clone.
-            blocking_object
+            method_attrs
+                .blocking_object
                 .as_ref()
                 .cloned()
                 .unwrap_or_else(|| format!("{o}ProxyBlocking"))
         } else {
-            async_object
+            method_attrs
+                .async_object
                 .as_ref()
                 .cloned()
                 .unwrap_or_else(|| format!("{o}Proxy"))
         }
     });
 
-    let method_flags = match (no_reply, no_autostart, allow_interactive_auth) {
+    let method_flags = match (
+        method_attrs.no_reply,
+        method_attrs.no_autostart,
+        method_attrs.allow_interactive_auth,
+    ) {
         (true, false, false) => Some(quote!(::std::convert::Into::into(
             zbus::proxy::MethodFlags::NoReplyExpected
         ))),
@@ -689,7 +588,7 @@ fn gen_proxy_method_call<M: AttrParse + Into<MethodAttrs>>(
         };
 
         if let Some(method_flags) = method_flags {
-            if no_reply {
+            if method_attrs.no_reply {
                 Ok(quote! {
                     #(#other_attrs)*
                     pub #usage #signature {
@@ -741,7 +640,7 @@ fn gen_proxy_property(
     let other_attrs: Vec<_> = m
         .attrs
         .iter()
-        .filter(|a| !a.path().is_ident("zbus") && !a.path().is_ident("dbus_proxy"))
+        .filter(|a| !a.path().is_ident("zbus"))
         .collect();
     let signature = &m.sig;
     if signature.inputs.len() > 1 {
@@ -870,7 +769,7 @@ fn gen_proxy_signal(
     let other_attrs: Vec<_> = method
         .attrs
         .iter()
-        .filter(|a| !a.path().is_ident("zbus") && !a.path().is_ident("dbus_proxy"))
+        .filter(|a| !a.path().is_ident("zbus"))
         .collect();
     let input_types: Vec<_> = method
         .sig
