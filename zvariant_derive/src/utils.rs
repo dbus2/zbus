@@ -16,7 +16,7 @@ pub fn zvariant_path() -> TokenStream {
 }
 
 def_attrs! {
-    crate zvariant;
+    crate zbus, zvariant;
 
     /// Attributes defined on structures.
     pub StructAttributes("struct") { signature str, rename_all str, deny_unknown_fields none };

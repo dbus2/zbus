@@ -4,9 +4,16 @@ use syn::{
 };
 
 // find the #[@attr_name] attribute in @attrs
-fn find_attribute_meta(attrs: &[Attribute], attr_name: &str) -> Result<Option<MetaList>> {
-    let meta = match attrs.iter().find(|a| a.path().is_ident(attr_name)) {
-        Some(a) => &a.meta,
+fn find_attribute_meta(attrs: &[Attribute], attr_names: &[&str]) -> Result<Option<MetaList>> {
+    // Find attribute with path matching one of the allowed attribute names,
+    let search_result = attrs.iter().find_map(|a| {
+        attr_names
+            .iter()
+            .find_map(|attr_name| a.path().is_ident(attr_name).then_some((attr_name, a)))
+    });
+
+    let (attr_name, meta) = match search_result {
+        Some((attr_name, a)) => (attr_name, &a.meta),
         _ => return Ok(None),
     };
     match meta.require_list() {
@@ -132,8 +139,11 @@ pub trait AttrParse {
 
 /// Returns an iterator over the contents of all [`MetaList`]s with the specified identifier in an
 /// array of [`Attribute`]s.
-pub fn iter_meta_lists(attrs: &[Attribute], list_name: &str) -> Result<impl Iterator<Item = Meta>> {
-    let meta = find_attribute_meta(attrs, list_name)?;
+pub fn iter_meta_lists(
+    attrs: &[Attribute],
+    list_names: &[&str],
+) -> Result<impl Iterator<Item = Meta>> {
+    let meta = find_attribute_meta(attrs, list_names)?;
 
     Ok(meta
         .map(|meta| meta.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated))
@@ -223,11 +233,31 @@ pub fn iter_meta_lists(attrs: &[Attribute], list_name: &str) -> Result<impl Iter
 /// The syntax for inner attributes is the same as for the outer attributes, but you can specify
 /// only one inner attribute per outer attribute.
 ///
+/// # Using attribute names for attribute lists
+///
+/// It is possible to use multiple different "crate" names as follows:
+///
+/// ```
+/// # use zvariant_utils::def_attrs;
+/// def_attrs! {
+///     crate zvariant, zbus;
+///
+///     pub FooAttributes("foo") {
+///         simple_attr bool
+///     };
+/// }
+/// ```
+///
+/// It will be possible to use both `#[zvariant(...)]` and `#[zbus(...)]` attributes with
+/// `FooAttributes`.
+///
+/// Don't forget to add all the supported attributes to your proc macro definition.
+///
 /// # Calling the macro multiple times
 ///
-/// The macro generates an array called `ALLOWED_ATTRS` that contains a list of allowed attributes.
-/// Calling the macro twice in the same scope will cause a name alias and thus will fail to compile.
-/// You need to place each macro invocation into a module in that case.
+/// The macro generates static variables with hardcoded names. Calling the macro twice in the same
+/// scope will cause a name alias and thus will fail to compile. You need to place each macro
+/// invocation into a module in that case.
 ///
 /// # Errors
 ///
@@ -353,12 +383,12 @@ macro_rules! def_attrs {
                 };
         }
     };
-    (@def_ty $list_name:ident str) => {};
-    (@def_ty $list_name:ident bool) => {};
-    (@def_ty $list_name:ident [str]) => {};
-    (@def_ty $list_name:ident none) => {};
+    (@def_ty str) => {};
+    (@def_ty bool) => {};
+    (@def_ty [str]) => {};
+    (@def_ty none) => {};
     (
-        @def_ty $list_name:ident {
+        @def_ty {
             $(#[$m:meta])*
             $vis:vis $name:ident($what:literal) {
                 $($attr_name:ident $kind:tt),+
@@ -366,11 +396,10 @@ macro_rules! def_attrs {
         }
     ) => {
         // Recurse further to potentially define nested lists.
-        $($crate::def_attrs!(@def_ty $attr_name $kind);)+
+        $($crate::def_attrs!(@def_ty $kind);)+
 
         $crate::def_attrs!(
             @def_struct
-            $list_name
             $(#[$m])*
             $vis $name($what) {
                 $($attr_name $kind),+
@@ -379,7 +408,6 @@ macro_rules! def_attrs {
     };
     (
         @def_struct
-        $list_name:ident
         $(#[$m:meta])*
         $vis:vis $name:ident($what:literal) {
             $($attr_name:ident $kind:tt),+
@@ -446,9 +474,10 @@ macro_rules! def_attrs {
 
             pub fn parse(attrs: &[::syn::Attribute]) -> ::syn::Result<Self> {
                 let mut parsed = $name::default();
+
                 for nested_meta in $crate::macros::iter_meta_lists(
                     attrs,
-                    ::std::stringify!($list_name),
+                    ALLOWED_LISTS,
                 )? {
                     parsed.parse_meta(&nested_meta)?;
                 }
@@ -458,7 +487,7 @@ macro_rules! def_attrs {
         }
     };
     (
-        crate $list_name:ident;
+        crate $($list_name:ident),+;
         $(
             $(#[$m:meta])*
             $vis:vis $name:ident($what:literal) {
@@ -470,10 +499,13 @@ macro_rules! def_attrs {
             $($(::std::stringify!($attr_name),)+)+
         ];
 
+        static ALLOWED_LISTS: &[&'static str] = &[
+            $(::std::stringify!($list_name),)+
+        ];
+
         $(
             $crate::def_attrs!(
-                @def_ty
-                $list_name {
+                @def_ty {
                     $(#[$m])*
                     $vis $name($what) {
                         $($attr_name $kind),+
