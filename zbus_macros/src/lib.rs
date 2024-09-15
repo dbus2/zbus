@@ -197,17 +197,7 @@ mod utils;
 pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr with Punctuated<Meta, Token![,]>::parse_terminated);
     let input = parse_macro_input!(item as ItemTrait);
-    proxy::expand::<proxy::TraitAttributes, proxy::MethodAttributes>(args, input)
-        .unwrap_or_else(|err| err.to_compile_error())
-        .into()
-}
-
-#[deprecated = "Use `#[proxy(...)]` proc macro with `#[zbus(...)]` item attributes instead."]
-#[proc_macro_attribute]
-pub fn dbus_proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(attr with Punctuated<Meta, Token![,]>::parse_terminated);
-    let input = parse_macro_input!(item as ItemTrait);
-    proxy::expand::<proxy::old::TraitAttributes, proxy::old::MethodAttributes>(args, input)
+    proxy::expand(args, input)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
 }
