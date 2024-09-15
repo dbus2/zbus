@@ -3,7 +3,7 @@ use proc_macro2::{Literal, Span, TokenStream};
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use syn::{
     fold::Fold, parse_quote, parse_str, punctuated::Punctuated, spanned::Spanned, Error, FnArg,
-    Ident, ItemTrait, Meta, Path, ReturnType, Token, TraitItemFn,
+    Ident, ItemTrait, Meta, Path, ReturnType, Token, TraitItemFn, Visibility,
 };
 use zvariant_utils::{case, def_attrs};
 
@@ -182,6 +182,7 @@ pub fn create_proxy(
     let mut uncached_properties: Vec<String> = vec![];
 
     let async_opts = AsyncOpts::new(blocking);
+    let visibility = &input.vis;
 
     for i in input.items.iter() {
         if let syn::TraitItem::Fn(m) = i {
@@ -234,6 +235,7 @@ pub fn create_proxy(
                     &method_name,
                     m,
                     &async_opts,
+                    visibility,
                     gen_sig_args,
                 );
                 stream_types.extend(types);
@@ -340,7 +342,7 @@ pub fn create_proxy(
 
         #(#other_attrs)*
         #[derive(Clone, Debug)]
-        pub struct #proxy_name<'p>(#proxy_struct<'p>);
+        #visibility struct #proxy_name<'p>(#proxy_struct<'p>);
 
         impl<'p> #proxy_name<'p> {
             #proxy_method_new
@@ -751,6 +753,7 @@ impl Fold for SetLifetimeS {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn gen_proxy_signal(
     proxy_name: &Ident,
     iface_name: &str,
@@ -758,6 +761,7 @@ fn gen_proxy_signal(
     snake_case_name: &str,
     method: &TraitItemFn,
     async_opts: &AsyncOpts,
+    visibility: &Visibility,
     gen_sig_args: bool,
 ) -> (TokenStream, TokenStream) {
     let AsyncOpts {
@@ -894,7 +898,7 @@ fn gen_proxy_signal(
         quote! {
             #[doc = #args_struct_gen_doc]
             #[derive(Debug, Clone)]
-            pub struct #signal_name_ident(#zbus::message::Body);
+            #visibility struct #signal_name_ident(#zbus::message::Body);
 
             impl #signal_name_ident {
                 #[doc = "Try to construct a "]
@@ -955,7 +959,7 @@ fn gen_proxy_signal(
             }
 
             #[doc = #signal_args_gen_doc]
-            pub struct #signal_args #ty_generics {
+            #visibility struct #signal_args #ty_generics {
                 phantom: std::marker::PhantomData<&'s ()>,
                 #(
                     pub #args: #input_types_s
@@ -1065,7 +1069,7 @@ fn gen_proxy_signal(
     let stream_types = quote! {
         #[doc = #stream_gen_doc]
         #[derive(Debug)]
-        pub struct #stream_name<'a>(#zbus::#signal_type<'a>);
+        #visibility struct #stream_name<'a>(#zbus::#signal_type<'a>);
 
         #zbus::export::static_assertions::assert_impl_all!(
             #stream_name<'_>: ::std::marker::Send, ::std::marker::Unpin

@@ -31,7 +31,7 @@ macro_rules! gen_introspectable_proxy {
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
         )]
-        trait Introspectable {
+        pub trait Introspectable {
             /// Return an XML description of the object, including its interfaces (with signals and
             /// methods), objects below it in the object path tree, and its properties.
             fn introspect(&self) -> Result<String>;
@@ -73,7 +73,7 @@ macro_rules! gen_properties_proxy {
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
         )]
-        trait Properties {
+        pub trait Properties {
             /// Get a property value.
             async fn get(
                 &self,
@@ -236,7 +236,7 @@ macro_rules! gen_object_manager_proxy {
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
         )]
-        trait ObjectManager {
+        pub trait ObjectManager {
             /// The return value of this method is a dict whose keys are object paths. All returned object
             /// paths are children of the object path implementing this interface, i.e. their object paths
             /// start with the ObjectManager's object path plus '/'.
@@ -392,7 +392,7 @@ macro_rules! gen_monitoring_proxy {
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
         )]
-        trait Monitoring {
+        pub trait Monitoring {
             /// Convert the connection into a monitor connection which can be used as a
             /// debugging/monitoring tool.
             ///
@@ -436,7 +436,7 @@ macro_rules! gen_stats_proxy {
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
         )]
-        trait Stats {
+        pub trait Stats {
             /// GetStats (undocumented)
             fn get_stats(&self) -> Result<Vec<HashMap<String, OwnedValue>>>;
 
@@ -703,7 +703,7 @@ macro_rules! gen_dbus_proxy {
             gen_async = $gen_async,
             gen_blocking = $gen_blocking,
         )]
-        trait DBus {
+        pub trait DBus {
             /// Add a match rule to match messages going through the message bus.
             #[zbus(name = "AddMatch")]
             fn add_match_rule(&self, rule: crate::MatchRule<'_>) -> Result<()>;

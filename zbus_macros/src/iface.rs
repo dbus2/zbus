@@ -1428,7 +1428,7 @@ impl Proxy {
                 #gen_async
                 #gen_blocking
             )]
-            trait #ty {
+            pub trait #ty {
                 #methods
             }
         }
