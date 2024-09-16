@@ -94,7 +94,7 @@ enum MyIfaceError {
 
 #[interface(
     interface = "org.freedesktop.MyIface",
-    proxy(gen_blocking = true, assume_defaults = true)
+    proxy(gen_blocking = true, assume_defaults = true, visibility = "pub(self)")
 )]
 impl MyIface {
     #[instrument]

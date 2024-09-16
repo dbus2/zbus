@@ -29,7 +29,7 @@ mod test {
         interface = "org.freedesktop.zbus_macros.Test",
         default_service = "org.freedesktop.zbus_macros"
     )]
-    trait Test {
+    pub(super) trait Test {
         /// comment for a_test()
         fn a_test(&self, val: &str) -> zbus::Result<u32>;
 
