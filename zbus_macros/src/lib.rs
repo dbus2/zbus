@@ -260,7 +260,8 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// * `proxy` - Use this to specify the [`macro@proxy`]-specific method sub-attributes (e.g
 ///   `object`). The common sub-attributes (e.g `name`) are automatically forworded to the
-///   [`macro@proxy`] macro.
+///   [`macro@proxy`] macro. Moreover, you can use `visibility` sub-attribute to specify the
+///   visibility of the generated proxy type(s).
 ///
 ///   In such case, your method must return a tuple containing
 ///   your out arguments, in the same order as passed to `out_args`.

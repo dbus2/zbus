@@ -3,7 +3,7 @@ use quote::{format_ident, quote};
 use std::collections::BTreeMap;
 use syn::{
     parse::{Parse, ParseStream},
-    parse_quote,
+    parse_quote, parse_str,
     punctuated::Punctuated,
     spanned::Spanned,
     token::Comma,
@@ -34,7 +34,8 @@ def_attrs! {
                 async_name str,
                 blocking_name str,
                 gen_async bool,
-                gen_blocking bool
+                gen_blocking bool,
+                visibility str
             }
         }
     };
@@ -745,7 +746,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
         }
     };
 
-    let proxy = proxy.map(|proxy| proxy.gen());
+    let proxy = proxy.map(|proxy| proxy.gen()).transpose()?;
 
     Ok(quote! {
         #input
@@ -1374,7 +1375,7 @@ impl Proxy {
         Ok(())
     }
 
-    fn gen(&self) -> TokenStream {
+    fn gen(&self) -> syn::Result<TokenStream> {
         let attrs = &self.attrs;
         let (
             assume_defaults,
@@ -1414,9 +1415,13 @@ impl Proxy {
             &self.methods,
         );
         let iface_name = &self.iface_name;
+        let vis = match &self.attrs.visibility {
+            Some(s) => parse_str::<Visibility>(s)?,
+            None => Visibility::Public(Token![pub](ty.span())),
+        };
         let zbus = &self.zbus;
         let proxy_doc = format!("Proxy for the `{iface_name}` interface.");
-        quote! {
+        Ok(quote! {
             #[doc = #proxy_doc]
             #[#zbus::proxy(
                 name = #iface_name,
@@ -1428,9 +1433,9 @@ impl Proxy {
                 #gen_async
                 #gen_blocking
             )]
-            pub trait #ty {
+            #vis trait #ty {
                 #methods
             }
-        }
+        })
     }
 }
