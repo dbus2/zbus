@@ -2,10 +2,18 @@
 //!
 //! Provides blocking versions of the proxy types in [`zbus::fdo`] module.
 
-pub type IntrospectableProxy<'p> = crate::fdo::IntrospectableProxyBlocking<'p>;
-pub type PropertiesProxy<'p> = crate::fdo::PropertiesProxyBlocking<'p>;
-pub type ObjectManagerProxy<'p> = crate::fdo::ObjectManagerProxyBlocking<'p>;
-pub type PeerProxy<'p> = crate::fdo::PeerProxyBlocking<'p>;
-pub type MonitoringProxy<'p> = crate::fdo::MonitoringProxyBlocking<'p>;
-pub type StatsProxy<'p> = crate::fdo::StatsProxyBlocking<'p>;
-pub type DBusProxy<'p> = crate::fdo::DBusProxyBlocking<'p>;
+pub use crate::fdo::{
+    dbus::{
+        DBusProxyBlocking as DBusProxy, NameAcquiredIterator, NameLostIterator,
+        NameOwnerChangedIterator,
+    },
+    introspectable::IntrospectableProxyBlocking as IntrospectableProxy,
+    monitoring::MonitoringProxyBlocking as MonitoringProxy,
+    object_manager::{
+        InterfacesAddedIterator, InterfacesRemovedIterator,
+        ObjectManagerProxyBlocking as ObjectManagerProxy,
+    },
+    peer::PeerProxyBlocking as PeerProxy,
+    properties::{PropertiesChangedIterator, PropertiesProxyBlocking as PropertiesProxy},
+    stats::StatsProxyBlocking as StatsProxy,
+};
