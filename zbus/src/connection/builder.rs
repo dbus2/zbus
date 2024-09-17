@@ -24,7 +24,7 @@ use vsock::VsockStream;
 use zvariant::{ObjectPath, Str};
 
 use crate::{
-    address::{self, Address},
+    legacy_address::{self, Address},
     names::{InterfaceName, WellKnownName},
     object_server::{ArcInterface, Interface},
     Connection, Error, Executor, Guid, OwnedGuid, Result,
@@ -536,13 +536,13 @@ impl<'a> Builder<'a> {
                 guid = address.guid().map(|g| g.to_owned().into());
                 match address.connect().await? {
                     #[cfg(any(unix, not(feature = "tokio")))]
-                    address::transport::Stream::Unix(stream) => stream.into(),
-                    address::transport::Stream::Tcp(stream) => stream.into(),
+                    legacy_address::transport::Stream::Unix(stream) => stream.into(),
+                    legacy_address::transport::Stream::Tcp(stream) => stream.into(),
                     #[cfg(any(
                         all(feature = "vsock", not(feature = "tokio")),
                         feature = "tokio-vsock"
                     ))]
-                    address::transport::Stream::Vsock(stream) => stream.into(),
+                    legacy_address::transport::Stream::Vsock(stream) => stream.into(),
                 }
             }
             Target::Socket(stream) => stream,

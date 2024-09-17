@@ -46,8 +46,8 @@ pub use dbus_error::*;
 mod error;
 pub use error::*;
 
-pub mod address;
-pub use address::Address;
+pub mod legacy_address;
+pub use legacy_address::Address;
 
 mod guid;
 pub use guid::*;

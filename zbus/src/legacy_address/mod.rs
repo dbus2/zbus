@@ -181,11 +181,11 @@ mod tests {
         Address,
     };
     #[cfg(target_os = "macos")]
-    use crate::address::transport::Launchd;
+    use crate::legacy_address::transport::Launchd;
     #[cfg(windows)]
-    use crate::address::transport::{Autolaunch, AutolaunchScope};
+    use crate::legacy_address::transport::{Autolaunch, AutolaunchScope};
     use crate::{
-        address::transport::{Unix, UnixSocket},
+        legacy_address::transport::{Unix, UnixSocket},
         Error,
     };
     use std::str::FromStr;
@@ -308,9 +308,11 @@ mod tests {
         #[cfg(all(feature = "vsock", not(feature = "tokio")))]
         assert_eq!(
             Address::from_str(&format!("vsock:cid=98,port=2934,guid={guid}")).unwrap(),
-            Address::from(Transport::Vsock(super::transport::Vsock::new(98, 2934)))
-                .set_guid(guid)
-                .unwrap(),
+            Address::from(Transport::Vsock(legacy_address::transport::Vsock::new(
+                98, 2934
+            )))
+            .set_guid(guid)
+            .unwrap(),
         );
         assert_eq!(
             Address::from_str("unix:dir=/some/dir").unwrap(),
@@ -403,10 +405,12 @@ mod tests {
         {
             let guid = crate::Guid::generate();
             assert_eq!(
-                Address::from(Transport::Vsock(super::transport::Vsock::new(98, 2934)))
-                    .set_guid(guid.clone())
-                    .unwrap()
-                    .to_string(),
+                Address::from(Transport::Vsock(legacy_address::transport::Vsock::new(
+                    98, 2934
+                )))
+                .set_guid(guid.clone())
+                .unwrap()
+                .to_string(),
                 format!("vsock:cid=98,port=2934,guid={guid}"),
             );
         }

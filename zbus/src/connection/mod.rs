@@ -1386,7 +1386,7 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn connect_launchd_session_bus() {
-        use crate::address::{transport::Launchd, Address, Transport};
+        use crate::legacy_address::{transport::Launchd, Address, Transport};
         crate::block_on(async {
             let addr = Address::from(Transport::Launchd(Launchd::new(
                 "DBUS_LAUNCHD_SESSION_BUS_SOCKET",

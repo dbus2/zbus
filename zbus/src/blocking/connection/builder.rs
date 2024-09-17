@@ -15,8 +15,8 @@ use zvariant::{ObjectPath, Str};
 #[cfg(feature = "p2p")]
 use crate::Guid;
 use crate::{
-    address::Address, blocking::Connection, connection::socket::BoxedSplit, names::WellKnownName,
-    object_server::Interface, utils::block_on, AuthMechanism, Error, Result,
+    blocking::Connection, connection::socket::BoxedSplit, legacy_address::Address,
+    names::WellKnownName, object_server::Interface, utils::block_on, AuthMechanism, Error, Result,
 };
 
 /// A builder for [`zbus::blocking::Connection`].
