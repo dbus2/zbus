@@ -538,7 +538,7 @@ impl ObjectServer {
                             Ok((i.into(), props?))
                         })
                         .collect::<Result<_>>()?;
-                    ObjectManager::interfaces_added(&ctxt, &path, &interfaces).await?;
+                    ObjectManager::interfaces_added(&ctxt, path.into(), interfaces).await?;
                 }
             } else if let Some(manager_path) = manager_path {
                 let ctxt = SignalContext::new(&self.connection(), manager_path.clone())?;
@@ -550,7 +550,7 @@ impl ObjectServer {
                     .collect::<Result<_>>()?;
                 interfaces.insert(name, props);
 
-                ObjectManager::interfaces_added(&ctxt, &path, &interfaces).await?;
+                ObjectManager::interfaces_added(&ctxt, path, interfaces).await?;
             }
         }
 
@@ -576,7 +576,7 @@ impl ObjectServer {
         }
         if let Some(manager_path) = manager_path {
             let ctxt = SignalContext::new(&self.connection(), manager_path.clone())?;
-            ObjectManager::interfaces_removed(&ctxt, &path, &[I::name()]).await?;
+            ObjectManager::interfaces_removed(&ctxt, path.clone(), vec![I::name()]).await?;
         }
         if node.is_empty() {
             let mut path_parts = path.rsplit('/').filter(|i| !i.is_empty());
