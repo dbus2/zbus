@@ -29,7 +29,7 @@ use nix::unistd::Uid;
 pub mod transport;
 
 mod address_list;
-pub use address_list::{DBusAddrList, DBusAddrListIter};
+pub use address_list::{AddressList, AddressListIter};
 
 mod percent;
 pub use percent::*;
@@ -74,13 +74,13 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Get the address for session socket respecting the DBUS_SESSION_BUS_ADDRESS environment
 /// variable. If we don't recognize the value (or it's not set) we fall back to
 /// $XDG_RUNTIME_DIR/bus
-pub fn session() -> Result<DBusAddrList<'static>> {
+pub fn session() -> Result<AddressList<'static>> {
     match env::var("DBUS_SESSION_BUS_ADDRESS") {
-        Ok(val) => DBusAddrList::try_from(val),
+        Ok(val) => AddressList::try_from(val),
         _ => {
             #[cfg(windows)]
             {
-                DBusAddrList::try_from("autolaunch:scope=*user;autolaunch:")
+                AddressList::try_from("autolaunch:scope=*user;autolaunch:")
             }
 
             #[cfg(all(unix, not(target_os = "macos")))]
@@ -89,12 +89,12 @@ pub fn session() -> Result<DBusAddrList<'static>> {
                     .unwrap_or_else(|_| format!("/run/user/{}", Uid::effective()));
                 let path = format!("unix:path={runtime_dir}/bus");
 
-                DBusAddrList::try_from(path)
+                AddressList::try_from(path)
             }
 
             #[cfg(target_os = "macos")]
             {
-                DBusAddrList::try_from("launchd:env=DBUS_LAUNCHD_SESSION_BUS_SOCKET")
+                AddressList::try_from("launchd:env=DBUS_LAUNCHD_SESSION_BUS_SOCKET")
             }
         }
     }
@@ -103,18 +103,18 @@ pub fn session() -> Result<DBusAddrList<'static>> {
 /// Get the address for system bus respecting the DBUS_SYSTEM_BUS_ADDRESS environment
 /// variable. If we don't recognize the value (or it's not set) we fall back to
 /// /var/run/dbus/system_bus_socket
-pub fn system() -> Result<DBusAddrList<'static>> {
+pub fn system() -> Result<AddressList<'static>> {
     match env::var("DBUS_SYSTEM_BUS_ADDRESS") {
-        Ok(val) => DBusAddrList::try_from(val),
+        Ok(val) => AddressList::try_from(val),
         _ => {
             #[cfg(all(unix, not(target_os = "macos")))]
-            return DBusAddrList::try_from("unix:path=/var/run/dbus/system_bus_socket");
+            return AddressList::try_from("unix:path=/var/run/dbus/system_bus_socket");
 
             #[cfg(windows)]
-            return DBusAddrList::try_from("autolaunch:");
+            return AddressList::try_from("autolaunch:");
 
             #[cfg(target_os = "macos")]
-            return DBusAddrList::try_from("launchd:env=DBUS_LAUNCHD_SESSION_BUS_SOCKET");
+            return AddressList::try_from("launchd:env=DBUS_LAUNCHD_SESSION_BUS_SOCKET");
         }
     }
 }
@@ -123,16 +123,16 @@ pub fn system() -> Result<DBusAddrList<'static>> {
 ///
 /// Example:
 /// ```
-/// use zbus::DBusAddr;
+/// use zbus::Address;
 ///
-/// let _: DBusAddr = "unix:path=/tmp/dbus.sock".try_into().unwrap();
+/// let _: Address = "unix:path=/tmp/dbus.sock".try_into().unwrap();
 /// ```
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct DBusAddr<'a> {
+pub struct Address<'a> {
     pub(super) addr: Cow<'a, str>,
 }
 
-impl<'a> DBusAddr<'a> {
+impl<'a> Address<'a> {
     /// The connection GUID if any.
     pub fn guid(&self) -> Option<Cow<'_, str>> {
         self.get_string("guid").and_then(|res| res.ok())
@@ -195,14 +195,14 @@ fn validate_guid(value: &[u8]) -> Result<()> {
     Ok(())
 }
 
-impl DBusAddr<'_> {
-    pub fn to_owned(&self) -> DBusAddr<'static> {
+impl Address<'_> {
+    pub fn to_owned(&self) -> Address<'static> {
         let addr = self.addr.to_string();
-        DBusAddr { addr: addr.into() }
+        Address { addr: addr.into() }
     }
 }
 
-impl<'a> TryFrom<String> for DBusAddr<'a> {
+impl<'a> TryFrom<String> for Address<'a> {
     type Error = Error;
 
     fn try_from(addr: String) -> Result<Self> {
@@ -210,7 +210,7 @@ impl<'a> TryFrom<String> for DBusAddr<'a> {
     }
 }
 
-impl<'a> TryFrom<&'a str> for DBusAddr<'a> {
+impl<'a> TryFrom<&'a str> for Address<'a> {
     type Error = Error;
 
     fn try_from(addr: &'a str) -> Result<Self> {
@@ -218,7 +218,7 @@ impl<'a> TryFrom<&'a str> for DBusAddr<'a> {
     }
 }
 
-impl fmt::Display for DBusAddr<'_> {
+impl fmt::Display for Address<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let kv = KeyValFmt::new().add("guid", self.guid());
         let t = self.transport().map_err(|_| fmt::Error)?;
@@ -307,43 +307,43 @@ impl fmt::Display for KeyValFmt<'_> {
     }
 }
 
-/// A trait for objects which can be converted or resolved to one or more [`DBusAddr`] values.
-pub trait ToDBusAddrs<'a> {
-    type Iter: Iterator<Item = Result<DBusAddr<'a>>>;
+/// A trait for objects which can be converted or resolved to one or more [`Address`] values.
+pub trait ToAddresses<'a> {
+    type Iter: Iterator<Item = Result<Address<'a>>>;
 
-    fn to_dbus_addrs(&'a self) -> Self::Iter;
+    fn to_addresses(&'a self) -> Self::Iter;
 }
 
-impl<'a> ToDBusAddrs<'a> for DBusAddr<'a> {
-    type Iter = std::iter::Once<Result<DBusAddr<'a>>>;
+impl<'a> ToAddresses<'a> for Address<'a> {
+    type Iter = std::iter::Once<Result<Address<'a>>>;
 
     /// Get an iterator over the D-Bus addresses.
-    fn to_dbus_addrs(&'a self) -> Self::Iter {
+    fn to_addresses(&'a self) -> Self::Iter {
         std::iter::once(Ok(self.clone()))
     }
 }
 
-impl<'a> ToDBusAddrs<'a> for str {
-    type Iter = std::iter::Once<Result<DBusAddr<'a>>>;
+impl<'a> ToAddresses<'a> for str {
+    type Iter = std::iter::Once<Result<Address<'a>>>;
 
-    fn to_dbus_addrs(&'a self) -> Self::Iter {
+    fn to_addresses(&'a self) -> Self::Iter {
         std::iter::once(self.try_into())
     }
 }
 
-impl<'a> ToDBusAddrs<'a> for String {
-    type Iter = std::iter::Once<Result<DBusAddr<'a>>>;
+impl<'a> ToAddresses<'a> for String {
+    type Iter = std::iter::Once<Result<Address<'a>>>;
 
-    fn to_dbus_addrs(&'a self) -> Self::Iter {
+    fn to_addresses(&'a self) -> Self::Iter {
         std::iter::once(self.as_str().try_into())
     }
 }
 
-impl<'a> ToDBusAddrs<'a> for Vec<Result<DBusAddr<'_>>> {
-    type Iter = std::iter::Cloned<std::slice::Iter<'a, Result<DBusAddr<'a>>>>;
+impl<'a> ToAddresses<'a> for Vec<Result<Address<'_>>> {
+    type Iter = std::iter::Cloned<std::slice::Iter<'a, Result<Address<'a>>>>;
 
     /// Get an iterator over the D-Bus addresses.
-    fn to_dbus_addrs(&'a self) -> Self::Iter {
+    fn to_addresses(&'a self) -> Self::Iter {
         self.iter().cloned()
     }
 }

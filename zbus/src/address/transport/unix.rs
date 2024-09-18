@@ -2,7 +2,7 @@ use std::{borrow::Cow, ffi::OsStr};
 
 use super::{
     percent::{decode_percents, decode_percents_os_str, decode_percents_str, EncData, EncOsStr},
-    DBusAddr, Error, KeyValFmt, KeyValFmtAdd, Result,
+    Address, Error, KeyValFmt, KeyValFmtAdd, Result,
 };
 
 /// A sub-type of `unix:` transport.
@@ -52,10 +52,10 @@ impl<'a> Unix<'a> {
     }
 }
 
-impl<'a> TryFrom<&'a DBusAddr<'a>> for Unix<'a> {
+impl<'a> TryFrom<&'a Address<'a>> for Unix<'a> {
     type Error = Error;
 
-    fn try_from(s: &'a DBusAddr<'a>) -> Result<Self> {
+    fn try_from(s: &'a Address<'a>) -> Result<Self> {
         let mut kind = None;
         let mut iter = s.key_val_iter();
         for (k, v) in &mut iter {

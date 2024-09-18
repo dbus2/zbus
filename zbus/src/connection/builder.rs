@@ -24,7 +24,7 @@ use vsock::VsockStream;
 use zvariant::{ObjectPath, Str};
 
 use crate::{
-    address::{DBusAddr, ToDBusAddrs},
+    address::{Address, ToAddresses},
     names::{InterfaceName, WellKnownName},
     object_server::{ArcInterface, Interface},
     Connection, Error, Executor, Guid, OwnedGuid, Result,
@@ -48,7 +48,7 @@ enum Target {
         feature = "tokio-vsock"
     ))]
     VsockStream(VsockStream),
-    Address(Vec<DBusAddr<'static>>),
+    Address(Vec<Address<'static>>),
     Socket(Split<Box<dyn ReadHalf>, Box<dyn WriteHalf>>),
     AuthenticatedSocket(Split<Box<dyn ReadHalf>, Box<dyn WriteHalf>>),
 }
@@ -121,10 +121,10 @@ impl<'a> Builder<'a> {
     /// [D-Bus bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub fn address<'t, A>(address: &'t A) -> Result<Self>
     where
-        A: ToDBusAddrs<'t> + ?Sized,
+        A: ToAddresses<'t> + ?Sized,
     {
         let addr = address
-            .to_dbus_addrs()
+            .to_addresses()
             .filter_map(std::result::Result::ok)
             .map(|a| a.to_owned())
             .collect();

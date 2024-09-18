@@ -2,12 +2,12 @@
 
 use super::socket;
 use crate::{
-    address::{transport::Transport, DBusAddr},
+    address::{transport::Transport, Address},
     process::run,
     Error, Result,
 };
 
-async fn launchd_bus_address(env_key: &str) -> Result<DBusAddr<'static>> {
+async fn launchd_bus_address(env_key: &str) -> Result<Address<'static>> {
     let output = run("launchctl", ["getenv", env_key])
         .await
         .expect("failed to wait on launchctl output");
@@ -38,11 +38,11 @@ pub(crate) async fn connect(
 
 #[cfg(test)]
 mod tests {
-    use crate::address::{transport::Transport, DBusAddr};
+    use crate::address::{transport::Transport, Address};
 
     #[test]
     fn connect_launchd_session_bus() {
-        let addr: DBusAddr<'_> = "launchd:env=DBUS_LAUNCHD_SESSION_BUS_SOCKET"
+        let addr: Address<'_> = "launchd:env=DBUS_LAUNCHD_SESSION_BUS_SOCKET"
             .try_into()
             .unwrap();
         let launchd = match addr.transport().unwrap() {

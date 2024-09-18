@@ -1,26 +1,26 @@
 use std::{borrow::Cow, fmt};
 
-use super::{DBusAddr, Error, Result, ToDBusAddrs};
+use super::{Address, Error, Result, ToAddresses};
 
 /// A bus address list.
 ///
 /// D-Bus addresses are `;`-separated.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct DBusAddrList<'a> {
+pub struct AddressList<'a> {
     addr: Cow<'a, str>,
 }
 
-impl<'a> ToDBusAddrs<'a> for DBusAddrList<'a> {
-    type Iter = DBusAddrListIter<'a>;
+impl<'a> ToAddresses<'a> for AddressList<'a> {
+    type Iter = AddressListIter<'a>;
 
     /// Get an iterator over the D-Bus addresses.
-    fn to_dbus_addrs(&'a self) -> Self::Iter {
-        DBusAddrListIter::new(self)
+    fn to_addresses(&'a self) -> Self::Iter {
+        AddressListIter::new(self)
     }
 }
 
-impl<'a> Iterator for DBusAddrListIter<'a> {
-    type Item = Result<DBusAddr<'a>>;
+impl<'a> Iterator for AddressListIter<'a> {
+    type Item = Result<Address<'a>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.next_index >= self.data.len() {
@@ -35,18 +35,18 @@ impl<'a> Iterator for DBusAddrListIter<'a> {
             self.next_index = self.data.len();
         }
 
-        Some(DBusAddr::try_from(addr))
+        Some(Address::try_from(addr))
     }
 }
 
 /// An iterator of D-Bus addresses.
-pub struct DBusAddrListIter<'a> {
+pub struct AddressListIter<'a> {
     data: &'a str,
     next_index: usize,
 }
 
-impl<'a> DBusAddrListIter<'a> {
-    fn new(list: &'a DBusAddrList<'_>) -> Self {
+impl<'a> AddressListIter<'a> {
+    fn new(list: &'a AddressList<'_>) -> Self {
         Self {
             data: list.addr.as_ref(),
             next_index: 0,
@@ -54,7 +54,7 @@ impl<'a> DBusAddrListIter<'a> {
     }
 }
 
-impl<'a> TryFrom<String> for DBusAddrList<'a> {
+impl<'a> TryFrom<String> for AddressList<'a> {
     type Error = Error;
 
     fn try_from(value: String) -> Result<Self> {
@@ -64,7 +64,7 @@ impl<'a> TryFrom<String> for DBusAddrList<'a> {
     }
 }
 
-impl<'a> TryFrom<&'a str> for DBusAddrList<'a> {
+impl<'a> TryFrom<&'a str> for AddressList<'a> {
     type Error = Error;
 
     fn try_from(value: &'a str) -> Result<Self> {
@@ -74,7 +74,7 @@ impl<'a> TryFrom<&'a str> for DBusAddrList<'a> {
     }
 }
 
-impl fmt::Display for DBusAddrList<'_> {
+impl fmt::Display for AddressList<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.addr)
     }

@@ -2,7 +2,7 @@
 
 use super::BoxedSplit;
 use crate::{
-    address::{transport::Transport, DBusAddr},
+    address::{transport::Transport, Address},
     win32::autolaunch_bus_address,
     Error, OwnedGuid, Result,
 };
@@ -16,7 +16,7 @@ pub(crate) async fn connect(
         ));
     }
 
-    let addr: DBusAddr<'_> = autolaunch_bus_address()?.try_into()?;
+    let addr: Address<'_> = autolaunch_bus_address()?.try_into()?;
 
     if let Transport::Autolaunch(_) = addr.transport()? {
         return Err(Error::Address("Recursive autolaunch: address".into()));
@@ -29,9 +29,9 @@ pub(crate) async fn connect(
 mod tests {
     #[test]
     fn connect_autolaunch_session_bus() {
-        use crate::address::{transport::Transport, DBusAddr};
+        use crate::address::{transport::Transport, Address};
 
-        let addr: DBusAddr<'_> = "autolaunch:".try_into().unwrap();
+        let addr: Address<'_> = "autolaunch:".try_into().unwrap();
         let autolaunch = match addr.transport().unwrap() {
             Transport::Autolaunch(l) => l,
             _ => unreachable!(),

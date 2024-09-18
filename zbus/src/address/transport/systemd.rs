@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use super::{DBusAddr, Error, KeyValFmt, KeyValFmtAdd, Result};
+use super::{Address, Error, KeyValFmt, KeyValFmtAdd, Result};
 
 /// `systemd:` D-Bus transport.
 ///
@@ -11,10 +11,10 @@ pub struct Systemd<'a> {
     phantom: PhantomData<&'a ()>,
 }
 
-impl<'a> TryFrom<&'a DBusAddr<'a>> for Systemd<'a> {
+impl<'a> TryFrom<&'a Address<'a>> for Systemd<'a> {
     type Error = Error;
 
-    fn try_from(_s: &'a DBusAddr<'a>) -> Result<Self> {
+    fn try_from(_s: &'a Address<'a>) -> Result<Self> {
         Ok(Systemd {
             phantom: PhantomData,
         })

@@ -2,7 +2,7 @@ use std::{future::Future, pin::Pin};
 use tracing::debug;
 
 use crate::{
-    address::{transport::Transport, DBusAddr},
+    address::{transport::Transport, Address},
     Error, Guid, OwnedGuid, Result,
 };
 
@@ -13,7 +13,7 @@ mod win32;
 
 type ConnectResult = Result<(BoxedSplit, Option<OwnedGuid>)>;
 
-fn connect(addr: &DBusAddr<'_>) -> Pin<Box<dyn Future<Output = ConnectResult>>> {
+fn connect(addr: &Address<'_>) -> Pin<Box<dyn Future<Output = ConnectResult>>> {
     let addr = addr.to_owned();
     Box::pin(async move {
         let guid = match addr.guid() {
@@ -45,7 +45,7 @@ fn connect(addr: &DBusAddr<'_>) -> Pin<Box<dyn Future<Output = ConnectResult>>> 
 }
 
 pub(crate) async fn connect_address(
-    address: &[DBusAddr<'_>],
+    address: &[Address<'_>],
 ) -> Result<(BoxedSplit, Option<OwnedGuid>)> {
     for addr in address {
         match connect(addr).await {

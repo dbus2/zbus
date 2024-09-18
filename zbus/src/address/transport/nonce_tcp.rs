@@ -3,7 +3,7 @@ use std::{borrow::Cow, ffi::OsStr};
 use super::{
     percent::{decode_percents_os_str, decode_percents_str, EncOsStr},
     tcp::TcpFamily,
-    DBusAddr, Error, KeyValFmt, KeyValFmtAdd, Result,
+    Address, Error, KeyValFmt, KeyValFmtAdd, Result,
 };
 
 /// `nonce-tcp:` D-Bus transport.
@@ -65,10 +65,10 @@ impl KeyValFmtAdd for NonceTcp<'_> {
     }
 }
 
-impl<'a> TryFrom<&'a DBusAddr<'a>> for NonceTcp<'a> {
+impl<'a> TryFrom<&'a Address<'a>> for NonceTcp<'a> {
     type Error = Error;
 
-    fn try_from(s: &'a DBusAddr<'a>) -> Result<Self> {
+    fn try_from(s: &'a Address<'a>) -> Result<Self> {
         let mut res = NonceTcp::default();
         for (k, v) in s.key_val_iter() {
             match (k, v) {

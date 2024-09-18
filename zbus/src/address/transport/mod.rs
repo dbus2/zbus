@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use super::{percent, DBusAddr, Error, KeyValFmt, KeyValFmtAdd, Result};
+use super::{percent, Address, Error, KeyValFmt, KeyValFmtAdd, Result};
 
 mod autolaunch;
 pub use autolaunch::{Autolaunch, AutolaunchScope};
@@ -80,10 +80,10 @@ impl KeyValFmtAdd for Transport<'_> {
     }
 }
 
-impl<'a> TryFrom<&'a DBusAddr<'a>> for Transport<'a> {
+impl<'a> TryFrom<&'a Address<'a>> for Transport<'a> {
     type Error = Error;
 
-    fn try_from(s: &'a DBusAddr<'a>) -> Result<Self> {
+    fn try_from(s: &'a Address<'a>) -> Result<Self> {
         let col = s.addr.find(':').ok_or(Error::MissingTransport)?;
         match &s.addr[..col] {
             "unix" => Ok(Self::Unix(s.try_into()?)),

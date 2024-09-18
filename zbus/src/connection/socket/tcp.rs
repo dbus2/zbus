@@ -277,13 +277,13 @@ pub(crate) async fn connect_nonce(
 
 #[cfg(test)]
 mod tests {
-    use crate::address::{transport::Transport, DBusAddr};
+    use crate::address::{transport::Transport, Address};
 
     #[test]
     fn connect() {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
-        let addr: DBusAddr<'_> = format!("tcp:host=localhost,port={port}")
+        let addr: Address<'_> = format!("tcp:host=localhost,port={port}")
             .try_into()
             .unwrap();
         let tcp = match addr.transport().unwrap() {
@@ -318,7 +318,7 @@ mod tests {
             PercentEncoded(cookie.path().to_str().unwrap().as_ref())
         );
 
-        let addr: DBusAddr<'_> =
+        let addr: Address<'_> =
             format!("nonce-tcp:host=localhost,port={port},noncefile={encoded_path}")
                 .try_into()
                 .unwrap();

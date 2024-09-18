@@ -1,6 +1,6 @@
 use std::{borrow::Cow, fmt};
 
-use super::{percent::decode_percents_str, DBusAddr, Error, KeyValFmt, KeyValFmtAdd, Result};
+use super::{percent::decode_percents_str, Address, Error, KeyValFmt, KeyValFmtAdd, Result};
 
 /// Scope of autolaunch (Windows only)
 #[derive(Debug, PartialEq, Eq)]
@@ -51,10 +51,10 @@ impl<'a> Autolaunch<'a> {
     }
 }
 
-impl<'a> TryFrom<&'a DBusAddr<'a>> for Autolaunch<'a> {
+impl<'a> TryFrom<&'a Address<'a>> for Autolaunch<'a> {
     type Error = Error;
 
-    fn try_from(s: &'a DBusAddr<'a>) -> Result<Self> {
+    fn try_from(s: &'a Address<'a>) -> Result<Self> {
         let mut res = Autolaunch::default();
 
         for (k, v) in s.key_val_iter() {
