@@ -1,5 +1,9 @@
 mod dispatch_result;
 pub use dispatch_result::*;
+mod interface_ref;
+pub use interface_ref::*;
+mod interface_deref;
+pub use interface_deref::*;
 
 use std::{
     any::{Any, TypeId},
