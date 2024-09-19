@@ -1,6 +1,6 @@
 use std::{
     num::NonZeroU32,
-    sync::atomic::{AtomicU32, Ordering::SeqCst},
+    sync::atomic::{AtomicU32, Ordering::Relaxed},
 };
 
 use enumflags2::{bitflags, BitFlags};
@@ -131,9 +131,9 @@ assert_impl_all!(PrimaryHeader: Send, Sync, Unpin);
 impl PrimaryHeader {
     /// Create a new `PrimaryHeader` instance.
     pub fn new(msg_type: Type, body_len: u32) -> Self {
-        let mut serial_num = SERIAL_NUM.fetch_add(1, SeqCst);
+        let mut serial_num = SERIAL_NUM.fetch_add(1, Relaxed);
         if serial_num == 0 {
-            serial_num = SERIAL_NUM.fetch_add(1, SeqCst);
+            serial_num = SERIAL_NUM.fetch_add(1, Relaxed);
         }
 
         Self {
