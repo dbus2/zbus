@@ -36,6 +36,9 @@ pub use fd::*;
 mod object_path;
 pub use crate::object_path::*;
 
+mod file_path;
+pub use crate::file_path::*;
+
 mod ser;
 pub use ser::*;
 
