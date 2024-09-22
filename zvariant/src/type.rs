@@ -235,7 +235,6 @@ where
         if expected == signature {
             Ok(PhantomData)
         } else {
-            let expected = <T as Type>::SIGNATURE;
             Err(zvariant::Error::SignatureMismatch(
                 signature.clone(),
                 format!("`{expected}`"),
