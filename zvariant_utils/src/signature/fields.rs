@@ -46,6 +46,11 @@ impl Fields {
             Self::Dynamic { fields } => fields.len(),
         }
     }
+
+    /// Whether there are no fields.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 impl From<Box<[Signature]>> for Fields {
