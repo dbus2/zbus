@@ -38,6 +38,14 @@ impl Fields {
             Self::Dynamic { fields } => Fields::Dynamic(fields.iter()),
         }
     }
+
+    /// The number of fields.
+    pub fn len(&self) -> usize {
+        match self {
+            Self::Static { fields } => fields.len(),
+            Self::Dynamic { fields } => fields.len(),
+        }
+    }
 }
 
 impl From<Box<[Signature]>> for Fields {
