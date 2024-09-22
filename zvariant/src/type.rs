@@ -232,14 +232,24 @@ where
     fn deserializer_for_signature(signature: &Signature) -> zvariant::Result<Self::Deserializer> {
         let expected = <T as Type>::SIGNATURE;
 
-        if expected == signature {
-            Ok(PhantomData)
-        } else {
-            Err(zvariant::Error::SignatureMismatch(
-                signature.clone(),
-                format!("`{expected}`"),
-            ))
+        if expected != signature {
+            match expected {
+                Signature::Structure(fields)
+                    if fields.len() == 1 && fields.iter().next().unwrap() == signature =>
+                {
+                    // This is likely a D-Bus message body containing a single type being
+                    // deserialized as a single-field struct. No need to be super strict here.
+                }
+                _ => {
+                    return Err(zvariant::Error::SignatureMismatch(
+                        signature.clone(),
+                        format!("`{expected}`"),
+                    ))
+                }
+            }
         }
+
+        Ok(PhantomData)
     }
 }
 
