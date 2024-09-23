@@ -330,7 +330,7 @@ impl PropertiesCache {
         interface: InterfaceName<'static>,
         uncached_properties: HashSet<zvariant::Str<'static>>,
     ) -> Result<(
-        PropertiesChangedStream<'static>,
+        PropertiesChangedStream,
         InterfaceName<'static>,
         HashSet<zvariant::Str<'static>>,
     )> {
@@ -394,7 +394,7 @@ impl PropertiesCache {
     #[instrument(skip_all)]
     async fn keep_updated(
         &self,
-        mut prop_changes: PropertiesChangedStream<'static>,
+        mut prop_changes: PropertiesChangedStream,
         interface: InterfaceName<'static>,
         uncached_properties: HashSet<zvariant::Str<'static>>,
     ) -> Result<()> {
@@ -1072,7 +1072,7 @@ impl From<MethodFlags> for Flags {
 }
 
 type OwnerChangedStreamMap = Map<
-    fdo::NameOwnerChangedStream<'static>,
+    fdo::NameOwnerChangedStream,
     Box<dyn FnMut(fdo::NameOwnerChanged) -> Option<UniqueName<'static>> + Send + Sync + Unpin>,
 >;
 
