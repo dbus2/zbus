@@ -868,7 +868,7 @@ fn gen_proxy_signal(
         quote! {
             #[doc = #receive_with_args_gen_doc]
             #(#other_attrs)*
-            pub #usage fn #receiver_with_args_name(&self, args: &[(u8, &str)]) -> #zbus::Result<#stream_name<'static>>
+            pub #usage fn #receiver_with_args_name(&self, args: &[(u8, &str)]) -> #zbus::Result<#stream_name>
             {
                 self.0.receive_signal_with_args(#signal_name, args)#wait.map(#stream_name)
             }
@@ -877,7 +877,7 @@ fn gen_proxy_signal(
     let receive_signal = quote! {
         #[doc = #receive_gen_doc]
         #(#other_attrs)*
-        pub #usage fn #receiver_name(&self) -> #zbus::Result<#stream_name<'static>>
+        pub #usage fn #receiver_name(&self) -> #zbus::Result<#stream_name>
         {
             self.0.receive_signal(#signal_name)#wait.map(#stream_name)
         }
@@ -1008,7 +1008,7 @@ fn gen_proxy_signal(
     };
     let stream_impl = if *blocking {
         quote! {
-            impl ::std::iter::Iterator for #stream_name<'_> {
+            impl ::std::iter::Iterator for #stream_name {
                 type Item = #signal_name_ident;
 
                 fn next(&mut self) -> ::std::option::Option<Self::Item> {
@@ -1019,7 +1019,7 @@ fn gen_proxy_signal(
         }
     } else {
         quote! {
-            impl #zbus::export::futures_core::stream::Stream for #stream_name<'_> {
+            impl #zbus::export::futures_core::stream::Stream for #stream_name {
                 type Item = #signal_name_ident;
 
                 fn poll_next(
@@ -1034,7 +1034,7 @@ fn gen_proxy_signal(
                 }
             }
 
-            impl #zbus::export::ordered_stream::OrderedStream for #stream_name<'_> {
+            impl #zbus::export::ordered_stream::OrderedStream for #stream_name {
                 type Data = #signal_name_ident;
                 type Ordering = #zbus::message::Sequence;
 
@@ -1052,14 +1052,14 @@ fn gen_proxy_signal(
                 }
             }
 
-            impl #zbus::export::futures_core::stream::FusedStream for #stream_name<'_> {
+            impl #zbus::export::futures_core::stream::FusedStream for #stream_name {
                 fn is_terminated(&self) -> bool {
                     self.0.is_terminated()
                 }
             }
 
             #[#zbus::export::async_trait::async_trait]
-            impl #zbus::AsyncDrop for #stream_name<'_> {
+            impl #zbus::AsyncDrop for #stream_name {
                 async fn async_drop(self) {
                     self.0.async_drop().await
                 }
@@ -1069,20 +1069,20 @@ fn gen_proxy_signal(
     let stream_types = quote! {
         #[doc = #stream_gen_doc]
         #[derive(Debug)]
-        #visibility struct #stream_name<'a>(#zbus::#signal_type<'a>);
+        #visibility struct #stream_name(#zbus::#signal_type<'static>);
 
         #zbus::export::static_assertions::assert_impl_all!(
-            #stream_name<'_>: ::std::marker::Send, ::std::marker::Unpin
+            #stream_name: ::std::marker::Send, ::std::marker::Unpin
         );
 
-        impl<'a> #stream_name<'a> {
+        impl #stream_name {
             /// Consumes `self`, returning the underlying `zbus::#signal_type`.
-            pub fn into_inner(self) -> #zbus::#signal_type<'a> {
+            pub fn into_inner(self) -> #zbus::#signal_type<'static> {
                 self.0
             }
 
             /// The reference to the underlying `zbus::#signal_type`.
-            pub fn inner(&self) -> & #zbus::#signal_type<'a> {
+            pub fn inner(&self) -> & #zbus::#signal_type<'static> {
                 &self.0
             }
         }
