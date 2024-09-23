@@ -234,10 +234,9 @@ impl PrimaryHeader {
 
 /// The message header, containing all the metadata about the message.
 ///
-/// This includes both the [`PrimaryHeader`] and [`Fields`].
+/// This includes both the [`PrimaryHeader`] and the dynamic fields.
 ///
 /// [`PrimaryHeader`]: struct.PrimaryHeader.html
-/// [`Fields`]: struct.Fields.html
 #[derive(Debug, Clone, Serialize, Deserialize, VariantType)]
 pub struct Header<'m> {
     primary: PrimaryHeader,
