@@ -568,6 +568,11 @@ macro_rules! static_str_type {
 static_str_type!(Path);
 static_str_type!(PathBuf);
 
+#[cfg(feature = "camino")]
+static_str_type!(camino::Utf8Path);
+#[cfg(feature = "camino")]
+static_str_type!(camino::Utf8PathBuf);
+
 #[cfg(feature = "uuid")]
 impl_type_with_repr! {
     uuid::Uuid => &[u8] {

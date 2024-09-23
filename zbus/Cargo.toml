@@ -21,6 +21,7 @@ chrono = ["zvariant/chrono"]
 heapless = ["zvariant/heapless"]
 # Enables ser/de of `Option<T>` as an array of 0 or 1 elements.
 option-as-array = ["zvariant/option-as-array"]
+camino = ["zvariant/camino"]
 # Enables API that is only needed for bus implementations (enables `p2p`).
 bus-impl = ["p2p"]
 # Enables API that is only needed for peer-to-peer (p2p) connections.
