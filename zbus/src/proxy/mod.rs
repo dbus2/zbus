@@ -624,17 +624,17 @@ impl<'a> Proxy<'a> {
     }
 
     /// Get a reference to the destination service name.
-    pub fn destination(&self) -> &BusName<'_> {
+    pub fn destination(&self) -> &BusName<'a> {
         &self.inner.destination
     }
 
     /// Get a reference to the object path.
-    pub fn path(&self) -> &ObjectPath<'_> {
+    pub fn path(&self) -> &ObjectPath<'a> {
         &self.inner.path
     }
 
     /// Get a reference to the interface.
-    pub fn interface(&self) -> &InterfaceName<'_> {
+    pub fn interface(&self) -> &InterfaceName<'a> {
         &self.inner.interface
     }
 
@@ -1000,7 +1000,7 @@ impl<'a> Proxy<'a> {
     ///
     /// Note that zbus doesn't queue the updates. If the listener is slower than the receiver, it
     /// will only receive the last update.
-    pub async fn receive_owner_changed(&self) -> Result<OwnerChangedStream<'_>> {
+    pub async fn receive_owner_changed(&self) -> Result<OwnerChangedStream<'a>> {
         use futures_util::StreamExt;
         let dbus_proxy = fdo::DBusProxy::builder(self.connection())
             .cache_properties(CacheProperties::No)
@@ -1071,8 +1071,8 @@ impl From<MethodFlags> for Flags {
     }
 }
 
-type OwnerChangedStreamMap<'a> = Map<
-    fdo::NameOwnerChangedStream<'a>,
+type OwnerChangedStreamMap = Map<
+    fdo::NameOwnerChangedStream<'static>,
     Box<dyn FnMut(fdo::NameOwnerChanged) -> Option<UniqueName<'static>> + Send + Sync + Unpin>,
 >;
 
@@ -1080,15 +1080,15 @@ type OwnerChangedStreamMap<'a> = Map<
 ///
 /// Use [`Proxy::receive_owner_changed`] to create an instance of this type.
 pub struct OwnerChangedStream<'a> {
-    stream: OwnerChangedStreamMap<'a>,
+    stream: OwnerChangedStreamMap,
     name: BusName<'a>,
 }
 
 assert_impl_all!(OwnerChangedStream<'_>: Send, Sync, Unpin);
 
-impl OwnerChangedStream<'_> {
+impl<'a> OwnerChangedStream<'a> {
     /// The bus name being tracked.
-    pub fn name(&self) -> &BusName<'_> {
+    pub fn name(&self) -> &BusName<'a> {
         &self.name
     }
 }
