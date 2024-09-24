@@ -1,7 +1,9 @@
 use std::{borrow::Cow, ffi::OsStr};
 
+#[cfg(target_os = "windows")]
+use super::transport::AutolaunchScope;
 use super::{
-    transport::{AutolaunchScope, TcpFamily, Transport, UnixAddrKind},
+    transport::{TcpFamily, Transport, UnixAddrKind},
     Address,
 };
 
@@ -79,6 +81,7 @@ fn parse_unix() {
     Address::try_from(String::from("unix:path=/tmp/foo")).unwrap();
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn parse_launchd() {
     let addr = Address::try_from("launchd:env=FOOBAR").unwrap();
@@ -93,6 +96,7 @@ fn parse_launchd() {
     );
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn parse_systemd() {
     let addr = Address::try_from("systemd:").unwrap();
@@ -156,9 +160,11 @@ fn parse_unixexec() {
 #[test]
 fn parse_autolaunch() {
     let addr = Address::try_from("autolaunch:scope=*user").unwrap();
+    #[allow(unused)]
     let Transport::Autolaunch(t) = addr.transport().unwrap() else {
         panic!();
     };
+    #[cfg(target_os = "windows")]
     assert_eq!(t.scope().unwrap(), &AutolaunchScope::User);
 }
 

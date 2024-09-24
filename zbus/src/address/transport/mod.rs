@@ -5,15 +5,21 @@ use std::fmt;
 use super::{percent, Address, Error, KeyValFmt, KeyValFmtAdd, Result};
 
 mod autolaunch;
-pub use autolaunch::{Autolaunch, AutolaunchScope};
+pub use autolaunch::Autolaunch;
+#[cfg(target_os = "windows")]
+pub use autolaunch::AutolaunchScope;
 
+#[cfg(target_os = "macos")]
 mod launchd;
+#[cfg(target_os = "macos")]
 pub use launchd::Launchd;
 
 mod nonce_tcp;
 pub use nonce_tcp::NonceTcp;
 
+#[cfg(target_os = "linux")]
 mod systemd;
+#[cfg(target_os = "linux")]
 pub use systemd::Systemd;
 
 mod tcp;
@@ -34,8 +40,10 @@ pub use vsock::Vsock;
 pub enum Transport<'a> {
     /// Unix Domain Sockets transport.
     Unix(unix::Unix<'a>),
+    #[cfg(target_os = "macos")]
     /// launchd transport.
     Launchd(launchd::Launchd<'a>),
+    #[cfg(target_os = "linux")]
     /// systemd transport.
     Systemd(systemd::Systemd<'a>),
     /// TCP Sockets transport.
@@ -54,7 +62,9 @@ impl fmt::Display for Transport<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Unix(_) => write!(f, "unix"),
+            #[cfg(target_os = "macos")]
             Self::Launchd(_) => write!(f, "launchd"),
+            #[cfg(target_os = "linux")]
             Self::Systemd(_) => write!(f, "systemd"),
             Self::Tcp(_) => write!(f, "tcp"),
             Self::NonceTcp(_) => write!(f, "nonce-tcp"),
@@ -69,7 +79,9 @@ impl KeyValFmtAdd for Transport<'_> {
     fn key_val_fmt_add<'a: 'b, 'b>(&'a self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
         match self {
             Self::Unix(t) => t.key_val_fmt_add(kv),
+            #[cfg(target_os = "macos")]
             Self::Launchd(t) => t.key_val_fmt_add(kv),
+            #[cfg(target_os = "linux")]
             Self::Systemd(t) => t.key_val_fmt_add(kv),
             Self::Tcp(t) => t.key_val_fmt_add(kv),
             Self::NonceTcp(t) => t.key_val_fmt_add(kv),
@@ -87,7 +99,9 @@ impl<'a> TryFrom<&'a Address<'a>> for Transport<'a> {
         let col = s.addr.find(':').ok_or(Error::MissingTransport)?;
         match &s.addr[..col] {
             "unix" => Ok(Self::Unix(s.try_into()?)),
+            #[cfg(target_os = "macos")]
             "launchd" => Ok(Self::Launchd(s.try_into()?)),
+            #[cfg(target_os = "linux")]
             "systemd" => Ok(Self::Systemd(s.try_into()?)),
             "tcp" => Ok(Self::Tcp(s.try_into()?)),
             "nonce-tcp" => Ok(Self::NonceTcp(s.try_into()?)),

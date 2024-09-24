@@ -1,8 +1,13 @@
+use std::marker::PhantomData;
+#[cfg(target_os = "windows")]
 use std::{borrow::Cow, fmt};
 
-use super::{percent::decode_percents_str, Address, Error, KeyValFmt, KeyValFmtAdd, Result};
+#[cfg(target_os = "windows")]
+use super::percent::decode_percents_str;
+use super::{Address, Error, KeyValFmt, KeyValFmtAdd, Result};
 
 /// Scope of autolaunch (Windows only)
+#[cfg(target_os = "windows")]
 #[derive(Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum AutolaunchScope<'a> {
@@ -14,6 +19,7 @@ pub enum AutolaunchScope<'a> {
     Other(Cow<'a, str>),
 }
 
+#[cfg(target_os = "windows")]
 impl fmt::Display for AutolaunchScope<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -24,6 +30,7 @@ impl fmt::Display for AutolaunchScope<'_> {
     }
 }
 
+#[cfg(target_os = "windows")]
 impl<'a> TryFrom<Cow<'a, str>> for AutolaunchScope<'a> {
     type Error = Error;
 
@@ -41,10 +48,13 @@ impl<'a> TryFrom<Cow<'a, str>> for AutolaunchScope<'a> {
 /// <https://dbus.freedesktop.org/doc/dbus-specification.html#meta-transports-autolaunch>
 #[derive(Debug, PartialEq, Eq, Default)]
 pub struct Autolaunch<'a> {
+    #[cfg(target_os = "windows")]
     scope: Option<AutolaunchScope<'a>>,
+    phantom: PhantomData<&'a ()>,
 }
 
 impl<'a> Autolaunch<'a> {
+    #[cfg(target_os = "windows")]
     /// Scope of autolaunch (Windows only)
     pub fn scope(&self) -> Option<&AutolaunchScope<'a>> {
         self.scope.as_ref()
@@ -55,10 +65,12 @@ impl<'a> TryFrom<&'a Address<'a>> for Autolaunch<'a> {
     type Error = Error;
 
     fn try_from(s: &'a Address<'a>) -> Result<Self> {
+        #[allow(unused_mut)]
         let mut res = Autolaunch::default();
 
         for (k, v) in s.key_val_iter() {
             match (k, v) {
+                #[cfg(target_os = "windows")]
                 ("scope", Some(v)) => {
                     res.scope = Some(decode_percents_str(v)?.try_into()?);
                 }
@@ -72,6 +84,8 @@ impl<'a> TryFrom<&'a Address<'a>> for Autolaunch<'a> {
 
 impl KeyValFmtAdd for Autolaunch<'_> {
     fn key_val_fmt_add<'a: 'b, 'b>(&'a self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
-        kv.add("scope", self.scope())
+        #[cfg(target_os = "windows")]
+        let kv = kv.add("scope", self.scope());
+        kv
     }
 }
