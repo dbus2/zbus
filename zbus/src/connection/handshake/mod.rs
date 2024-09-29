@@ -150,7 +150,7 @@ mod tests {
 
     use super::*;
 
-    use crate::{Guid, Socket};
+    use crate::{connection::Socket, Guid};
 
     fn create_async_socket_pair() -> (impl AsyncWrite + Socket, impl AsyncWrite + Socket) {
         // Tokio needs us to call the sync function from async context. :shrug:

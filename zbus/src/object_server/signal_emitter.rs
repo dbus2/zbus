@@ -6,7 +6,7 @@ use crate::{zvariant::ObjectPath, Connection, Error, Result};
 ///
 /// For signal emission using the high-level API, you'll need instances of this type.
 ///
-/// See [`crate::InterfaceRef::signal_emitter`] and [`crate::interface`]
+/// See [`crate::object_server::InterfaceRef::signal_emitter`] and [`crate::interface`]
 /// documentation for details and examples of this type in use.
 #[derive(Clone, Debug)]
 pub struct SignalEmitter<'s> {
