@@ -1,4 +1,4 @@
-use zbus_names::BusName;
+use zbus_names::{BusName, InterfaceName, MemberName};
 
 use crate::{zvariant::ObjectPath, Connection, Error, Result};
 
@@ -38,6 +38,26 @@ impl<'s> SignalContext<'s> {
             path,
             destination: None,
         }
+    }
+
+    /// Emit a signal on the given interface with the given signal name and body.
+    pub async fn emit<'i, 'm, I, M, B>(&self, interface: I, signal_name: M, body: &B) -> Result<()>
+    where
+        I: TryInto<InterfaceName<'i>>,
+        I::Error: Into<Error>,
+        M: TryInto<MemberName<'m>>,
+        M::Error: Into<Error>,
+        B: serde::ser::Serialize + zvariant::DynamicType,
+    {
+        self.conn
+            .emit_signal(
+                self.destination.as_ref(),
+                &self.path,
+                interface,
+                signal_name,
+                body,
+            )
+            .await
     }
 
     /// Set the destination for the signal emission.

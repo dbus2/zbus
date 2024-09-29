@@ -446,9 +446,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                 let signal_context = signal_context_arg.unwrap().pat;
 
                 method.block = parse_quote!({
-                    #signal_context.connection().emit_signal(
-                        #signal_context.destination(),
-                        #signal_context.path(),
+                    #signal_context.emit(
                         <#self_ty as #zbus::object_server::Interface>::name(),
                         #member_name,
                         &(#args_names),
