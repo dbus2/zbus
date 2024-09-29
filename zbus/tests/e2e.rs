@@ -24,7 +24,7 @@ use zvariant::{DeserializeDict, Optional, OwnedValue, SerializeDict, Str, Type, 
 use zbus::{
     connection, interface,
     message::Header,
-    object_server::{InterfaceRef, SignalContext},
+    object_server::{InterfaceRef, SignalEmitter},
     proxy::CacheProperties,
     Connection, ObjectServer,
 };
@@ -98,10 +98,10 @@ enum MyIfaceError {
 )]
 impl MyIface {
     #[instrument]
-    async fn ping(&mut self, #[zbus(signal_context)] ctxt: SignalContext<'_>) -> u32 {
+    async fn ping(&mut self, #[zbus(signal_emitter)] emitter: SignalEmitter<'_>) -> u32 {
         self.count += 1;
         if self.count % 3 == 0 {
-            MyIface::alert_count(&ctxt, self.count)
+            MyIface::alert_count(&emitter, self.count)
                 .await
                 .expect("Failed to emit signal");
             debug!("emitted `AlertCount` signal.");
@@ -170,17 +170,17 @@ impl MyIface {
     fn test_response_notify(
         &self,
         #[zbus(connection)] conn: &Connection,
-        #[zbus(signal_context)] ctxt: SignalContext<'_>,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) -> zbus::fdo::Result<ResponseDispatchNotifier<String>> {
         debug!("`TestResponseNotify` called.");
         let (response, listener) = ResponseDispatchNotifier::new(String::from("Meaning of life"));
-        let ctxt = ctxt.to_owned();
+        let emitter = emitter.to_owned();
         conn.executor()
             .spawn(
                 async move {
                     listener.await;
 
-                    Self::test_response_notified(ctxt).await.unwrap();
+                    Self::test_response_notified(emitter).await.unwrap();
                 },
                 "TestResponseNotify",
             )
@@ -190,7 +190,7 @@ impl MyIface {
     }
 
     #[zbus(signal)]
-    async fn test_response_notified(ctxt: SignalContext<'_>) -> zbus::Result<()>;
+    async fn test_response_notified(emitter: SignalEmitter<'_>) -> zbus::Result<()>;
 
     #[instrument]
     async fn test_hashmap_return(&self) -> zbus::fdo::Result<HashMap<String, String>> {
@@ -375,7 +375,7 @@ impl MyIface {
     }
 
     #[zbus(signal)]
-    async fn alert_count(ctxt: &SignalContext<'_>, val: u32) -> zbus::Result<()>;
+    async fn alert_count(emitter: &SignalEmitter<'_>, val: u32) -> zbus::Result<()>;
 
     #[instrument]
     #[zbus(property)]
@@ -968,13 +968,13 @@ async fn iface_and_proxy_(#[allow(unused)] p2p: bool) {
     iface
         .get()
         .await
-        .count_changed(iface.signal_context())
+        .count_changed(iface.signal_emitter())
         .await
         .unwrap();
     debug!("`PropertiesChanged` emitted for `Count` property.");
 
     loop {
-        MyIface::alert_count(iface.signal_context(), 51)
+        MyIface::alert_count(iface.signal_emitter(), 51)
             .await
             .unwrap();
         debug!("`AlertCount` signal emitted.");

@@ -1,13 +1,13 @@
 use std::{marker::PhantomData, sync::Arc};
 
-use super::{Interface, InterfaceDeref, InterfaceDerefMut, SignalContext};
+use super::{Interface, InterfaceDeref, InterfaceDerefMut, SignalEmitter};
 use crate::async_lock::RwLock;
 
-/// Wrapper over an interface, along with its corresponding `SignalContext`
+/// Wrapper over an interface, along with its corresponding `SignalEmitter`
 /// instance. A reference to the underlying interface may be obtained via
 /// [`InterfaceRef::get`] and [`InterfaceRef::get_mut`].
 pub struct InterfaceRef<I> {
-    pub(crate) ctxt: SignalContext<'static>,
+    pub(crate) emitter: SignalEmitter<'static>,
     pub(crate) lock: Arc<RwLock<dyn Interface>>,
     pub(crate) phantom: PhantomData<I>,
 }
@@ -73,7 +73,7 @@ where
     /// let iface_ref = object_server.interface::<_, MyIface>(path).await?;
     /// let mut iface = iface_ref.get_mut().await;
     /// iface.0 = 42;
-    /// iface.count_changed(iface_ref.signal_context()).await?;
+    /// iface.count_changed(iface_ref.signal_emitter()).await?;
     /// # Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// # })?;
     /// #
@@ -95,15 +95,20 @@ where
         }
     }
 
-    pub fn signal_context(&self) -> &SignalContext<'static> {
-        &self.ctxt
+    pub fn signal_emitter(&self) -> &SignalEmitter<'static> {
+        &self.emitter
+    }
+
+    #[deprecated(since = "0.5.0", note = "Please use `signal_emitter` instead.")]
+    pub fn signal_context(&self) -> &SignalEmitter<'static> {
+        &self.emitter
     }
 }
 
 impl<I> Clone for InterfaceRef<I> {
     fn clone(&self) -> Self {
         Self {
-            ctxt: self.ctxt.clone(),
+            emitter: self.emitter.clone(),
             lock: self.lock.clone(),
             phantom: PhantomData,
         }

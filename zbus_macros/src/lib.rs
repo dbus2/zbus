@@ -289,7 +289,7 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///   which the method call was received.
 /// * `header` - This marks the method argument to receive the message header associated with the
 ///   D-Bus method call being handled.
-/// * `signal_context` - This marks the method argument to receive a [`SignalContext`] instance,
+/// * `signal_emitter` - This marks the method argument to receive a [`SignalEmitter`] instance,
 ///   which is needed for emitting signals the easy way.
 ///
 /// # Example
@@ -297,7 +297,7 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 /// # use std::error::Error;
 /// use zbus_macros::interface;
-/// use zbus::{ObjectServer, object_server::SignalContext, message::Header};
+/// use zbus::{ObjectServer, object_server::SignalEmitter, message::Header};
 ///
 /// struct Example {
 ///     _some_data: String,
@@ -310,14 +310,14 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///         &self,
 ///         #[zbus(header)]
 ///         hdr: Header<'_>,
-///         #[zbus(signal_context)]
-///         ctxt: SignalContext<'_>,
+///         #[zbus(signal_emitter)]
+///         emitter: SignalEmitter<'_>,
 ///         #[zbus(object_server)]
 ///         _server: &ObjectServer,
 ///     ) -> zbus::fdo::Result<()> {
 ///         let path = hdr.path().unwrap();
 ///         let msg = format!("You are leaving me on the {} path?", path);
-///         Example::bye(&ctxt, &msg).await?;
+///         Example::bye(&emitter, &msg).await?;
 ///
 ///         // Do some asynchronous tasks before quitting..
 ///
@@ -342,7 +342,7 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 ///     // "Bye" signal (note: no implementation body).
 ///     #[zbus(signal)]
-///     async fn bye(signal_ctxt: &SignalContext<'_>, message: &str) -> zbus::Result<()>;
+///     async fn bye(signal_emitter: &SignalEmitter<'_>, message: &str) -> zbus::Result<()>;
 ///
 ///     #[zbus(out_args("answer", "question"))]
 ///     fn meaning_of_life(&self) -> zbus::fdo::Result<(i32, String)> {
@@ -359,7 +359,7 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// [`ObjectServer::with`]: https://docs.rs/zbus/latest/zbus/object_server/struct.ObjectServer.html#method.with
 /// [`Connection`]: https://docs.rs/zbus/latest/zbus/connection/struct.Connection.html
 /// [`Connection::emit_signal()`]: https://docs.rs/zbus/latest/zbus/connection/struct.Connection.html#method.emit_signal
-/// [`SignalContext`]: https://docs.rs/zbus/latest/zbus/object_server/struct.SignalContext.html
+/// [`SignalEmitter`]: https://docs.rs/zbus/latest/zbus/object_server/struct.SignalEmitter.html
 /// [`Interface`]: https://docs.rs/zbus/latest/zbus/object_server/trait.Interface.html
 /// [dbus_emits_changed_signal]: https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format
 #[proc_macro_attribute]

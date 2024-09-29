@@ -17,7 +17,7 @@ use zbus_names::{InterfaceName, MemberName};
 use zvariant::{OwnedValue, Value};
 
 use crate::{
-    async_lock::RwLock, fdo, message::Message, object_server::SignalContext, Connection,
+    async_lock::RwLock, fdo, message::Message, object_server::SignalEmitter, Connection,
     ObjectServer,
 };
 
@@ -59,9 +59,9 @@ pub trait Interface: Any + Send + Sync {
         &'call self,
         property_name: &'call str,
         value: &'call Value<'_>,
-        ctxt: &'call SignalContext<'_>,
+        emitter: &'call SignalEmitter<'_>,
     ) -> DispatchResult<'call> {
-        let _ = (property_name, value, ctxt);
+        let _ = (property_name, value, emitter);
         DispatchResult::RequiresMut
     }
 
@@ -74,7 +74,7 @@ pub trait Interface: Any + Send + Sync {
         &mut self,
         property_name: &str,
         value: &Value<'_>,
-        ctxt: &SignalContext<'_>,
+        emitter: &SignalEmitter<'_>,
     ) -> Option<fdo::Result<()>>;
 
     /// Call a method.

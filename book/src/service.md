@@ -209,7 +209,7 @@ synchronize with the interface handlers from outside, thanks to the `event_liste
 (this is just one of the many ways).
 
 ```rust,no_run
-# use zbus::{object_server::SignalContext, connection::Builder, interface, fdo, Result};
+# use zbus::{object_server::SignalEmitter, connection::Builder, interface, fdo, Result};
 #
 use event_listener::{Event, Listener};
 
@@ -227,10 +227,10 @@ impl Greeter {
     // Rude!
     async fn go_away(
         &self,
-        #[zbus(signal_context)]
-        ctxt: SignalContext<'_>,
+        #[zbus(signal_emitter)]
+        emitter: SignalEmitter<'_>,
     ) -> fdo::Result<()> {
-        Self::greeted_everyone(&ctxt).await?;
+        Self::greeted_everyone(&emitter).await?;
         self.done.notify(1);
 
         Ok(())
@@ -254,7 +254,7 @@ impl Greeter {
 
     /// A signal; the implementation is provided by the macro.
     #[zbus(signal)]
-    async fn greeted_everyone(ctxt: &SignalContext<'_>) -> Result<()>;
+    async fn greeted_everyone(emitter: &SignalEmitter<'_>) -> Result<()>;
 }
 
 // Although we use `tokio` here, you can use any async runtime of choice.
@@ -318,9 +318,9 @@ want to use [`zbus::fdo::Error::UnknownProperty`] variant.
 ### Sending signals
 
 As you might have noticed in the previous example, the signal methods don't take a `&self` argument
-but a `SignalContext` reference. This allows to emit signals whether from inside or outside of the
+but a `SignalEmitter` reference. This allows to emit signals whether from inside or outside of the
 `interface` methods' context. To make things simpler, `interface` methods can receive a
-`SignalContext` passed to them using the special `zbus(signal_context)` attribute, as demonstrated
+`SignalEmitter` passed to them using the special `zbus(signal_emitter)` attribute, as demonstrated
 in the previous example.
 
 Please refer to [`interface` documentation][didoc] for more examples and list of other special
@@ -360,7 +360,7 @@ example code:
 let iface_ref = object_server.interface::<_, Greeter>("/org/zbus/MyGreeter").await?;
 let mut iface = iface_ref.get_mut().await;
 iface.name = String::from("👋");
-iface.greeter_name_changed(iface_ref.signal_context()).await?;
+iface.greeter_name_changed(iface_ref.signal_emitter()).await?;
 # Ok(())
 # }
 ```

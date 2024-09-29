@@ -9,7 +9,7 @@ use zbus_names::InterfaceName;
 use zvariant::{OwnedValue, Value};
 
 use super::{Error, Result};
-use crate::{interface, message::Header, object_server::SignalContext, ObjectServer};
+use crate::{interface, message::Header, object_server::SignalEmitter, ObjectServer};
 
 /// Service-side implementation for the `org.freedesktop.DBus.Properties` interface.
 /// This interface is implemented automatically for any object registered to the
@@ -53,7 +53,7 @@ impl Properties {
         value: Value<'_>,
         #[zbus(object_server)] server: &ObjectServer,
         #[zbus(header)] header: Header<'_>,
-        #[zbus(signal_context)] ctxt: SignalContext<'_>,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) -> Result<()> {
         let path = header.path().ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
@@ -68,7 +68,7 @@ impl Properties {
             .instance
             .read()
             .await
-            .set(property_name, &value, &ctxt)
+            .set(property_name, &value, &emitter)
         {
             zbus::object_server::DispatchResult::RequiresMut => {}
             zbus::object_server::DispatchResult::NotFound => {
@@ -84,7 +84,7 @@ impl Properties {
             .instance
             .write()
             .await
-            .set_mut(property_name, &value, &ctxt)
+            .set_mut(property_name, &value, &emitter)
             .await;
         res.unwrap_or_else(|| {
             Err(Error::UnknownProperty(format!(
@@ -117,7 +117,7 @@ impl Properties {
     #[zbus(signal)]
     #[rustfmt::skip]
     pub async fn properties_changed(
-        ctxt: &SignalContext<'_>,
+        emitter: &SignalEmitter<'_>,
         interface_name: InterfaceName<'_>,
         changed_properties: HashMap<&str, Value<'_>>,
         invalidated_properties: Vec<&str>,
