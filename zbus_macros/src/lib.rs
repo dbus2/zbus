@@ -250,7 +250,11 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// * `signal` - the method is a "signal". It must be a method declaration (without body). Its code
 ///   block will be expanded to emit the signal from the object path associated with the interface
-///   instance.
+///   instance. Moreover, `interface` will also generate a trait named `<Interface>Signals` that
+///   provides all the signal methods but without the `SignalEmitter` argument. The macro implements
+///   this trait for two types, `zbus::object_server::InterfaceRef<Interface>` and
+///   `SignalEmitter<'_>`. The former is useful for emitting signals from outside the context of an
+///   interface method and the latter is useful for emitting signals from inside interface methods.
 ///
 ///   You can call a signal method from a an interface method, or from an [`ObjectServer::with`]
 ///   function.
@@ -317,7 +321,7 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     ) -> zbus::fdo::Result<()> {
 ///         let path = hdr.path().unwrap();
 ///         let msg = format!("You are leaving me on the {} path?", path);
-///         Example::bye(&emitter, &msg).await?;
+///         emitter.bye(&msg).await?;
 ///
 ///         // Do some asynchronous tasks before quitting..
 ///

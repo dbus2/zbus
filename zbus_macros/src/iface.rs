@@ -6,7 +6,7 @@ use syn::{
     parse_quote, parse_str,
     punctuated::Punctuated,
     spanned::Spanned,
-    token::Comma,
+    token::{Async, Comma},
     AngleBracketedGenericArguments, Attribute, Error, Expr, ExprLit, FnArg, GenericArgument, Ident,
     ImplItem, ImplItemFn, ItemImpl,
     Lit::Str,
@@ -305,6 +305,9 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
     let mut call_mut_dispatch = quote!();
     let mut introspect = quote!();
     let mut generated_signals = quote!();
+    let mut signals_trait_methods = quote!();
+    let mut signals_emitter_impl_methods = quote!();
+    let mut signals_interface_ref_impl_methods = quote!();
 
     // the impl Type
     let ty = match input.self_ty.as_ref() {
@@ -431,6 +434,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
             ..
         } = method_info;
 
+        let mut method_clone = method.clone();
         let Signature {
             ident,
             inputs,
@@ -453,6 +457,37 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                         &(#args_names),
                     )
                     .await
+                });
+
+                method_clone.sig.asyncness = Some(Async(method_clone.span()));
+                *method_clone.sig.inputs.first_mut().unwrap() = parse_quote!(&self);
+                method_clone.vis = Visibility::Inherited;
+                let sig = &method_clone.sig;
+                signals_trait_methods.extend(quote! {
+                    #sig;
+                });
+                method_clone.block = parse_quote!({
+                    self.emit(
+                        #iface_name,
+                        #member_name,
+                        &(#args_names),
+                    )
+                    .await
+                });
+                signals_emitter_impl_methods.extend(quote! {
+                    #method_clone
+                });
+                method_clone.block = parse_quote!({
+                    <#zbus::object_server::InterfaceRef<#self_ty>>::signal_emitter(self)
+                        .emit(
+                            #iface_name,
+                            #member_name,
+                            &(#args_names),
+                        )
+                        .await
+                });
+                signals_interface_ref_impl_methods.extend(quote! {
+                    #method_clone
                 });
             }
             MethodType::Property(_) => {
@@ -744,6 +779,33 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
             }
         }
     };
+    let signals_trait_and_impl = if signals_trait_methods.is_empty() {
+        quote!()
+    } else {
+        let signals_trait_name = format_ident!("{}Signals", ty);
+        let signals_trait_doc = format!("Trait providing all signal emission methods for `{ty}`.");
+
+        quote! {
+            #[doc = #signals_trait_doc]
+            #[#zbus::export::async_trait::async_trait]
+            pub trait #signals_trait_name {
+                #signals_trait_methods
+            }
+
+            #[#zbus::export::async_trait::async_trait]
+            impl #signals_trait_name for #zbus::object_server::SignalEmitter<'_>
+            {
+                #signals_emitter_impl_methods
+            }
+
+            #[#zbus::export::async_trait::async_trait]
+            impl #generics #signals_trait_name for #zbus::object_server::InterfaceRef<#self_ty>
+            #where_clause
+            {
+                #signals_interface_ref_impl_methods
+            }
+        }
+    };
 
     let proxy = proxy.map(|proxy| proxy.gen()).transpose()?;
 
@@ -751,6 +813,8 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
         #input
 
         #generated_signals_impl
+
+        #signals_trait_and_impl
 
         #[#zbus::export::async_trait::async_trait]
         impl #generics #zbus::object_server::Interface for #self_ty

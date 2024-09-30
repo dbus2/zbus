@@ -286,7 +286,7 @@ fn test_interface() {
                 .unwrap();
             let _ = t.call(&s, &c, &m, "StrU32".try_into().unwrap());
             let ctxt = SignalEmitter::new(&c, "/does/not/matter").unwrap();
-            block_on(Test::<u32>::signal(&ctxt, 23, "ergo sum")).unwrap();
+            ctxt.signal(23, "ergo sum").await.unwrap();
         });
     }
 }
