@@ -230,7 +230,7 @@ impl Greeter {
         #[zbus(signal_emitter)]
         emitter: SignalEmitter<'_>,
     ) -> fdo::Result<()> {
-        Self::greeted_everyone(&emitter).await?;
+        emitter.greeted_everyone().await?;
         self.done.notify(1);
 
         Ok(())
@@ -265,13 +265,21 @@ async fn main() -> Result<()> {
         done: event_listener::Event::new(),
     };
     let done_listener = greeter.done.listen();
-    let _connection = Builder::session()?
+    let connection = Builder::session()?
         .name("org.zbus.MyGreeter")?
         .serve_at("/org/zbus/MyGreeter", greeter)?
         .build()
         .await?;
 
     done_listener.wait();
+
+    // Let's emit the signal again, just for the fun of it.
+    connection
+        .object_server()
+        .interface("/org/zbus/MyGreeter")
+        .await?
+        .greeted_everyone()
+        .await?;
 
     Ok(())
 }
@@ -318,13 +326,24 @@ want to use [`zbus::fdo::Error::UnknownProperty`] variant.
 ### Sending signals
 
 As you might have noticed in the previous example, the signal methods don't take a `&self` argument
-but a `SignalEmitter` reference. This allows to emit signals whether from inside or outside of the
-`interface` methods' context. To make things simpler, `interface` methods can receive a
-`SignalEmitter` passed to them using the special `zbus(signal_emitter)` attribute, as demonstrated
-in the previous example.
+but a `SignalEmitter` reference. While this allows to emit signals whether from inside or outside of
+the `interface` methods' context, it does make it a bit inconvenient to use. To make things easier
+`interface` generates a trait, `GreeterSignals` that provides the same signal methods but
+without the `SignalEmitter` argument. The macro provides two implementations of this trait for:
+
+* `zbus::object_server::InterfaceRef<Greeter>`
+* `zbus::object_server::SignalEmitter`
+
+The former is useful for emitting signals from outside the context of an `interface` method and the
+latter is useful for emitting signals from inside of it. To make it possible to emit signals from
+inside of an `interface` method, methods can ask to receive a `SignalEmitter` passed to them using
+the special `zbus(signal_emitter)` attribute.
 
 Please refer to [`interface` documentation][didoc] for more examples and list of other special
 attributes you can make use of.
+
+We saw examples of signal emission in action, from both inside and outside an `interface` method, in
+the previous example.
 
 ### Notifying property changes
 

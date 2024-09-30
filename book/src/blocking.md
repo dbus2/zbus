@@ -155,7 +155,7 @@ impl Greeter {
         #[zbus(signal_emitter)]
         emitter: SignalEmitter<'_>,
     ) -> fdo::Result<()> {
-        Self::greeted_everyone(&emitter).await?;
+        emitter.greeted_everyone().await?;
         self.done.notify(1);
 
         Ok(())
