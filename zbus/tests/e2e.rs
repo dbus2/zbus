@@ -101,7 +101,8 @@ impl MyIface {
     async fn ping(&mut self, #[zbus(signal_emitter)] emitter: SignalEmitter<'_>) -> u32 {
         self.count += 1;
         if self.count % 3 == 0 {
-            MyIface::alert_count(&emitter, self.count)
+            emitter
+                .alert_count(self.count)
                 .await
                 .expect("Failed to emit signal");
             debug!("emitted `AlertCount` signal.");
@@ -974,9 +975,7 @@ async fn iface_and_proxy_(#[allow(unused)] p2p: bool) {
     debug!("`PropertiesChanged` emitted for `Count` property.");
 
     loop {
-        MyIface::alert_count(iface.signal_emitter(), 51)
-            .await
-            .unwrap();
+        iface.alert_count(51).await.unwrap();
         debug!("`AlertCount` signal emitted.");
 
         match next_rx.recv().await.unwrap() {
