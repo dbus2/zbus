@@ -26,13 +26,6 @@ pub use basic::*;
 mod dict;
 pub use dict::*;
 
-#[deprecated(since = "4.0.0", note = "Use `serialized::Context` instead")]
-#[doc(hidden)]
-pub type EncodingContext = serialized::Context;
-#[deprecated(since = "4.0.0", note = "Use `serialized::Format` instead")]
-#[doc(hidden)]
-pub type EncodingFormat = serialized::Format;
-
 pub mod serialized;
 
 #[cfg(unix)]
