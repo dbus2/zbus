@@ -334,7 +334,7 @@ pub fn create_proxy(
     };
 
     Ok(quote! {
-        impl<'a> #zbus::proxy::ProxyDefault for #proxy_name<'a> {
+        impl<'a> #zbus::proxy::Defaults for #proxy_name<'a> {
             const INTERFACE: Option<&'static str> = Some(#iface_name);
             const DESTINATION: Option<&'static str> = #default_service;
             const PATH: Option<&'static str> = #default_path;

@@ -4,13 +4,13 @@
 /// used to retrieve the associated constants.
 ///
 /// [`proxy`]: attr.proxy.html
-pub trait ProxyDefault {
+pub trait Defaults {
     const INTERFACE: Option<&'static str>;
     const DESTINATION: Option<&'static str>;
     const PATH: Option<&'static str>;
 }
 
-impl ProxyDefault for super::Proxy<'_> {
+impl Defaults for super::Proxy<'_> {
     const INTERFACE: Option<&'static str> = None;
     const DESTINATION: Option<&'static str> = None;
     const PATH: Option<&'static str> = None;

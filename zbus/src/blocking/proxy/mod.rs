@@ -10,7 +10,7 @@ use zvariant::{ObjectPath, OwnedValue, Value};
 use crate::{
     blocking::Connection,
     message::Message,
-    proxy::{MethodFlags, ProxyDefault},
+    proxy::{Defaults, MethodFlags},
     utils::block_on,
     Error, Result,
 };
@@ -365,7 +365,7 @@ impl<'a> Proxy<'a> {
     }
 }
 
-impl ProxyDefault for Proxy<'_> {
+impl Defaults for Proxy<'_> {
     const INTERFACE: Option<&'static str> = None;
     const DESTINATION: Option<&'static str> = None;
     const PATH: Option<&'static str> = None;

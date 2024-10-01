@@ -144,7 +144,7 @@ impl<'a, T> Builder<'a, T> {
 
 impl<'a, T> Builder<'a, T>
 where
-    T: super::ProxyDefault,
+    T: super::Defaults,
 {
     /// Create a new [`Builder`] for the given connection.
     #[must_use]

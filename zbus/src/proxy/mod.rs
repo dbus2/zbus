@@ -30,7 +30,7 @@ mod builder;
 pub use builder::{Builder, CacheProperties};
 
 mod defaults;
-pub use defaults::ProxyDefault;
+pub use defaults::Defaults;
 
 /// A client-side interface proxy.
 ///
