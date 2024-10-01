@@ -20,8 +20,10 @@ mod interface;
 pub(crate) use interface::ArcInterface;
 pub use interface::{DispatchResult, Interface, InterfaceDeref, InterfaceDerefMut, InterfaceRef};
 
-mod signal_context;
-pub use signal_context::SignalContext;
+mod signal_emitter;
+pub use signal_emitter::SignalEmitter;
+#[deprecated(since = "5.0.0", note = "Please use `SignalEmitter` instead.")]
+pub type SignalContext<'s> = SignalEmitter<'s>;
 
 mod dispatch_notifier;
 pub use dispatch_notifier::ResponseDispatchNotifier;
@@ -143,7 +145,7 @@ impl ObjectServer {
         if added {
             if name == ObjectManager::name() {
                 // Just added an object manager. Need to signal all managed objects under it.
-                let ctxt = SignalContext::new(&self.connection(), path)?;
+                let ctxt = SignalEmitter::new(&self.connection(), path)?;
                 let objects = node.get_managed_objects().await?;
                 for (path, owned_interfaces) in objects {
                     let interfaces = owned_interfaces
@@ -159,7 +161,7 @@ impl ObjectServer {
                     ObjectManager::interfaces_added(&ctxt, path.into(), interfaces).await?;
                 }
             } else if let Some(manager_path) = manager_path {
-                let ctxt = SignalContext::new(&self.connection(), manager_path.clone())?;
+                let ctxt = SignalEmitter::new(&self.connection(), manager_path.clone())?;
                 let mut interfaces = HashMap::new();
                 let owned_props = node.get_properties(name.clone()).await?;
                 let props = owned_props
@@ -193,7 +195,7 @@ impl ObjectServer {
             return Err(Error::InterfaceNotFound);
         }
         if let Some(manager_path) = manager_path {
-            let ctxt = SignalContext::new(&self.connection(), manager_path.clone())?;
+            let ctxt = SignalEmitter::new(&self.connection(), manager_path.clone())?;
             ObjectManager::interfaces_removed(&ctxt, path.clone(), vec![I::name()]).await?;
         }
         if node.is_empty() {
@@ -247,7 +249,7 @@ impl ObjectServer {
     ///     .interface::<_, MyIface>(path).await?;
     /// let mut iface = iface_ref.get_mut().await;
     /// iface.0 = 42;
-    /// iface.count_changed(iface_ref.signal_context()).await?;
+    /// iface.count_changed(iface_ref.signal_emitter()).await?;
     /// # Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// # })?;
     /// #
@@ -277,10 +279,10 @@ impl ObjectServer {
 
         let conn = self.connection();
         // SAFETY: We know that there is a valid path on the node as we already converted w/o error.
-        let ctxt = SignalContext::new(&conn, path).unwrap().into_owned();
+        let emitter = SignalEmitter::new(&conn, path).unwrap().into_owned();
 
         Ok(InterfaceRef {
-            ctxt,
+            emitter,
             lock,
             phantom: PhantomData,
         })

@@ -9,7 +9,7 @@ use zbus_names::{InterfaceName, OwnedInterfaceName};
 use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 
 use super::{Error, Result};
-use crate::{interface, message::Header, object_server::SignalContext, ObjectServer};
+use crate::{interface, message::Header, object_server::SignalEmitter, ObjectServer};
 
 /// The type returned by the [`ObjectManagerProxy::get_managed_objects`] method.
 pub type ManagedObjects =
@@ -61,7 +61,7 @@ impl ObjectManager {
     /// interfaces and properties (if any) that have been added to the given object path.
     #[zbus(signal)]
     pub async fn interfaces_added(
-        ctxt: &SignalContext<'_>,
+        emitter: &SignalEmitter<'_>,
         object_path: ObjectPath<'_>,
         interfaces_and_properties: HashMap<InterfaceName<'_>, HashMap<&str, Value<'_>>>,
     ) -> zbus::Result<()>;
@@ -70,7 +70,7 @@ impl ObjectManager {
     /// The `interfaces` parameters contains a list of the interfaces that were removed.
     #[zbus(signal)]
     pub async fn interfaces_removed(
-        ctxt: &SignalContext<'_>,
+        emitter: &SignalEmitter<'_>,
         object_path: ObjectPath<'_>,
         interfaces: Vec<InterfaceName<'_>>,
     ) -> zbus::Result<()>;

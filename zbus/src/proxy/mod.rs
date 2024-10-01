@@ -1356,7 +1356,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{connection, interface, object_server::SignalContext, proxy, utils::block_on};
+    use crate::{connection, interface, object_server::SignalEmitter, proxy, utils::block_on};
     use futures_util::StreamExt;
     use ntest::timeout;
     use test_log::test;
@@ -1459,7 +1459,7 @@ mod tests {
         #[interface(name = "org.zbus.Test")]
         impl TestIface {
             #[zbus(signal)]
-            async fn my_signal(context: &SignalContext<'_>, msg: &'static str) -> Result<()>;
+            async fn my_signal(context: &SignalEmitter<'_>, msg: &'static str) -> Result<()>;
         }
 
         let test_iface = TestIface;
@@ -1501,7 +1501,7 @@ mod tests {
                     .await
                     .unwrap();
 
-                let context = iface_ref.signal_context();
+                let context = iface_ref.signal_emitter();
                 while !tx.is_closed() {
                     for _ in 0..10 {
                         TestIface::my_signal(context, "This is a test")

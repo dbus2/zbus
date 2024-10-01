@@ -154,7 +154,7 @@ mod utils;
 /// // Use `builder` to override the default arguments, `new` otherwise.
 /// let proxy = SomeIfaceProxyBlocking::builder(&connection)
 ///                .destination("org.another.Service")?
-///                .cache_properties(zbus::CacheProperties::No)
+///                .cache_properties(zbus::proxy::CacheProperties::No)
 ///                .build()?;
 /// let _ = proxy.do_this("foo", 32, &Value::new(true));
 /// let _ = proxy.set_a_property("val");
@@ -166,7 +166,7 @@ mod utils;
 /// // Now the same again, but asynchronous.
 /// block_on(async move {
 ///     let proxy = SomeIfaceProxy::builder(&connection.into())
-///                    .cache_properties(zbus::CacheProperties::No)
+///                    .cache_properties(zbus::proxy::CacheProperties::No)
 ///                    .build()
 ///                    .await
 ///                    .unwrap();
@@ -247,10 +247,14 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///       signal.
 ///     * `"const"` - the property never changes, thus no signal is ever emitted for it.
 ///     * `"false"` - the change signal is not emitted if the property changes.
-
+///
 /// * `signal` - the method is a "signal". It must be a method declaration (without body). Its code
 ///   block will be expanded to emit the signal from the object path associated with the interface
-///   instance.
+///   instance. Moreover, `interface` will also generate a trait named `<Interface>Signals` that
+///   provides all the signal methods but without the `SignalEmitter` argument. The macro implements
+///   this trait for two types, `zbus::object_server::InterfaceRef<Interface>` and
+///   `SignalEmitter<'_>`. The former is useful for emitting signals from outside the context of an
+///   interface method and the latter is useful for emitting signals from inside interface methods.
 ///
 ///   You can call a signal method from a an interface method, or from an [`ObjectServer::with`]
 ///   function.
@@ -289,7 +293,7 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///   which the method call was received.
 /// * `header` - This marks the method argument to receive the message header associated with the
 ///   D-Bus method call being handled.
-/// * `signal_context` - This marks the method argument to receive a [`SignalContext`] instance,
+/// * `signal_emitter` - This marks the method argument to receive a [`SignalEmitter`] instance,
 ///   which is needed for emitting signals the easy way.
 ///
 /// # Example
@@ -297,7 +301,7 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 /// # use std::error::Error;
 /// use zbus_macros::interface;
-/// use zbus::{ObjectServer, object_server::SignalContext, message::Header};
+/// use zbus::{ObjectServer, object_server::SignalEmitter, message::Header};
 ///
 /// struct Example {
 ///     _some_data: String,
@@ -310,14 +314,14 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///         &self,
 ///         #[zbus(header)]
 ///         hdr: Header<'_>,
-///         #[zbus(signal_context)]
-///         ctxt: SignalContext<'_>,
+///         #[zbus(signal_emitter)]
+///         emitter: SignalEmitter<'_>,
 ///         #[zbus(object_server)]
 ///         _server: &ObjectServer,
 ///     ) -> zbus::fdo::Result<()> {
 ///         let path = hdr.path().unwrap();
 ///         let msg = format!("You are leaving me on the {} path?", path);
-///         Example::bye(&ctxt, &msg).await?;
+///         emitter.bye(&msg).await?;
 ///
 ///         // Do some asynchronous tasks before quitting..
 ///
@@ -342,7 +346,7 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 ///     // "Bye" signal (note: no implementation body).
 ///     #[zbus(signal)]
-///     async fn bye(signal_ctxt: &SignalContext<'_>, message: &str) -> zbus::Result<()>;
+///     async fn bye(signal_emitter: &SignalEmitter<'_>, message: &str) -> zbus::Result<()>;
 ///
 ///     #[zbus(out_args("answer", "question"))]
 ///     fn meaning_of_life(&self) -> zbus::fdo::Result<(i32, String)> {
@@ -359,7 +363,7 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// [`ObjectServer::with`]: https://docs.rs/zbus/latest/zbus/object_server/struct.ObjectServer.html#method.with
 /// [`Connection`]: https://docs.rs/zbus/latest/zbus/connection/struct.Connection.html
 /// [`Connection::emit_signal()`]: https://docs.rs/zbus/latest/zbus/connection/struct.Connection.html#method.emit_signal
-/// [`SignalContext`]: https://docs.rs/zbus/latest/zbus/object_server/struct.SignalContext.html
+/// [`SignalEmitter`]: https://docs.rs/zbus/latest/zbus/object_server/struct.SignalEmitter.html
 /// [`Interface`]: https://docs.rs/zbus/latest/zbus/object_server/trait.Interface.html
 /// [dbus_emits_changed_signal]: https://dbus.freedesktop.org/doc/dbus-specification.html#introspection-format
 #[proc_macro_attribute]

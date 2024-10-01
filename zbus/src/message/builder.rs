@@ -10,10 +10,10 @@ use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 use zvariant::{serialized, Endian, Signature};
 
 use crate::{
-    message::{Fields, Flags, Header, Message, PrimaryHeader, Sequence, Type},
+    message::{EndianSig, Fields, Flags, Header, Message, PrimaryHeader, Sequence, Type},
     utils::padding_for_8_bytes,
     zvariant::{serialized::Context, DynamicType, ObjectPath},
-    EndianSig, Error, Result,
+    Error, Result,
 };
 
 use crate::message::header::MAX_MESSAGE_SIZE;

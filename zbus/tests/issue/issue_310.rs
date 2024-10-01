@@ -59,11 +59,11 @@ async fn issue_310() {
             {
                 let iface = iface_ref.get().await;
                 iface
-                    .connected_network_invalidate(iface_ref.signal_context())
+                    .connected_network_invalidate(iface_ref.signal_emitter())
                     .await
                     .unwrap();
                 iface
-                    .connected_network_changed(iface_ref.signal_context())
+                    .connected_network_changed(iface_ref.signal_emitter())
                     .await
                     .unwrap();
             }

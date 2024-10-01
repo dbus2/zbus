@@ -1,21 +1,21 @@
-use zbus_names::BusName;
+use zbus_names::{BusName, InterfaceName, MemberName};
 
 use crate::{zvariant::ObjectPath, Connection, Error, Result};
 
-/// A signal emission context.
+/// A signal emitter.
 ///
 /// For signal emission using the high-level API, you'll need instances of this type.
 ///
-/// See [`crate::InterfaceRef::signal_context`] and [`crate::interface`]
+/// See [`crate::object_server::InterfaceRef::signal_emitter`] and [`crate::interface`]
 /// documentation for details and examples of this type in use.
 #[derive(Clone, Debug)]
-pub struct SignalContext<'s> {
+pub struct SignalEmitter<'s> {
     conn: Connection,
     path: ObjectPath<'s>,
     destination: Option<BusName<'s>>,
 }
 
-impl<'s> SignalContext<'s> {
+impl<'s> SignalEmitter<'s> {
     /// Create a new signal context for the given connection and object path.
     pub fn new<P>(conn: &Connection, path: P) -> Result<Self>
     where
@@ -38,6 +38,26 @@ impl<'s> SignalContext<'s> {
             path,
             destination: None,
         }
+    }
+
+    /// Emit a signal on the given interface with the given signal name and body.
+    pub async fn emit<'i, 'm, I, M, B>(&self, interface: I, signal_name: M, body: &B) -> Result<()>
+    where
+        I: TryInto<InterfaceName<'i>>,
+        I::Error: Into<Error>,
+        M: TryInto<MemberName<'m>>,
+        M::Error: Into<Error>,
+        B: serde::ser::Serialize + zvariant::DynamicType,
+    {
+        self.conn
+            .emit_signal(
+                self.destination.as_ref(),
+                &self.path,
+                interface,
+                signal_name,
+                body,
+            )
+            .await
     }
 
     /// Set the destination for the signal emission.
@@ -67,8 +87,8 @@ impl<'s> SignalContext<'s> {
     }
 
     /// Create an owned clone of `self`.
-    pub fn to_owned(&self) -> SignalContext<'static> {
-        SignalContext {
+    pub fn to_owned(&self) -> SignalEmitter<'static> {
+        SignalEmitter {
             conn: self.conn.clone(),
             path: self.path.to_owned(),
             destination: self.destination.as_ref().map(|d| d.to_owned()),
@@ -76,8 +96,8 @@ impl<'s> SignalContext<'s> {
     }
 
     /// Convert into an owned clone of `self`.
-    pub fn into_owned(self) -> SignalContext<'static> {
-        SignalContext {
+    pub fn into_owned(self) -> SignalEmitter<'static> {
+        SignalEmitter {
             conn: self.conn,
             path: self.path.into_owned(),
             destination: self.destination.map(|d| d.into_owned()),

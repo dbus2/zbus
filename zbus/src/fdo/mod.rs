@@ -144,7 +144,7 @@ mod tests {
         let conn = blocking::Connection::session().unwrap();
         let mut iterator = blocking::MessageIterator::for_match_rule(
             zbus::MatchRule::builder()
-                .msg_type(zbus::MessageType::Signal)
+                .msg_type(zbus::message::Type::Signal)
                 .interface("org.freedesktop.DBus.ObjectManager")
                 .unwrap()
                 .path("/org/zbus/NoObjectManagerSignalsBeforeHello")

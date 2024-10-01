@@ -4,7 +4,7 @@ use ntest::timeout;
 use test_log::test;
 use zbus::block_on;
 
-use zbus::{blocking, object_server::SignalContext};
+use zbus::{blocking, object_server::SignalEmitter};
 
 #[test]
 #[timeout(15000)]
@@ -41,7 +41,7 @@ fn issue_173() {
     #[zbus::interface(name = "org.freedesktop.zbus.ComeAndGo")]
     impl ComeAndGo {
         #[zbus(signal)]
-        async fn the_signal(signal_ctxt: &SignalContext<'_>) -> zbus::Result<()>;
+        async fn the_signal(signal_emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
     }
 
     rx.recv().unwrap();
@@ -59,7 +59,7 @@ fn issue_173() {
             .object_server()
             .interface::<_, ComeAndGo>("/org/freedesktop/zbus/ComeAndGo")
             .unwrap();
-        block_on(ComeAndGo::the_signal(iface_ref.signal_context())).unwrap();
+        block_on(ComeAndGo::the_signal(iface_ref.signal_emitter())).unwrap();
 
         rx.recv().unwrap();
 

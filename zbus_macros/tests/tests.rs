@@ -3,7 +3,7 @@ use futures_util::{
     stream::StreamExt,
 };
 use std::future::ready;
-use zbus::{block_on, fdo, object_server::SignalContext, proxy::CacheProperties};
+use zbus::{block_on, fdo, object_server::SignalEmitter, proxy::CacheProperties};
 use zbus_macros::{interface, proxy, DBusError};
 
 mod param {
@@ -217,7 +217,7 @@ fn test_interface() {
 
         /// Emit a signal.
         #[zbus(signal)]
-        async fn signal(ctxt: &SignalContext<'_>, arg: u8, other: &str) -> zbus::Result<()>;
+        async fn signal(emitter: &SignalEmitter<'_>, arg: u8, other: &str) -> zbus::Result<()>;
     }
 
     const EXPECTED_XML: &str = r#"<interface name="org.freedesktop.zbus.Test">
@@ -285,8 +285,8 @@ fn test_interface() {
                 .build(&(42,))
                 .unwrap();
             let _ = t.call(&s, &c, &m, "StrU32".try_into().unwrap());
-            let ctxt = SignalContext::new(&c, "/does/not/matter").unwrap();
-            block_on(Test::<u32>::signal(&ctxt, 23, "ergo sum")).unwrap();
+            let ctxt = SignalEmitter::new(&c, "/does/not/matter").unwrap();
+            ctxt.signal(23, "ergo sum").await.unwrap();
         });
     }
 }

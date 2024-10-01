@@ -134,7 +134,7 @@ the beginning of this chapter for details on why and a possible workaround.
 
 ```rust,no_run
 # use std::error::Error;
-# use zbus::{blocking::connection, interface, fdo, SignalContext};
+# use zbus::{blocking::connection, interface, fdo, object_server::SignalEmitter};
 #
 use event_listener::{Event, Listener};
 
@@ -152,10 +152,10 @@ impl Greeter {
     // Rude!
     async fn go_away(
         &self,
-        #[zbus(signal_context)]
-        ctxt: SignalContext<'_>,
+        #[zbus(signal_emitter)]
+        emitter: SignalEmitter<'_>,
     ) -> fdo::Result<()> {
-        Self::greeted_everyone(&ctxt).await?;
+        emitter.greeted_everyone().await?;
         self.done.notify(1);
 
         Ok(())
@@ -179,7 +179,7 @@ impl Greeter {
 
     /// A signal; the implementation is provided by the macro.
     #[zbus(signal)]
-    async fn greeted_everyone(ctxt: &SignalContext<'_>) -> zbus::Result<()>;
+    async fn greeted_everyone(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
 }
 
 fn main() -> Result<(), Box<dyn Error>> {

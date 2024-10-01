@@ -4,12 +4,12 @@ use static_assertions::assert_impl_all;
 use zvariant::ObjectPath;
 
 use crate::{
-    object_server::{Interface, InterfaceDeref, InterfaceDerefMut, SignalContext},
+    object_server::{Interface, InterfaceDeref, InterfaceDerefMut, SignalEmitter},
     utils::block_on,
     Error, Result,
 };
 
-/// Wrapper over an interface, along with its corresponding `SignalContext`
+/// Wrapper over an interface, along with its corresponding `SignalEmitter`
 /// instance. A reference to the underlying interface may be obtained via
 /// [`InterfaceRef::get`] and [`InterfaceRef::get_mut`].
 pub struct InterfaceRef<I> {
@@ -67,7 +67,7 @@ where
     /// let iface_ref = object_server.interface::<_, MyIface>(path)?;
     /// let mut iface = iface_ref.get_mut();
     /// iface.0 = 42;
-    /// block_on(iface.count_changed(iface_ref.signal_context()))?;
+    /// block_on(iface.count_changed(iface_ref.signal_emitter()))?;
     /// #
     /// # Ok::<_, Box<dyn Error + Send + Sync>>(())
     /// ```
@@ -75,8 +75,8 @@ where
         block_on(self.azync.get_mut())
     }
 
-    pub fn signal_context(&self) -> &SignalContext<'static> {
-        self.azync.signal_context()
+    pub fn signal_emitter(&self) -> &SignalEmitter<'static> {
+        self.azync.signal_emitter()
     }
 }
 
@@ -192,7 +192,7 @@ impl ObjectServer {
     /// # use std::error::Error;
     /// # use zbus::block_on;
     /// # use zbus::{
-    /// #    SignalContext,
+    /// #    object_server::SignalEmitter,
     /// #    blocking::Connection,
     /// #    interface,
     /// # };
@@ -201,7 +201,7 @@ impl ObjectServer {
     /// #[interface(name = "org.myiface.MyIface")]
     /// impl MyIface {
     ///     #[zbus(signal)]
-    ///     async fn emit_signal(ctxt: &SignalContext<'_>) -> zbus::Result<()>;
+    ///     async fn emit_signal(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
     /// }
     ///
     /// # let connection = Connection::session()?;
@@ -211,7 +211,7 @@ impl ObjectServer {
     /// let iface_ref = connection
     ///     .object_server()
     ///     .interface::<_, MyIface>(path)?;
-    /// block_on(MyIface::emit_signal(iface_ref.signal_context()))?;
+    /// block_on(MyIface::emit_signal(iface_ref.signal_emitter()))?;
     /// #
     /// #
     /// # Ok::<_, Box<dyn Error + Send + Sync>>(())
