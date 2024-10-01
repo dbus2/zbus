@@ -152,9 +152,13 @@ where
         Self {
             conn: conn.clone(),
             destination: T::DESTINATION
+                .as_ref()
                 .map(|d| BusName::from_static_str(d).expect("invalid bus name")),
-            path: T::PATH.map(|p| ObjectPath::from_static_str(p).expect("invalid default path")),
+            path: T::PATH
+                .as_ref()
+                .map(|p| ObjectPath::from_static_str(p).expect("invalid default path")),
             interface: T::INTERFACE
+                .as_ref()
                 .map(|i| InterfaceName::from_static_str(i).expect("invalid interface name")),
             cache: CacheProperties::default(),
             uncached_properties: None,

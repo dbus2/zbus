@@ -32,9 +32,9 @@ fn issue_1015() {
     // handled.
     let conn = Builder::session()
         .unwrap()
-        .serve_at(IfaceProxy::PATH.unwrap(), Iface)
+        .serve_at(IfaceProxy::PATH.as_ref().unwrap(), Iface)
         .unwrap()
-        .name(IfaceProxy::DESTINATION.unwrap())
+        .name(IfaceProxy::DESTINATION.clone().unwrap())
         .unwrap()
         .build()
         .unwrap();

@@ -366,9 +366,9 @@ impl<'a> Proxy<'a> {
 }
 
 impl Defaults for Proxy<'_> {
-    const INTERFACE: Option<&'static str> = None;
-    const DESTINATION: Option<&'static str> = None;
-    const PATH: Option<&'static str> = None;
+    const INTERFACE: &'static Option<InterfaceName<'static>> = &None;
+    const DESTINATION: &'static Option<BusName<'static>> = &None;
+    const PATH: &'static Option<ObjectPath<'static>> = &None;
 }
 
 impl<'a> std::convert::AsRef<Proxy<'a>> for Proxy<'a> {

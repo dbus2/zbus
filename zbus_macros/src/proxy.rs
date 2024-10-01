@@ -325,19 +325,34 @@ pub fn create_proxy(
         }
     };
     let default_path = match default_path {
-        Some(p) => quote! { Some(#p) },
-        None => quote! { None },
+        Some(p) => quote! { &Some(#zbus::zvariant::ObjectPath::from_static_str_unchecked(#p)) },
+        None => quote! { &None },
     };
     let default_service = match default_service {
-        Some(d) => quote! { Some(#d) },
-        None => quote! { None },
+        Some(d) => {
+            if d.starts_with(':') || d == "org.freedesktop.DBus" {
+                quote! {
+                    &Some(#zbus::names::BusName::Unique(
+                        #zbus::names::UniqueName::from_static_str_unchecked(#d),
+                    ))
+                }
+            } else {
+                quote! {
+                    &Some(#zbus::names::BusName::WellKnown(
+                        #zbus::names::WellKnownName::from_static_str_unchecked(#d),
+                    ))
+                }
+            }
+        }
+        None => quote! { &None },
     };
 
     Ok(quote! {
         impl<'a> #zbus::proxy::Defaults for #proxy_name<'a> {
-            const INTERFACE: Option<&'static str> = Some(#iface_name);
-            const DESTINATION: Option<&'static str> = #default_service;
-            const PATH: Option<&'static str> = #default_path;
+            const INTERFACE: &'static Option<#zbus::names::InterfaceName<'static>> =
+                &Some(#zbus::names::InterfaceName::from_static_str_unchecked(#iface_name));
+            const DESTINATION: &'static Option<#zbus::names::BusName<'static>> = #default_service;
+            const PATH: &'static Option<#zbus::zvariant::ObjectPath<'static>> = #default_path;
         }
 
         #(#other_attrs)*
