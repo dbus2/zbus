@@ -144,7 +144,7 @@ impl<'a, T> Builder<'a, T> {
 
 impl<'a, T> Builder<'a, T>
 where
-    T: ProxyDefault,
+    T: super::ProxyDefault,
 {
     /// Create a new [`Builder`] for the given connection.
     #[must_use]
@@ -171,24 +171,6 @@ where
     pub fn new_bare(conn: &Connection) -> Self {
         Self::new(conn)
     }
-}
-
-/// Trait for the default associated values of a proxy.
-///
-/// The trait is automatically implemented by the [`proxy`] macro on your behalf, and may be later
-/// used to retrieve the associated constants.
-///
-/// [`proxy`]: attr.proxy.html
-pub trait ProxyDefault {
-    const INTERFACE: Option<&'static str>;
-    const DESTINATION: Option<&'static str>;
-    const PATH: Option<&'static str>;
-}
-
-impl ProxyDefault for Proxy<'_> {
-    const INTERFACE: Option<&'static str> = None;
-    const DESTINATION: Option<&'static str> = None;
-    const PATH: Option<&'static str> = None;
 }
 
 #[cfg(test)]
