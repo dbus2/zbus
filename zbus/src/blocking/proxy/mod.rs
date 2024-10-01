@@ -10,7 +10,7 @@ use zvariant::{ObjectPath, OwnedValue, Value};
 use crate::{
     blocking::Connection,
     message::Message,
-    proxy::{MethodFlags, ProxyDefault},
+    proxy::{Defaults, MethodFlags},
     utils::block_on,
     Error, Result,
 };
@@ -365,10 +365,10 @@ impl<'a> Proxy<'a> {
     }
 }
 
-impl ProxyDefault for Proxy<'_> {
-    const INTERFACE: Option<&'static str> = None;
-    const DESTINATION: Option<&'static str> = None;
-    const PATH: Option<&'static str> = None;
+impl Defaults for Proxy<'_> {
+    const INTERFACE: &'static Option<InterfaceName<'static>> = &None;
+    const DESTINATION: &'static Option<BusName<'static>> = &None;
+    const PATH: &'static Option<ObjectPath<'static>> = &None;
 }
 
 impl<'a> std::convert::AsRef<Proxy<'a>> for Proxy<'a> {
