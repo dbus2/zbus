@@ -1,60 +1,46 @@
-use super::{Transport, Unix, UnixSocket};
-use crate::{process::run, Result};
-use std::collections::HashMap;
+use std::borrow::Cow;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[non_exhaustive]
-/// The transport properties of a launchd D-Bus address.
-pub struct Launchd {
-    pub(super) env: String,
+use super::{percent::decode_percents_str, Address, Error, KeyValFmt, KeyValFmtAdd, Result};
+
+/// `launchd:` D-Bus transport.
+///
+/// <https://dbus.freedesktop.org/doc/dbus-specification.html#transports-launchd>
+#[derive(Debug, PartialEq, Eq)]
+pub struct Launchd<'a> {
+    env: Cow<'a, str>,
 }
 
-impl Launchd {
-    /// Create a new launchd D-Bus address.
-    pub fn new(env: &str) -> Self {
-        Self {
-            env: env.to_string(),
-        }
-    }
-
-    /// The path of the unix domain socket for the launchd created dbus-daemon.
+impl<'a> Launchd<'a> {
+    /// Environment variable.
+    ///
+    /// Environment variable used to get the path of the unix domain socket for the launchd created
+    /// dbus-daemon.
     pub fn env(&self) -> &str {
-        &self.env
-    }
-
-    /// Determine the actual transport details behind a launchd address.
-    pub(super) async fn bus_address(&self) -> Result<Transport> {
-        let output = run("launchctl", ["getenv", self.env()])
-            .await
-            .expect("failed to wait on launchctl output");
-
-        if !output.status.success() {
-            return Err(crate::Error::Address(format!(
-                "launchctl terminated with code: {}",
-                output.status
-            )));
-        }
-
-        let addr = String::from_utf8(output.stdout).map_err(|e| {
-            crate::Error::Address(format!("Unable to parse launchctl output as UTF-8: {}", e))
-        })?;
-
-        Ok(Transport::Unix(Unix::new(UnixSocket::File(
-            addr.trim().into(),
-        ))))
-    }
-
-    pub(super) fn from_options(opts: HashMap<&str, &str>) -> Result<Self> {
-        opts.get("env")
-            .ok_or_else(|| crate::Error::Address("missing env key".into()))
-            .map(|env| Self {
-                env: env.to_string(),
-            })
+        self.env.as_ref()
     }
 }
 
-impl std::fmt::Display for Launchd {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "launchd:env={}", self.env)
+impl<'a> TryFrom<&'a Address<'a>> for Launchd<'a> {
+    type Error = Error;
+
+    fn try_from(s: &'a Address<'a>) -> Result<Self> {
+        for (k, v) in s.key_val_iter() {
+            match (k, v) {
+                ("env", Some(v)) => {
+                    return Ok(Launchd {
+                        env: decode_percents_str(v)?,
+                    });
+                }
+                _ => continue,
+            }
+        }
+
+        Err(Error::MissingKey("env".into()))
+    }
+}
+
+impl KeyValFmtAdd for Launchd<'_> {
+    fn key_val_fmt_add<'a: 'b, 'b>(&'a self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
+        kv.add("env", Some(self.env()))
     }
 }

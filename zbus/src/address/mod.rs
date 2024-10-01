@@ -3,475 +3,347 @@
 //! Server addresses consist of a transport name followed by a colon, and then an optional,
 //! comma-separated list of keys and values in the form key=value.
 //!
+//! # Miscellaneous and caveats on D-Bus addresses
+//!
+//! * Assumes values are UTF-8 encoded.
+//!
+//! * Duplicated keys are accepted, last pair wins.
+//!
+//! * Assumes that empty `key=val` is accepted, so `transport:,,guid=...` is valid.
+//!
+//! * Allows key only, so `transport:foo,bar` is ok.
+//!
+//! * Accept unknown keys and transports.
+//!
 //! See also:
 //!
 //! * [Server addresses] in the D-Bus specification.
 //!
 //! [Server addresses]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
 
-pub mod transport;
+use std::{borrow::Cow, env, fmt};
 
-use crate::{Error, Guid, OwnedGuid, Result};
 #[cfg(all(unix, not(target_os = "macos")))]
 use nix::unistd::Uid;
-use std::{collections::HashMap, env, str::FromStr};
 
-use std::fmt::{Display, Formatter};
+pub mod transport;
 
-use self::transport::Stream;
-pub use self::transport::Transport;
+mod address_list;
+pub use address_list::{AddressList, AddressListIter};
+
+mod percent;
+pub use percent::*;
+
+#[cfg(test)]
+mod tests;
+
+/// Error returned when an address is invalid.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum Error {
+    UnknownTransport,
+    MissingTransport,
+    Encoding(String),
+    DuplicateKey(String),
+    MissingKey(String),
+    MissingValue(String),
+    InvalidValue(String),
+    UnknownTcpFamily(String),
+    Other(String),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::UnknownTransport => write!(f, "Unsupported transport in address"),
+            Error::MissingTransport => write!(f, "Missing transport in address"),
+            Error::Encoding(e) => write!(f, "Encoding error: {e}"),
+            Error::DuplicateKey(e) => write!(f, "Duplicate key: `{e}`"),
+            Error::MissingKey(e) => write!(f, "Missing key: `{e}`"),
+            Error::MissingValue(e) => write!(f, "Missing value for key: `{e}`"),
+            Error::InvalidValue(e) => write!(f, "Invalid value for key: `{e}`"),
+            Error::UnknownTcpFamily(e) => write!(f, "Unknown TCP address family: `{e}`"),
+            Error::Other(e) => write!(f, "Other error: {e}"),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
+pub type Result<T> = std::result::Result<T, Error>;
+
+/// Get the address for session socket respecting the DBUS_SESSION_BUS_ADDRESS environment
+/// variable. If we don't recognize the value (or it's not set) we fall back to
+/// $XDG_RUNTIME_DIR/bus
+pub fn session() -> Result<AddressList<'static>> {
+    match env::var("DBUS_SESSION_BUS_ADDRESS") {
+        Ok(val) => AddressList::try_from(val),
+        _ => {
+            #[cfg(windows)]
+            {
+                AddressList::try_from("autolaunch:scope=*user;autolaunch:")
+            }
+
+            #[cfg(all(unix, not(target_os = "macos")))]
+            {
+                let runtime_dir = env::var("XDG_RUNTIME_DIR")
+                    .unwrap_or_else(|_| format!("/run/user/{}", Uid::effective()));
+                let path = format!("unix:path={runtime_dir}/bus");
+
+                AddressList::try_from(path)
+            }
+
+            #[cfg(target_os = "macos")]
+            {
+                AddressList::try_from("launchd:env=DBUS_LAUNCHD_SESSION_BUS_SOCKET")
+            }
+        }
+    }
+}
+
+/// Get the address for system bus respecting the DBUS_SYSTEM_BUS_ADDRESS environment
+/// variable. If we don't recognize the value (or it's not set) we fall back to
+/// /var/run/dbus/system_bus_socket
+pub fn system() -> Result<AddressList<'static>> {
+    match env::var("DBUS_SYSTEM_BUS_ADDRESS") {
+        Ok(val) => AddressList::try_from(val),
+        _ => {
+            #[cfg(all(unix, not(target_os = "macos")))]
+            return AddressList::try_from("unix:path=/var/run/dbus/system_bus_socket");
+
+            #[cfg(windows)]
+            return AddressList::try_from("autolaunch:");
+
+            #[cfg(target_os = "macos")]
+            return AddressList::try_from("launchd:env=DBUS_LAUNCHD_SESSION_BUS_SOCKET");
+        }
+    }
+}
 
 /// A bus address.
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[non_exhaustive]
-pub struct Address {
-    guid: Option<OwnedGuid>,
-    transport: Transport,
+///
+/// Example:
+/// ```
+/// use zbus::Address;
+///
+/// let _: Address = "unix:path=/tmp/dbus.sock".try_into().unwrap();
+/// ```
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Address<'a> {
+    pub(super) addr: Cow<'a, str>,
 }
 
-impl Address {
-    /// Create a new `Address` from a `Transport`.
-    pub fn new(transport: Transport) -> Self {
-        Self {
-            transport,
-            guid: None,
-        }
+impl<'a> Address<'a> {
+    /// The connection GUID if any.
+    pub fn guid(&self) -> Option<Cow<'_, str>> {
+        self.get_string("guid").and_then(|res| res.ok())
     }
 
-    /// Set the GUID for this address.
-    pub fn set_guid<G>(mut self, guid: G) -> Result<Self>
+    /// Transport connection details
+    pub fn transport(&self) -> Result<transport::Transport<'_>> {
+        self.try_into()
+    }
+
+    pub(super) fn key_val_iter(&'a self) -> KeyValIter<'a> {
+        let mut split = self.addr.splitn(2, ':');
+        // skip transport:..
+        split.next();
+        let kv = split.next().unwrap_or("");
+        KeyValIter::new(kv)
+    }
+
+    fn new<A: Into<Cow<'a, str>>>(addr: A) -> Result<Self> {
+        let addr = addr.into();
+        let addr = Self { addr };
+
+        addr.validate()?;
+
+        Ok(addr)
+    }
+
+    fn validate(&self) -> Result<()> {
+        self.transport()?;
+        for (k, v) in self.key_val_iter() {
+            let v = match v {
+                Some(v) => decode_percents(v)?,
+                _ => Cow::from(b"" as &[_]),
+            };
+            if k == "guid" {
+                validate_guid(v.as_ref())?;
+            }
+        }
+
+        Ok(())
+    }
+
+    // the last key=val wins
+    fn get_string(&'a self, key: &str) -> Option<Result<Cow<'a, str>>> {
+        let mut val = None;
+        for (k, v) in self.key_val_iter() {
+            if key == k {
+                val = v;
+            }
+        }
+        val.map(decode_percents_str)
+    }
+}
+
+fn validate_guid(value: &[u8]) -> Result<()> {
+    if value.len() != 32 || value.iter().any(|&c| !c.is_ascii_hexdigit()) {
+        return Err(Error::InvalidValue("guid".into()));
+    }
+
+    Ok(())
+}
+
+impl Address<'_> {
+    pub fn to_owned(&self) -> Address<'static> {
+        let addr = self.addr.to_string();
+        Address { addr: addr.into() }
+    }
+}
+
+impl<'a> TryFrom<String> for Address<'a> {
+    type Error = Error;
+
+    fn try_from(addr: String) -> Result<Self> {
+        Self::new(addr)
+    }
+}
+
+impl<'a> TryFrom<&'a str> for Address<'a> {
+    type Error = Error;
+
+    fn try_from(addr: &'a str) -> Result<Self> {
+        Self::new(addr)
+    }
+}
+
+impl fmt::Display for Address<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let kv = KeyValFmt::new().add("guid", self.guid());
+        let t = self.transport().map_err(|_| fmt::Error)?;
+        let kv = t.key_val_fmt_add(kv);
+        write!(f, "{t}:{kv}")?;
+        Ok(())
+    }
+}
+
+pub(super) struct KeyValIter<'a> {
+    data: &'a str,
+    next_index: usize,
+}
+
+impl<'a> KeyValIter<'a> {
+    fn new(data: &'a str) -> Self {
+        KeyValIter {
+            data,
+            next_index: 0,
+        }
+    }
+}
+
+impl<'a> Iterator for KeyValIter<'a> {
+    type Item = (&'a str, Option<&'a str>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.next_index >= self.data.len() {
+            return None;
+        }
+
+        let mut pair = &self.data[self.next_index..];
+        if let Some(end) = pair.find(',') {
+            pair = &pair[..end];
+            self.next_index += end + 1;
+        } else {
+            self.next_index = self.data.len();
+        }
+        let mut split = pair.split('=');
+        // SAFETY: first split always returns something
+        let key = split.next().unwrap();
+
+        Some((key, split.next()))
+    }
+}
+
+pub(crate) trait KeyValFmtAdd {
+    fn key_val_fmt_add<'a: 'b, 'b>(&'a self, kv: KeyValFmt<'b>) -> KeyValFmt<'b>;
+}
+
+pub(crate) struct KeyValFmt<'a> {
+    fields: Vec<(Box<dyn fmt::Display + 'a>, Box<dyn Encodable + 'a>)>,
+}
+
+impl<'a> KeyValFmt<'a> {
+    fn new() -> Self {
+        Self { fields: vec![] }
+    }
+
+    pub(crate) fn add<K, V>(mut self, key: K, val: Option<V>) -> Self
     where
-        G: TryInto<OwnedGuid>,
-        G::Error: Into<crate::Error>,
+        K: fmt::Display + 'a,
+        V: Encodable + 'a,
     {
-        self.guid = Some(guid.try_into().map_err(Into::into)?);
-
-        Ok(self)
-    }
-
-    /// The transport details for this address.
-    pub fn transport(&self) -> &Transport {
-        &self.transport
-    }
-
-    #[cfg_attr(any(target_os = "macos", windows), async_recursion::async_recursion)]
-    pub(crate) async fn connect(self) -> Result<Stream> {
-        self.transport.connect().await
-    }
-
-    /// Get the address for the session socket respecting the `DBUS_SESSION_BUS_ADDRESS` environment
-    /// variable. If we don't recognize the value (or it's not set) we fall back to
-    /// `$XDG_RUNTIME_DIR/bus`.
-    pub fn session() -> Result<Self> {
-        match env::var("DBUS_SESSION_BUS_ADDRESS") {
-            Ok(val) => Self::from_str(&val),
-            _ => {
-                #[cfg(windows)]
-                return Self::from_str("autolaunch:");
-
-                #[cfg(all(unix, not(target_os = "macos")))]
-                {
-                    let runtime_dir = env::var("XDG_RUNTIME_DIR")
-                        .unwrap_or_else(|_| format!("/run/user/{}", Uid::effective()));
-                    let path = format!("unix:path={runtime_dir}/bus");
-
-                    Self::from_str(&path)
-                }
-
-                #[cfg(target_os = "macos")]
-                return Self::from_str("launchd:env=DBUS_LAUNCHD_SESSION_BUS_SOCKET");
-            }
+        if let Some(val) = val {
+            self.fields.push((Box::new(key), Box::new(val)));
         }
-    }
 
-    /// Get the address for the system bus respecting the `DBUS_SYSTEM_BUS_ADDRESS` environment
-    /// variable. If we don't recognize the value (or it's not set) we fall back to
-    /// `/var/run/dbus/system_bus_socket`.
-    pub fn system() -> Result<Self> {
-        match env::var("DBUS_SYSTEM_BUS_ADDRESS") {
-            Ok(val) => Self::from_str(&val),
-            _ => {
-                #[cfg(all(unix, not(target_os = "macos")))]
-                return Self::from_str("unix:path=/var/run/dbus/system_bus_socket");
-
-                #[cfg(windows)]
-                return Self::from_str("autolaunch:");
-
-                #[cfg(target_os = "macos")]
-                return Self::from_str("launchd:env=DBUS_LAUNCHD_SESSION_BUS_SOCKET");
-            }
-        }
-    }
-
-    /// The GUID for this address, if known.
-    pub fn guid(&self) -> Option<&Guid<'_>> {
-        self.guid.as_ref().map(|guid| guid.inner())
+        self
     }
 }
 
-impl Display for Address {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.transport.fmt(f)?;
-
-        if let Some(guid) = &self.guid {
-            write!(f, ",guid={}", guid)?;
+impl fmt::Display for KeyValFmt<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut first = true;
+        for (k, v) in self.fields.iter() {
+            if !first {
+                write!(f, ",")?;
+            }
+            write!(f, "{k}=")?;
+            v.encode(f)?;
+            first = false;
         }
 
         Ok(())
     }
 }
 
-impl FromStr for Address {
-    type Err = Error;
+/// A trait for objects which can be converted or resolved to one or more [`Address`] values.
+pub trait ToAddresses<'a> {
+    type Iter: Iterator<Item = Result<Address<'a>>>;
 
-    /// Parse the transport part of a D-Bus address into a `Transport`.
-    fn from_str(address: &str) -> Result<Self> {
-        let col = address
-            .find(':')
-            .ok_or_else(|| Error::Address("address has no colon".to_owned()))?;
-        let transport = &address[..col];
-        let mut options = HashMap::new();
+    fn to_addresses(&'a self) -> Self::Iter;
+}
 
-        if address.len() > col + 1 {
-            for kv in address[col + 1..].split(',') {
-                let (k, v) = match kv.find('=') {
-                    Some(eq) => (&kv[..eq], &kv[eq + 1..]),
-                    None => {
-                        return Err(Error::Address(
-                            "missing = when parsing key/value".to_owned(),
-                        ))
-                    }
-                };
-                if options.insert(k, v).is_some() {
-                    return Err(Error::Address(format!(
-                        "Key `{k}` specified multiple times"
-                    )));
-                }
-            }
-        }
+impl<'a> ToAddresses<'a> for Address<'a> {
+    type Iter = std::iter::Once<Result<Address<'a>>>;
 
-        Ok(Self {
-            guid: options
-                .remove("guid")
-                .map(|s| Guid::from_str(s).map(|guid| OwnedGuid::from(guid).to_owned()))
-                .transpose()?,
-            transport: Transport::from_options(transport, options)?,
-        })
+    /// Get an iterator over the D-Bus addresses.
+    fn to_addresses(&'a self) -> Self::Iter {
+        std::iter::once(Ok(self.clone()))
     }
 }
 
-impl TryFrom<&str> for Address {
-    type Error = Error;
+impl<'a> ToAddresses<'a> for str {
+    type Iter = std::iter::Once<Result<Address<'a>>>;
 
-    fn try_from(value: &str) -> Result<Self> {
-        Self::from_str(value)
+    fn to_addresses(&'a self) -> Self::Iter {
+        std::iter::once(self.try_into())
     }
 }
 
-impl From<Transport> for Address {
-    fn from(transport: Transport) -> Self {
-        Self::new(transport)
+impl<'a> ToAddresses<'a> for String {
+    type Iter = std::iter::Once<Result<Address<'a>>>;
+
+    fn to_addresses(&'a self) -> Self::Iter {
+        std::iter::once(self.as_str().try_into())
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{
-        transport::{Tcp, TcpTransportFamily, Transport},
-        Address,
-    };
-    #[cfg(target_os = "macos")]
-    use crate::address::transport::Launchd;
-    #[cfg(windows)]
-    use crate::address::transport::{Autolaunch, AutolaunchScope};
-    use crate::{
-        address::transport::{Unix, UnixSocket},
-        Error,
-    };
-    use std::str::FromStr;
-    use test_log::test;
+impl<'a> ToAddresses<'a> for Vec<Result<Address<'_>>> {
+    type Iter = std::iter::Cloned<std::slice::Iter<'a, Result<Address<'a>>>>;
 
-    #[test]
-    fn parse_dbus_addresses() {
-        match Address::from_str("").unwrap_err() {
-            Error::Address(e) => assert_eq!(e, "address has no colon"),
-            _ => panic!(),
-        }
-        match Address::from_str("foo").unwrap_err() {
-            Error::Address(e) => assert_eq!(e, "address has no colon"),
-            _ => panic!(),
-        }
-        match Address::from_str("foo:opt").unwrap_err() {
-            Error::Address(e) => assert_eq!(e, "missing = when parsing key/value"),
-            _ => panic!(),
-        }
-        match Address::from_str("foo:opt=1,opt=2").unwrap_err() {
-            Error::Address(e) => assert_eq!(e, "Key `opt` specified multiple times"),
-            _ => panic!(),
-        }
-        match Address::from_str("tcp:host=localhost").unwrap_err() {
-            Error::Address(e) => assert_eq!(e, "tcp address is missing `port`"),
-            _ => panic!(),
-        }
-        match Address::from_str("tcp:host=localhost,port=32f").unwrap_err() {
-            Error::Address(e) => assert_eq!(e, "invalid tcp `port`"),
-            _ => panic!(),
-        }
-        match Address::from_str("tcp:host=localhost,port=123,family=ipv7").unwrap_err() {
-            Error::Address(e) => assert_eq!(e, "invalid tcp address `family`: ipv7"),
-            _ => panic!(),
-        }
-        match Address::from_str("unix:foo=blah").unwrap_err() {
-            Error::Address(e) => assert_eq!(e, "unix: address is invalid"),
-            _ => panic!(),
-        }
-        #[cfg(target_os = "linux")]
-        match Address::from_str("unix:path=/tmp,abstract=foo").unwrap_err() {
-            Error::Address(e) => {
-                assert_eq!(e, "unix: address is invalid")
-            }
-            _ => panic!(),
-        }
-        assert_eq!(
-            Address::from_str("unix:path=/tmp/dbus-foo").unwrap(),
-            Transport::Unix(Unix::new(UnixSocket::File("/tmp/dbus-foo".into()))).into(),
-        );
-        #[cfg(target_os = "linux")]
-        assert_eq!(
-            Address::from_str("unix:abstract=/tmp/dbus-foo").unwrap(),
-            Transport::Unix(Unix::new(UnixSocket::Abstract("/tmp/dbus-foo".into()))).into(),
-        );
-        let guid = crate::Guid::generate();
-        assert_eq!(
-            Address::from_str(&format!("unix:path=/tmp/dbus-foo,guid={guid}")).unwrap(),
-            Address::from(Transport::Unix(Unix::new(UnixSocket::File(
-                "/tmp/dbus-foo".into()
-            ))))
-            .set_guid(guid.clone())
-            .unwrap(),
-        );
-        assert_eq!(
-            Address::from_str("tcp:host=localhost,port=4142").unwrap(),
-            Transport::Tcp(Tcp::new("localhost", 4142)).into(),
-        );
-        assert_eq!(
-            Address::from_str("tcp:host=localhost,port=4142,family=ipv4").unwrap(),
-            Transport::Tcp(Tcp::new("localhost", 4142).set_family(Some(TcpTransportFamily::Ipv4)))
-                .into(),
-        );
-        assert_eq!(
-            Address::from_str("tcp:host=localhost,port=4142,family=ipv6").unwrap(),
-            Transport::Tcp(Tcp::new("localhost", 4142).set_family(Some(TcpTransportFamily::Ipv6)))
-                .into(),
-        );
-        assert_eq!(
-            Address::from_str("tcp:host=localhost,port=4142,family=ipv6,noncefile=/a/file/path")
-                .unwrap(),
-            Transport::Tcp(
-                Tcp::new("localhost", 4142)
-                    .set_family(Some(TcpTransportFamily::Ipv6))
-                    .set_nonce_file(Some(b"/a/file/path".to_vec()))
-            )
-            .into(),
-        );
-        assert_eq!(
-            Address::from_str(
-                "nonce-tcp:host=localhost,port=4142,family=ipv6,noncefile=/a/file/path%20to%20file%201234"
-            )
-            .unwrap(),
-            Transport::Tcp(
-                Tcp::new("localhost", 4142)
-                    .set_family(Some(TcpTransportFamily::Ipv6))
-                    .set_nonce_file(Some(b"/a/file/path to file 1234".to_vec()))
-            ).into()
-        );
-        #[cfg(windows)]
-        assert_eq!(
-            Address::from_str("autolaunch:").unwrap(),
-            Transport::Autolaunch(Autolaunch::new()).into(),
-        );
-        #[cfg(windows)]
-        assert_eq!(
-            Address::from_str("autolaunch:scope=*my_cool_scope*").unwrap(),
-            Transport::Autolaunch(
-                Autolaunch::new()
-                    .set_scope(Some(AutolaunchScope::Other("*my_cool_scope*".to_string())))
-            )
-            .into(),
-        );
-        #[cfg(target_os = "macos")]
-        assert_eq!(
-            Address::from_str("launchd:env=my_cool_env_key").unwrap(),
-            Transport::Launchd(Launchd::new("my_cool_env_key")).into(),
-        );
-
-        #[cfg(all(feature = "vsock", not(feature = "tokio")))]
-        assert_eq!(
-            Address::from_str(&format!("vsock:cid=98,port=2934,guid={guid}")).unwrap(),
-            Address::from(Transport::Vsock(super::transport::Vsock::new(98, 2934)))
-                .set_guid(guid)
-                .unwrap(),
-        );
-        assert_eq!(
-            Address::from_str("unix:dir=/some/dir").unwrap(),
-            Transport::Unix(Unix::new(UnixSocket::Dir("/some/dir".into()))).into(),
-        );
-        assert_eq!(
-            Address::from_str("unix:tmpdir=/some/dir").unwrap(),
-            Transport::Unix(Unix::new(UnixSocket::TmpDir("/some/dir".into()))).into(),
-        );
-    }
-
-    #[test]
-    fn stringify_dbus_addresses() {
-        assert_eq!(
-            Address::from(Transport::Unix(Unix::new(UnixSocket::File(
-                "/tmp/dbus-foo".into()
-            ))))
-            .to_string(),
-            "unix:path=/tmp/dbus-foo",
-        );
-        assert_eq!(
-            Address::from(Transport::Unix(Unix::new(UnixSocket::Dir(
-                "/tmp/dbus-foo".into()
-            ))))
-            .to_string(),
-            "unix:dir=/tmp/dbus-foo",
-        );
-        assert_eq!(
-            Address::from(Transport::Unix(Unix::new(UnixSocket::TmpDir(
-                "/tmp/dbus-foo".into()
-            ))))
-            .to_string(),
-            "unix:tmpdir=/tmp/dbus-foo"
-        );
-        // FIXME: figure out how to handle abstract on Windows
-        #[cfg(target_os = "linux")]
-        assert_eq!(
-            Address::from(Transport::Unix(Unix::new(UnixSocket::Abstract(
-                "/tmp/dbus-foo".into()
-            ))))
-            .to_string(),
-            "unix:abstract=/tmp/dbus-foo"
-        );
-        assert_eq!(
-            Address::from(Transport::Tcp(Tcp::new("localhost", 4142))).to_string(),
-            "tcp:host=localhost,port=4142"
-        );
-        assert_eq!(
-            Address::from(Transport::Tcp(
-                Tcp::new("localhost", 4142).set_family(Some(TcpTransportFamily::Ipv4))
-            ))
-            .to_string(),
-            "tcp:host=localhost,port=4142,family=ipv4"
-        );
-        assert_eq!(
-            Address::from(Transport::Tcp(
-                Tcp::new("localhost", 4142).set_family(Some(TcpTransportFamily::Ipv6))
-            ))
-            .to_string(),
-            "tcp:host=localhost,port=4142,family=ipv6"
-        );
-        assert_eq!(
-            Address::from(Transport::Tcp(Tcp::new("localhost", 4142)
-                .set_family(Some(TcpTransportFamily::Ipv6))
-                .set_nonce_file(Some(b"/a/file/path to file 1234".to_vec())
-            )))
-            .to_string(),
-            "nonce-tcp:noncefile=/a/file/path%20to%20file%201234,host=localhost,port=4142,family=ipv6"
-        );
-        #[cfg(windows)]
-        assert_eq!(
-            Address::from(Transport::Autolaunch(Autolaunch::new())).to_string(),
-            "autolaunch:"
-        );
-        #[cfg(windows)]
-        assert_eq!(
-            Address::from(Transport::Autolaunch(Autolaunch::new().set_scope(Some(
-                AutolaunchScope::Other("*my_cool_scope*".to_string())
-            ))))
-            .to_string(),
-            "autolaunch:scope=*my_cool_scope*"
-        );
-        #[cfg(target_os = "macos")]
-        assert_eq!(
-            Address::from(Transport::Launchd(Launchd::new("my_cool_key"))).to_string(),
-            "launchd:env=my_cool_key"
-        );
-
-        #[cfg(all(feature = "vsock", not(feature = "tokio")))]
-        {
-            let guid = crate::Guid::generate();
-            assert_eq!(
-                Address::from(Transport::Vsock(super::transport::Vsock::new(98, 2934)))
-                    .set_guid(guid.clone())
-                    .unwrap()
-                    .to_string(),
-                format!("vsock:cid=98,port=2934,guid={guid}"),
-            );
-        }
-    }
-
-    #[test]
-    fn connect_tcp() {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let addr = Address::from_str(&format!("tcp:host=localhost,port={port}")).unwrap();
-        crate::utils::block_on(async { addr.connect().await }).unwrap();
-    }
-
-    #[test]
-    fn connect_nonce_tcp() {
-        struct PercentEncoded<'a>(&'a [u8]);
-
-        impl std::fmt::Display for PercentEncoded<'_> {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                super::transport::encode_percents(f, self.0)
-            }
-        }
-
-        use std::io::Write;
-
-        const TEST_COOKIE: &[u8] = b"VERILY SECRETIVE";
-
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = listener.local_addr().unwrap().port();
-
-        let mut cookie = tempfile::NamedTempFile::new().unwrap();
-        cookie.as_file_mut().write_all(TEST_COOKIE).unwrap();
-
-        let encoded_path = format!(
-            "{}",
-            PercentEncoded(cookie.path().to_str().unwrap().as_ref())
-        );
-
-        let addr = Address::from_str(&format!(
-            "nonce-tcp:host=localhost,port={port},noncefile={encoded_path}"
-        ))
-        .unwrap();
-
-        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
-
-        std::thread::spawn(move || {
-            use std::io::Read;
-
-            let mut client = listener.incoming().next().unwrap().unwrap();
-
-            let mut buf = [0u8; 16];
-            client.read_exact(&mut buf).unwrap();
-
-            sender.send(buf == TEST_COOKIE).unwrap();
-        });
-
-        crate::utils::block_on(addr.connect()).unwrap();
-
-        let saw_cookie = receiver
-            .recv_timeout(std::time::Duration::from_millis(100))
-            .expect("nonce file content hasn't been received by server thread in time");
-
-        assert!(
-            saw_cookie,
-            "nonce file content has been received, but was invalid"
-        );
+    /// Get an iterator over the D-Bus addresses.
+    fn to_addresses(&'a self) -> Self::Iter {
+        self.iter().cloned()
     }
 }

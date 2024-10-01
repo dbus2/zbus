@@ -6,6 +6,8 @@ use std::os::fd::BorrowedFd;
 #[cfg(not(feature = "tokio"))]
 use std::{net::TcpStream, sync::Arc};
 
+use crate::{address::transport::TcpFamily, Error, Result};
+
 use super::{ReadHalf, RecvmsgResult, WriteHalf};
 #[cfg(feature = "tokio")]
 use super::{Socket, Split};
@@ -169,4 +171,184 @@ fn win32_credentials_from_addr(
     Ok(crate::fdo::ConnectionCredentials::default()
         .set_process_id(pid)
         .set_windows_sid(sid))
+}
+
+#[cfg(not(feature = "tokio"))]
+type Stream = Async<TcpStream>;
+#[cfg(feature = "tokio")]
+type Stream = tokio::net::TcpStream;
+
+async fn connect_with(host: &str, port: u16, family: Option<TcpFamily>) -> Result<Stream> {
+    #[cfg(not(feature = "tokio"))]
+    {
+        use std::net::ToSocketAddrs;
+
+        let host = host.to_string();
+        let addrs = crate::Task::spawn_blocking(
+            move || -> Result<Vec<std::net::SocketAddr>> {
+                let addrs = (host, port).to_socket_addrs()?.filter(|a| {
+                    if let Some(family) = family {
+                        if family == TcpFamily::IPv4 {
+                            a.is_ipv4()
+                        } else {
+                            a.is_ipv6()
+                        }
+                    } else {
+                        true
+                    }
+                });
+                Ok(addrs.collect())
+            },
+            "connect tcp",
+        )
+        .await
+        .map_err(|e| Error::Address(format!("Failed to receive TCP addresses: {e}")))?;
+
+        // we could attempt connections in parallel?
+        let mut last_err = Error::Address("Failed to connect".into());
+        for addr in addrs {
+            match Stream::connect(addr).await {
+                Ok(stream) => return Ok(stream),
+                Err(e) => last_err = e.into(),
+            }
+        }
+
+        Err(last_err)
+    }
+
+    #[cfg(feature = "tokio")]
+    {
+        // FIXME: doesn't handle family
+        let _ = family;
+        Stream::connect((host, port))
+            .await
+            .map_err(|e| Error::InputOutput(e.into()))
+    }
+}
+
+pub(crate) async fn connect(addr: &crate::address::transport::Tcp<'_>) -> Result<Stream> {
+    let Some(host) = addr.host() else {
+        return Err(Error::Address("No host in address".into()));
+    };
+    let Some(port) = addr.port() else {
+        return Err(Error::Address("No port in address".into()));
+    };
+
+    connect_with(host, port, addr.family()).await
+}
+
+pub(crate) async fn connect_nonce(
+    addr: &crate::address::transport::NonceTcp<'_>,
+) -> Result<Stream> {
+    let Some(host) = addr.host() else {
+        return Err(Error::Address("No host in address".into()));
+    };
+    let Some(port) = addr.port() else {
+        return Err(Error::Address("No port in address".into()));
+    };
+    let Some(noncefile) = addr.noncefile() else {
+        return Err(Error::Address("No noncefile in address".into()));
+    };
+
+    #[allow(unused_mut)]
+    let mut stream = connect_with(host, port, addr.family()).await?;
+
+    #[cfg(not(feature = "tokio"))]
+    {
+        use std::io::prelude::*;
+
+        let nonce = std::fs::read(noncefile)?;
+        let mut nonce = &nonce[..];
+
+        while !nonce.is_empty() {
+            let len = stream.write_with(|mut s| s.write(nonce)).await?;
+            nonce = &nonce[len..];
+        }
+    }
+
+    #[cfg(feature = "tokio")]
+    {
+        let nonce = tokio::fs::read(noncefile).await?;
+        tokio::io::AsyncWriteExt::write_all(&mut stream, &nonce).await?;
+    }
+
+    Ok(stream)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::address::{transport::Transport, Address};
+
+    #[test]
+    fn connect() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let addr: Address<'_> = format!("tcp:host=localhost,port={port}")
+            .try_into()
+            .unwrap();
+        let tcp = match addr.transport().unwrap() {
+            Transport::Tcp(tcp) => tcp,
+            _ => unreachable!(),
+        };
+        crate::utils::block_on(super::connect(&tcp)).unwrap();
+    }
+
+    #[test]
+    fn connect_nonce_tcp() {
+        struct PercentEncoded<'a>(&'a [u8]);
+
+        impl std::fmt::Display for PercentEncoded<'_> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                crate::address::encode_percents(f, self.0)
+            }
+        }
+
+        use std::io::Write;
+
+        const TEST_COOKIE: &[u8] = b"VERILY SECRETIVE";
+
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        let mut cookie = tempfile::NamedTempFile::new().unwrap();
+        cookie.as_file_mut().write_all(TEST_COOKIE).unwrap();
+
+        let encoded_path = format!(
+            "{}",
+            PercentEncoded(cookie.path().to_str().unwrap().as_ref())
+        );
+
+        let addr: Address<'_> =
+            format!("nonce-tcp:host=localhost,port={port},noncefile={encoded_path}")
+                .try_into()
+                .unwrap();
+        let tcp = match addr.transport().unwrap() {
+            Transport::NonceTcp(tcp) => tcp,
+            _ => unreachable!(),
+        };
+
+        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+
+        std::thread::spawn(move || {
+            use std::io::Read;
+
+            let mut client = listener.incoming().next().unwrap().unwrap();
+
+            let mut buf = [0u8; 16];
+            client.read_exact(&mut buf).unwrap();
+
+            sender.send(buf == TEST_COOKIE).unwrap();
+        });
+
+        crate::utils::block_on(super::connect_nonce(&tcp)).unwrap();
+
+        let saw_cookie = receiver
+            .recv_timeout(std::time::Duration::from_millis(100))
+            .expect("nonce file content hasn't been received by server thread in time");
+
+        assert!(
+            saw_cookie,
+            "nonce file content has been received, but was invalid"
+        );
+    }
 }
