@@ -37,56 +37,11 @@ pub struct Builder<'a> {
 }
 
 impl<'a> Builder<'a> {
-    fn new(msg_type: Type) -> Self {
+    pub(super) fn new(msg_type: Type) -> Self {
         let primary = PrimaryHeader::new(msg_type, 0);
         let fields = Fields::new();
         let header = Header::new(primary, fields);
         Self { header }
-    }
-
-    /// Create a message of type [`Type::MethodCall`].
-    #[deprecated(since = "4.0.0", note = "Please use `Message::method` instead")]
-    pub fn method_call<'p: 'a, 'm: 'a, P, M>(path: P, method_name: M) -> Result<Self>
-    where
-        P: TryInto<ObjectPath<'p>>,
-        M: TryInto<MemberName<'m>>,
-        P::Error: Into<Error>,
-        M::Error: Into<Error>,
-    {
-        Self::new(Type::MethodCall).path(path)?.member(method_name)
-    }
-
-    /// Create a message of type [`Type::Signal`].
-    #[deprecated(since = "4.0.0", note = "Please use `Message::signal` instead")]
-    pub fn signal<'p: 'a, 'i: 'a, 'm: 'a, P, I, M>(path: P, interface: I, name: M) -> Result<Self>
-    where
-        P: TryInto<ObjectPath<'p>>,
-        I: TryInto<InterfaceName<'i>>,
-        M: TryInto<MemberName<'m>>,
-        P::Error: Into<Error>,
-        I::Error: Into<Error>,
-        M::Error: Into<Error>,
-    {
-        Self::new(Type::Signal)
-            .path(path)?
-            .interface(interface)?
-            .member(name)
-    }
-
-    /// Create a message of type [`Type::MethodReturn`].
-    #[deprecated(since = "4.0.0", note = "Please use `Message::method_reply` instead")]
-    pub fn method_return(reply_to: &Header<'_>) -> Result<Self> {
-        Self::new(Type::MethodReturn).reply_to(reply_to)
-    }
-
-    /// Create a message of type [`Type::Error`].
-    #[deprecated(since = "4.0.0", note = "Please use `Message::method_error` instead")]
-    pub fn error<'e: 'a, E>(reply_to: &Header<'_>, name: E) -> Result<Self>
-    where
-        E: TryInto<ErrorName<'e>>,
-        E::Error: Into<Error>,
-    {
-        Self::new(Type::Error).error_name(name)?.reply_to(reply_to)
     }
 
     /// Add flags to the message.
@@ -145,7 +100,7 @@ impl<'a> Builder<'a> {
         Ok(self)
     }
 
-    fn error_name<'e: 'a, E>(mut self, error: E) -> Result<Self>
+    pub(super) fn error_name<'e: 'a, E>(mut self, error: E) -> Result<Self>
     where
         E: TryInto<ErrorName<'e>>,
         E::Error: Into<Error>,
@@ -164,7 +119,7 @@ impl<'a> Builder<'a> {
         Ok(self)
     }
 
-    fn reply_to(mut self, reply_to: &Header<'_>) -> Result<Self> {
+    pub(super) fn reply_to(mut self, reply_to: &Header<'_>) -> Result<Self> {
         let serial = reply_to.primary().serial_num();
         self.header.fields_mut().reply_serial = Some(serial);
         self = self.endian(reply_to.primary().endian_sig().into());

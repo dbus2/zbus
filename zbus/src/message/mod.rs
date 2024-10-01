@@ -1,5 +1,5 @@
 //! D-Bus Message.
-use std::{fmt, num::NonZeroU32, sync::Arc};
+use std::{fmt, sync::Arc};
 
 use static_assertions::assert_impl_all;
 use zbus_names::{ErrorName, InterfaceName, MemberName};
@@ -77,8 +77,9 @@ impl Message {
         P::Error: Into<Error>,
         M::Error: Into<Error>,
     {
-        #[allow(deprecated)]
-        Builder::method_call(path, method_name)
+        Builder::new(Type::MethodCall)
+            .path(path)?
+            .member(method_name)
     }
 
     /// Create a builder for a message of type [`Type::Signal`].
@@ -95,14 +96,15 @@ impl Message {
         I::Error: Into<Error>,
         M::Error: Into<Error>,
     {
-        #[allow(deprecated)]
-        Builder::signal(path, iface, signal_name)
+        Builder::new(Type::Signal)
+            .path(path)?
+            .interface(iface)?
+            .member(signal_name)
     }
 
     /// Create a builder for a message of type [`Type::MethodReturn`].
     pub fn method_return(reply_to: &Header<'_>) -> Result<Builder<'static>> {
-        #[allow(deprecated)]
-        Builder::method_return(reply_to)
+        Builder::new(Type::MethodReturn).reply_to(reply_to)
     }
 
     /// Create a builder for a message of type [`Type::Error`].
@@ -111,8 +113,9 @@ impl Message {
         E: TryInto<ErrorName<'e>>,
         E::Error: Into<Error>,
     {
-        #[allow(deprecated)]
-        Builder::error(reply_to, name)
+        Builder::new(Type::Error)
+            .reply_to(reply_to)?
+            .error_name(name)
     }
 
     /// Create a message from bytes.
@@ -183,42 +186,6 @@ impl Message {
     /// The message type.
     pub fn message_type(&self) -> Type {
         self.inner.primary_header.msg_type()
-    }
-
-    /// The object to send a call to, or the object a signal is emitted from.
-    #[deprecated(
-        since = "4.0.0",
-        note = "Use `Message::header` with `message::Header::path` instead"
-    )]
-    pub fn path(&self) -> Option<ObjectPath<'_>> {
-        self.header().path().cloned()
-    }
-
-    /// The interface to invoke a method call on, or that a signal is emitted from.
-    #[deprecated(
-        since = "4.0.0",
-        note = "Use `Message::header` with `message::Header::interface` instead"
-    )]
-    pub fn interface(&self) -> Option<InterfaceName<'_>> {
-        self.header().interface().cloned()
-    }
-
-    /// The member, either the method name or signal name.
-    #[deprecated(
-        since = "4.0.0",
-        note = "Use `Message::header` with `message::Header::member` instead"
-    )]
-    pub fn member(&self) -> Option<MemberName<'_>> {
-        self.header().member().cloned()
-    }
-
-    /// The serial number of the message this message is a reply to.
-    #[deprecated(
-        since = "4.0.0",
-        note = "Use `Message::header` with `message::Header::reply_serial` instead"
-    )]
-    pub fn reply_serial(&self) -> Option<NonZeroU32> {
-        self.header().reply_serial()
     }
 
     /// The body that you can deserialize using [`Body::deserialize`].
