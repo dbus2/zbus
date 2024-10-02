@@ -191,15 +191,8 @@ impl<'a> Builder<'a> {
     }
 
     /// Specify the mechanism to use during authentication.
-    pub fn auth_mechanism(self, auth_mechanism: AuthMechanism) -> Self {
-        #[allow(deprecated)]
-        self.auth_mechanisms(&[auth_mechanism])
-    }
-
-    /// Specify the mechanisms to use during authentication.
-    #[deprecated(since = "4.1.3", note = "Use `auth_mechanism` instead.")]
-    pub fn auth_mechanisms(mut self, auth_mechanisms: &[AuthMechanism]) -> Self {
-        self.auth_mechanisms = Some(VecDeque::from(auth_mechanisms.to_vec()));
+    pub fn auth_mechanism(mut self, auth_mechanism: AuthMechanism) -> Self {
+        self.auth_mechanisms = Some(VecDeque::from(vec![auth_mechanism]));
 
         self
     }

@@ -280,7 +280,7 @@ fn test_interface() {
             // check compilation
             let c = zbus::Connection::session().await.unwrap();
             let s = c.object_server();
-            let m = zbus::message::Message::method("/", "StrU32")
+            let m = zbus::message::Message::method_call("/", "StrU32")
                 .unwrap()
                 .build(&(42,))
                 .unwrap();

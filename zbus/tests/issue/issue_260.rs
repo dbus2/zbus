@@ -31,7 +31,7 @@ async fn service(connection: &Connection) -> Result<()> {
 
         match msg_header.message_type() {
             zbus::message::Type::MethodCall => {
-                connection.reply(&msg, &()).await?;
+                connection.reply(&msg_header, &()).await?;
 
                 break;
             }

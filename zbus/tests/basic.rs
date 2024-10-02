@@ -18,7 +18,7 @@ use zbus::{
 
 #[test]
 fn msg() {
-    let m = Message::method("/org/freedesktop/DBus", "GetMachineId")
+    let m = Message::method_call("/org/freedesktop/DBus", "GetMachineId")
         .unwrap()
         .destination("org.freedesktop.DBus")
         .unwrap()

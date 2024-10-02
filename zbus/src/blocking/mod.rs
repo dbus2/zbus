@@ -26,28 +26,4 @@ pub use object_server::ObjectServer;
 pub mod proxy;
 pub use proxy::Proxy;
 
-#[deprecated(since = "4.0.0", note = "Use `proxy::Builder` instead")]
-#[doc(hidden)]
-pub use proxy::Builder as ProxyBuilder;
-#[deprecated(since = "4.0.0", note = "Use `proxy::OwnerChangedIterator` instead")]
-#[doc(hidden)]
-pub use proxy::OwnerChangedIterator;
-#[deprecated(since = "4.0.0", note = "Use `proxy::PropertyChanged` instead")]
-#[doc(hidden)]
-pub use proxy::PropertyChanged;
-#[deprecated(since = "4.0.0", note = "Use `proxy::PropertyIterator` instead")]
-#[doc(hidden)]
-pub use proxy::PropertyIterator;
-#[deprecated(since = "4.0.0", note = "Use `proxy::SignalIterator` instead")]
-#[doc(hidden)]
-pub use proxy::SignalIterator;
-
-#[deprecated(since = "4.0.0", note = "Use `object_server::InterfaceRef` instead")]
-#[doc(hidden)]
-pub use object_server::InterfaceRef;
-
-#[deprecated(since = "4.0.0", note = "Use `connection::Builder` instead")]
-#[doc(hidden)]
-pub use connection::Builder as ConnectionBuilder;
-
 pub mod fdo;

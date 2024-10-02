@@ -33,7 +33,7 @@ impl<'a> DispatchResult<'a> {
             let ret = f.await;
             if !hdr.primary().flags().contains(Flags::NoReplyExpected) {
                 match ret {
-                    Ok(r) => conn.reply(msg, &r).await,
+                    Ok(r) => conn.reply(&hdr, &r).await,
                     Err(e) => conn.reply_dbus_error(&hdr, e).await,
                 }
                 .map(|_seq| ())

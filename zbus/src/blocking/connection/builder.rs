@@ -94,13 +94,6 @@ impl<'a> Builder<'a> {
         Self(self.0.auth_mechanism(auth_mechanism))
     }
 
-    /// Specify the mechanisms to use during authentication.
-    #[deprecated(since = "4.1.3", note = "Use `auth_mechanism` instead.")]
-    pub fn auth_mechanisms(self, auth_mechanisms: &[AuthMechanism]) -> Self {
-        #[allow(deprecated)]
-        Self(self.0.auth_mechanisms(auth_mechanisms))
-    }
-
     /// The cookie context to use during authentication.
     ///
     /// This is only used when the `cookie` authentication mechanism is enabled and only valid for

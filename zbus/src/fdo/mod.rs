@@ -45,13 +45,13 @@ mod tests {
 
     #[test]
     fn error_from_zerror() {
-        let m = Message::method("/", "foo")
+        let m = Message::method_call("/", "foo")
             .unwrap()
             .destination(":1.2")
             .unwrap()
             .build(&())
             .unwrap();
-        let m = Message::method_error(&m, "org.freedesktop.DBus.Error.TimedOut")
+        let m = Message::error(&m.header(), "org.freedesktop.DBus.Error.TimedOut")
             .unwrap()
             .build(&("so long"))
             .unwrap();

@@ -48,7 +48,7 @@ fn issue_122() {
     std::thread::sleep(std::time::Duration::from_millis(100));
 
     let destination = conn.unique_name().map(UniqueName::<'_>::from).unwrap();
-    let msg = Message::method("/does/not/matter", "ZBusIssue122")
+    let msg = Message::method_call("/does/not/matter", "ZBusIssue122")
         .unwrap()
         .destination(destination)
         .unwrap()

@@ -1,5 +1,5 @@
 //! D-Bus Message.
-use std::{fmt, num::NonZeroU32, sync::Arc};
+use std::{fmt, sync::Arc};
 
 use static_assertions::assert_impl_all;
 use zbus_names::{ErrorName, InterfaceName, MemberName};
@@ -70,15 +70,16 @@ assert_impl_all!(Message: Send, Sync, Unpin);
 
 impl Message {
     /// Create a builder for a message of type [`Type::MethodCall`].
-    pub fn method<'b, 'p: 'b, 'm: 'b, P, M>(path: P, method_name: M) -> Result<Builder<'b>>
+    pub fn method_call<'b, 'p: 'b, 'm: 'b, P, M>(path: P, method_name: M) -> Result<Builder<'b>>
     where
         P: TryInto<ObjectPath<'p>>,
         M: TryInto<MemberName<'m>>,
         P::Error: Into<Error>,
         M::Error: Into<Error>,
     {
-        #[allow(deprecated)]
-        Builder::method_call(path, method_name)
+        Builder::new(Type::MethodCall)
+            .path(path)?
+            .member(method_name)
     }
 
     /// Create a builder for a message of type [`Type::Signal`].
@@ -95,24 +96,26 @@ impl Message {
         I::Error: Into<Error>,
         M::Error: Into<Error>,
     {
-        #[allow(deprecated)]
-        Builder::signal(path, iface, signal_name)
+        Builder::new(Type::Signal)
+            .path(path)?
+            .interface(iface)?
+            .member(signal_name)
     }
 
     /// Create a builder for a message of type [`Type::MethodReturn`].
-    pub fn method_reply(call: &Self) -> Result<Builder<'_>> {
-        #[allow(deprecated)]
-        Builder::method_return(&call.header())
+    pub fn method_return(reply_to: &Header<'_>) -> Result<Builder<'static>> {
+        Builder::new(Type::MethodReturn).reply_to(reply_to)
     }
 
     /// Create a builder for a message of type [`Type::Error`].
-    pub fn method_error<'b, 'e: 'b, E>(call: &Self, name: E) -> Result<Builder<'b>>
+    pub fn error<'b, 'e: 'b, E>(reply_to: &Header<'_>, name: E) -> Result<Builder<'b>>
     where
         E: TryInto<ErrorName<'e>>,
         E::Error: Into<Error>,
     {
-        #[allow(deprecated)]
-        Builder::error(&call.header(), name)
+        Builder::new(Type::Error)
+            .reply_to(reply_to)?
+            .error_name(name)
     }
 
     /// Create a message from bytes.
@@ -185,42 +188,6 @@ impl Message {
         self.inner.primary_header.msg_type()
     }
 
-    /// The object to send a call to, or the object a signal is emitted from.
-    #[deprecated(
-        since = "4.0.0",
-        note = "Use `Message::header` with `message::Header::path` instead"
-    )]
-    pub fn path(&self) -> Option<ObjectPath<'_>> {
-        self.header().path().cloned()
-    }
-
-    /// The interface to invoke a method call on, or that a signal is emitted from.
-    #[deprecated(
-        since = "4.0.0",
-        note = "Use `Message::header` with `message::Header::interface` instead"
-    )]
-    pub fn interface(&self) -> Option<InterfaceName<'_>> {
-        self.header().interface().cloned()
-    }
-
-    /// The member, either the method name or signal name.
-    #[deprecated(
-        since = "4.0.0",
-        note = "Use `Message::header` with `message::Header::member` instead"
-    )]
-    pub fn member(&self) -> Option<MemberName<'_>> {
-        self.header().member().cloned()
-    }
-
-    /// The serial number of the message this message is a reply to.
-    #[deprecated(
-        since = "4.0.0",
-        note = "Use `Message::header` with `message::Header::reply_serial` instead"
-    )]
-    pub fn reply_serial(&self) -> Option<NonZeroU32> {
-        self.header().reply_serial()
-    }
-
     /// The body that you can deserialize using [`Body::deserialize`].
     ///
     /// # Example
@@ -229,10 +196,11 @@ impl Message {
     /// # use zbus::message::Message;
     /// # (|| -> zbus::Result<()> {
     /// let send_body = (7i32, (2i32, "foo"), vec!["bar"]);
-    /// let message = Message::method("/", "ping")?
+    /// let message = Message::method_call("/", "ping")?
     ///     .destination("zbus.test")?
     ///     .interface("zbus.test")?
     ///     .build(&send_body)?;
+    /// let header = message.header();
     /// let body = message.body();
     /// let body: zbus::zvariant::Structure = body.deserialize()?;
     /// let fields = body.fields();
@@ -240,7 +208,7 @@ impl Message {
     /// assert!(matches!(fields[1], zvariant::Value::Structure(_)));
     /// assert!(matches!(fields[2], zvariant::Value::Array(_)));
     ///
-    /// let reply_body = Message::method_reply(&message)?.build(&body)?.body();
+    /// let reply_body = Message::method_return(&header)?.build(&body)?.body();
     /// let reply_value : (i32, (i32, &str), Vec<String>) = reply_body.deserialize()?;
     ///
     /// assert_eq!(reply_value.0, 7);
@@ -378,7 +346,7 @@ mod tests {
     fn test() {
         #[cfg(unix)]
         let stdout = std::io::stdout();
-        let m = Message::method("/", "do")
+        let m = Message::method_call("/", "do")
             .unwrap()
             .sender(":1.72")
             .unwrap()
@@ -410,12 +378,12 @@ mod tests {
         ));
 
         assert_eq!(m.to_string(), "Method call do from :1.72");
-        let r = Message::method_reply(&m)
+        let r = Message::method_return(&m.header())
             .unwrap()
             .build(&("all fine!"))
             .unwrap();
         assert_eq!(r.to_string(), "Method return");
-        let e = Message::method_error(&m, "org.freedesktop.zbus.Error")
+        let e = Message::error(&m.header(), "org.freedesktop.zbus.Error")
             .unwrap()
             .build(&("kaboom!", 32))
             .unwrap();

@@ -165,16 +165,6 @@ where
             proxy_type: PhantomData,
         }
     }
-
-    /// Create a new [`Builder`] for the given connection.
-    #[must_use]
-    #[deprecated(
-        since = "4.0.0",
-        note = "use `Builder::new` instead, which is now generic over the proxy type"
-    )]
-    pub fn new_bare(conn: &Connection) -> Self {
-        Self::new(conn)
-    }
 }
 
 #[cfg(test)]

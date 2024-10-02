@@ -374,7 +374,7 @@ impl Connection {
     {
         let _permit = acquire_serial_num_semaphore().await;
 
-        let mut builder = Message::method(path, method_name)?;
+        let mut builder = Message::method_call(path, method_name)?;
         if let Some(sender) = self.unique_name() {
             builder = builder.sender(sender)?
         }
@@ -445,13 +445,13 @@ impl Connection {
     ///
     /// Given an existing message (likely a method call), send a reply back to the caller with the
     /// given `body`.
-    pub async fn reply<B>(&self, call: &Message, body: &B) -> Result<()>
+    pub async fn reply<B>(&self, call: &zbus::message::Header<'_>, body: &B) -> Result<()>
     where
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
         let _permit = acquire_serial_num_semaphore().await;
 
-        let mut b = Message::method_reply(call)?;
+        let mut b = Message::method_return(call)?;
         if let Some(sender) = self.unique_name() {
             b = b.sender(sender)?;
         }
@@ -463,7 +463,12 @@ impl Connection {
     ///
     /// Given an existing message (likely a method call), send an error reply back to the caller
     /// with the given `error_name` and `body`.
-    pub async fn reply_error<'e, E, B>(&self, call: &Message, error_name: E, body: &B) -> Result<()>
+    pub async fn reply_error<'e, E, B>(
+        &self,
+        call: &zbus::message::Header<'_>,
+        error_name: E,
+        body: &B,
+    ) -> Result<()>
     where
         B: serde::ser::Serialize + zvariant::DynamicType,
         E: TryInto<ErrorName<'e>>,
@@ -471,7 +476,7 @@ impl Connection {
     {
         let _permit = acquire_serial_num_semaphore().await;
 
-        let mut b = Message::method_error(call, error_name)?;
+        let mut b = Message::error(call, error_name)?;
         if let Some(sender) = self.unique_name() {
             b = b.sender(sender)?;
         }
@@ -1577,7 +1582,7 @@ mod p2p_tests {
             server2
                 .emit_signal(None::<()>, "/", "org.zbus.p2p", "ASignalForYou", &())
                 .await?;
-            server2.reply(&method, &("yay")).await?;
+            server2.reply(&method.header(), &("yay")).await?;
             client_done_listener.await;
 
             Ok(())
@@ -1593,7 +1598,7 @@ mod p2p_tests {
                 Endian::Little => Endian::Big,
                 Endian::Big => Endian::Little,
             };
-            let method = Message::method("/", "Test")?
+            let method = Message::method_call("/", "Test")?
                 .interface("org.zbus.p2p")?
                 .endian(endian)
                 .build(&64u64)?;
