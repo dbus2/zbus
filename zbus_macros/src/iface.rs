@@ -237,14 +237,11 @@ impl MethodInfo {
             let ret = quote!(r);
 
             quote!(match reply {
-                ::std::result::Result::Ok(r) => c.reply(m, &#ret).await,
-                ::std::result::Result::Err(e) => {
-                    let hdr = m.header();
-                    c.reply_dbus_error(&hdr, e).await
-                }
+                ::std::result::Result::Ok(r) => c.reply(&hdr, &#ret).await,
+                ::std::result::Result::Err(e) => c.reply_dbus_error(&hdr, e).await,
             })
         } else {
-            quote!(c.reply(m, &reply).await)
+            quote!(c.reply(&hdr, &reply).await)
         };
 
         let member_name = attrs.name.clone().unwrap_or_else(|| {
@@ -738,6 +735,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                         let future = async move {
                             #args_from_msg
                             let reply = self.#ident(#args_names)#method_await;
+                            let hdr = m.header();
                             #reply
                         };
                         #zbus::object_server::DispatchResult::Async(::std::boxed::Box::pin(async move {

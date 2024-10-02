@@ -21,7 +21,7 @@ fn issue_68() {
     // Send a message as client before service starts to process messages
     let client_conn = blocking::Connection::session().unwrap();
     let destination = conn.unique_name().map(UniqueName::<'_>::from).unwrap();
-    let msg = Message::method("/org/freedesktop/Issue68", "Ping")
+    let msg = Message::method_call("/org/freedesktop/Issue68", "Ping")
         .unwrap()
         .destination(destination)
         .unwrap()

@@ -50,7 +50,7 @@ fn msg_de(c: &mut Criterion) {
 }
 
 fn empty_message() -> Message {
-    Message::method("/org/freedesktop/DBus/Something", "Ping")
+    Message::method_call("/org/freedesktop/DBus/Something", "Ping")
         .unwrap()
         .destination("org.freedesktop.DBus.Something")
         .unwrap()
@@ -61,7 +61,7 @@ fn empty_message() -> Message {
 }
 
 fn big_boy_message(big_boy: &BigBoy<'_>) -> Message {
-    Message::method("/org/freedesktop/DBus/Something", "Ping")
+    Message::method_call("/org/freedesktop/DBus/Something", "Ping")
         .unwrap()
         .destination("org.freedesktop.DBus.Something")
         .unwrap()

@@ -83,7 +83,7 @@ fn issue_813() {
             );
             let mut bytes: Vec<u8> = commands.bytes().collect();
             let fd = std::io::stdin();
-            let msg = zbus::message::Message::method("/org/zbus/Issue813", "PassFd")?
+            let msg = zbus::message::Message::method_call("/org/zbus/Issue813", "PassFd")?
                 .destination("org.zbus.Issue813")?
                 .interface("org.zbus.Issue813")?
                 .build(&(Fd::from(fd.as_fd())))?;

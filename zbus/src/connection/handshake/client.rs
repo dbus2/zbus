@@ -287,7 +287,7 @@ impl Handshake for Client {
 }
 
 fn create_hello_method_call() -> Message {
-    Message::method("/org/freedesktop/DBus", "Hello")
+    Message::method_call("/org/freedesktop/DBus", "Hello")
         .unwrap()
         .destination("org.freedesktop.DBus")
         .unwrap()
