@@ -11,9 +11,26 @@ use super::socket::{self, BoxedSplit};
 mod macos;
 mod win32;
 
-type ConnectResult = Result<(BoxedSplit, Option<OwnedGuid>)>;
+pub(crate) async fn connect_address(
+    address: &[Address<'_>],
+) -> Result<(BoxedSplit, Option<OwnedGuid>)> {
+    for addr in address {
+        match connect(addr).await {
+            Ok(res) => {
+                return Ok(res);
+            }
+            Err(e) => {
+                debug!("Failed to connect to: {}", e);
+                continue;
+            }
+        }
+    }
+    Err(Error::Address("No connectable address".into()))
+}
 
-fn connect(addr: &Address<'_>) -> Pin<Box<dyn Future<Output = ConnectResult>>> {
+fn connect(
+    addr: &Address<'_>,
+) -> Pin<Box<dyn Future<Output = ConnectResult> + Send + Sync + 'static>> {
     let addr = addr.to_owned();
     Box::pin(async move {
         let guid = match addr.guid() {
@@ -44,19 +61,4 @@ fn connect(addr: &Address<'_>) -> Pin<Box<dyn Future<Output = ConnectResult>>> {
     })
 }
 
-pub(crate) async fn connect_address(
-    address: &[Address<'_>],
-) -> Result<(BoxedSplit, Option<OwnedGuid>)> {
-    for addr in address {
-        match connect(addr).await {
-            Ok(res) => {
-                return Ok(res);
-            }
-            Err(e) => {
-                debug!("Failed to connect to: {}", e);
-                continue;
-            }
-        }
-    }
-    Err(Error::Address("No connectable address".into()))
-}
+type ConnectResult = Result<(BoxedSplit, Option<OwnedGuid>)>;
