@@ -13,7 +13,9 @@ mod win32;
 
 type ConnectResult = Result<(BoxedSplit, Option<OwnedGuid>)>;
 
-fn connect(addr: &Address<'_>) -> Pin<Box<dyn Future<Output = ConnectResult>>> {
+fn connect(
+    addr: &Address<'_>,
+) -> Pin<Box<dyn Future<Output = ConnectResult> + Send + Sync + 'static>> {
     let addr = addr.to_owned();
     Box::pin(async move {
         let guid = match addr.guid() {
