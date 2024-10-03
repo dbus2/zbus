@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use tracing::{instrument, trace};
 
 use super::{AuthMechanism, BoxedSplit, Command};
@@ -12,21 +11,20 @@ pub(super) struct Common {
     #[cfg(unix)]
     received_fds: Vec<std::os::fd::OwnedFd>,
     cap_unix_fd: bool,
-    // the current AUTH mechanism is front, ordered by priority
-    mechanisms: VecDeque<AuthMechanism>,
+    mechanism: AuthMechanism,
     first_command: bool,
 }
 
 impl Common {
     /// Start a handshake on this client socket
-    pub fn new(socket: BoxedSplit, mechanisms: VecDeque<AuthMechanism>) -> Self {
+    pub fn new(socket: BoxedSplit, mechanism: AuthMechanism) -> Self {
         Self {
             socket,
             recv_buffer: Vec::new(),
             #[cfg(unix)]
             received_fds: Vec::new(),
             cap_unix_fd: false,
-            mechanisms,
+            mechanism,
             first_command: true,
         }
     }
@@ -44,9 +42,8 @@ impl Common {
         self.cap_unix_fd = cap_unix_fd;
     }
 
-    #[cfg(feature = "p2p")]
-    pub fn mechanisms(&self) -> &VecDeque<AuthMechanism> {
-        &self.mechanisms
+    pub fn mechanism(&self) -> AuthMechanism {
+        self.mechanism
     }
 
     pub fn into_components(self) -> IntoComponentsReturn {
@@ -56,7 +53,7 @@ impl Common {
             #[cfg(unix)]
             self.received_fds,
             self.cap_unix_fd,
-            self.mechanisms,
+            self.mechanism,
         )
     }
 
@@ -175,12 +172,6 @@ impl Common {
 
         Ok(commands)
     }
-
-    pub fn next_mechanism(&mut self) -> Result<AuthMechanism> {
-        self.mechanisms
-            .pop_front()
-            .ok_or_else(|| Error::Handshake("Exhausted available AUTH mechanisms".into()))
-    }
 }
 
 #[cfg(unix)]
@@ -189,7 +180,7 @@ type IntoComponentsReturn = (
     Vec<u8>,
     Vec<std::os::fd::OwnedFd>,
     bool,
-    VecDeque<AuthMechanism>,
+    AuthMechanism,
 );
 #[cfg(not(unix))]
-type IntoComponentsReturn = (BoxedSplit, Vec<u8>, bool, VecDeque<AuthMechanism>);
+type IntoComponentsReturn = (BoxedSplit, Vec<u8>, bool, AuthMechanism);

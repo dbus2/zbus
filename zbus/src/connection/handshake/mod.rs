@@ -8,7 +8,7 @@ mod server;
 use async_trait::async_trait;
 #[cfg(unix)]
 use nix::unistd::Uid;
-use std::{collections::VecDeque, fmt::Debug};
+use std::fmt::Debug;
 use zbus_names::OwnedUniqueName;
 
 #[cfg(windows)]
@@ -51,10 +51,10 @@ impl Authenticated {
     pub async fn client(
         socket: BoxedSplit,
         server_guid: Option<OwnedGuid>,
-        mechanisms: Option<VecDeque<AuthMechanism>>,
+        mechanism: Option<AuthMechanism>,
         bus: bool,
     ) -> Result<Self> {
-        Client::new(socket, mechanisms, server_guid, bus)
+        Client::new(socket, mechanism, server_guid, bus)
             .perform()
             .await
     }
@@ -68,7 +68,7 @@ impl Authenticated {
         guid: OwnedGuid,
         #[cfg(unix)] client_uid: Option<u32>,
         #[cfg(windows)] client_sid: Option<String>,
-        auth_mechanisms: Option<VecDeque<AuthMechanism>>,
+        auth_mechanism: Option<AuthMechanism>,
         unique_name: Option<OwnedUniqueName>,
     ) -> Result<Self> {
         Server::new(
@@ -78,7 +78,7 @@ impl Authenticated {
             client_uid,
             #[cfg(windows)]
             client_sid,
-            auth_mechanisms,
+            auth_mechanism,
             unique_name,
         )?
         .perform()
@@ -250,7 +250,7 @@ mod tests {
             p1.into(),
             Guid::generate().into(),
             Some(Uid::effective().into()),
-            Some(vec![AuthMechanism::Anonymous].into()),
+            Some(AuthMechanism::Anonymous),
             None,
         )
         .unwrap();
@@ -267,7 +267,7 @@ mod tests {
             p1.into(),
             Guid::generate().into(),
             Some(Uid::effective().into()),
-            Some(vec![AuthMechanism::Anonymous].into()),
+            Some(AuthMechanism::Anonymous),
             None,
         )
         .unwrap();
