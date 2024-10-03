@@ -701,7 +701,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                                 signal_emitter,
                                 #zbus::names::InterfaceName::from_static_str_unchecked(#iface_name),
                                 changed,
-                                vec![],
+                                ::std::borrow::Cow::Borrowed(&[]),
                             ).await
                         }
                     );
@@ -717,7 +717,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                                 signal_emitter,
                                 #zbus::names::InterfaceName::from_static_str_unchecked(#iface_name),
                                 ::std::collections::HashMap::new(),
-                                vec![#member_name],
+                                ::std::borrow::Cow::Borrowed(&[#member_name]),
                             ).await
                         }
                     );

@@ -4,7 +4,7 @@
 //! be useful across various D-Bus applications. This module provides their proxy.
 
 use static_assertions::assert_impl_all;
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap};
 use zbus_names::InterfaceName;
 use zvariant::{OwnedValue, Value};
 
@@ -120,7 +120,7 @@ impl Properties {
         emitter: &SignalEmitter<'_>,
         interface_name: InterfaceName<'_>,
         changed_properties: HashMap<&str, Value<'_>>,
-        invalidated_properties: Vec<&str>,
+        invalidated_properties: Cow<'_, [&str]>,
     ) -> zbus::Result<()>;
 }
 
