@@ -364,7 +364,7 @@ impl PropertiesCache {
                 }
                 Some(Either::Right(populate)) => {
                     populate?.body().deserialize().map(|values| {
-                        self.update_cache(&uncached_properties, &values, Vec::new(), &interface);
+                        self.update_cache(&uncached_properties, &values, &[], &interface);
                     })?;
                     break;
                 }
@@ -379,7 +379,7 @@ impl PropertiesCache {
                     self.update_cache(
                         &uncached_properties,
                         &args.changed_properties,
-                        args.invalidated_properties,
+                        &args.invalidated_properties,
                         &interface,
                     );
                 }
@@ -410,7 +410,7 @@ impl PropertiesCache {
                     self.update_cache(
                         &uncached_properties,
                         &args.changed_properties,
-                        args.invalidated_properties,
+                        &args.invalidated_properties,
                         &interface,
                     );
                 }
@@ -424,13 +424,13 @@ impl PropertiesCache {
         &self,
         uncached_properties: &HashSet<Str<'_>>,
         changed: &HashMap<&str, Value<'_>>,
-        invalidated: Vec<&str>,
+        invalidated: &[&str],
         interface: &InterfaceName<'_>,
     ) {
         let mut values = self.values.write().expect("lock poisoned");
 
         for inval in invalidated {
-            if uncached_properties.contains(&Str::from(inval)) {
+            if uncached_properties.contains(&Str::from(*inval)) {
                 debug!(
                     "Ignoring invalidation of uncached property `{}.{}`",
                     interface, inval
@@ -439,7 +439,7 @@ impl PropertiesCache {
             }
             trace!("Property `{interface}.{inval}` invalidated");
 
-            if let Some(entry) = values.get_mut(inval) {
+            if let Some(entry) = values.get_mut(*inval) {
                 entry.value = None;
                 entry.event.notify(usize::MAX);
             }

@@ -727,7 +727,7 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
 
     let args = ifaces_removed.args()?;
     assert_eq!(args.object_path(), "/zbus/test/MyObj");
-    assert_eq!(args.interfaces(), &["org.freedesktop.MyIface"]);
+    assert_eq!(args.interfaces().as_ref(), &["org.freedesktop.MyIface"]);
 
     assert!(my_obj_proxy.inner().introspect().await.is_err());
     assert!(my_obj_proxy.ping().await.is_err());
