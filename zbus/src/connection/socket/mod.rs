@@ -23,7 +23,7 @@ use crate::{
         header::{MAX_MESSAGE_SIZE, MIN_MESSAGE_SIZE},
         PrimaryHeader,
     },
-    padding_for_8_bytes, Message,
+    padding_for_8_bytes, AuthMechanism, Message,
 };
 #[cfg(unix)]
 use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
@@ -237,6 +237,13 @@ pub trait ReadHalf: std::fmt::Debug + Send + Sync + 'static {
     async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
         Ok(ConnectionCredentials::default())
     }
+
+    /// The authentication mechanism to use for this socket on the target OS.
+    ///
+    /// Default is `AuthMechanism::External`.
+    fn auth_mechanism(&self) -> AuthMechanism {
+        AuthMechanism::External
+    }
 }
 
 /// The write half of a socket.
@@ -353,6 +360,10 @@ impl ReadHalf for Box<dyn ReadHalf> {
 
     async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
         (**self).peer_credentials().await
+    }
+
+    fn auth_mechanism(&self) -> AuthMechanism {
+        (**self).auth_mechanism()
     }
 }
 

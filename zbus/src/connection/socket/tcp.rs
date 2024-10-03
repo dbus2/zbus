@@ -48,6 +48,11 @@ impl ReadHalf for Arc<Async<TcpStream>> {
         )
         .await
     }
+
+    #[cfg(not(windows))]
+    fn auth_mechanism(&self) -> crate::AuthMechanism {
+        crate::AuthMechanism::Anonymous
+    }
 }
 
 #[cfg(not(feature = "tokio"))]
@@ -119,6 +124,11 @@ impl ReadHalf for tokio::net::tcp::OwnedReadHalf {
             "peer credentials",
         )
         .await
+    }
+
+    #[cfg(not(windows))]
+    fn auth_mechanism(&self) -> crate::AuthMechanism {
+        crate::AuthMechanism::Anonymous
     }
 }
 
