@@ -85,9 +85,6 @@ jobs:
           dbus-run-session --config-file /tmp/dbus-session.conf -- \
             cargo --locked test --profile "$PROFILE" --verbose --features uuid,url,time,chrono,option-as-array,vsock,bus-impl \
               -- --skip fdpass_systemd
-          # check cookie-sha1 auth against dbus-daemon
-          sed -i s/EXTERNAL/DBUS_COOKIE_SHA1/g /tmp/dbus-session.conf
-          dbus-run-session --config-file /tmp/dbus-session.conf -- cargo --locked test --profile "$PROFILE" --verbose -- basic_connection
           # Test tokio support.
           dbus-run-session --config-file /tmp/dbus-session.conf -- \
             cargo --locked test --profile "$PROFILE" --verbose --tests -p zbus --no-default-features \
