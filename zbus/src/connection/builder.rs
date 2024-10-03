@@ -21,7 +21,7 @@ use uds_windows::UnixStream;
 #[cfg(all(feature = "vsock", not(feature = "tokio")))]
 use vsock::VsockStream;
 
-use zvariant::{ObjectPath, Str};
+use zvariant::ObjectPath;
 
 use crate::{
     address::{Address, ToAddresses},
@@ -71,8 +71,6 @@ pub struct Builder<'a> {
     auth_mechanisms: Option<VecDeque<AuthMechanism>>,
     #[cfg(feature = "bus-impl")]
     unique_name: Option<crate::names::UniqueName<'a>>,
-    cookie_context: Option<super::handshake::CookieContext<'a>>,
-    cookie_id: Option<usize>,
 }
 
 assert_impl_all!(Builder<'_>: Send, Sync, Unpin);
@@ -193,37 +191,6 @@ impl<'a> Builder<'a> {
     /// Specify the mechanism to use during authentication.
     pub fn auth_mechanism(mut self, auth_mechanism: AuthMechanism) -> Self {
         self.auth_mechanisms = Some(VecDeque::from(vec![auth_mechanism]));
-
-        self
-    }
-
-    /// The cookie context to use during authentication.
-    ///
-    /// This is only used when the `cookie` authentication mechanism is enabled and only valid for
-    /// server connections.
-    ///
-    /// If not specified, the default cookie context of `org_freedesktop_general` will be used.
-    ///
-    /// # Errors
-    ///
-    /// If the given string is not a valid cookie context.
-    pub fn cookie_context<C>(mut self, context: C) -> Result<Self>
-    where
-        C: Into<Str<'a>>,
-    {
-        self.cookie_context = Some(context.into().try_into()?);
-
-        Ok(self)
-    }
-
-    /// The ID of the cookie to use during authentication.
-    ///
-    /// This is only used when the `cookie` authentication mechanism is enabled and only valid for
-    /// server connections.
-    ///
-    /// If not specified, the first cookie found in the cookie context file will be used.
-    pub fn cookie_id(mut self, id: usize) -> Self {
-        self.cookie_id = Some(id);
 
         self
     }
@@ -436,8 +403,6 @@ impl<'a> Builder<'a> {
                         #[cfg(windows)]
                         client_sid,
                         self.auth_mechanisms,
-                        self.cookie_id,
-                        self.cookie_context.unwrap_or_default(),
                         unique_name,
                     )
                     .await?
@@ -506,8 +471,6 @@ impl<'a> Builder<'a> {
             auth_mechanisms: None,
             #[cfg(feature = "bus-impl")]
             unique_name: None,
-            cookie_id: None,
-            cookie_context: None,
         }
     }
 

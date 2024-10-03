@@ -105,3 +105,9 @@ impl FromStr for Command {
         Ok(cmd)
     }
 }
+
+impl From<hex::FromHexError> for Error {
+    fn from(e: hex::FromHexError) -> Self {
+        Error::Handshake(format!("Invalid hexcode: {e}"))
+    }
+}

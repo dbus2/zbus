@@ -10,7 +10,7 @@ use tokio::net::UnixStream;
 #[cfg(all(windows, not(feature = "tokio")))]
 use uds_windows::UnixStream;
 
-use zvariant::{ObjectPath, Str};
+use zvariant::ObjectPath;
 
 #[cfg(feature = "p2p")]
 use crate::Guid;
@@ -92,33 +92,6 @@ impl<'a> Builder<'a> {
     /// Specify the mechanism to use during authentication.
     pub fn auth_mechanism(self, auth_mechanism: AuthMechanism) -> Self {
         Self(self.0.auth_mechanism(auth_mechanism))
-    }
-
-    /// The cookie context to use during authentication.
-    ///
-    /// This is only used when the `cookie` authentication mechanism is enabled and only valid for
-    /// server connections.
-    ///
-    /// If not specified, the default cookie context of `org_freedesktop_general` will be used.
-    ///
-    /// # Errors
-    ///
-    /// If the given string is not a valid cookie context.
-    pub fn cookie_context<C>(self, context: C) -> Result<Self>
-    where
-        C: Into<Str<'a>>,
-    {
-        self.0.cookie_context(context).map(Self)
-    }
-
-    /// The ID of the cookie to use during authentication.
-    ///
-    /// This is only used when the `cookie` authentication mechanism is enabled and only valid for
-    /// server connections.
-    ///
-    /// If not specified, the first cookie found in the cookie context file will be used.
-    pub fn cookie_id(self, id: usize) -> Self {
-        Self(self.0.cookie_id(id))
     }
 
     /// The to-be-created connection will be a peer-to-peer connection.
