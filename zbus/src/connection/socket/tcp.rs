@@ -50,8 +50,8 @@ impl ReadHalf for Arc<Async<TcpStream>> {
     }
 
     #[cfg(not(windows))]
-    fn auth_mechanism(&self) -> crate::AuthMechanism {
-        crate::AuthMechanism::Anonymous
+    fn auth_mechanism(&self) -> crate::conn::AuthMechanism {
+        crate::conn::AuthMechanism::Anonymous
     }
 }
 
@@ -127,8 +127,8 @@ impl ReadHalf for tokio::net::tcp::OwnedReadHalf {
     }
 
     #[cfg(not(windows))]
-    fn auth_mechanism(&self) -> crate::AuthMechanism {
-        crate::AuthMechanism::Anonymous
+    fn auth_mechanism(&self) -> crate::conn::AuthMechanism {
+        crate::conn::AuthMechanism::Anonymous
     }
 }
 

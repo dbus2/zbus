@@ -2,7 +2,7 @@ use std::io;
 
 use async_broadcast::{broadcast, Receiver, Sender};
 
-use crate::{fdo::ConnectionCredentials, AuthMechanism, Message};
+use crate::{conn::AuthMechanism, fdo::ConnectionCredentials, Message};
 
 /// An in-process channel-based socket.
 ///

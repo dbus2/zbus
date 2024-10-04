@@ -18,12 +18,13 @@ use std::{io, mem};
 use tracing::trace;
 
 use crate::{
+    conn::AuthMechanism,
     fdo::ConnectionCredentials,
     message::{
         header::{MAX_MESSAGE_SIZE, MIN_MESSAGE_SIZE},
         PrimaryHeader,
     },
-    padding_for_8_bytes, AuthMechanism, Message,
+    padding_for_8_bytes, Message,
 };
 #[cfg(unix)]
 use std::os::fd::{AsFd, BorrowedFd, OwnedFd};

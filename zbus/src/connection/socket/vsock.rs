@@ -91,8 +91,8 @@ impl super::ReadHalf for tokio_vsock::ReadHalf {
         })
     }
 
-    fn auth_mechanism(&self) -> crate::AuthMechanism {
-        crate::AuthMechanism::Anonymous
+    fn auth_mechanism(&self) -> crate::conn::AuthMechanism {
+        crate::conn::AuthMechanism::Anonymous
     }
 }
 

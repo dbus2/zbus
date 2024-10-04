@@ -1,6 +1,6 @@
 use std::{fmt, str::FromStr};
 
-use crate::{AuthMechanism, Error, Guid, OwnedGuid, Result};
+use crate::{conn::AuthMechanism, Error, Guid, OwnedGuid, Result};
 
 // The plain-text SASL profile authentication protocol described here:
 // <https://dbus.freedesktop.org/doc/dbus-specification.html#auth-protocol>
