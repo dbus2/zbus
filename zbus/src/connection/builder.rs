@@ -7,7 +7,7 @@ use std::net::TcpStream;
 #[cfg(all(unix, not(feature = "tokio")))]
 use std::os::unix::net::UnixStream;
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet},
     vec,
 };
 #[cfg(feature = "tokio")]
@@ -68,7 +68,7 @@ pub struct Builder<'a> {
     internal_executor: bool,
     interfaces: Interfaces<'a>,
     names: HashSet<WellKnownName<'a>>,
-    auth_mechanisms: Option<VecDeque<AuthMechanism>>,
+    auth_mechanism: Option<AuthMechanism>,
     #[cfg(feature = "bus-impl")]
     unique_name: Option<crate::names::UniqueName<'a>>,
 }
@@ -190,7 +190,7 @@ impl<'a> Builder<'a> {
 
     /// Specify the mechanism to use during authentication.
     pub fn auth_mechanism(mut self, auth_mechanism: AuthMechanism) -> Self {
-        self.auth_mechanisms = Some(VecDeque::from(vec![auth_mechanism]));
+        self.auth_mechanism = Some(auth_mechanism);
 
         self
     }
@@ -381,7 +381,7 @@ impl<'a> Builder<'a> {
             match self.guid {
                 None => {
                     // SASL Handshake
-                    Authenticated::client(stream, server_guid, self.auth_mechanisms, is_bus_conn)
+                    Authenticated::client(stream, server_guid, self.auth_mechanism, is_bus_conn)
                         .await?
                 }
                 Some(guid) => {
@@ -402,7 +402,7 @@ impl<'a> Builder<'a> {
                         client_uid,
                         #[cfg(windows)]
                         client_sid,
-                        self.auth_mechanisms,
+                        self.auth_mechanism,
                         unique_name,
                     )
                     .await?
@@ -410,7 +410,7 @@ impl<'a> Builder<'a> {
             }
 
             #[cfg(not(feature = "p2p"))]
-            Authenticated::client(stream, server_guid, self.auth_mechanisms, is_bus_conn).await?
+            Authenticated::client(stream, server_guid, self.auth_mechanism, is_bus_conn).await?
         };
 
         // SAFETY: `Authenticated` is always built with these fields set to `Some`.
@@ -468,7 +468,7 @@ impl<'a> Builder<'a> {
             internal_executor: true,
             interfaces: HashMap::new(),
             names: HashSet::new(),
-            auth_mechanisms: None,
+            auth_mechanism: None,
             #[cfg(feature = "bus-impl")]
             unique_name: None,
         }

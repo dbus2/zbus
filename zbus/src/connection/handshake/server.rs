@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use std::collections::VecDeque;
 use tracing::{instrument, trace};
 
 use crate::names::OwnedUniqueName;
@@ -41,21 +40,13 @@ impl Server {
         guid: OwnedGuid,
         #[cfg(unix)] client_uid: Option<u32>,
         #[cfg(windows)] client_sid: Option<String>,
-        mechanisms: Option<VecDeque<AuthMechanism>>,
+        mechanism: Option<AuthMechanism>,
         unique_name: Option<OwnedUniqueName>,
     ) -> Result<Self> {
-        let mechanisms = match mechanisms {
-            Some(mechanisms) => mechanisms,
-            None => {
-                let mut mechanisms = VecDeque::new();
-                mechanisms.push_back(AuthMechanism::External);
-
-                mechanisms
-            }
-        };
+        let mechanism = mechanism.unwrap_or_else(|| socket.read().auth_mechanism());
 
         Ok(Server {
-            common: Common::new(socket, mechanisms),
+            common: Common::new(socket, mechanism),
             step: ServerHandshakeStep::WaitingForAuth,
             #[cfg(unix)]
             client_uid,
@@ -111,8 +102,7 @@ impl Server {
 
     #[instrument(skip(self))]
     async fn rejected_error(&mut self) -> Result<()> {
-        let mechanisms = self.common.mechanisms().iter().cloned().collect();
-        let cmd = Command::Rejected(mechanisms);
+        let cmd = Command::Rejected(vec![self.common.mechanism()]);
         trace!("Sending authentication error");
         self.common.write_command(cmd).await?;
         self.step = ServerHandshakeStep::WaitingForAuth;
@@ -141,22 +131,24 @@ impl Server {
         trace!("Waiting for authentication");
         let reply = self.common.read_command().await?;
         match reply {
-            Command::Auth(mech, resp) => {
-                let mech = mech.filter(|m| self.common.mechanisms().contains(m));
+            Command::Auth(requested_mech, resp) => {
+                let mech = self.common.mechanism();
+                if requested_mech != Some(mech) {
+                    self.rejected_error().await?;
 
-                match (mech, &resp) {
-                    (Some(mech), None) => {
+                    return Ok(());
+                }
+
+                match &resp {
+                    None => {
                         trace!("Sending data request");
                         self.common.write_command(Command::Data(None)).await?;
                         self.step = ServerHandshakeStep::WaitingForData(mech);
                     }
-                    (Some(AuthMechanism::Anonymous), Some(_)) => {
-                        self.auth_ok().await?;
-                    }
-                    (Some(AuthMechanism::External), Some(sasl_id)) => {
-                        self.check_external_auth(sasl_id).await?;
-                    }
-                    _ => self.rejected_error().await?,
+                    Some(sasl_id) => match mech {
+                        AuthMechanism::Anonymous => self.auth_ok().await?,
+                        AuthMechanism::External => self.check_external_auth(sasl_id).await?,
+                    },
                 }
             }
             Command::Cancel | Command::Error(_) => {

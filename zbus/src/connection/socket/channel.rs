@@ -2,7 +2,7 @@ use std::io;
 
 use async_broadcast::{broadcast, Receiver, Sender};
 
-use crate::{fdo::ConnectionCredentials, Message};
+use crate::{conn::AuthMechanism, fdo::ConnectionCredentials, Message};
 
 /// An in-process channel-based socket.
 ///
@@ -71,6 +71,10 @@ impl super::ReadHalf for Reader {
 
     async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
         self_credentials().await
+    }
+
+    fn auth_mechanism(&self) -> AuthMechanism {
+        AuthMechanism::Anonymous
     }
 }
 

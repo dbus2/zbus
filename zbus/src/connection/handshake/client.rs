@@ -1,6 +1,5 @@
 use async_trait::async_trait;
-use std::collections::VecDeque;
-use tracing::{debug, instrument, trace, warn};
+use tracing::{instrument, trace, warn};
 
 use crate::{conn::socket::ReadHalf, is_flatpak, names::OwnedUniqueName, Message};
 
@@ -24,19 +23,14 @@ impl Client {
     /// Start a handshake on this client socket
     pub fn new(
         socket: BoxedSplit,
-        mechanisms: Option<VecDeque<AuthMechanism>>,
+        mechanism: Option<AuthMechanism>,
         server_guid: Option<OwnedGuid>,
         bus: bool,
     ) -> Client {
-        let mechanisms = mechanisms.unwrap_or_else(|| {
-            let mut mechanisms = VecDeque::new();
-            mechanisms.push_back(AuthMechanism::External);
-            mechanisms.push_back(AuthMechanism::Anonymous);
-            mechanisms
-        });
+        let mechanism = mechanism.unwrap_or_else(|| socket.read().auth_mechanism());
 
         Client {
-            common: Common::new(socket, mechanisms),
+            common: Common::new(socket, mechanism),
             server_guid,
             bus,
         }
@@ -84,32 +78,37 @@ impl Client {
     /// Perform the authentication handshake with the server.
     #[instrument(skip(self))]
     async fn authenticate(&mut self) -> Result<()> {
-        loop {
-            let mechanism = self.common.next_mechanism()?;
-            trace!("Trying {mechanism} mechanism");
-            let auth_cmd = match mechanism {
-                AuthMechanism::Anonymous => Command::Auth(Some(mechanism), Some("zbus".into())),
-                AuthMechanism::External => {
-                    Command::Auth(Some(mechanism), Some(sasl_auth_id()?.into_bytes()))
-                }
-            };
-            self.common.write_command(auth_cmd).await?;
-
-            match self.common.read_command().await? {
-                Command::Ok(guid) => {
-                    trace!("Received OK from server");
-                    self.set_guid(guid)?;
-
-                    return Ok(());
-                }
-                Command::Rejected(_) => debug!("{mechanism} rejected by the server"),
-                Command::Error(e) => debug!("Received error from server: {e}"),
-                cmd => {
-                    return Err(Error::Handshake(format!(
-                        "Unexpected command from server: {cmd}"
-                    )))
-                }
+        let mechanism = self.common.mechanism();
+        trace!("Trying {mechanism} mechanism");
+        let auth_cmd = match mechanism {
+            AuthMechanism::Anonymous => Command::Auth(Some(mechanism), Some("zbus".into())),
+            AuthMechanism::External => {
+                Command::Auth(Some(mechanism), Some(sasl_auth_id()?.into_bytes()))
             }
+        };
+        self.common.write_command(auth_cmd).await?;
+
+        match self.common.read_command().await? {
+            Command::Ok(guid) => {
+                trace!("Received OK from server");
+                self.set_guid(guid)?;
+
+                Ok(())
+            }
+            Command::Rejected(accepted) => {
+                let list = accepted
+                    .iter()
+                    .map(|m| m.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                Err(Error::Handshake(format!(
+                    "{mechanism} rejected by the server. Accepted mechanisms: [{list}]"
+                )))
+            }
+            Command::Error(e) => Err(Error::Handshake(format!("Received error from server: {e}"))),
+            cmd => Err(Error::Handshake(format!(
+                "Unexpected command from server: {cmd}"
+            ))),
         }
     }
 

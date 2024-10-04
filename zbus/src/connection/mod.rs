@@ -41,6 +41,7 @@ mod socket_reader;
 use socket_reader::SocketReader;
 
 pub(crate) mod handshake;
+pub use handshake::AuthMechanism;
 use handshake::Authenticated;
 
 mod connect;
@@ -1528,7 +1529,7 @@ mod p2p_tests {
     use test_log::test;
     use zvariant::{Endian, NATIVE_ENDIAN};
 
-    use crate::{AuthMechanism, Guid};
+    use crate::{conn::AuthMechanism, Guid};
 
     use super::*;
 

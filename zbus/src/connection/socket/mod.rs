@@ -18,6 +18,7 @@ use std::{io, mem};
 use tracing::trace;
 
 use crate::{
+    conn::AuthMechanism,
     fdo::ConnectionCredentials,
     message::{
         header::{MAX_MESSAGE_SIZE, MIN_MESSAGE_SIZE},
@@ -237,6 +238,13 @@ pub trait ReadHalf: std::fmt::Debug + Send + Sync + 'static {
     async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
         Ok(ConnectionCredentials::default())
     }
+
+    /// The authentication mechanism to use for this socket on the target OS.
+    ///
+    /// Default is `AuthMechanism::External`.
+    fn auth_mechanism(&self) -> AuthMechanism {
+        AuthMechanism::External
+    }
 }
 
 /// The write half of a socket.
@@ -353,6 +361,10 @@ impl ReadHalf for Box<dyn ReadHalf> {
 
     async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
         (**self).peer_credentials().await
+    }
+
+    fn auth_mechanism(&self) -> AuthMechanism {
+        (**self).auth_mechanism()
     }
 }
 

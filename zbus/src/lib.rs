@@ -58,7 +58,12 @@ pub use message::Message;
 pub mod connection;
 /// Alias for `connection` module, for convenience.
 pub use connection as conn;
-pub use connection::{handshake::AuthMechanism, Connection};
+#[deprecated(
+    since = "5.0.0",
+    note = "Please use `connection::AuthMechanism` instead"
+)]
+pub use connection::handshake::AuthMechanism;
+pub use connection::Connection;
 
 mod message_stream;
 pub use message_stream::*;

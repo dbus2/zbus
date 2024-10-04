@@ -26,6 +26,10 @@ impl super::ReadHalf for std::sync::Arc<async_io::Async<vsock::VsockStream>> {
             }
         }
     }
+
+    fn auth_mechanism(&self) -> crate::AuthMechanism {
+        crate::AuthMechanism::Anonymous
+    }
 }
 
 #[cfg(all(feature = "vsock", not(feature = "tokio")))]
@@ -85,6 +89,10 @@ impl super::ReadHalf for tokio_vsock::ReadHalf {
 
             ret
         })
+    }
+
+    fn auth_mechanism(&self) -> crate::conn::AuthMechanism {
+        crate::conn::AuthMechanism::Anonymous
     }
 }
 
