@@ -102,7 +102,7 @@ impl Server {
 
     #[instrument(skip(self))]
     async fn rejected_error(&mut self) -> Result<()> {
-        let cmd = Command::Rejected(vec![self.common.mechanism()]);
+        let cmd = Command::Rejected(self.common.mechanism().as_str().into());
         trace!("Sending authentication error");
         self.common.write_command(cmd).await?;
         self.step = ServerHandshakeStep::WaitingForAuth;
