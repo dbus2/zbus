@@ -2,7 +2,7 @@ use std::{borrow::Cow, ffi::OsStr, fmt};
 
 use super::{
     percent::{decode_percents_os_str, decode_percents_str, EncOsStr},
-    Address, Error, KeyValFmt, KeyValFmtAdd, Result,
+    Address, Error, KeyValFmt, KeyValFmtAdd, Result, TransportImpl,
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -43,10 +43,8 @@ impl<'a> Unixexec<'a> {
     }
 }
 
-impl<'a> TryFrom<&'a Address<'a>> for Unixexec<'a> {
-    type Error = Error;
-
-    fn try_from(s: &'a Address<'a>) -> Result<Self> {
+impl<'a> TransportImpl<'a> for Unixexec<'a> {
+    fn for_address(s: &'a Address<'a>) -> Result<Self> {
         let mut path = None;
         let mut argv = Vec::new();
 

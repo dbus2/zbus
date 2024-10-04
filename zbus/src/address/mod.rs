@@ -33,6 +33,7 @@ pub use address_list::{AddressList, AddressListIter};
 
 mod percent;
 pub use percent::*;
+use transport::TransportImpl;
 
 #[cfg(test)]
 mod tests;
@@ -140,7 +141,7 @@ impl<'a> Address<'a> {
 
     /// Transport connection details
     pub fn transport(&self) -> Result<transport::Transport<'_>> {
-        self.try_into()
+        transport::Transport::for_address(self)
     }
 
     pub(super) fn key_val_iter(&'a self) -> KeyValIter<'a> {

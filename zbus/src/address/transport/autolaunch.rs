@@ -4,7 +4,7 @@ use std::{borrow::Cow, fmt};
 
 #[cfg(target_os = "windows")]
 use super::percent::decode_percents_str;
-use super::{Address, Error, KeyValFmt, KeyValFmtAdd, Result};
+use super::{Address, KeyValFmt, KeyValFmtAdd, Result, TransportImpl};
 
 /// Scope of autolaunch (Windows only)
 #[cfg(target_os = "windows")]
@@ -61,10 +61,8 @@ impl<'a> Autolaunch<'a> {
     }
 }
 
-impl<'a> TryFrom<&'a Address<'a>> for Autolaunch<'a> {
-    type Error = Error;
-
-    fn try_from(s: &'a Address<'a>) -> Result<Self> {
+impl<'a> TransportImpl<'a> for Autolaunch<'a> {
+    fn for_address(s: &'a Address<'a>) -> Result<Self> {
         #[allow(unused_mut)]
         let mut res = Autolaunch::default();
 
