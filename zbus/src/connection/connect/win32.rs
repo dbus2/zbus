@@ -9,10 +9,10 @@ use crate::{
 use std::{future::Future, pin::Pin};
 
 pub(crate) fn connect<'l>(
-    l: &'l crate::address::transport::Autolaunch<'_>,
+    autolaunch: &'l crate::address::transport::Autolaunch<'_>,
 ) -> Pin<Box<dyn Future<Output = ConnectResult> + 'l>> {
     Box::pin(async move {
-        if l.scope().is_some() {
+        if autolaunch.scope().is_some() {
             return Err(Error::Address(
                 "autolaunch with scope isn't supported yet".into(),
             ));
