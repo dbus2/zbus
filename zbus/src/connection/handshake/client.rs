@@ -2,13 +2,11 @@ use async_trait::async_trait;
 use std::collections::VecDeque;
 use tracing::{debug, instrument, trace, warn};
 
-use sha1::{Digest, Sha1};
-
 use crate::{conn::socket::ReadHalf, is_flatpak, names::OwnedUniqueName, Message};
 
 use super::{
-    random_ascii, sasl_auth_id, AuthMechanism, Authenticated, BoxedSplit, Command, Common, Cookie,
-    Error, Handshake, OwnedGuid, Result, Str,
+    sasl_auth_id, AuthMechanism, Authenticated, BoxedSplit, Command, Common, Error, Handshake,
+    OwnedGuid, Result,
 };
 
 /// A representation of an in-progress handshake, client-side
@@ -33,7 +31,6 @@ impl Client {
         let mechanisms = mechanisms.unwrap_or_else(|| {
             let mut mechanisms = VecDeque::new();
             mechanisms.push_back(AuthMechanism::External);
-            mechanisms.push_back(AuthMechanism::Cookie);
             mechanisms.push_back(AuthMechanism::Anonymous);
             mechanisms
         });
@@ -43,37 +40,6 @@ impl Client {
             server_guid,
             bus,
         }
-    }
-
-    /// Respond to a cookie authentication challenge from the server.
-    ///
-    /// Returns the next command to send to the server.
-    async fn handle_cookie_challenge(&mut self, data: Vec<u8>) -> Result<Command> {
-        let context = std::str::from_utf8(&data)
-            .map_err(|_| Error::Handshake("Cookie context was not valid UTF-8".into()))?;
-        let mut split = context.split_ascii_whitespace();
-        let context = split
-            .next()
-            .ok_or_else(|| Error::Handshake("Missing cookie context name".into()))?;
-        let context = Str::from(context).try_into()?;
-        let id = split
-            .next()
-            .ok_or_else(|| Error::Handshake("Missing cookie ID".into()))?;
-        let id = id
-            .parse()
-            .map_err(|e| Error::Handshake(format!("Invalid cookie ID `{id}`: {e}")))?;
-        let server_challenge = split
-            .next()
-            .ok_or_else(|| Error::Handshake("Missing cookie challenge".into()))?;
-
-        let cookie = Cookie::lookup(&context, id).await?;
-        let cookie = cookie.cookie();
-        let client_challenge = random_ascii(16);
-        let sec = format!("{server_challenge}:{client_challenge}:{cookie}");
-        let sha1 = hex::encode(Sha1::digest(sec));
-        let data = format!("{client_challenge} {sha1}").into_bytes();
-
-        Ok(Command::Data(Some(data)))
     }
 
     fn set_guid(&mut self, guid: OwnedGuid) -> Result<()> {
@@ -116,11 +82,8 @@ impl Client {
     }
 
     /// Perform the authentication handshake with the server.
-    ///
-    /// In case of cookie auth, it returns the challenge response to send to the server, so it can
-    /// be batched with rest of the commands.
     #[instrument(skip(self))]
-    async fn authenticate(&mut self) -> Result<Option<Command>> {
+    async fn authenticate(&mut self) -> Result<()> {
         loop {
             let mechanism = self.common.next_mechanism()?;
             trace!("Trying {mechanism} mechanism");
@@ -129,10 +92,6 @@ impl Client {
                 AuthMechanism::External => {
                     Command::Auth(Some(mechanism), Some(sasl_auth_id()?.into_bytes()))
                 }
-                AuthMechanism::Cookie => Command::Auth(
-                    Some(AuthMechanism::Cookie),
-                    Some(sasl_auth_id()?.into_bytes()),
-                ),
             };
             self.common.write_command(auth_cmd).await?;
 
@@ -141,16 +100,7 @@ impl Client {
                     trace!("Received OK from server");
                     self.set_guid(guid)?;
 
-                    return Ok(None);
-                }
-                Command::Data(data) if mechanism == AuthMechanism::Cookie => {
-                    let data = data.ok_or_else(|| {
-                        Error::Handshake("Received DATA with no data from server".into())
-                    })?;
-                    trace!("Received cookie challenge from server");
-                    let response = self.handle_cookie_challenge(data).await?;
-
-                    return Ok(Some(response));
+                    return Ok(());
                 }
                 Command::Rejected(_) => debug!("{mechanism} rejected by the server"),
                 Command::Error(e) => debug!("Received error from server: {e}"),
@@ -164,18 +114,9 @@ impl Client {
     }
 
     /// Sends out all commands after authentication.
-    ///
-    /// This includes the challenge response for cookie auth, if any and returns the number of
-    /// responses expected from the server.
     #[instrument(skip(self))]
-    async fn send_secondary_commands(
-        &mut self,
-        challenge_response: Option<Command>,
-    ) -> Result<usize> {
+    async fn send_secondary_commands(&mut self) -> Result<usize> {
         let mut commands = Vec::with_capacity(4);
-        if let Some(response) = challenge_response {
-            commands.push(response);
-        }
 
         let can_pass_fd = self.common.socket_mut().read_mut().can_pass_unix_fd();
         if can_pass_fd {
@@ -222,11 +163,6 @@ impl Client {
                 }
                 Command::AgreeUnixFD => self.common.set_cap_unix_fd(true),
                 Command::Error(e) => warn!("UNIX file descriptor passing rejected: {e}"),
-                // This also covers "REJECTED", which would mean that the server has rejected the
-                // authentication challenge response (likely cookie) since it already agreed to the
-                // mechanism. Theoretically we should be just trying the next auth mechanism but
-                // this most likely means something is very wrong and we're already too deep into
-                // the handshake to recover.
                 cmd => {
                     return Err(Error::Handshake(format!(
                         "Unexpected command from server: {cmd}"
@@ -248,8 +184,8 @@ impl Handshake for Client {
         #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
         self.send_zero_byte().await?;
 
-        let challenge_response = self.authenticate().await?;
-        let expected_n_responses = self.send_secondary_commands(challenge_response).await?;
+        self.authenticate().await?;
+        let expected_n_responses = self.send_secondary_commands().await?;
 
         if expected_n_responses > 0 {
             self.receive_secondary_responses(expected_n_responses)

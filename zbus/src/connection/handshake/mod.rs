@@ -2,7 +2,6 @@ mod auth_mechanism;
 mod client;
 mod command;
 mod common;
-mod cookies;
 #[cfg(feature = "p2p")]
 mod server;
 
@@ -11,7 +10,6 @@ use async_trait::async_trait;
 use nix::unistd::Uid;
 use std::{collections::VecDeque, fmt::Debug};
 use zbus_names::OwnedUniqueName;
-use zvariant::Str;
 
 #[cfg(windows)]
 use crate::win32;
@@ -23,8 +21,6 @@ pub use auth_mechanism::AuthMechanism;
 use client::Client;
 use command::Command;
 use common::Common;
-use cookies::Cookie;
-pub(crate) use cookies::CookieContext;
 #[cfg(feature = "p2p")]
 use server::Server;
 
@@ -73,8 +69,6 @@ impl Authenticated {
         #[cfg(unix)] client_uid: Option<u32>,
         #[cfg(windows)] client_sid: Option<String>,
         auth_mechanisms: Option<VecDeque<AuthMechanism>>,
-        cookie_id: Option<usize>,
-        cookie_context: CookieContext<'_>,
         unique_name: Option<OwnedUniqueName>,
     ) -> Result<Self> {
         Server::new(
@@ -85,8 +79,6 @@ impl Authenticated {
             #[cfg(windows)]
             client_sid,
             auth_mechanisms,
-            cookie_id,
-            cookie_context,
             unique_name,
         )?
         .perform()
@@ -101,18 +93,6 @@ pub trait Handshake {
     /// On a successful handshake, you get an `Authenticated`. If you need to send a Bus Hello,
     /// this remains to be done.
     async fn perform(mut self) -> Result<Authenticated>;
-}
-
-fn random_ascii(len: usize) -> String {
-    use rand::{distributions::Alphanumeric, thread_rng, Rng};
-    use std::iter;
-
-    let mut rng = thread_rng();
-    iter::repeat(())
-        .map(|()| rng.sample(Alphanumeric))
-        .map(char::from)
-        .take(len)
-        .collect()
 }
 
 fn sasl_auth_id() -> Result<String> {
@@ -178,16 +158,8 @@ mod tests {
 
         let guid = OwnedGuid::from(Guid::generate());
         let client = Client::new(p0.into(), None, Some(guid.clone()), false);
-        let server = Server::new(
-            p1.into(),
-            guid,
-            Some(Uid::effective().into()),
-            None,
-            None,
-            CookieContext::default(),
-            None,
-        )
-        .unwrap();
+        let server =
+            Server::new(p1.into(), guid, Some(Uid::effective().into()), None, None).unwrap();
 
         // proceed to the handshakes
         let (client, server) = crate::utils::block_on(join(
@@ -208,8 +180,6 @@ mod tests {
             Guid::generate().into(),
             Some(Uid::effective().into()),
             None,
-            None,
-            CookieContext::default(),
             None,
         )
         .unwrap();
@@ -239,8 +209,6 @@ mod tests {
             Some(Uid::effective().into()),
             None,
             None,
-            CookieContext::default(),
-            None,
         )
         .unwrap();
 
@@ -267,8 +235,6 @@ mod tests {
             Some(Uid::effective().into()),
             None,
             None,
-            CookieContext::default(),
-            None,
         )
         .unwrap();
 
@@ -286,8 +252,6 @@ mod tests {
             Some(Uid::effective().into()),
             Some(vec![AuthMechanism::Anonymous].into()),
             None,
-            CookieContext::default(),
-            None,
         )
         .unwrap();
 
@@ -304,8 +268,6 @@ mod tests {
             Guid::generate().into(),
             Some(Uid::effective().into()),
             Some(vec![AuthMechanism::Anonymous].into()),
-            None,
-            CookieContext::default(),
             None,
         )
         .unwrap();
