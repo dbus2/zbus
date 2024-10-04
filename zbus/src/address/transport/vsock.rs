@@ -1,6 +1,8 @@
 use std::marker::PhantomData;
 
-use super::{percent::decode_percents_str, Address, Error, KeyValFmt, KeyValFmtAdd, Result};
+use super::{
+    percent::decode_percents_str, Address, Error, KeyValFmt, KeyValFmtAdd, Result, TransportImpl,
+};
 
 /// `vsock:` D-Bus transport.
 #[derive(Debug, PartialEq, Eq)]
@@ -25,10 +27,8 @@ impl<'a> Vsock<'a> {
     }
 }
 
-impl<'a> TryFrom<&'a Address<'a>> for Vsock<'a> {
-    type Error = Error;
-
-    fn try_from(s: &'a Address<'a>) -> Result<Self> {
+impl<'a> TransportImpl<'a> for Vsock<'a> {
+    fn for_address(s: &'a Address<'a>) -> Result<Self> {
         let mut port = None;
         let mut cid = None;
 

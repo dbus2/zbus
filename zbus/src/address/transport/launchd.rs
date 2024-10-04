@@ -1,6 +1,8 @@
 use std::borrow::Cow;
 
-use super::{percent::decode_percents_str, Address, Error, KeyValFmt, KeyValFmtAdd, Result};
+use super::{
+    percent::decode_percents_str, Address, Error, KeyValFmt, KeyValFmtAdd, Result, TransportImpl,
+};
 
 /// `launchd:` D-Bus transport.
 ///
@@ -20,10 +22,8 @@ impl<'a> Launchd<'a> {
     }
 }
 
-impl<'a> TryFrom<&'a Address<'a>> for Launchd<'a> {
-    type Error = Error;
-
-    fn try_from(s: &'a Address<'a>) -> Result<Self> {
+impl<'a> TransportImpl<'a> for Launchd<'a> {
+    fn for_address(s: &'a Address<'a>) -> Result<Self> {
         for (k, v) in s.key_val_iter() {
             match (k, v) {
                 ("env", Some(v)) => {
