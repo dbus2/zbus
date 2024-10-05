@@ -2,8 +2,8 @@
 //!
 //! This module hosts all our blocking API. All the types under this module are thin wrappers
 //! around the corresponding asynchronous types. Most of the method calls are simply calling their
-//! asynchronous counterparts on the underlying types and use [`async_io::block_on`] to turn them
-//! into blocking calls.
+//! asynchronous counterparts on the underlying types and use [`async_io::block_on`] (or
+//! [`tokio::runtime::Runtime::block_on`]) to turn them into blocking calls.
 //!
 //! # Caveats
 //!
