@@ -4,7 +4,10 @@ use tracing::trace;
 
 use zvariant::{OwnedObjectPath, OwnedValue};
 
-use zbus::{blocking, names::UniqueName};
+use zbus::{
+    conn::{self, Connection},
+    names::UniqueName,
+};
 
 #[test]
 #[timeout(15000)]
@@ -15,6 +18,10 @@ fn issue104() {
     // with multiple out arguments, ending up with double parenthesis around the signature of
     // the return type and zbus only removing the outer `()` only and then it not matching the
     // signature we receive on the reply message.
+    zbus::block_on(issue104_async());
+}
+
+async fn issue104_async() {
     use zvariant::{ObjectPath, Value};
 
     struct Secret;
@@ -35,21 +42,18 @@ fn issue104() {
     }
 
     let secret = Secret;
-    let conn = blocking::connection::Builder::session()
+    let conn = conn::Builder::session()
         .unwrap()
         .serve_at("/org/freedesktop/secrets", secret)
         .unwrap()
         .build()
+        .await
         .unwrap();
     let service_name = conn.unique_name().unwrap().clone();
 
     {
-        let conn = blocking::Connection::session().unwrap();
-        #[zbus::proxy(
-            interface = "org.freedesktop.Secret.Service",
-            assume_defaults = true,
-            gen_async = false
-        )]
+        let conn = Connection::session().await.unwrap();
+        #[zbus::proxy(interface = "org.freedesktop.Secret.Service", assume_defaults = true)]
         trait Secret {
             fn open_session(
                 &self,
@@ -64,10 +68,11 @@ fn issue104() {
             .path("/org/freedesktop/secrets")
             .unwrap()
             .build()
+            .await
             .unwrap();
 
         trace!("Calling open_session");
-        proxy.open_session("plain", &Value::from("")).unwrap();
+        proxy.open_session("plain", &Value::from("")).await.unwrap();
         trace!("Called open_session");
     };
 }
