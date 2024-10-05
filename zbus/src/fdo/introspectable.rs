@@ -36,4 +36,5 @@ impl Introspectable {
 }
 
 assert_impl_all!(IntrospectableProxy<'_>: Send, Sync, Unpin);
+#[cfg(feature = "blocking-api")]
 assert_impl_all!(IntrospectableProxyBlocking<'_>: Send, Sync, Unpin);

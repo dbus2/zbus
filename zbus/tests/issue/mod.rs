@@ -1,6 +1,7 @@
 mod issue_1015;
 mod issue_104;
 mod issue_121;
+#[cfg(feature = "blocking-api")]
 mod issue_122;
 mod issue_173;
 mod issue_260;

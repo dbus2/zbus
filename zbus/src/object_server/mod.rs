@@ -447,6 +447,7 @@ impl ObjectServer {
     }
 }
 
+#[cfg(feature = "blocking-api")]
 impl From<crate::blocking::ObjectServer> for ObjectServer {
     fn from(server: crate::blocking::ObjectServer) -> Self {
         server.into_inner()

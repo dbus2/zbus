@@ -1304,6 +1304,7 @@ impl Connection {
     }
 }
 
+#[cfg(feature = "blocking-api")]
 impl From<crate::blocking::Connection> for Connection {
     fn from(conn: crate::blocking::Connection) -> Self {
         conn.into_inner()

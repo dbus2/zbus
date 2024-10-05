@@ -125,4 +125,5 @@ impl Properties {
 }
 
 assert_impl_all!(PropertiesProxy<'_>: Send, Sync, Unpin);
+#[cfg(feature = "blocking-api")]
 assert_impl_all!(PropertiesProxyBlocking<'_>: Send, Sync, Unpin);

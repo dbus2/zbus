@@ -5,6 +5,8 @@
 //! asynchronous counterparts on the underlying types and use [`async_io::block_on`] (or
 //! [`tokio::runtime::Runtime::block_on`]) to turn them into blocking calls.
 //!
+//! This module is only available when the `blocking-api` feature is enabled (default).
+//!
 //! # Caveats
 //!
 //! Since methods provided by these types run their own little runtime (`block_on`), you must not

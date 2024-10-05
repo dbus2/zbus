@@ -36,4 +36,5 @@ pub trait Monitoring {
 }
 
 assert_impl_all!(MonitoringProxy<'_>: Send, Sync, Unpin);
+#[cfg(feature = "blocking-api")]
 assert_impl_all!(MonitoringProxyBlocking<'_>: Send, Sync, Unpin);

@@ -44,4 +44,5 @@ impl Peer {
 }
 
 assert_impl_all!(PeerProxy<'_>: Send, Sync, Unpin);
+#[cfg(feature = "blocking-api")]
 assert_impl_all!(PeerProxyBlocking<'_>: Send, Sync, Unpin);

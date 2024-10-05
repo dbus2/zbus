@@ -16,6 +16,11 @@ license = "MIT"
 categories = ["data-structures", "encoding", "parsing"]
 readme = "README.md"
 
+[features]
+default = []
+# Enable blocking API.
+blocking-api = ["zbus/blocking-api"]
+
 [lib]
 proc-macro = true
 
