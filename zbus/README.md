@@ -98,7 +98,8 @@ async fn main() -> Result<()> {
 ## Blocking API
 
 While zbus is primarily asynchronous (since 2.0), [blocking wrappers][bw] are provided for
-convenience.
+convenience. Since zbus 5.0, blocking API can be disabled by disabling the `blocking-api` cargo
+feature.
 
 ## Compatibility with async runtimes
 

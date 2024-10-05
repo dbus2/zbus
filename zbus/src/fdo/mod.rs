@@ -135,14 +135,17 @@ mod tests {
     #[test]
     #[timeout(15000)]
     fn no_object_manager_signals_before_hello() {
-        use zbus::blocking;
+        crate::block_on(no_object_manager_signals_before_hello_async());
+    }
+
+    async fn no_object_manager_signals_before_hello_async() {
         // We were emitting `InterfacesAdded` signals before `Hello` was called, which is wrong and
         // results in us getting disconnected by the bus. This test case ensures we don't do that
         // and also that the signals are eventually emitted.
 
         // Let's first create an interator to get the signals (it has to be another connection).
-        let conn = blocking::Connection::session().unwrap();
-        let mut iterator = blocking::MessageIterator::for_match_rule(
+        let conn = zbus::Connection::session().await.unwrap();
+        let mut stream = zbus::MessageStream::for_match_rule(
             zbus::MatchRule::builder()
                 .msg_type(zbus::message::Type::Signal)
                 .interface("org.freedesktop.DBus.ObjectManager")
@@ -153,6 +156,7 @@ mod tests {
             &conn,
             None,
         )
+        .await
         .unwrap();
 
         // Now create the service side.
@@ -164,7 +168,7 @@ mod tests {
                 "test".into()
             }
         }
-        let _conn = blocking::connection::Builder::session()
+        let _conn = zbus::conn::Builder::session()
             .unwrap()
             .name("org.zbus.NoObjectManagerSignalsBeforeHello")
             .unwrap()
@@ -176,10 +180,11 @@ mod tests {
             )
             .unwrap()
             .build()
+            .await
             .unwrap();
 
         // Let's see if the `InterfacesAdded` signal was emitted.
-        let msg = iterator.next().unwrap().unwrap();
+        let msg = stream.next().await.unwrap().unwrap();
         let signal = super::InterfacesAdded::from_message(msg).unwrap();
         assert_eq!(
             signal.args().unwrap().interfaces_and_properties,

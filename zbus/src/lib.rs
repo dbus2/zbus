@@ -85,6 +85,7 @@ pub use utils::*;
 #[macro_use]
 pub mod fdo;
 
+#[cfg(feature = "blocking-api")]
 pub mod blocking;
 
 pub use zbus_macros::{interface, proxy, DBusError};

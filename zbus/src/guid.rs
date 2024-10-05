@@ -1,10 +1,8 @@
 use std::{
     borrow::{Borrow, Cow},
     fmt::{self, Debug, Display, Formatter},
-    iter::repeat_with,
     ops::Deref,
     str::FromStr,
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 use serde::{de, Deserialize, Serialize};
@@ -27,9 +25,14 @@ assert_impl_all!(Guid<'_>: Send, Sync, Unpin);
 impl Guid<'_> {
     /// Generate a D-Bus GUID that can be used with e.g.
     /// [`connection::Builder::server`](crate::connection::Builder::server).
+    ///
+    /// This method is only available when the `p2p` feature is enabled (disabled by default).
+    #[cfg(feature = "p2p")]
     pub fn generate() -> Guid<'static> {
-        let r: Vec<u32> = repeat_with(rand::random::<u32>).take(3).collect();
-        let r3 = match SystemTime::now().duration_since(UNIX_EPOCH) {
+        let r: Vec<u32> = std::iter::repeat_with(rand::random::<u32>)
+            .take(3)
+            .collect();
+        let r3 = match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
             Ok(n) => n.as_secs() as u32,
             Err(_) => rand::random::<u32>(),
         };
@@ -245,6 +248,7 @@ impl Display for OwnedGuid {
 }
 
 #[cfg(test)]
+#[cfg(feature = "p2p")]
 mod tests {
     use crate::Guid;
     use test_log::test;

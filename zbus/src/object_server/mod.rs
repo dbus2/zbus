@@ -88,10 +88,10 @@ pub(crate) use node::Node;
 /// # })?;
 /// # Ok::<_, Box<dyn Error + Send + Sync>>(())
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ObjectServer {
     conn: WeakConnection,
-    root: RwLock<Node>,
+    root: Arc<RwLock<Node>>,
 }
 
 assert_impl_all!(ObjectServer: Send, Sync, Unpin);
@@ -101,7 +101,9 @@ impl ObjectServer {
     pub(crate) fn new(conn: &Connection) -> Self {
         Self {
             conn: conn.into(),
-            root: RwLock::new(Node::new("/".try_into().expect("zvariant bug"))),
+            root: Arc::new(RwLock::new(Node::new(
+                "/".try_into().expect("zvariant bug"),
+            ))),
         }
     }
 
@@ -445,6 +447,7 @@ impl ObjectServer {
     }
 }
 
+#[cfg(feature = "blocking-api")]
 impl From<crate::blocking::ObjectServer> for ObjectServer {
     fn from(server: crate::blocking::ObjectServer) -> Self {
         server.into_inner()

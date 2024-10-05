@@ -362,4 +362,5 @@ pub trait DBus {
 }
 
 assert_impl_all!(DBusProxy<'_>: Send, Sync, Unpin);
+#[cfg(feature = "blocking-api")]
 assert_impl_all!(DBusProxyBlocking<'_>: Send, Sync, Unpin);

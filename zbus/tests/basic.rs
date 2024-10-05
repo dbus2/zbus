@@ -10,7 +10,6 @@ use zbus_names::UniqueName;
 use zvariant::{OwnedValue, Type};
 
 use zbus::{
-    blocking,
     fdo::{RequestNameFlags, RequestNameReply},
     message::Message,
     Connection, Result,
@@ -35,8 +34,9 @@ fn msg() {
 #[test]
 #[timeout(15000)]
 #[instrument]
+#[cfg(feature = "blocking-api")]
 fn basic_connection() {
-    let connection = blocking::Connection::session()
+    let connection = zbus::blocking::Connection::session()
         .map_err(|e| {
             debug!("error: {}", e);
 
@@ -91,10 +91,14 @@ async fn test_basic_connection() -> Result<()> {
 #[test]
 #[timeout(15000)]
 fn fdpass_systemd() {
+    zbus::block_on(fdpass_systemd_async());
+}
+
+async fn fdpass_systemd_async() {
     use std::{fs::File, os::unix::io::AsRawFd};
     use zvariant::OwnedFd;
 
-    let connection = blocking::Connection::system().unwrap();
+    let connection = Connection::system().await.unwrap();
 
     let reply = connection
         .call_method(
@@ -104,6 +108,7 @@ fn fdpass_systemd() {
             "DumpByFileDescriptor",
             &(),
         )
+        .await
         .unwrap();
 
     let fd: OwnedFd = reply.body().deserialize().unwrap();
@@ -115,8 +120,9 @@ fn fdpass_systemd() {
 #[test]
 #[instrument]
 #[timeout(15000)]
+#[cfg(feature = "blocking-api")]
 fn freedesktop_api() {
-    let connection = blocking::Connection::session()
+    let connection = zbus::blocking::Connection::session()
         .map_err(|e| {
             debug!("error: {}", e);
 

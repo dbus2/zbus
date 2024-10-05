@@ -31,4 +31,5 @@ pub trait Stats {
 }
 
 assert_impl_all!(StatsProxy<'_>: Send, Sync, Unpin);
+#[cfg(feature = "blocking-api")]
 assert_impl_all!(StatsProxyBlocking<'_>: Send, Sync, Unpin);

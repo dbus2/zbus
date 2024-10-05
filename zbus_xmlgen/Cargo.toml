@@ -25,7 +25,7 @@ name = "zbus-xmlgen"
 path = "src/main.rs"
 
 [dependencies]
-zbus = { path = "../zbus", version = "4.0.0" }
+zbus = { path = "../zbus", version = "4.0.0", features = ["blocking-api"] }
 zbus_xml = { path = "../zbus_xml", version = "4.0.0" }
 zvariant = { path = "../zvariant", version = "4" }
 snakecase = "0.1.0"

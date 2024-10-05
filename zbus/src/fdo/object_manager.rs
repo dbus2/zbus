@@ -77,4 +77,5 @@ impl ObjectManager {
 }
 
 assert_impl_all!(ObjectManagerProxy<'_>: Send, Sync, Unpin);
+#[cfg(feature = "blocking-api")]
 assert_impl_all!(ObjectManagerProxyBlocking<'_>: Send, Sync, Unpin);

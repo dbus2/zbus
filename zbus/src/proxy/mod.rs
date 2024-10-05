@@ -1334,6 +1334,7 @@ impl AsyncDrop for SignalStream<'_> {
     }
 }
 
+#[cfg(feature = "blocking-api")]
 impl<'a> From<crate::blocking::Proxy<'a>> for Proxy<'a> {
     fn from(proxy: crate::blocking::Proxy<'a>) -> Self {
         proxy.into_inner()

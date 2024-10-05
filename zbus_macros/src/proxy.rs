@@ -74,7 +74,10 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, input: ItemTrait) -> Result<Tok
         )),
     }?;
     let gen_async = attrs.gen_async.unwrap_or(true);
+    #[cfg(feature = "blocking-api")]
     let gen_blocking = attrs.gen_blocking.unwrap_or(true);
+    #[cfg(not(feature = "blocking-api"))]
+    let gen_blocking = false;
 
     // Some sanity checks
     assert!(

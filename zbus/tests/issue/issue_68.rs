@@ -1,11 +1,8 @@
+use futures_util::StreamExt;
 use ntest::timeout;
 use test_log::test;
 
-use zbus::{
-    blocking::{self, MessageIterator},
-    message::Message,
-    names::UniqueName,
-};
+use zbus::{message::Message, names::UniqueName, Connection, MessageStream};
 
 #[test]
 #[timeout(15000)]
@@ -15,11 +12,15 @@ fn issue_68() {
     // While this is not an exact reproduction of the issue 68, the underlying problem it
     // produces is exactly the same: `Connection::call_method` dropping all incoming messages
     // while waiting for the reply to the method call.
-    let conn = blocking::Connection::session().unwrap();
-    let stream = MessageIterator::from(&conn);
+    zbus::block_on(issue_68_async());
+}
+
+async fn issue_68_async() {
+    let conn = Connection::session().await.unwrap();
+    let mut stream = MessageStream::from(&conn);
 
     // Send a message as client before service starts to process messages
-    let client_conn = blocking::Connection::session().unwrap();
+    let client_conn = Connection::session().await.unwrap();
     let destination = conn.unique_name().map(UniqueName::<'_>::from).unwrap();
     let msg = Message::method_call("/org/freedesktop/Issue68", "Ping")
         .unwrap()
@@ -30,14 +31,16 @@ fn issue_68() {
         .build(&())
         .unwrap();
     let serial = msg.primary_header().serial_num();
-    client_conn.send(&msg).unwrap();
+    client_conn.send(&msg).await.unwrap();
 
-    zbus::blocking::fdo::DBusProxy::new(&conn)
+    zbus::fdo::DBusProxy::new(&conn)
+        .await
         .unwrap()
         .get_id()
+        .await
         .unwrap();
 
-    for m in stream {
+    while let Some(m) = stream.next().await {
         let msg = m.unwrap();
 
         if msg.primary_header().serial_num() == serial {
