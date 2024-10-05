@@ -10,7 +10,7 @@ use zbus_names::UniqueName;
 use zvariant::{OwnedValue, Type};
 
 use zbus::{
-    blocking,
+    blocking, conn,
     fdo::{RequestNameFlags, RequestNameReply},
     message::Message,
     Connection, Result,
@@ -110,6 +110,15 @@ fn fdpass_systemd() {
     assert!(fd.as_raw_fd() >= 0);
     let f = File::from(std::os::fd::OwnedFd::from(fd));
     f.metadata().unwrap();
+}
+
+#[cfg(target_os = "linux")]
+#[cfg(feature = "ibus")]
+#[test]
+fn test_ibus() {
+    let ibus = block_on(conn::Builder::ibus().unwrap().build()).unwrap();
+
+    assert!(!ibus.server_guid().as_str().is_empty());
 }
 
 #[test]
