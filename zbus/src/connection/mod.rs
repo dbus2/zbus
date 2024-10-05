@@ -8,7 +8,6 @@ use std::{
     collections::HashMap,
     io::{self, ErrorKind},
     num::NonZeroU32,
-    ops::Deref,
     pin::Pin,
     sync::{Arc, OnceLock, Weak},
     task::{Context, Poll},
@@ -22,7 +21,6 @@ use futures_util::StreamExt;
 
 use crate::{
     async_lock::{Mutex, Semaphore, SemaphorePermit},
-    blocking,
     fdo::{self, ConnectionCredentials, RequestNameFlags, RequestNameReply},
     is_flatpak,
     message::{Flags, Message, Type},
@@ -76,7 +74,7 @@ pub(crate) struct ConnectionInner {
 
     subscriptions: Mutex<Subscriptions>,
 
-    object_server: OnceLock<blocking::ObjectServer>,
+    object_server: OnceLock<ObjectServer>,
     object_server_dispatch_task: OnceLock<Task<()>>,
 
     drop_event: Event,
@@ -913,41 +911,22 @@ impl Connection {
     /// **Note**: Once the `ObjectServer` is created, it will be replying to all method calls
     /// received on `self`. If you want to manually reply to method calls, do not use this
     /// method (or any of the `ObjectServer` related API).
-    pub fn object_server(&self) -> impl Deref<Target = ObjectServer> + '_ {
-        // FIXME: Maybe it makes sense after all to implement Deref<Target= ObjectServer> for
-        // crate::ObjectServer instead of this wrapper?
-        struct Wrapper<'a>(&'a blocking::ObjectServer);
-        impl<'a> Deref for Wrapper<'a> {
-            type Target = ObjectServer;
-
-            fn deref(&self) -> &Self::Target {
-                self.0.inner()
-            }
-        }
-
-        Wrapper(self.sync_object_server(true, None))
+    pub fn object_server(&self) -> &ObjectServer {
+        self.ensure_object_server(true)
     }
 
-    pub(crate) fn sync_object_server(
-        &self,
-        start: bool,
-        started_event: Option<Event>,
-    ) -> &blocking::ObjectServer {
+    pub(crate) fn ensure_object_server(&self, start: bool) -> &ObjectServer {
         self.inner
             .object_server
-            .get_or_init(move || self.setup_object_server(start, started_event))
+            .get_or_init(move || self.setup_object_server(start, None))
     }
 
-    fn setup_object_server(
-        &self,
-        start: bool,
-        started_event: Option<Event>,
-    ) -> blocking::ObjectServer {
+    fn setup_object_server(&self, start: bool, started_event: Option<Event>) -> ObjectServer {
         if start {
             self.start_object_server(started_event);
         }
 
-        blocking::ObjectServer::new(self)
+        ObjectServer::new(self)
     }
 
     #[instrument(skip(self))]

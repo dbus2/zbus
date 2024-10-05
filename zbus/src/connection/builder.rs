@@ -423,11 +423,10 @@ impl<'a> Builder<'a> {
         conn.set_max_queued(self.max_queued.unwrap_or(DEFAULT_MAX_QUEUED));
 
         if !self.interfaces.is_empty() {
-            let object_server = conn.sync_object_server(false, None);
+            let object_server = conn.ensure_object_server(false);
             for (path, interfaces) in self.interfaces {
                 for (name, iface) in interfaces {
                     let added = object_server
-                        .inner()
                         .add_arc_interface(path.clone(), name.clone(), iface.clone())
                         .await?;
                     if !added {

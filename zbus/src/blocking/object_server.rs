@@ -138,7 +138,7 @@ impl ObjectServer {
     /// Create a new D-Bus `ObjectServer`.
     pub(crate) fn new(conn: &crate::Connection) -> Self {
         Self {
-            azync: crate::ObjectServer::new(conn),
+            azync: conn.object_server().clone(),
         }
     }
 

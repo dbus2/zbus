@@ -224,7 +224,16 @@ impl Connection {
     ///
     /// The `ObjectServer` is created on-demand.
     pub fn object_server(&self) -> impl Deref<Target = ObjectServer> + '_ {
-        self.inner.sync_object_server(true, None)
+        struct Wrapper(ObjectServer);
+        impl Deref for Wrapper {
+            type Target = ObjectServer;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+
+        Wrapper(ObjectServer::new(&self.inner))
     }
 
     /// Get a reference to the underlying async Connection.
