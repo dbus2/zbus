@@ -96,11 +96,7 @@ impl Client {
                 Ok(())
             }
             Command::Rejected(accepted) => {
-                let list = accepted
-                    .iter()
-                    .map(|m| m.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ");
+                let list = accepted.replace(" ", ", ");
                 Err(Error::Handshake(format!(
                     "{mechanism} rejected by the server. Accepted mechanisms: [{list}]"
                 )))

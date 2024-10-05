@@ -1,4 +1,4 @@
-use std::{fmt, str::FromStr};
+use std::{borrow::Cow, fmt, str::FromStr};
 
 use crate::{conn::AuthMechanism, Error, Guid, OwnedGuid, Result};
 
@@ -15,7 +15,7 @@ pub(super) enum Command {
     Data(Option<Vec<u8>>),
     Error(String),
     NegotiateUnixFD,
-    Rejected(Vec<AuthMechanism>),
+    Rejected(Cow<'static, str>),
     Ok(OwnedGuid),
     AgreeUnixFD,
 }
@@ -42,17 +42,7 @@ impl fmt::Display for Command {
             },
             Command::Error(expl) => write!(f, "ERROR {expl}"),
             Command::NegotiateUnixFD => write!(f, "NEGOTIATE_UNIX_FD"),
-            Command::Rejected(mechs) => {
-                write!(
-                    f,
-                    "REJECTED {}",
-                    mechs
-                        .iter()
-                        .map(|m| m.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                )
-            }
+            Command::Rejected(mechs) => write!(f, "REJECTED {mechs}"),
             Command::Ok(guid) => write!(f, "OK {guid}"),
             Command::AgreeUnixFD => write!(f, "AGREE_UNIX_FD"),
         }
@@ -90,7 +80,7 @@ impl FromStr for Command {
             Some("ERROR") => Command::Error(s.into()),
             Some("NEGOTIATE_UNIX_FD") => Command::NegotiateUnixFD,
             Some("REJECTED") => {
-                let mechs = words.map(|m| m.parse()).collect::<Result<_>>()?;
+                let mechs = words.map(|s| s.to_owned()).collect();
                 Command::Rejected(mechs)
             }
             Some("OK") => {
