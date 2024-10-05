@@ -116,8 +116,6 @@ where
 ///
 /// On non-Unix systems, the returned [`Written`] instance will not contain any file descriptors and
 /// hence is safe to drop.
-///
-/// [`to_writer_fds`]: fn.to_writer_fds.html
 pub unsafe fn to_writer<W, T>(writer: &mut W, ctxt: Context, value: &T) -> Result<Written>
 where
     W: Write + Seek,
