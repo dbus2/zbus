@@ -26,12 +26,18 @@ pub enum AuthMechanism {
     Anonymous,
 }
 
-impl fmt::Display for AuthMechanism {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mech = match self {
+impl AuthMechanism {
+    pub fn as_str(&self) -> &'static str {
+        match self {
             AuthMechanism::External => "EXTERNAL",
             AuthMechanism::Anonymous => "ANONYMOUS",
-        };
+        }
+    }
+}
+
+impl fmt::Display for AuthMechanism {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mech = self.as_str();
         write!(f, "{mech}")
     }
 }
