@@ -11,6 +11,10 @@ in panics and hangs. This is not a limitation of zbus but rather a
 [well-known general problem][wkgp] in the Rust async/await world. The [`blocking` crate],
 [`async-std`][assb] and [`tokio`][tsb] crates provide a easy way around this problem.
 
+**Note:** Since zbus 5.0, blocking API can be disabled through the `blocking-api` cargo feature. If
+you use this API, make sure you are not unintentionally disabling it by disabling the default
+features in your `Cargo.toml`.
+
 ## Establishing a connection
 
 The only difference to that of [asynchronous `Connection` API] is that you use
