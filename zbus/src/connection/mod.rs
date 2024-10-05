@@ -1332,7 +1332,7 @@ impl From<crate::blocking::Connection> for Connection {
 }
 
 // Internal API that allows keeping a weak connection ref around.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct WeakConnection {
     inner: Weak<ConnectionInner>,
 }

@@ -127,7 +127,7 @@ where
 /// quit_listener.wait();
 /// # Ok::<_, Box<dyn Error + Send + Sync>>(())
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ObjectServer {
     azync: crate::ObjectServer,
 }
