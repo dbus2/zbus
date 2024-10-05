@@ -25,7 +25,7 @@ camino = ["zvariant/camino"]
 # Enables API that is only needed for bus implementations (enables `p2p`).
 bus-impl = ["p2p"]
 # Enables API that is only needed for peer-to-peer (p2p) connections.
-p2p = []
+p2p = ["dep:rand"]
 async-io = [
   "dep:async-io",
   "async-executor",
@@ -56,7 +56,7 @@ futures-util = { version = "0.3.30", default-features = false, features = [
 async-broadcast = "0.7.0"
 hex = "0.4.3"
 ordered-stream = "0.2"
-rand = "0.8.5"
+rand = { version = "0.8.5", optional = true }
 event-listener = "5.3.0"
 static_assertions = "1.1.0"
 async-trait = "0.1.80"
