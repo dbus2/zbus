@@ -112,13 +112,20 @@ fn fdpass_systemd() {
     f.metadata().unwrap();
 }
 
-#[cfg(target_os = "linux")]
-#[cfg(feature = "ibus")]
+#[cfg(all(target_os = "linux", feature = "ibus"))]
 #[test]
 fn test_ibus() {
-    let ibus = block_on(conn::Builder::ibus().unwrap().build()).unwrap();
+    let ibus_blocking = blocking::connection::Builder::ibus()
+        .unwrap()
+        .build()
+        .unwrap();
+    let ibus_non_blocking = block_on(block_on(conn::Builder::ibus()).unwrap().build()).unwrap();
 
-    assert!(!ibus.server_guid().as_str().is_empty());
+    assert!(!ibus_blocking.server_guid().is_empty());
+    assert_eq!(
+        ibus_blocking.server_guid().is_empty(),
+        ibus_non_blocking.server_guid().is_empty()
+    );
 }
 
 #[test]
