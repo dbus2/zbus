@@ -6,6 +6,8 @@ use static_assertions::assert_impl_all;
 use std::net::TcpStream;
 #[cfg(all(unix, not(feature = "tokio")))]
 use std::os::unix::net::UnixStream;
+#[cfg(feature = "ibus")]
+use std::process::Stdio;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     vec,
@@ -22,6 +24,9 @@ use uds_windows::UnixStream;
 use vsock::VsockStream;
 
 use zvariant::{ObjectPath, Str};
+
+#[cfg(feature = "ibus")]
+use crate::process::Command;
 
 use crate::{
     address::{Address, ToAddresses},
@@ -92,19 +97,30 @@ impl<'a> Builder<'a> {
     ///
     /// [IBus]: https://en.wikipedia.org/wiki/Intelligent_Input_Bus
     #[cfg(feature = "ibus")]
-    pub fn ibus() -> Result<Self> {
-        let ibus_address = {
-            let output = Command::new("ibus")
-                .arg("address")
-                .output()
-                .expect("Fail to run `ibus address`");
-            String::from_utf8(output.stdout)
-                .expect("Invalid utf8 when getting stdout")
-                .trim()
-                .to_owned()
-        };
+    pub async fn ibus() -> Result<Self> {
+        let child_process = Command::new("ibus")
+            .arg("address")
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("Fail to call `ibus address`");
 
-        Builder::address(ibus_address.as_str())
+        #[cfg(not(feature = "tokio"))]
+        let output = child_process
+            .output()
+            .await
+            .expect("Fail to run `ibus address`");
+
+        #[cfg(feature = "tokio")]
+        let output = child_process
+            .wait_with_output()
+            .await
+            .expect("Fail to run `ibus address`");
+
+        let ibus_address = std::str::from_utf8(&output.stdout)
+            .expect("Invalid utf8 when getting stdout")
+            .trim();
+
+        Builder::address(ibus_address)
     }
 
     /// Create a builder for a connection that will use the given [D-Bus bus address].
