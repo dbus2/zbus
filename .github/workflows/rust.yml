@@ -74,6 +74,8 @@ jobs:
           sed -e s/UID/$UID/ -e s/PATH/path/ CI/dbus-session.conf > /tmp/dbus-session.conf
           sed -e s/UID/$UID/ -e s/PATH/abstract/ CI/dbus-session.conf > /tmp/dbus-session-abstract.conf
           sudo apt-get install -y dbus
+          sudo apt-get install -y ibus
+          ibus start &
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
@@ -83,7 +85,7 @@ jobs:
           dbus-run-session --config-file /tmp/dbus-session-abstract.conf -- cargo --locked test --profile "$PROFILE" --verbose -- basic_connection
           # All features except tokio.
           dbus-run-session --config-file /tmp/dbus-session.conf -- \
-            cargo --locked test --profile "$PROFILE" --verbose --features uuid,url,time,chrono,option-as-array,vsock,bus-impl \
+            cargo --locked test --profile "$PROFILE" --verbose --features uuid,url,time,chrono,option-as-array,vsock,bus-impl,ibus \
               -- --skip fdpass_systemd
           # Test tokio support.
           dbus-run-session --config-file /tmp/dbus-session.conf -- \
