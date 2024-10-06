@@ -37,6 +37,14 @@ impl<'a> Builder<'a> {
         crate::connection::Builder::system().map(Self)
     }
 
+    /// Create a builder for the [IBus] daemon.
+    ///
+    /// [IBus]: https://en.wikipedia.org/wiki/Intelligent_Input_Bus
+    #[cfg(feature = "ibus")]
+    pub fn ibus() -> Result<Self> {
+        block_on(crate::connection::Builder::ibus()).map(Self)
+    }
+
     /// Create a builder for a connection that will use the given [D-Bus bus address].
     ///
     /// [D-Bus bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
