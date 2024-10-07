@@ -214,12 +214,8 @@ impl<'s> TryFrom<Str<'s>> for BusName<'s> {
     type Error = Error;
 
     fn try_from(value: Str<'s>) -> Result<Self> {
-        if value.starts_with(':') {
+        if value.starts_with(':') || value == "org.freedesktop.DBus" {
             UniqueName::try_from(value).map(BusName::Unique)
-        } else if value == "org.freedesktop.DBus" {
-            Ok(BusName::Unique(UniqueName::from_static_str_unchecked(
-                "org.freedesktop.DBus",
-            )))
         } else {
             WellKnownName::try_from(value).map(BusName::WellKnown)
         }
