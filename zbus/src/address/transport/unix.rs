@@ -2,7 +2,7 @@ use std::{borrow::Cow, ffi::OsStr};
 
 use super::{
     percent::{decode_percents, decode_percents_os_str, decode_percents_str, EncData, EncOsStr},
-    Address, Error, KeyValFmt, KeyValFmtAdd, Result, TransportImpl,
+    Address, Error, KeyValFmt, Result, TransportImpl,
 };
 
 /// A sub-type of `unix:` transport.
@@ -25,8 +25,8 @@ pub enum UnixAddrKind<'a> {
     Runtime,
 }
 
-impl KeyValFmtAdd for UnixAddrKind<'_> {
-    fn key_val_fmt_add<'a: 'b, 'b>(&'a self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
+impl UnixAddrKind<'_> {
+    fn fmt_key_val<'s: 'b, 'b>(&'s self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
         match self {
             UnixAddrKind::Path(p) => kv.add("path", Some(EncOsStr(p))),
             UnixAddrKind::Dir(p) => kv.add("dir", Some(EncOsStr(p))),
@@ -107,10 +107,8 @@ impl<'a> TransportImpl<'a> for Unix<'a> {
 
         Ok(Unix { kind })
     }
-}
 
-impl KeyValFmtAdd for Unix<'_> {
-    fn key_val_fmt_add<'a: 'b, 'b>(&'a self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
-        self.kind().key_val_fmt_add(kv)
+    fn fmt_key_val<'s: 'b, 'b>(&'s self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
+        self.kind().fmt_key_val(kv)
     }
 }

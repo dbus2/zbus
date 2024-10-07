@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use super::{percent, Address, Error, KeyValFmt, KeyValFmtAdd, Result};
+use super::{percent, Address, Error, KeyValFmt, Result};
 
 mod autolaunch;
 pub use autolaunch::Autolaunch;
@@ -79,23 +79,9 @@ pub(crate) trait TransportImpl<'a> {
     fn for_address(s: &'a Address<'a>) -> Result<Self>
     where
         Self: Sized;
-}
 
-impl KeyValFmtAdd for Transport<'_> {
-    fn key_val_fmt_add<'a: 'b, 'b>(&'a self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
-        match self {
-            Self::Unix(t) => t.key_val_fmt_add(kv),
-            #[cfg(target_os = "macos")]
-            Self::Launchd(t) => t.key_val_fmt_add(kv),
-            #[cfg(target_os = "linux")]
-            Self::Systemd(t) => t.key_val_fmt_add(kv),
-            Self::Tcp(t) => t.key_val_fmt_add(kv),
-            Self::NonceTcp(t) => t.key_val_fmt_add(kv),
-            Self::Unixexec(t) => t.key_val_fmt_add(kv),
-            Self::Autolaunch(t) => t.key_val_fmt_add(kv),
-            Self::Vsock(t) => t.key_val_fmt_add(kv),
-        }
-    }
+    // add() the transport (key,val) pairs to KeyValFmt
+    fn fmt_key_val<'s: 'b, 'b>(&'s self, kv: KeyValFmt<'b>) -> KeyValFmt<'b>;
 }
 
 impl<'a> TransportImpl<'a> for Transport<'a> {
@@ -113,6 +99,21 @@ impl<'a> TransportImpl<'a> for Transport<'a> {
             "autolaunch" => Ok(Self::Autolaunch(Autolaunch::for_address(s)?)),
             "vsock" => Ok(Self::Vsock(Vsock::for_address(s)?)),
             _ => Err(Error::UnknownTransport),
+        }
+    }
+
+    fn fmt_key_val<'s: 'b, 'b>(&'s self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
+        match self {
+            Self::Unix(t) => t.fmt_key_val(kv),
+            #[cfg(target_os = "macos")]
+            Self::Launchd(t) => t.fmt_key_val(kv),
+            #[cfg(target_os = "linux")]
+            Self::Systemd(t) => t.fmt_key_val(kv),
+            Self::Tcp(t) => t.fmt_key_val(kv),
+            Self::NonceTcp(t) => t.fmt_key_val(kv),
+            Self::Unixexec(t) => t.fmt_key_val(kv),
+            Self::Autolaunch(t) => t.fmt_key_val(kv),
+            Self::Vsock(t) => t.fmt_key_val(kv),
         }
     }
 }

@@ -2,7 +2,7 @@ use std::{borrow::Cow, ffi::OsStr, fmt};
 
 use super::{
     percent::{decode_percents_os_str, decode_percents_str, EncOsStr},
-    Address, Error, KeyValFmt, KeyValFmtAdd, Result, TransportImpl,
+    Address, Error, KeyValFmt, Result, TransportImpl,
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -70,10 +70,8 @@ impl<'a> TransportImpl<'a> for Unixexec<'a> {
 
         Ok(Self { path, argv })
     }
-}
 
-impl KeyValFmtAdd for Unixexec<'_> {
-    fn key_val_fmt_add<'a: 'b, 'b>(&'a self, mut kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
+    fn fmt_key_val<'s: 'b, 'b>(&'s self, mut kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
         kv = kv.add("path", Some(EncOsStr(self.path())));
         for (n, arg) in self.argv() {
             kv = kv.add(Argv(*n), Some(arg));

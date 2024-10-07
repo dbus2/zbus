@@ -1,8 +1,6 @@
 use std::marker::PhantomData;
 
-use super::{
-    percent::decode_percents_str, Address, Error, KeyValFmt, KeyValFmtAdd, Result, TransportImpl,
-};
+use super::{percent::decode_percents_str, Address, Error, KeyValFmt, Result, TransportImpl};
 
 /// `vsock:` D-Bus transport.
 #[derive(Debug, PartialEq, Eq)]
@@ -58,10 +56,8 @@ impl<'a> TransportImpl<'a> for Vsock<'a> {
             phantom: PhantomData,
         })
     }
-}
 
-impl KeyValFmtAdd for Vsock<'_> {
-    fn key_val_fmt_add<'a: 'b, 'b>(&'a self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
+    fn fmt_key_val<'s: 'b, 'b>(&'s self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
         kv.add("cid", self.cid()).add("port", self.port())
     }
 }

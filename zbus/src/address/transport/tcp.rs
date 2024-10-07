@@ -1,8 +1,6 @@
 use std::{borrow::Cow, fmt};
 
-use super::{
-    percent::decode_percents_str, Address, Error, KeyValFmt, KeyValFmtAdd, Result, TransportImpl,
-};
+use super::{percent::decode_percents_str, Address, Error, KeyValFmt, Result, TransportImpl};
 
 /// TCP IP address family
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -76,15 +74,6 @@ impl<'a> Tcp<'a> {
     }
 }
 
-impl KeyValFmtAdd for Tcp<'_> {
-    fn key_val_fmt_add<'a: 'b, 'b>(&'a self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
-        kv.add("host", self.host())
-            .add("bind", self.bind())
-            .add("port", self.port())
-            .add("family", self.family())
-    }
-}
-
 impl<'a> TransportImpl<'a> for Tcp<'a> {
     fn for_address(s: &'a Address<'a>) -> Result<Self> {
         let mut res = Tcp::default();
@@ -111,5 +100,12 @@ impl<'a> TransportImpl<'a> for Tcp<'a> {
         }
 
         Ok(res)
+    }
+
+    fn fmt_key_val<'s: 'b, 'b>(&'s self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
+        kv.add("host", self.host())
+            .add("bind", self.bind())
+            .add("port", self.port())
+            .add("family", self.family())
     }
 }
