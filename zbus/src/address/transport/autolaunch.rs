@@ -4,7 +4,7 @@ use std::{borrow::Cow, fmt};
 
 #[cfg(target_os = "windows")]
 use super::percent::decode_percents_str;
-use super::{Address, KeyValFmt, KeyValFmtAdd, Result, TransportImpl};
+use super::{Address, KeyValFmt, Result, TransportImpl};
 
 /// Scope of autolaunch (Windows only)
 #[cfg(target_os = "windows")]
@@ -32,7 +32,7 @@ impl fmt::Display for AutolaunchScope<'_> {
 
 #[cfg(target_os = "windows")]
 impl<'a> TryFrom<Cow<'a, str>> for AutolaunchScope<'a> {
-    type Error = Error;
+    type Error = super::Error;
 
     fn try_from(s: Cow<'a, str>) -> Result<Self> {
         match s.as_ref() {
@@ -78,10 +78,8 @@ impl<'a> TransportImpl<'a> for Autolaunch<'a> {
 
         Ok(res)
     }
-}
 
-impl KeyValFmtAdd for Autolaunch<'_> {
-    fn key_val_fmt_add<'a: 'b, 'b>(&'a self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
+    fn fmt_key_val<'s: 'b, 'b>(&'s self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
         #[cfg(target_os = "windows")]
         let kv = kv.add("scope", self.scope());
         kv

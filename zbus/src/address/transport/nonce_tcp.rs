@@ -3,7 +3,7 @@ use std::{borrow::Cow, ffi::OsStr};
 use super::{
     percent::{decode_percents_os_str, decode_percents_str, EncOsStr},
     tcp::TcpFamily,
-    Address, Error, KeyValFmt, KeyValFmtAdd, Result, TransportImpl,
+    Address, Error, KeyValFmt, Result, TransportImpl,
 };
 
 /// `nonce-tcp:` D-Bus transport.
@@ -55,16 +55,6 @@ impl<'a> NonceTcp<'a> {
     }
 }
 
-impl KeyValFmtAdd for NonceTcp<'_> {
-    fn key_val_fmt_add<'a: 'b, 'b>(&'a self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
-        kv.add("host", self.host())
-            .add("bind", self.bind())
-            .add("port", self.port())
-            .add("family", self.family())
-            .add("noncefile", self.noncefile().map(EncOsStr))
-    }
-}
-
 impl<'a> TransportImpl<'a> for NonceTcp<'a> {
     fn for_address(s: &'a Address<'a>) -> Result<Self> {
         let mut res = NonceTcp::default();
@@ -94,5 +84,13 @@ impl<'a> TransportImpl<'a> for NonceTcp<'a> {
         }
 
         Ok(res)
+    }
+
+    fn fmt_key_val<'s: 'b, 'b>(&'s self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
+        kv.add("host", self.host())
+            .add("bind", self.bind())
+            .add("port", self.port())
+            .add("family", self.family())
+            .add("noncefile", self.noncefile().map(EncOsStr))
     }
 }
