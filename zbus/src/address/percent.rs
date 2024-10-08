@@ -6,39 +6,6 @@ use std::{
 
 use super::{Error, Result};
 
-// A trait for types that can be percent-encoded and written to a [`fmt::Formatter`].
-pub(crate) trait Encodable {
-    fn encode(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result;
-}
-
-impl<T: ToString> Encodable for T {
-    fn encode(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        encode_percents(f, self.to_string().as_bytes())
-    }
-}
-
-pub(crate) struct EncData<T: ?Sized>(pub T);
-
-impl<T: AsRef<[u8]>> Encodable for EncData<T> {
-    fn encode(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        encode_percents(f, self.0.as_ref())
-    }
-}
-
-pub(crate) struct EncOsStr<T: ?Sized>(pub T);
-
-impl Encodable for EncOsStr<&Cow<'_, OsStr>> {
-    fn encode(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        encode_percents(f, self.0.to_string_lossy().as_bytes())
-    }
-}
-
-impl Encodable for EncOsStr<&OsStr> {
-    fn encode(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        encode_percents(f, self.0.to_string_lossy().as_bytes())
-    }
-}
-
 /// Percent-encode the value.
 pub fn encode_percents(f: &mut dyn fmt::Write, value: &[u8]) -> std::fmt::Result {
     for &byte in value {
@@ -84,6 +51,39 @@ pub fn decode_percents(value: &str) -> Result<Cow<'_, [u8]>> {
     }
 
     Ok(Cow::Owned(decoded))
+}
+
+// A trait for types that can be percent-encoded and written to a [`fmt::Formatter`].
+pub(crate) trait Encodable {
+    fn encode(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result;
+}
+
+impl<T: ToString> Encodable for T {
+    fn encode(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        encode_percents(f, self.to_string().as_bytes())
+    }
+}
+
+pub(crate) struct EncData<T: ?Sized>(pub T);
+
+impl<T: AsRef<[u8]>> Encodable for EncData<T> {
+    fn encode(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        encode_percents(f, self.0.as_ref())
+    }
+}
+
+pub(crate) struct EncOsStr<T: ?Sized>(pub T);
+
+impl Encodable for EncOsStr<&Cow<'_, OsStr>> {
+    fn encode(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        encode_percents(f, self.0.to_string_lossy().as_bytes())
+    }
+}
+
+impl Encodable for EncOsStr<&OsStr> {
+    fn encode(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        encode_percents(f, self.0.to_string_lossy().as_bytes())
+    }
 }
 
 fn is_allowed_char(c: char) -> bool {
