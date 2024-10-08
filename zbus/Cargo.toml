@@ -85,7 +85,7 @@ tokio = { version = "1.37.0", optional = true, features = [
   "tracing",
 ] }
 vsock = { version = "0.5.0", optional = true }
-tokio-vsock = { version = "0.4", optional = true }
+tokio-vsock = { version = "0.5", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [
