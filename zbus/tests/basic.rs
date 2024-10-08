@@ -144,7 +144,7 @@ fn freedesktop_api() {
         .unwrap();
 
     let body = reply.body();
-    assert!(body.signature().map(|s| s == "u").unwrap());
+    assert_eq!(body.signature(), u32::SIGNATURE);
     let reply: RequestNameReply = body.deserialize().unwrap();
     assert_eq!(reply, RequestNameReply::PrimaryOwner);
 
@@ -159,7 +159,7 @@ fn freedesktop_api() {
         .unwrap();
 
     let body = reply.body();
-    assert!(body.signature().map(|s| <&str>::SIGNATURE == s).unwrap());
+    assert_eq!(body.signature(), <&str>::SIGNATURE);
     let id: &str = body.deserialize().unwrap();
     debug!("Unique ID of the bus: {}", id);
 
@@ -174,7 +174,7 @@ fn freedesktop_api() {
         .unwrap();
 
     let body = reply.body();
-    assert!(body.signature().map(|s| bool::SIGNATURE == s).unwrap());
+    assert_eq!(body.signature(), bool::SIGNATURE);
     assert!(body.deserialize::<bool>().unwrap());
 
     let reply = connection
@@ -188,7 +188,7 @@ fn freedesktop_api() {
         .unwrap();
 
     let body = reply.body();
-    assert!(body.signature().map(|s| <&str>::SIGNATURE == s).unwrap());
+    assert_eq!(body.signature(), <&str>::SIGNATURE);
     assert_eq!(
         body.deserialize::<UniqueName<'_>>().unwrap(),
         *connection.unique_name().unwrap(),
@@ -205,7 +205,7 @@ fn freedesktop_api() {
         .unwrap();
 
     let body = reply.body();
-    assert!(body.signature().map(|s| s == "a{sv}").unwrap());
+    assert_eq!(body.signature(), "a{sv}");
     let hashmap: HashMap<&str, OwnedValue> = body.deserialize().unwrap();
 
     let pid: u32 = (&hashmap["ProcessID"]).try_into().unwrap();
@@ -243,7 +243,7 @@ async fn test_freedesktop_api() -> Result<()> {
         .unwrap();
 
     let body = reply.body();
-    assert!(body.signature().map(|s| s == "u").unwrap());
+    assert_eq!(body.signature(), u32::SIGNATURE);
     let reply: RequestNameReply = body.deserialize().unwrap();
     assert_eq!(reply, RequestNameReply::PrimaryOwner);
 
@@ -259,7 +259,7 @@ async fn test_freedesktop_api() -> Result<()> {
         .unwrap();
 
     let body = reply.body();
-    assert!(body.signature().map(|s| <&str>::SIGNATURE == s).unwrap());
+    assert_eq!(body.signature(), <&str>::SIGNATURE);
     let id: &str = body.deserialize().unwrap();
     debug!("Unique ID of the bus: {}", id);
 
@@ -275,7 +275,7 @@ async fn test_freedesktop_api() -> Result<()> {
         .unwrap();
 
     let body = reply.body();
-    assert!(body.signature().map(|s| bool::SIGNATURE == s).unwrap());
+    assert_eq!(body.signature(), bool::SIGNATURE);
     assert!(body.deserialize::<bool>().unwrap());
 
     let reply = connection
@@ -290,7 +290,7 @@ async fn test_freedesktop_api() -> Result<()> {
         .unwrap();
 
     let body = reply.body();
-    assert!(body.signature().map(|s| <&str>::SIGNATURE == s).unwrap());
+    assert_eq!(body.signature(), <&str>::SIGNATURE);
     assert_eq!(
         body.deserialize::<UniqueName<'_>>().unwrap(),
         *connection.unique_name().unwrap(),
@@ -308,7 +308,7 @@ async fn test_freedesktop_api() -> Result<()> {
         .unwrap();
 
     let body = reply.body();
-    assert!(body.signature().map(|s| s == "a{sv}").unwrap());
+    assert_eq!(body.signature(), "a{sv}");
     let hashmap: HashMap<&str, OwnedValue> = body.deserialize().unwrap();
 
     let pid: u32 = (&hashmap["ProcessID"]).try_into().unwrap();

@@ -176,7 +176,7 @@ impl Message {
             reply_serial: quick_fields.reply_serial(),
             destination: quick_fields.destination(self),
             sender: quick_fields.sender(self),
-            signature: quick_fields.signature().cloned(),
+            signature: quick_fields.signature().clone(),
             unix_fds: quick_fields.unix_fds(),
         };
 
@@ -271,8 +271,11 @@ impl fmt::Debug for Message {
         if let Some(member) = h.member() {
             msg.field("member", &member);
         }
-        if let Some(s) = self.body().signature() {
-            msg.field("body", &s);
+        match self.body().signature() {
+            zvariant::Signature::Unit => (),
+            s => {
+                msg.field("body", &s);
+            }
         }
         #[cfg(unix)]
         {
@@ -358,7 +361,7 @@ mod tests {
             .unwrap();
         #[cfg(unix)]
         assert_eq!(
-            m.body().signature().unwrap(),
+            m.body().signature(),
             &Signature::static_structure(&[&Signature::Fd, &Signature::Str]),
         );
         #[cfg(not(unix))]

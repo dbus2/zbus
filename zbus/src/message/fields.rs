@@ -23,7 +23,7 @@ pub(crate) struct Fields<'f> {
     pub reply_serial: Option<NonZeroU32>,
     pub destination: Option<BusName<'f>>,
     pub sender: Option<UniqueName<'f>>,
-    pub signature: Option<Signature>,
+    pub signature: Signature,
     pub unix_fds: Option<u32>,
 }
 
@@ -63,8 +63,8 @@ impl<'f> Serialize for Fields<'f> {
         if let Some(sender) = &self.sender {
             seq.serialize_element(&(FieldCode::Sender, Value::from(sender.as_str())))?;
         }
-        if let Some(signature) = &self.signature {
-            seq.serialize_element(&(FieldCode::Signature, SignatureSerializer(signature)))?;
+        if !matches!(&self.signature, Signature::Unit) {
+            seq.serialize_element(&(FieldCode::Signature, SignatureSerializer(&self.signature)))?;
         }
         if let Some(unix_fds) = self.unix_fds {
             seq.serialize_element(&(FieldCode::UnixFDs, Value::from(unix_fds)))?;
@@ -149,7 +149,7 @@ impl<'de> Visitor<'de> for FieldsVisitor {
                     fields.sender = Some(UniqueName::try_from(value).map_err(V::Error::custom)?)
                 }
                 FieldCode::Signature => {
-                    fields.signature = Some(Signature::try_from(value).map_err(V::Error::custom)?)
+                    fields.signature = Signature::try_from(value).map_err(V::Error::custom)?
                 }
                 FieldCode::UnixFDs => {
                     fields.unix_fds = Some(u32::try_from(value).map_err(V::Error::custom)?)
@@ -234,7 +234,7 @@ pub(crate) struct QuickFields {
     reply_serial: Option<NonZeroU32>,
     destination: FieldPos,
     sender: FieldPos,
-    signature: Option<Signature>,
+    signature: Signature,
     unix_fds: Option<u32>,
 }
 
@@ -248,7 +248,7 @@ impl QuickFields {
             reply_serial: header.reply_serial(),
             destination: FieldPos::new(buf, header.destination()),
             sender: FieldPos::new(buf, header.sender()),
-            signature: header.signature().cloned(),
+            signature: header.signature().clone(),
             unix_fds: header.unix_fds(),
         }
     }
@@ -281,8 +281,8 @@ impl QuickFields {
         self.sender.read(msg.data())
     }
 
-    pub fn signature(&self) -> Option<&Signature> {
-        self.signature.as_ref()
+    pub fn signature(&self) -> &Signature {
+        &self.signature
     }
 
     pub fn unix_fds(&self) -> Option<u32> {

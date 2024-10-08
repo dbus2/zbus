@@ -144,7 +144,7 @@ impl MyIface {
         #[zbus(header)] header: Header<'_>,
     ) -> zbus::fdo::Result<()> {
         debug!("`TestSingleStructArg` called.");
-        assert_eq!(header.signature().unwrap(), "(is)");
+        assert_eq!(header.signature(), "(is)");
         assert_eq!(arg.foo, 1);
         assert_eq!(arg.bar, "TestString");
 
