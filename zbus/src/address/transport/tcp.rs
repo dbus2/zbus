@@ -2,37 +2,6 @@ use std::{borrow::Cow, fmt};
 
 use super::{percent::decode_percents_str, Address, Error, KeyValFmt, Result, TransportImpl};
 
-/// TCP IP address family
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-#[non_exhaustive]
-pub enum TcpFamily {
-    /// IPv4
-    IPv4,
-    /// IPv6
-    IPv6,
-}
-
-impl fmt::Display for TcpFamily {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::IPv4 => write!(f, "ipv4"),
-            Self::IPv6 => write!(f, "ipv6"),
-        }
-    }
-}
-
-impl TryFrom<&str> for TcpFamily {
-    type Error = Error;
-
-    fn try_from(s: &str) -> Result<Self> {
-        match s {
-            "ipv4" => Ok(Self::IPv4),
-            "ipv6" => Ok(Self::IPv6),
-            _ => Err(Error::UnknownTcpFamily(s.into())),
-        }
-    }
-}
-
 /// `tcp:` D-Bus transport.
 ///
 /// <https://dbus.freedesktop.org/doc/dbus-specification.html#transports-tcp-sockets>
@@ -107,5 +76,36 @@ impl<'a> TransportImpl<'a> for Tcp<'a> {
             .add("bind", self.bind())
             .add("port", self.port())
             .add("family", self.family())
+    }
+}
+
+/// TCP IP address family
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[non_exhaustive]
+pub enum TcpFamily {
+    /// IPv4
+    IPv4,
+    /// IPv6
+    IPv6,
+}
+
+impl fmt::Display for TcpFamily {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::IPv4 => write!(f, "ipv4"),
+            Self::IPv6 => write!(f, "ipv6"),
+        }
+    }
+}
+
+impl TryFrom<&str> for TcpFamily {
+    type Error = Error;
+
+    fn try_from(s: &str) -> Result<Self> {
+        match s {
+            "ipv4" => Ok(Self::IPv4),
+            "ipv6" => Ok(Self::IPv6),
+            _ => Err(Error::UnknownTcpFamily(s.into())),
+        }
     }
 }

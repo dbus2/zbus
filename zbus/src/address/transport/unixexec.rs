@@ -5,17 +5,6 @@ use super::{
     Address, Error, KeyValFmt, Result, TransportImpl,
 };
 
-#[derive(Debug, PartialEq, Eq)]
-struct Argv(usize);
-
-impl fmt::Display for Argv {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let n = self.0;
-
-        write!(f, "argv{n}")
-    }
-}
-
 /// `unixexec:` D-Bus transport.
 ///
 /// <https://dbus.freedesktop.org/doc/dbus-specification.html#transports-exec>
@@ -78,5 +67,16 @@ impl<'a> TransportImpl<'a> for Unixexec<'a> {
         }
 
         kv
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct Argv(usize);
+
+impl fmt::Display for Argv {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let n = self.0;
+
+        write!(f, "argv{n}")
     }
 }

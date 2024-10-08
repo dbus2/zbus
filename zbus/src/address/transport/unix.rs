@@ -5,38 +5,6 @@ use super::{
     Address, Error, KeyValFmt, Result, TransportImpl,
 };
 
-/// A sub-type of `unix:` transport.
-#[derive(Debug, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum UnixAddrKind<'a> {
-    /// Path of the unix domain socket.
-    Path(Cow<'a, OsStr>),
-    /// Directory in which a socket file with a random file name starting with 'dbus-' should be
-    /// created by a server.
-    Dir(Cow<'a, OsStr>),
-    /// The same as "dir", except that on platforms with abstract sockets, a server may attempt to
-    /// create an abstract socket whose name starts with this directory instead of a path-based
-    /// socket.
-    Tmpdir(Cow<'a, OsStr>),
-    /// Unique string in the abstract namespace, often syntactically resembling a path but
-    /// unconnected to the filesystem namespace
-    Abstract(Cow<'a, [u8]>),
-    /// Listen on $XDG_RUNTIME_DIR/bus.
-    Runtime,
-}
-
-impl UnixAddrKind<'_> {
-    fn fmt_key_val<'s: 'b, 'b>(&'s self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
-        match self {
-            UnixAddrKind::Path(p) => kv.add("path", Some(EncOsStr(p))),
-            UnixAddrKind::Dir(p) => kv.add("dir", Some(EncOsStr(p))),
-            UnixAddrKind::Tmpdir(p) => kv.add("tmpdir", Some(EncOsStr(p))),
-            UnixAddrKind::Abstract(p) => kv.add("abstract", Some(EncData(p))),
-            UnixAddrKind::Runtime => kv.add("runtime", Some("yes")),
-        }
-    }
-}
-
 /// `unix:` D-Bus transport.
 ///
 /// <https://dbus.freedesktop.org/doc/dbus-specification.html#transports-unix-domain-sockets-addresses>
@@ -110,5 +78,37 @@ impl<'a> TransportImpl<'a> for Unix<'a> {
 
     fn fmt_key_val<'s: 'b, 'b>(&'s self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
         self.kind().fmt_key_val(kv)
+    }
+}
+
+/// A sub-type of `unix:` transport.
+#[derive(Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum UnixAddrKind<'a> {
+    /// Path of the unix domain socket.
+    Path(Cow<'a, OsStr>),
+    /// Directory in which a socket file with a random file name starting with 'dbus-' should be
+    /// created by a server.
+    Dir(Cow<'a, OsStr>),
+    /// The same as "dir", except that on platforms with abstract sockets, a server may attempt to
+    /// create an abstract socket whose name starts with this directory instead of a path-based
+    /// socket.
+    Tmpdir(Cow<'a, OsStr>),
+    /// Unique string in the abstract namespace, often syntactically resembling a path but
+    /// unconnected to the filesystem namespace
+    Abstract(Cow<'a, [u8]>),
+    /// Listen on $XDG_RUNTIME_DIR/bus.
+    Runtime,
+}
+
+impl UnixAddrKind<'_> {
+    fn fmt_key_val<'s: 'b, 'b>(&'s self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
+        match self {
+            UnixAddrKind::Path(p) => kv.add("path", Some(EncOsStr(p))),
+            UnixAddrKind::Dir(p) => kv.add("dir", Some(EncOsStr(p))),
+            UnixAddrKind::Tmpdir(p) => kv.add("tmpdir", Some(EncOsStr(p))),
+            UnixAddrKind::Abstract(p) => kv.add("abstract", Some(EncData(p))),
+            UnixAddrKind::Runtime => kv.add("runtime", Some("yes")),
+        }
     }
 }
