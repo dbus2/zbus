@@ -1708,7 +1708,7 @@ mod p2p_tests {
         #[cfg(all(feature = "vsock", not(feature = "tokio")))]
         let listener = vsock::VsockListener::bind_with_cid_port(vsock::VMADDR_CID_LOCAL, u32::MAX)?;
         #[cfg(feature = "tokio-vsock")]
-        let listener = tokio_vsock::VsockListener::bind(1, u32::MAX)?;
+        let listener = tokio_vsock::VsockListener::bind(tokio_vsock::VsockAddr::new(1, u32::MAX))?;
 
         let addr = listener.local_addr()?;
         let addr = format!("vsock:cid={},port={},guid={guid}", addr.cid(), addr.port());
@@ -1777,13 +1777,13 @@ mod p2p_tests {
 
     #[cfg(feature = "tokio-vsock")]
     async fn vsock_p2p_pipe() -> Result<(Connection, Connection)> {
+        use tokio_vsock::VsockAddr;
+
         let guid = Guid::generate();
 
-        let listener = tokio_vsock::VsockListener::bind(1, u32::MAX).unwrap();
+        let listener = tokio_vsock::VsockListener::bind(VsockAddr::new(1, u32::MAX)).unwrap();
         let addr = listener.local_addr().unwrap();
-        let client = tokio_vsock::VsockStream::connect(addr.cid(), addr.port())
-            .await
-            .unwrap();
+        let client = tokio_vsock::VsockStream::connect(addr).await.unwrap();
         let server = listener.incoming().next().await.unwrap().unwrap();
 
         futures_util::try_join!(
