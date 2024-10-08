@@ -133,11 +133,13 @@ type Stream = tokio_vsock::VsockStream;
     feature = "tokio-vsock"
 ))]
 pub(crate) async fn connect(addr: &crate::address::transport::Vsock<'_>) -> Result<Stream> {
+    use crate::address;
+
     let Some(cid) = addr.cid() else {
-        return Err(Error::Address("No cid in address".into()));
+        return Err(address::Error::MissingValue("cid".into()).into());
     };
     let Some(port) = addr.port() else {
-        return Err(Error::Address("No port in address".into()));
+        return Err(address::Error::MissingValue("port".into()).into());
     };
 
     #[cfg(all(feature = "vsock", not(feature = "tokio")))]
@@ -146,8 +148,7 @@ pub(crate) async fn connect(addr: &crate::address::transport::Vsock<'_>) -> Resu
             move || vsock::VsockStream::connect_with_cid_port(cid, port),
             "connect vsock",
         )
-        .await
-        .map_err(|e| Error::Address(format!("Failed to connect: {e}")))?;
+        .await?;
         Ok(Async::new(stream).map_err(|e| Error::InputOutput(e.into()))?)
     }
 

@@ -2,7 +2,7 @@
 
 use super::socket;
 use crate::{
-    address::{transport::Transport, Address},
+    address::{self, transport::Transport, Address},
     process::run,
     Error, Result,
 };
@@ -13,14 +13,15 @@ async fn launchd_bus_address(env_key: &str) -> Result<Address<'static>> {
         .expect("failed to wait on launchctl output");
 
     if !output.status.success() {
-        return Err(Error::Address(format!(
+        return Err(Error::Failure(format!(
             "launchctl terminated with code: {}",
             output.status
         )));
     }
 
-    let addr = String::from_utf8(output.stdout)
-        .map_err(|e| Error::Address(format!("Unable to parse launchctl output as UTF-8: {}", e)))?;
+    let addr = String::from_utf8(output.stdout).map_err(|e| {
+        address::Error::Encoding(format!("Unable to parse launchctl output as UTF-8: {}", e))
+    })?;
 
     Ok(format!("unix:path={}", addr.trim()).try_into()?)
 }
@@ -32,7 +33,10 @@ pub(crate) async fn connect(
 
     match addr.transport()? {
         Transport::Unix(t) => socket::unix::connect(&t).await,
-        _ => Err(Error::Address(format!("Address is unsupported: {}", addr))),
+        _ => {
+            tracing::debug!("Address is unsupported: {}", addr);
+            Err(Error::Unsupported)
+        }
     }
 }
 

@@ -24,7 +24,7 @@ pub(crate) async fn connect_address(
             }
         }
     }
-    Err(Error::Address("No connectable address".into()))
+    Err(Error::Failure("No connectable address".into()))
 }
 
 async fn connect(addr: &Address<'_>) -> ConnectResult {
@@ -50,7 +50,8 @@ async fn connect(addr: &Address<'_>) -> ConnectResult {
             return win32::connect(&l).await;
         }
         _ => {
-            return Err(Error::Address(format!("Unhandled address: {}", addr)));
+            tracing::debug!("Unsupported address: {addr}");
+            return Err(Error::Unsupported);
         }
     };
     Ok((split, guid))

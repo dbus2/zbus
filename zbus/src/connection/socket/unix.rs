@@ -405,7 +405,7 @@ pub(crate) async fn connect(addr: &crate::address::transport::Unix<'_>) -> Resul
         UnixAddrKind::Path(p) => p.clone().into_owned(),
         #[cfg(target_os = "linux")]
         UnixAddrKind::Abstract(name) => SocketAddr::from_abstract_name(name)?,
-        _ => return Err(Error::Address("Address is not connectable".into())),
+        _ => return Err(Error::Failure("Address is not connectable".into())),
     };
 
     let stream = crate::Task::spawn_blocking(

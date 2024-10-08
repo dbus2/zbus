@@ -13,15 +13,14 @@ pub(crate) fn connect<'l>(
 ) -> Pin<Box<dyn Future<Output = ConnectResult> + 'l>> {
     Box::pin(async move {
         if autolaunch.scope().is_some() {
-            return Err(Error::Address(
-                "autolaunch with scope isn't supported yet".into(),
-            ));
+            tracing::debug!("autolaunch with scope isn't supported yet");
+            return Err(Error::Unsupported);
         }
 
         let addr: Address<'_> = autolaunch_bus_address()?.try_into()?;
 
         if let Transport::Autolaunch(_) = addr.transport()? {
-            return Err(Error::Address("Recursive autolaunch: address".into()));
+            return Err(Error::Failure("Recursive autolaunch: address".into()));
         }
 
         super::connect(&addr).await
