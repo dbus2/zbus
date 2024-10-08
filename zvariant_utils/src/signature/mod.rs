@@ -38,7 +38,7 @@ use crate::serialized::Format;
 /// ```
 ///
 /// [`zvariant::Signature`]: https://docs.rs/zvariant/latest/zvariant/struct.Signature.html
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub enum Signature {
     // Basic types
     /// The signature for the unit type (`()`). This is not a valid D-Bus signature, but is used to
@@ -50,6 +50,7 @@ pub enum Signature {
     /// This variant only exists for convenience and must only be used as a top-level signature. If
     /// used inside container signatures, it will cause errors and in somce cases, panics. It's
     /// best to not use it directly.
+    #[default]
     Unit,
     /// The signature for an 8-bit unsigned integer (AKA a byte).
     U8,

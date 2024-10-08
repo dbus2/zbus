@@ -12,12 +12,12 @@ use crate::{Error, Message, Result};
 pub struct Body {
     data: Data<'static, 'static>,
     msg: Message,
-    signature: Option<Signature>,
+    signature: Signature,
 }
 
 impl Body {
     pub(super) fn new(data: Data<'static, 'static>, msg: Message) -> Self {
-        let body_sig = msg.header().signature().cloned();
+        let body_sig = msg.header().signature().clone();
 
         Self {
             data,
@@ -31,15 +31,11 @@ impl Body {
     where
         B: zvariant::DynamicDeserialize<'s>,
     {
-        let body_sig = self
-            .msg
-            .header()
-            .signature()
-            .cloned()
-            .unwrap_or(Signature::Unit);
+        let header = self.msg.header();
+        let body_sig = header.signature();
 
         self.data
-            .deserialize_for_dynamic_signature(&body_sig)
+            .deserialize_for_dynamic_signature(body_sig)
             .map_err(Error::from)
             .map(|b| b.0)
     }
@@ -53,8 +49,8 @@ impl Body {
     }
 
     /// The signature of the body.
-    pub fn signature(&self) -> Option<&Signature> {
-        self.signature.as_ref()
+    pub fn signature(&self) -> &Signature {
+        &self.signature
     }
 
     /// The length of the body in bytes.

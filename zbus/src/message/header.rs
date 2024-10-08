@@ -313,8 +313,8 @@ impl<'m> Header<'m> {
     }
 
     /// The signature of the message body.
-    pub fn signature(&self) -> Option<&Signature> {
-        self.fields.signature.as_ref()
+    pub fn signature(&self) -> &Signature {
+        &self.fields.signature
     }
 
     /// The number of Unix file descriptors that accompany the message.
@@ -332,7 +332,7 @@ mod tests {
     use std::error::Error;
     use test_log::test;
     use zbus_names::{InterfaceName, MemberName};
-    use zvariant::ObjectPath;
+    use zvariant::{ObjectPath, Signature};
 
     #[test]
     fn header() -> Result<(), Box<dyn Error>> {
@@ -354,14 +354,14 @@ mod tests {
         assert_eq!(h.destination(), None);
         assert_eq!(h.reply_serial(), None);
         assert_eq!(h.sender().unwrap(), ":1.84");
-        assert_eq!(h.signature(), None);
+        assert_eq!(h.signature(), &Signature::Unit);
         assert_eq!(h.unix_fds(), None);
 
         let mut f = Fields::new();
         f.error_name = Some("org.zbus.Error".try_into()?);
         f.destination = Some(":1.11".try_into()?);
         f.reply_serial = Some(88.try_into()?);
-        f.signature = Some("say".try_into().unwrap());
+        f.signature = "say".try_into().unwrap();
         f.unix_fds = Some(12);
         let h = Header::new(PrimaryHeader::new(Type::MethodReturn, 77), f);
 
@@ -373,7 +373,7 @@ mod tests {
         assert_eq!(h.destination().unwrap(), ":1.11");
         assert_eq!(h.reply_serial().map(Into::into), Some(88));
         assert_eq!(h.sender(), None);
-        assert_eq!(h.signature(), Some(&"say".try_into().unwrap()));
+        assert_eq!(h.signature(), &Signature::try_from("say").unwrap());
         assert_eq!(h.unix_fds(), Some(12));
 
         Ok(())

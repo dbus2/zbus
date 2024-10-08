@@ -231,9 +231,7 @@ impl<'a> Builder<'a> {
         let ctxt = dbus_context!(self, 0);
         let mut header = self.header;
 
-        if !matches!(signature, Signature::Unit) {
-            header.fields_mut().signature = Some(signature);
-        }
+        header.fields_mut().signature = signature;
 
         let body_len_u32 = body_size.size().try_into().map_err(|_| Error::ExcessData)?;
         header.primary_mut().set_body_len(body_len_u32);
@@ -287,7 +285,7 @@ impl<'m> From<Header<'m>> for Builder<'m> {
     fn from(mut header: Header<'m>) -> Self {
         // Signature and Fds are added by body* methods.
         let fields = header.fields_mut();
-        fields.signature = None;
+        fields.signature = Signature::Unit;
         fields.unix_fds = None;
 
         Self { header }
