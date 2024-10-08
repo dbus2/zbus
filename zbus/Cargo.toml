@@ -40,6 +40,8 @@ vsock = ["dep:vsock", "dep:async-io"]
 tokio-vsock = ["dep:tokio-vsock", "tokio"]
 # Enable blocking API (default).
 blocking-api = ["zbus_macros/blocking-api"]
+# Enable `serde_bytes` feature of `zvariant`.
+serde_bytes = ["zvariant/serde_bytes"]
 
 [dependencies]
 zbus_macros = { path = "../zbus_macros", version = "=4.4.0" }
