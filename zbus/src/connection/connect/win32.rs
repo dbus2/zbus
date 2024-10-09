@@ -9,19 +9,18 @@ use crate::{
 use std::{future::Future, pin::Pin};
 
 pub(crate) fn connect<'l>(
-    l: &'l crate::address::transport::Autolaunch<'_>,
+    autolaunch: &'l crate::address::transport::Autolaunch<'_>,
 ) -> Pin<Box<dyn Future<Output = ConnectResult> + 'l>> {
     Box::pin(async move {
-        if l.scope().is_some() {
-            return Err(Error::Address(
-                "autolaunch with scope isn't supported yet".into(),
-            ));
+        if autolaunch.scope().is_some() {
+            tracing::debug!("autolaunch with scope isn't supported yet");
+            return Err(Error::Unsupported);
         }
 
         let addr: Address<'_> = autolaunch_bus_address()?.try_into()?;
 
         if let Transport::Autolaunch(_) = addr.transport()? {
-            return Err(Error::Address("Recursive autolaunch: address".into()));
+            return Err(Error::Failure("Recursive autolaunch: address".into()));
         }
 
         super::connect(&addr).await

@@ -33,6 +33,7 @@ pub use address_list::{AddressList, AddressListIter};
 
 mod percent;
 pub use percent::*;
+use transport::TransportImpl;
 
 #[cfg(test)]
 mod tests;
@@ -140,7 +141,7 @@ impl<'a> Address<'a> {
 
     /// Transport connection details
     pub fn transport(&self) -> Result<transport::Transport<'_>> {
-        self.try_into()
+        transport::Transport::for_address(self)
     }
 
     pub(super) fn key_val_iter(&'a self) -> KeyValIter<'a> {
@@ -222,7 +223,7 @@ impl fmt::Display for Address<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let kv = KeyValFmt::new().add("guid", self.guid());
         let t = self.transport().map_err(|_| fmt::Error)?;
-        let kv = t.key_val_fmt_add(kv);
+        let kv = t.fmt_key_val(kv);
         write!(f, "{t}:{kv}")?;
         Ok(())
     }
@@ -265,10 +266,10 @@ impl<'a> Iterator for KeyValIter<'a> {
     }
 }
 
-pub(crate) trait KeyValFmtAdd {
-    fn key_val_fmt_add<'a: 'b, 'b>(&'a self, kv: KeyValFmt<'b>) -> KeyValFmt<'b>;
-}
-
+// A structure for formatting key-value pairs.
+//
+// This struct allows for the dynamic collection and formatting of key-value pairs,
+// where keys implement `fmt::Display` and values implement `Encodable`.
 pub(crate) struct KeyValFmt<'a> {
     fields: Vec<(Box<dyn fmt::Display + 'a>, Box<dyn Encodable + 'a>)>,
 }

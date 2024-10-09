@@ -288,7 +288,7 @@ fn read_shm(name: &str) -> Result<Vec<u8>, crate::Error> {
             // SAFETY: We have exclusive ownership over the file mapping handle
             unsafe { OwnedHandle::from_raw_handle(res as RawHandle) }
         } else {
-            return Err(crate::Error::Address(
+            return Err(crate::Error::Failure(
                 "Unable to open shared memory".to_owned(),
             ));
         }
@@ -297,7 +297,7 @@ fn read_shm(name: &str) -> Result<Vec<u8>, crate::Error> {
     let addr = unsafe { MapViewOfFile(handle.as_raw_handle(), FILE_MAP_READ, 0, 0, 0) };
 
     if addr.Value.is_null() {
-        return Err(crate::Error::Address("MapViewOfFile() failed".to_owned()));
+        return Err(crate::Error::Failure("MapViewOfFile() failed".to_owned()));
     }
 
     let data = unsafe { CStr::from_ptr(addr.Value.cast()) };
@@ -309,8 +309,9 @@ pub fn autolaunch_bus_address() -> Result<String, crate::Error> {
     let _guard = mutex.lock();
 
     let addr = read_shm("DBusDaemonAddressInfo")?;
-    let addr = String::from_utf8(addr)
-        .map_err(|e| crate::Error::Address(format!("Unable to parse address as UTF-8: {}", e)))?;
+    let addr = String::from_utf8(addr).map_err(|e| {
+        crate::address::Error::Encoding(format!("Unable to parse address as UTF-8: {}", e))
+    })?;
 
     Ok(addr)
 }

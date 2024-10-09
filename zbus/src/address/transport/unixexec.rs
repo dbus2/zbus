@@ -2,19 +2,8 @@ use std::{borrow::Cow, ffi::OsStr, fmt};
 
 use super::{
     percent::{decode_percents_os_str, decode_percents_str, EncOsStr},
-    Address, Error, KeyValFmt, KeyValFmtAdd, Result,
+    Address, Error, KeyValFmt, Result, TransportImpl,
 };
-
-#[derive(Debug, PartialEq, Eq)]
-struct Argv(usize);
-
-impl fmt::Display for Argv {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let n = self.0;
-
-        write!(f, "argv{n}")
-    }
-}
 
 /// `unixexec:` D-Bus transport.
 ///
@@ -43,10 +32,8 @@ impl<'a> Unixexec<'a> {
     }
 }
 
-impl<'a> TryFrom<&'a Address<'a>> for Unixexec<'a> {
-    type Error = Error;
-
-    fn try_from(s: &'a Address<'a>) -> Result<Self> {
+impl<'a> TransportImpl<'a> for Unixexec<'a> {
+    fn for_address(s: &'a Address<'a>) -> Result<Self> {
         let mut path = None;
         let mut argv = Vec::new();
 
@@ -72,15 +59,24 @@ impl<'a> TryFrom<&'a Address<'a>> for Unixexec<'a> {
 
         Ok(Self { path, argv })
     }
-}
 
-impl KeyValFmtAdd for Unixexec<'_> {
-    fn key_val_fmt_add<'a: 'b, 'b>(&'a self, mut kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
+    fn fmt_key_val<'s: 'b, 'b>(&'s self, mut kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
         kv = kv.add("path", Some(EncOsStr(self.path())));
         for (n, arg) in self.argv() {
             kv = kv.add(Argv(*n), Some(arg));
         }
 
         kv
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct Argv(usize);
+
+impl fmt::Display for Argv {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let n = self.0;
+
+        write!(f, "argv{n}")
     }
 }

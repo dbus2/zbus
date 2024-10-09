@@ -1,37 +1,6 @@
 use std::{borrow::Cow, fmt};
 
-use super::{percent::decode_percents_str, Address, Error, KeyValFmt, KeyValFmtAdd, Result};
-
-/// TCP IP address family
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-#[non_exhaustive]
-pub enum TcpFamily {
-    /// IPv4
-    IPv4,
-    /// IPv6
-    IPv6,
-}
-
-impl fmt::Display for TcpFamily {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::IPv4 => write!(f, "ipv4"),
-            Self::IPv6 => write!(f, "ipv6"),
-        }
-    }
-}
-
-impl TryFrom<&str> for TcpFamily {
-    type Error = Error;
-
-    fn try_from(s: &str) -> Result<Self> {
-        match s {
-            "ipv4" => Ok(Self::IPv4),
-            "ipv6" => Ok(Self::IPv6),
-            _ => Err(Error::UnknownTcpFamily(s.into())),
-        }
-    }
-}
+use super::{percent::decode_percents_str, Address, Error, KeyValFmt, Result, TransportImpl};
 
 /// `tcp:` D-Bus transport.
 ///
@@ -74,19 +43,8 @@ impl<'a> Tcp<'a> {
     }
 }
 
-impl KeyValFmtAdd for Tcp<'_> {
-    fn key_val_fmt_add<'a: 'b, 'b>(&'a self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
-        kv.add("host", self.host())
-            .add("bind", self.bind())
-            .add("port", self.port())
-            .add("family", self.family())
-    }
-}
-
-impl<'a> TryFrom<&'a Address<'a>> for Tcp<'a> {
-    type Error = Error;
-
-    fn try_from(s: &'a Address<'a>) -> Result<Self> {
+impl<'a> TransportImpl<'a> for Tcp<'a> {
+    fn for_address(s: &'a Address<'a>) -> Result<Self> {
         let mut res = Tcp::default();
         for (k, v) in s.key_val_iter() {
             match (k, v) {
@@ -111,5 +69,43 @@ impl<'a> TryFrom<&'a Address<'a>> for Tcp<'a> {
         }
 
         Ok(res)
+    }
+
+    fn fmt_key_val<'s: 'b, 'b>(&'s self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
+        kv.add("host", self.host())
+            .add("bind", self.bind())
+            .add("port", self.port())
+            .add("family", self.family())
+    }
+}
+
+/// TCP IP address family
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[non_exhaustive]
+pub enum TcpFamily {
+    /// IPv4
+    IPv4,
+    /// IPv6
+    IPv6,
+}
+
+impl fmt::Display for TcpFamily {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::IPv4 => write!(f, "ipv4"),
+            Self::IPv6 => write!(f, "ipv6"),
+        }
+    }
+}
+
+impl TryFrom<&str> for TcpFamily {
+    type Error = Error;
+
+    fn try_from(s: &str) -> Result<Self> {
+        match s {
+            "ipv4" => Ok(Self::IPv4),
+            "ipv6" => Ok(Self::IPv6),
+            _ => Err(Error::UnknownTcpFamily(s.into())),
+        }
     }
 }

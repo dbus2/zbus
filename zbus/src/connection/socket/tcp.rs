@@ -6,7 +6,10 @@ use std::os::fd::BorrowedFd;
 #[cfg(not(feature = "tokio"))]
 use std::{net::TcpStream, sync::Arc};
 
-use crate::{address::transport::TcpFamily, Error, Result};
+use crate::{
+    address::{self, transport::TcpFamily},
+    Result,
+};
 
 use super::{ReadHalf, RecvmsgResult, WriteHalf};
 #[cfg(feature = "tokio")]
@@ -211,19 +214,18 @@ async fn connect_with(host: &str, port: u16, family: Option<TcpFamily>) -> Resul
             },
             "connect tcp",
         )
-        .await
-        .map_err(|e| Error::Address(format!("Failed to receive TCP addresses: {e}")))?;
+        .await?;
 
         // we could attempt connections in parallel?
-        let mut last_err = Error::Address("Failed to connect".into());
+        let mut last_err = io::Error::other("No address");
         for addr in addrs {
             match Stream::connect(addr).await {
                 Ok(stream) => return Ok(stream),
-                Err(e) => last_err = e.into(),
+                Err(e) => last_err = e,
             }
         }
 
-        Err(last_err)
+        Err(last_err.into())
     }
 
     #[cfg(feature = "tokio")]
@@ -232,16 +234,16 @@ async fn connect_with(host: &str, port: u16, family: Option<TcpFamily>) -> Resul
         let _ = family;
         Stream::connect((host, port))
             .await
-            .map_err(|e| Error::InputOutput(e.into()))
+            .map_err(|e| crate::Error::InputOutput(e.into()))
     }
 }
 
 pub(crate) async fn connect(addr: &crate::address::transport::Tcp<'_>) -> Result<Stream> {
     let Some(host) = addr.host() else {
-        return Err(Error::Address("No host in address".into()));
+        return Err(address::Error::MissingValue("host".into()).into());
     };
     let Some(port) = addr.port() else {
-        return Err(Error::Address("No port in address".into()));
+        return Err(address::Error::MissingValue("port".into()).into());
     };
 
     connect_with(host, port, addr.family()).await
@@ -251,13 +253,13 @@ pub(crate) async fn connect_nonce(
     addr: &crate::address::transport::NonceTcp<'_>,
 ) -> Result<Stream> {
     let Some(host) = addr.host() else {
-        return Err(Error::Address("No host in address".into()));
+        return Err(address::Error::MissingValue("host".into()).into());
     };
     let Some(port) = addr.port() else {
-        return Err(Error::Address("No port in address".into()));
+        return Err(address::Error::MissingValue("port".into()).into());
     };
     let Some(noncefile) = addr.noncefile() else {
-        return Err(Error::Address("No noncefile in address".into()));
+        return Err(address::Error::MissingValue("noncefile".into()).into());
     };
 
     #[allow(unused_mut)]

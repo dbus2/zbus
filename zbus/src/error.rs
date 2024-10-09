@@ -4,7 +4,7 @@ use zbus_names::{Error as NamesError, InterfaceName, OwnedErrorName};
 use zvariant::{Error as VariantError, ObjectPath};
 
 use crate::{
-    fdo,
+    address, fdo,
     message::{Message, Type},
 };
 
@@ -18,7 +18,7 @@ pub enum Error {
     /// Interface not found.
     InterfaceNotFound,
     /// Invalid D-Bus address.
-    Address(String),
+    Address(address::Error),
     /// An I/O error.
     InputOutput(Arc<io::Error>),
     /// Invalid message field.
@@ -68,7 +68,7 @@ assert_impl_all!(Error: Send, Sync, Unpin);
 impl PartialEq for Error {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Address(_), Self::Address(_)) => true,
+            (Self::Address(s), Self::Address(o)) => s == o,
             (Self::InterfaceNotFound, Self::InterfaceNotFound) => true,
             (Self::Handshake(_), Self::Handshake(_)) => true,
             (Self::InvalidReply, Self::InvalidReply) => true,
@@ -97,7 +97,7 @@ impl error::Error for Error {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
             Error::InterfaceNotFound => None,
-            Error::Address(_) => None,
+            Error::Address(s) => Some(s),
             Error::InputOutput(e) => Some(e),
             Error::ExcessData => None,
             Error::Handshake(_) => None,
@@ -125,7 +125,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::InterfaceNotFound => write!(f, "Interface not found"),
-            Error::Address(e) => write!(f, "address error: {e}"),
+            Error::Address(e) => write!(f, "{e}"),
             Error::ExcessData => write!(f, "excess data"),
             Error::InputOutput(e) => write!(f, "I/O error: {e}"),
             Error::Handshake(e) => write!(f, "D-Bus handshake failed: {e}"),
@@ -199,9 +199,9 @@ impl From<nix::Error> for Error {
     }
 }
 
-impl From<crate::address::Error> for Error {
-    fn from(val: crate::address::Error) -> Self {
-        Error::Address(val.to_string())
+impl From<address::Error> for Error {
+    fn from(val: address::Error) -> Self {
+        Error::Address(val)
     }
 }
 

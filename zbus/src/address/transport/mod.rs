@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use super::{percent, Address, Error, KeyValFmt, KeyValFmtAdd, Result};
+use super::{percent, Address, Error, KeyValFmt, Result};
 
 mod autolaunch;
 pub use autolaunch::Autolaunch;
@@ -75,40 +75,45 @@ impl fmt::Display for Transport<'_> {
     }
 }
 
-impl KeyValFmtAdd for Transport<'_> {
-    fn key_val_fmt_add<'a: 'b, 'b>(&'a self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
-        match self {
-            Self::Unix(t) => t.key_val_fmt_add(kv),
-            #[cfg(target_os = "macos")]
-            Self::Launchd(t) => t.key_val_fmt_add(kv),
-            #[cfg(target_os = "linux")]
-            Self::Systemd(t) => t.key_val_fmt_add(kv),
-            Self::Tcp(t) => t.key_val_fmt_add(kv),
-            Self::NonceTcp(t) => t.key_val_fmt_add(kv),
-            Self::Unixexec(t) => t.key_val_fmt_add(kv),
-            Self::Autolaunch(t) => t.key_val_fmt_add(kv),
-            Self::Vsock(t) => t.key_val_fmt_add(kv),
-        }
-    }
+pub(crate) trait TransportImpl<'a> {
+    fn for_address(s: &'a Address<'a>) -> Result<Self>
+    where
+        Self: Sized;
+
+    // add() the transport (key,val) pairs to KeyValFmt
+    fn fmt_key_val<'s: 'b, 'b>(&'s self, kv: KeyValFmt<'b>) -> KeyValFmt<'b>;
 }
 
-impl<'a> TryFrom<&'a Address<'a>> for Transport<'a> {
-    type Error = Error;
-
-    fn try_from(s: &'a Address<'a>) -> Result<Self> {
+impl<'a> TransportImpl<'a> for Transport<'a> {
+    fn for_address(s: &'a Address<'a>) -> Result<Self> {
         let col = s.addr.find(':').ok_or(Error::MissingTransport)?;
         match &s.addr[..col] {
-            "unix" => Ok(Self::Unix(s.try_into()?)),
+            "unix" => Ok(Self::Unix(Unix::for_address(s)?)),
             #[cfg(target_os = "macos")]
-            "launchd" => Ok(Self::Launchd(s.try_into()?)),
+            "launchd" => Ok(Self::Launchd(Launchd::for_address(s)?)),
             #[cfg(target_os = "linux")]
-            "systemd" => Ok(Self::Systemd(s.try_into()?)),
-            "tcp" => Ok(Self::Tcp(s.try_into()?)),
-            "nonce-tcp" => Ok(Self::NonceTcp(s.try_into()?)),
-            "unixexec" => Ok(Self::Unixexec(s.try_into()?)),
-            "autolaunch" => Ok(Self::Autolaunch(s.try_into()?)),
-            "vsock" => Ok(Self::Vsock(s.try_into()?)),
+            "systemd" => Ok(Self::Systemd(Systemd::for_address(s)?)),
+            "tcp" => Ok(Self::Tcp(Tcp::for_address(s)?)),
+            "nonce-tcp" => Ok(Self::NonceTcp(NonceTcp::for_address(s)?)),
+            "unixexec" => Ok(Self::Unixexec(Unixexec::for_address(s)?)),
+            "autolaunch" => Ok(Self::Autolaunch(Autolaunch::for_address(s)?)),
+            "vsock" => Ok(Self::Vsock(Vsock::for_address(s)?)),
             _ => Err(Error::UnknownTransport),
+        }
+    }
+
+    fn fmt_key_val<'s: 'b, 'b>(&'s self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
+        match self {
+            Self::Unix(t) => t.fmt_key_val(kv),
+            #[cfg(target_os = "macos")]
+            Self::Launchd(t) => t.fmt_key_val(kv),
+            #[cfg(target_os = "linux")]
+            Self::Systemd(t) => t.fmt_key_val(kv),
+            Self::Tcp(t) => t.fmt_key_val(kv),
+            Self::NonceTcp(t) => t.fmt_key_val(kv),
+            Self::Unixexec(t) => t.fmt_key_val(kv),
+            Self::Autolaunch(t) => t.fmt_key_val(kv),
+            Self::Vsock(t) => t.fmt_key_val(kv),
         }
     }
 }
