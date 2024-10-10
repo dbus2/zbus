@@ -38,6 +38,8 @@ async fn connect(addr: &Address<'_>) -> ConnectResult {
         Transport::NonceTcp(t) => socket::tcp::connect_nonce(&t).await?.into(),
         #[cfg(any(unix, not(feature = "tokio")))]
         Transport::Unix(u) => socket::unix::connect(&u).await?.into(),
+        #[cfg(unix)]
+        Transport::Unixexec(u) => socket::command::connect(&u).await?.into(),
         #[cfg(any(
             all(feature = "vsock", not(feature = "tokio")),
             feature = "tokio-vsock"
