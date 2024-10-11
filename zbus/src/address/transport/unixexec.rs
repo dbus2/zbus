@@ -37,7 +37,8 @@ impl<'a> Unixexec<'a> {
 
     /// Arguments.
     ///
-    /// Arguments to pass to the binary as `[(nth, arg),...]`.
+    /// Arguments to pass to the binary as `[(nth, arg),...]`. The arguments are
+    /// sorted by index and the indices do not contain gaps.
     pub fn argv(&self) -> &[(usize, Cow<'a, str>)] {
         self.argv.as_ref()
     }
@@ -69,6 +70,15 @@ impl<'a> TryFrom<&'a Address<'a>> for Unixexec<'a> {
         };
 
         argv.sort_by_key(|(num, _)| *num);
+        argv.dedup_by(|(num_a, _), (num_b, _)| *num_a == *num_b);
+
+        if let Some(gap) = argv
+            .iter()
+            .enumerate()
+            .position(|(index, &(num, _))| index + 1 != num)
+        {
+            argv.truncate(gap);
+        }
 
         Ok(Self { path, argv })
     }
