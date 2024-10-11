@@ -154,3 +154,8 @@ bench = false
 [[bench]]
 name = "benchmarks"
 harness = false
+
+[[example]]
+name = "screen-brightness"
+path = "examples/screen-brightness.rs"
+required-features = ["blocking-api"]
