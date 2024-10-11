@@ -11,8 +11,17 @@ use crate::{Basic, Type};
 
 /// A string wrapper.
 ///
-/// This is used for keeping strings in a [`Value`]. API is provided to convert from, and to a
-/// [`&str`] and [`String`].
+///
+/// This is very similar to the [`std::borrow::Cow`] type, but it:
+///
+/// * is specialized for strings.
+/// * treats `&'static str` as a separate type. This allows you to avoid allocations and copying
+///   when turning an `Str` instance created  from a `&'static str` into an owned version in generic
+///   code that doesn't/can't assume the inner lifetime of the source `Str` instance.
+///
+/// This type is used for keeping strings in a [`Value`], among other things.
+///
+/// API is provided to convert from, and to a [`&str`] and [`String`].
 ///
 /// [`Value`]: enum.Value.html#variant.Str
 /// [`&str`]: https://doc.rust-lang.org/std/str/index.html
