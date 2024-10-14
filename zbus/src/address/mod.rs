@@ -120,7 +120,10 @@ pub fn system() -> Result<AddressList<'static>> {
     }
 }
 
-/// A bus address.
+/// A parsed bus address.
+///
+/// The fields of this structure are references to the source. Using an [`OwnedAddress`] may be more
+/// convenient or if your context requires 'static lifetime.
 ///
 /// Example:
 /// ```
@@ -226,6 +229,65 @@ impl fmt::Display for Address<'_> {
         let kv = t.fmt_key_val(kv);
         write!(f, "{t}:{kv}")?;
         Ok(())
+    }
+}
+
+/// An owned bus address.
+///
+/// Example:
+/// ```
+/// use zbus::address::OwnedAddress;
+///
+/// let _: OwnedAddress = "unix:path=/tmp/dbus.sock".try_into().unwrap();
+/// ```
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct OwnedAddress {
+    transport: transport::Transport<'static>,
+    guid: Option<String>,
+}
+
+impl OwnedAddress {
+    /// The connection GUID if any.
+    pub fn guid(&self) -> Option<&str> {
+        self.guid.as_ref().map(|g| g.as_ref())
+    }
+
+    /// Transport connection details
+    pub fn transport(&self) -> &transport::Transport<'static> {
+        &self.transport
+    }
+
+    fn new(addr: &str) -> Result<Self> {
+        let addr = Address { addr: addr.into() };
+        let transport = addr.transport()?.into_owned();
+        let guid = addr.guid().map(|c| c.into_owned());
+        Ok(Self { transport, guid })
+    }
+}
+
+impl fmt::Display for OwnedAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let kv = KeyValFmt::new().add("guid", self.guid.as_ref());
+        let t = &self.transport;
+        let kv = t.fmt_key_val(kv);
+        write!(f, "{t}:{kv}")?;
+        Ok(())
+    }
+}
+
+impl TryFrom<&str> for OwnedAddress {
+    type Error = Error;
+
+    fn try_from(addr: &str) -> Result<Self> {
+        Self::new(addr)
+    }
+}
+
+impl TryFrom<String> for OwnedAddress {
+    type Error = Error;
+
+    fn try_from(addr: String) -> Result<Self> {
+        Self::new(&addr)
     }
 }
 
@@ -343,8 +405,23 @@ impl<'a> ToAddresses<'a> for String {
 impl<'a> ToAddresses<'a> for Vec<Result<Address<'_>>> {
     type Iter = std::iter::Cloned<std::slice::Iter<'a, Result<Address<'a>>>>;
 
-    /// Get an iterator over the D-Bus addresses.
     fn to_addresses(&'a self) -> Self::Iter {
         self.iter().cloned()
+    }
+}
+
+/// A trait for objects which can be converted or resolved to one or more [`OwnedAddress`] values.
+pub trait ToOwnedAddresses<'a> {
+    type Iter: Iterator<Item = Result<OwnedAddress>>;
+
+    /// Get an iterator over the D-Bus addresses.
+    fn to_owned_addresses(&'a self) -> Self::Iter;
+}
+
+impl<'a> ToOwnedAddresses<'a> for str {
+    type Iter = std::iter::Once<Result<OwnedAddress>>;
+
+    fn to_owned_addresses(&'a self) -> Self::Iter {
+        std::iter::once(self.try_into())
     }
 }
