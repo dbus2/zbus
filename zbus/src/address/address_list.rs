@@ -1,6 +1,6 @@
 use std::{borrow::Cow, fmt};
 
-use super::{Address, Error, Result, ToAddresses};
+use super::{Address, Error, OwnedAddress, Result, ToAddresses, ToOwnedAddresses};
 
 /// A bus address list.
 ///
@@ -77,5 +77,49 @@ impl<'a> TryFrom<&'a str> for AddressList<'a> {
 impl fmt::Display for AddressList<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.addr)
+    }
+}
+
+/// An iterator of D-Bus addresses.
+pub struct OwnedAddressListIter<'a> {
+    data: &'a str,
+    next_index: usize,
+}
+
+impl<'a> ToOwnedAddresses<'a> for AddressList<'a> {
+    type Iter = OwnedAddressListIter<'a>;
+
+    /// Get an iterator over the D-Bus addresses.
+    fn to_owned_addresses(&'a self) -> Self::Iter {
+        OwnedAddressListIter::new(self)
+    }
+}
+
+impl<'a> OwnedAddressListIter<'a> {
+    fn new(list: &'a AddressList<'_>) -> Self {
+        Self {
+            data: list.addr.as_ref(),
+            next_index: 0,
+        }
+    }
+}
+
+impl<'a> Iterator for OwnedAddressListIter<'a> {
+    type Item = Result<OwnedAddress>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.next_index >= self.data.len() {
+            return None;
+        }
+
+        let mut addr = &self.data[self.next_index..];
+        if let Some(end) = addr.find(';') {
+            addr = &addr[..end];
+            self.next_index += end + 1;
+        } else {
+            self.next_index = self.data.len();
+        }
+
+        Some(OwnedAddress::try_from(addr))
     }
 }
