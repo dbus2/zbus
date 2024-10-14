@@ -143,13 +143,13 @@ fn parse_nonce_tcp() {
 
 #[test]
 fn parse_unixexec() {
-    let addr = Address::try_from("unixexec:path=/bin/test,argv2=foo").unwrap();
+    let addr = Address::try_from("unixexec:path=/bin/test,argv1=foo").unwrap();
     let Transport::Unixexec(t) = addr.transport().unwrap() else {
         panic!();
     };
 
     assert_eq!(t.path(), "/bin/test");
-    assert_eq!(t.argv(), &[(2, Cow::from("foo"))]);
+    assert_eq!(t.argv(), &[(1, Cow::from("foo"))]);
 
     assert_eq!(
         Address::try_from("unixexec:weof").unwrap_err().to_string(),

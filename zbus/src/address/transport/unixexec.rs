@@ -22,6 +22,7 @@ impl fmt::Display for Argv {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Unixexec<'a> {
     path: Cow<'a, OsStr>,
+    arg0: Option<Cow<'a, str>>,
     argv: Vec<(usize, Cow<'a, str>)>,
 }
 
@@ -35,9 +36,19 @@ impl<'a> Unixexec<'a> {
         self.path.as_ref()
     }
 
+    /// The executable argument.
+    ///
+    /// The program name to use when executing the binary. If omitted the same
+    /// value as specified for path will be used. This corresponds to the
+    /// second argument of execlp().
+    pub fn arg0(&self) -> Option<&Cow<'a, str>> {
+        self.arg0.as_ref()
+    }
+
     /// Arguments.
     ///
-    /// Arguments to pass to the binary as `[(nth, arg),...]`.
+    /// Arguments to pass to the binary as `[(nth, arg),...]`. The arguments are
+    /// sorted by index and the indices do not contain gaps.
     pub fn argv(&self) -> &[(usize, Cow<'a, str>)] {
         self.argv.as_ref()
     }
@@ -48,6 +59,7 @@ impl<'a> TryFrom<&'a Address<'a>> for Unixexec<'a> {
 
     fn try_from(s: &'a Address<'a>) -> Result<Self> {
         let mut path = None;
+        let mut arg0 = None;
         let mut argv = Vec::new();
 
         for (k, v) in s.key_val_iter() {
@@ -58,7 +70,13 @@ impl<'a> TryFrom<&'a Address<'a>> for Unixexec<'a> {
                 (k, Some(v)) if k.starts_with("argv") => {
                     let n: usize = k[4..].parse().map_err(|_| Error::InvalidValue(k.into()))?;
                     let arg = decode_percents_str(v)?;
-                    argv.push((n, arg));
+                    if n == 0 {
+                        if arg0.is_none() {
+                            arg0 = Some(arg);
+                        }
+                    } else {
+                        argv.push((n, arg));
+                    }
                 }
                 _ => continue,
             }
@@ -69,14 +87,24 @@ impl<'a> TryFrom<&'a Address<'a>> for Unixexec<'a> {
         };
 
         argv.sort_by_key(|(num, _)| *num);
+        argv.dedup_by(|(num_a, _), (num_b, _)| *num_a == *num_b);
 
-        Ok(Self { path, argv })
+        if let Some(gap) = argv
+            .iter()
+            .enumerate()
+            .position(|(index, &(num, _))| index + 1 != num)
+        {
+            argv.truncate(gap);
+        }
+
+        Ok(Self { path, arg0, argv })
     }
 }
 
 impl KeyValFmtAdd for Unixexec<'_> {
     fn key_val_fmt_add<'a: 'b, 'b>(&'a self, mut kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
         kv = kv.add("path", Some(EncOsStr(self.path())));
+        kv = kv.add("argv0", self.arg0());
         for (n, arg) in self.argv() {
             kv = kv.add(Argv(*n), Some(arg));
         }
