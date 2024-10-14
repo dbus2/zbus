@@ -23,6 +23,15 @@ impl<'a> Vsock<'a> {
     pub fn cid(&self) -> Option<u32> {
         self.cid
     }
+
+    /// Convert into owned version, with 'static lifetime.
+    pub fn into_owned(self) -> Vsock<'static> {
+        Vsock {
+            cid: self.cid,
+            port: self.port,
+            phantom: PhantomData,
+        }
+    }
 }
 
 impl<'a> TransportImpl<'a> for Vsock<'a> {

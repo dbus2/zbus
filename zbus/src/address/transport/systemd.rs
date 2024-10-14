@@ -11,6 +11,15 @@ pub struct Systemd<'a> {
     phantom: PhantomData<&'a ()>,
 }
 
+impl<'a> Systemd<'a> {
+    /// Convert into owned version, with 'static lifetime.
+    pub fn into_owned(&self) -> Systemd<'static> {
+        Systemd {
+            phantom: PhantomData,
+        }
+    }
+}
+
 impl<'a> TransportImpl<'a> for Systemd<'a> {
     fn for_address(_addr: &'a Address<'a>) -> Result<Self> {
         Ok(Systemd {

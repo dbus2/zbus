@@ -58,6 +58,24 @@ pub enum Transport<'a> {
     Vsock(vsock::Vsock<'a>),
 }
 
+impl<'a> Transport<'a> {
+    /// Convert into owned version, with 'static lifetime.
+    pub fn into_owned(self) -> Transport<'static> {
+        match self {
+            Transport::Unix(unix) => Transport::Unix(unix.into_owned()),
+            #[cfg(target_os = "macos")]
+            Transport::Launchd(launchd) => Transport::Launchd(launchd.into_owned()),
+            #[cfg(target_os = "linux")]
+            Transport::Systemd(systemd) => Transport::Systemd(systemd.into_owned()),
+            Transport::Tcp(tcp) => Transport::Tcp(tcp.into_owned()),
+            Transport::NonceTcp(nonce_tcp) => Transport::NonceTcp(nonce_tcp.into_owned()),
+            Transport::Unixexec(unixexec) => Transport::Unixexec(unixexec.into_owned()),
+            Transport::Autolaunch(autolaunch) => Transport::Autolaunch(autolaunch.into_owned()),
+            Transport::Vsock(vsock) => Transport::Vsock(vsock.into_owned()),
+        }
+    }
+}
+
 impl fmt::Display for Transport<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

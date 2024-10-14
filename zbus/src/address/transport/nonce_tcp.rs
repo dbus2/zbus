@@ -53,6 +53,25 @@ impl<'a> NonceTcp<'a> {
     pub fn noncefile(&self) -> Option<&OsStr> {
         self.noncefile.as_ref().map(|v| v.as_ref())
     }
+
+    /// Convert into owned version, with 'static lifetime.
+    pub fn into_owned(self) -> NonceTcp<'static> {
+        let Self {
+            host,
+            bind,
+            port,
+            family,
+            noncefile,
+        } = self;
+
+        NonceTcp {
+            host: host.map(|h| h.into_owned().into()),
+            bind: bind.map(|b| b.into_owned().into()),
+            port,
+            family,
+            noncefile: noncefile.map(|n| n.into_owned().into()),
+        }
+    }
 }
 
 impl<'a> TransportImpl<'a> for NonceTcp<'a> {

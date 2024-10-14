@@ -18,6 +18,13 @@ impl<'a> Launchd<'a> {
     pub fn env(&self) -> &str {
         self.env.as_ref()
     }
+
+    /// Convert into owned version, with 'static lifetime.
+    pub fn into_owned(self) -> Launchd<'static> {
+        Launchd {
+            env: self.env.into_owned().into(),
+        }
+    }
 }
 
 impl<'a> TransportImpl<'a> for Launchd<'a> {

@@ -41,6 +41,16 @@ impl<'a> Tcp<'a> {
     pub fn family(&self) -> Option<TcpFamily> {
         self.family
     }
+
+    /// Convert into owned version, with 'static lifetime.
+    pub fn into_owned(self) -> Tcp<'static> {
+        Tcp {
+            host: self.host.map(|h| h.into_owned().into()),
+            bind: self.bind.map(|b| b.into_owned().into()),
+            port: self.port,
+            family: self.family,
+        }
+    }
 }
 
 impl<'a> TransportImpl<'a> for Tcp<'a> {

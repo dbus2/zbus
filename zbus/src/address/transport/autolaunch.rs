@@ -22,6 +22,15 @@ impl<'a> Autolaunch<'a> {
     pub fn scope(&self) -> Option<&AutolaunchScope<'a>> {
         self.scope.as_ref()
     }
+
+    /// Convert into owned version, with 'static lifetime.
+    pub fn into_owned(self) -> Autolaunch<'static> {
+        Autolaunch {
+            #[cfg(target_os = "windows")]
+            scope: self.scope.map(|s| s.into_owned()),
+            phantom: PhantomData,
+        }
+    }
 }
 
 impl<'a> TransportImpl<'a> for Autolaunch<'a> {
@@ -60,6 +69,17 @@ pub enum AutolaunchScope<'a> {
     User,
     /// other values - specify dedicated session bus like "release", "debug" or other.
     Other(Cow<'a, str>),
+}
+
+#[cfg(target_os = "windows")]
+impl<'a> AutolaunchScope<'a> {
+    fn into_owned(self) -> AutolaunchScope<'static> {
+        match self {
+            AutolaunchScope::InstallPath => AutolaunchScope::InstallPath,
+            AutolaunchScope::User => AutolaunchScope::User,
+            AutolaunchScope::Other(other) => AutolaunchScope::Other(other.into_owned().into()),
+        }
+    }
 }
 
 #[cfg(target_os = "windows")]

@@ -30,6 +30,19 @@ impl<'a> Unixexec<'a> {
     pub fn argv(&self) -> &[(usize, Cow<'a, str>)] {
         self.argv.as_ref()
     }
+
+    /// Convert into owned version, with 'static lifetime.
+    pub fn into_owned(self) -> Unixexec<'static> {
+        let argv = self
+            .argv
+            .into_iter()
+            .map(|(index, cow)| (index, cow.into_owned().into()))
+            .collect();
+        Unixexec {
+            path: self.path.into_owned().into(),
+            argv,
+        }
+    }
 }
 
 impl<'a> TransportImpl<'a> for Unixexec<'a> {

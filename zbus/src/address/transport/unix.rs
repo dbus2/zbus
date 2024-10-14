@@ -18,6 +18,13 @@ impl<'a> Unix<'a> {
     pub fn kind(&self) -> &UnixAddrKind<'a> {
         &self.kind
     }
+
+    /// Convert into owned version, with 'static lifetime.
+    pub fn into_owned(self) -> Unix<'static> {
+        Unix {
+            kind: self.kind.into_owned(),
+        }
+    }
 }
 
 impl<'a> TransportImpl<'a> for Unix<'a> {
@@ -109,6 +116,16 @@ impl UnixAddrKind<'_> {
             UnixAddrKind::Tmpdir(p) => kv.add("tmpdir", Some(EncOsStr(p))),
             UnixAddrKind::Abstract(p) => kv.add("abstract", Some(EncData(p))),
             UnixAddrKind::Runtime => kv.add("runtime", Some("yes")),
+        }
+    }
+
+    fn into_owned(self) -> UnixAddrKind<'static> {
+        match self {
+            UnixAddrKind::Path(cow) => UnixAddrKind::Path(cow.into_owned().into()),
+            UnixAddrKind::Dir(cow) => UnixAddrKind::Dir(cow.into_owned().into()),
+            UnixAddrKind::Tmpdir(cow) => UnixAddrKind::Tmpdir(cow.into_owned().into()),
+            UnixAddrKind::Abstract(cow) => UnixAddrKind::Abstract(cow.into_owned().into()),
+            UnixAddrKind::Runtime => UnixAddrKind::Runtime,
         }
     }
 }
