@@ -4,7 +4,7 @@ name = "zvariant_derive"
 version = "4.2.0"
 authors = ["Zeeshan Ali Khan <zeeshanak@gnome.org>"]
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.81"
 
 description = "D-Bus & GVariant encoding & decoding"
 repository = "https://github.com/dbus2/zbus/"
