@@ -35,7 +35,7 @@ mod vsock;
 pub use vsock::Vsock;
 
 /// A D-Bus transport.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Transport<'a> {
     /// Unix Domain Sockets transport.

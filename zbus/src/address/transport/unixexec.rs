@@ -8,7 +8,7 @@ use super::{
 /// `unixexec:` D-Bus transport.
 ///
 /// <https://dbus.freedesktop.org/doc/dbus-specification.html#transports-exec>
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Unixexec<'a> {
     path: Cow<'a, OsStr>,
     argv: Vec<(usize, Cow<'a, str>)>,

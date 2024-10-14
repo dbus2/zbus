@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use super::{percent::decode_percents_str, Address, Error, KeyValFmt, Result, TransportImpl};
 
 /// `vsock:` D-Bus transport.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Vsock<'a> {
     // no cid means ANY
     cid: Option<u32>,

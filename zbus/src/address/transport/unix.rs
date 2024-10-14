@@ -8,7 +8,7 @@ use super::{
 /// `unix:` D-Bus transport.
 ///
 /// <https://dbus.freedesktop.org/doc/dbus-specification.html#transports-unix-domain-sockets-addresses>
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Unix<'a> {
     kind: UnixAddrKind<'a>,
 }
@@ -89,7 +89,7 @@ impl<'a> TransportImpl<'a> for Unix<'a> {
 }
 
 /// A sub-type of `unix:` transport.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum UnixAddrKind<'a> {
     /// Path of the unix domain socket.

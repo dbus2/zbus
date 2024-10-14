@@ -9,7 +9,7 @@ use super::{Address, KeyValFmt, Result, TransportImpl};
 /// `autolaunch:` D-Bus transport.
 ///
 /// <https://dbus.freedesktop.org/doc/dbus-specification.html#meta-transports-autolaunch>
-#[derive(Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Autolaunch<'a> {
     #[cfg(target_os = "windows")]
     scope: Option<AutolaunchScope<'a>>,
@@ -60,7 +60,7 @@ impl<'a> TransportImpl<'a> for Autolaunch<'a> {
 
 /// Scope of autolaunch (Windows only)
 #[cfg(target_os = "windows")]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum AutolaunchScope<'a> {
     /// Limit session bus to dbus installation path.

@@ -5,7 +5,7 @@ use super::{Address, KeyValFmt, Result, TransportImpl};
 /// `systemd:` D-Bus transport.
 ///
 /// <https://dbus.freedesktop.org/doc/dbus-specification.html#transports-systemd>
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Systemd<'a> {
     // use a phantom lifetime for eventually future fields and consistency
     phantom: PhantomData<&'a ()>,

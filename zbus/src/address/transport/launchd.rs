@@ -5,7 +5,7 @@ use super::{percent::decode_percents_str, Address, Error, KeyValFmt, Result, Tra
 /// `launchd:` D-Bus transport.
 ///
 /// <https://dbus.freedesktop.org/doc/dbus-specification.html#transports-launchd>
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Launchd<'a> {
     env: Cow<'a, str>,
 }

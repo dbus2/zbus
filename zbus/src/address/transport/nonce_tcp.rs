@@ -9,7 +9,7 @@ use super::{
 /// `nonce-tcp:` D-Bus transport.
 ///
 /// <https://dbus.freedesktop.org/doc/dbus-specification.html#transports-nonce-tcp-sockets>
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct NonceTcp<'a> {
     host: Option<Cow<'a, str>>,
     bind: Option<Cow<'a, str>>,
