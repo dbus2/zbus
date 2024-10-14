@@ -1,13 +1,3 @@
-#[cfg(all(feature = "vsock", not(feature = "tokio")))]
-#[cfg(not(feature = "tokio"))]
-use async_io::Async;
-
-#[cfg(any(
-    all(feature = "vsock", not(feature = "tokio")),
-    feature = "tokio-vsock"
-))]
-use crate::{Error, Result};
-
 #[cfg(feature = "tokio-vsock")]
 use super::{Socket, Split};
 
@@ -121,38 +111,4 @@ impl super::WriteHalf for tokio_vsock::OwnedWriteHalf {
     async fn close(&mut self) -> std::io::Result<()> {
         tokio::io::AsyncWriteExt::shutdown(self).await
     }
-}
-
-#[cfg(all(feature = "vsock", not(feature = "tokio")))]
-type Stream = Async<vsock::VsockStream>;
-#[cfg(feature = "tokio-vsock")]
-type Stream = tokio_vsock::VsockStream;
-
-#[cfg(any(
-    all(feature = "vsock", not(feature = "tokio")),
-    feature = "tokio-vsock"
-))]
-pub(crate) async fn connect(addr: &crate::address::transport::Vsock<'_>) -> Result<Stream> {
-    let Some(cid) = addr.cid() else {
-        return Err(Error::Address("No cid in address".into()));
-    };
-    let Some(port) = addr.port() else {
-        return Err(Error::Address("No port in address".into()));
-    };
-
-    #[cfg(all(feature = "vsock", not(feature = "tokio")))]
-    {
-        let stream = crate::Task::spawn_blocking(
-            move || vsock::VsockStream::connect_with_cid_port(cid, port),
-            "connect vsock",
-        )
-        .await
-        .map_err(|e| Error::Address(format!("Failed to connect: {e}")))?;
-        Ok(Async::new(stream).map_err(|e| Error::InputOutput(e.into()))?)
-    }
-
-    #[cfg(feature = "tokio-vsock")]
-    Stream::connect(tokio_vsock::VsockAddr::new(cid, port))
-        .await
-        .map_err(|e| Error::InputOutput(e.into()))
 }

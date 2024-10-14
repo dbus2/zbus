@@ -199,12 +199,6 @@ impl From<nix::Error> for Error {
     }
 }
 
-impl From<crate::address::Error> for Error {
-    fn from(val: crate::address::Error) -> Self {
-        Error::Address(val.to_string())
-    }
-}
-
 impl From<VariantError> for Error {
     fn from(val: VariantError) -> Self {
         Error::Variant(val)

@@ -1,118 +1,129 @@
-use std::{borrow::Cow, ffi::OsStr};
-
-use super::{
-    percent::{decode_percents, decode_percents_os_str, decode_percents_str, EncData, EncOsStr},
-    Address, Error, KeyValFmt, KeyValFmtAdd, Result,
+#[cfg(target_os = "linux")]
+use std::ffi::OsString;
+use std::{
+    ffi::OsStr,
+    fmt::{Display, Formatter},
+    path::PathBuf,
 };
 
-/// A sub-type of `unix:` transport.
-#[derive(Debug, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum UnixAddrKind<'a> {
-    /// Path of the unix domain socket.
-    Path(Cow<'a, OsStr>),
-    /// Directory in which a socket file with a random file name starting with 'dbus-' should be
-    /// created by a server.
-    Dir(Cow<'a, OsStr>),
-    /// The same as "dir", except that on platforms with abstract sockets, a server may attempt to
-    /// create an abstract socket whose name starts with this directory instead of a path-based
-    /// socket.
-    Tmpdir(Cow<'a, OsStr>),
-    /// Unique string in the abstract namespace, often syntactically resembling a path but
-    /// unconnected to the filesystem namespace
-    Abstract(Cow<'a, [u8]>),
-    /// Listen on $XDG_RUNTIME_DIR/bus.
-    Runtime,
+#[cfg(unix)]
+use super::encode_percents;
+
+/// A Unix domain socket transport in a D-Bus address.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Unix {
+    path: UnixSocket,
 }
 
-impl KeyValFmtAdd for UnixAddrKind<'_> {
-    fn key_val_fmt_add<'a: 'b, 'b>(&'a self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
-        match self {
-            UnixAddrKind::Path(p) => kv.add("path", Some(EncOsStr(p))),
-            UnixAddrKind::Dir(p) => kv.add("dir", Some(EncOsStr(p))),
-            UnixAddrKind::Tmpdir(p) => kv.add("tmpdir", Some(EncOsStr(p))),
-            UnixAddrKind::Abstract(p) => kv.add("abstract", Some(EncData(p))),
-            UnixAddrKind::Runtime => kv.add("runtime", Some("yes")),
-        }
+impl Unix {
+    /// Create a new Unix transport with the given path.
+    pub fn new(path: UnixSocket) -> Self {
+        Self { path }
     }
-}
 
-/// `unix:` D-Bus transport.
-///
-/// <https://dbus.freedesktop.org/doc/dbus-specification.html#transports-unix-domain-sockets-addresses>
-#[derive(Debug, PartialEq, Eq)]
-pub struct Unix<'a> {
-    kind: UnixAddrKind<'a>,
-}
-
-impl<'a> Unix<'a> {
-    /// One of the various `unix:` addresses.
-    pub fn kind(&self) -> &UnixAddrKind<'a> {
-        &self.kind
+    /// The path.
+    pub fn path(&self) -> &UnixSocket {
+        &self.path
     }
-}
 
-impl<'a> TryFrom<&'a Address<'a>> for Unix<'a> {
-    type Error = Error;
+    /// Take the path, consuming `self`.
+    pub fn take_path(self) -> UnixSocket {
+        self.path
+    }
 
-    fn try_from(s: &'a Address<'a>) -> Result<Self> {
-        let mut kind = None;
-        let mut iter = s.key_val_iter();
-        for (k, v) in &mut iter {
-            match k {
-                "path" | "dir" | "tmpdir" => {
-                    let v = v.ok_or_else(|| Error::MissingValue(k.into()))?;
-                    let v = decode_percents_os_str(v)?;
-                    kind = Some(match k {
-                        "path" => UnixAddrKind::Path(v),
-                        "dir" => UnixAddrKind::Dir(v),
-                        "tmpdir" => UnixAddrKind::Tmpdir(v),
-                        // can't happen, we matched those earlier
-                        _ => panic!(),
-                    });
-
-                    break;
-                }
-                "abstract" => {
-                    let v = v.ok_or_else(|| Error::MissingValue(k.into()))?;
-                    let v = decode_percents(v)?;
-                    kind = Some(UnixAddrKind::Abstract(v));
-
-                    break;
-                }
-                "runtime" => {
-                    let v = v.ok_or_else(|| Error::MissingValue(k.into()))?;
-                    let v = decode_percents_str(v)?;
-                    if v != "yes" {
-                        return Err(Error::InvalidValue(k.into()));
-                    }
-                    kind = Some(UnixAddrKind::Runtime);
-
-                    break;
-                }
-                _ => continue,
+    pub(super) fn from_options(opts: std::collections::HashMap<&str, &str>) -> crate::Result<Self> {
+        let path = opts.get("path");
+        let abs = opts.get("abstract");
+        let dir = opts.get("dir");
+        let tmpdir = opts.get("tmpdir");
+        let path = match (path, abs, dir, tmpdir) {
+            (Some(p), None, None, None) => UnixSocket::File(PathBuf::from(p)),
+            #[cfg(target_os = "linux")]
+            (None, Some(p), None, None) => UnixSocket::Abstract(OsString::from(p)),
+            #[cfg(not(target_os = "linux"))]
+            (None, Some(_), None, None) => {
+                return Err(crate::Error::Address(
+                    "abstract sockets currently Linux-only".to_owned(),
+                ));
             }
-        }
-        let Some(kind) = kind else {
-            return Err(Error::Other(
-                "invalid `unix:` address, missing required key".into(),
-            ));
+            (None, None, Some(p), None) => UnixSocket::Dir(PathBuf::from(p)),
+            (None, None, None, Some(p)) => UnixSocket::TmpDir(PathBuf::from(p)),
+            _ => {
+                return Err(crate::Error::Address("unix: address is invalid".to_owned()));
+            }
         };
-        for (k, _) in iter {
-            match k {
-                "path" | "dir" | "tmpdir" | "abstract" | "runtime" => {
-                    return Err(Error::Other("invalid address, only one of `path` `dir` `tmpdir` `abstract` or `runtime` expected".into()));
-                }
-                _ => (),
-            }
-        }
 
-        Ok(Unix { kind })
+        Ok(Self::new(path))
     }
 }
 
-impl KeyValFmtAdd for Unix<'_> {
-    fn key_val_fmt_add<'a: 'b, 'b>(&'a self, kv: KeyValFmt<'b>) -> KeyValFmt<'b> {
-        self.kind().key_val_fmt_add(kv)
+impl Display for Unix {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "unix:{}", self.path)
+    }
+}
+
+/// A Unix domain socket path in a D-Bus address.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum UnixSocket {
+    /// A path to a unix domain socket on the filesystem.
+    File(PathBuf),
+    /// An abstract unix domain socket name.
+    #[cfg(target_os = "linux")]
+    Abstract(OsString),
+    /// A listenable address using the specified path, in which a socket file with a random file
+    /// name starting with 'dbus-' will be created by the server. See [UNIX domain socket address]
+    /// reference documentation.
+    ///
+    /// This address is mostly relevant to server (typically bus broker) implementations.
+    ///
+    /// [UNIX domain socket address]: https://dbus.freedesktop.org/doc/dbus-specification.html#transports-unix-domain-sockets-addresses
+    Dir(PathBuf),
+    /// The same as UnixDir, except that on platforms with abstract sockets, the server may attempt
+    /// to create an abstract socket whose name starts with this directory instead of a path-based
+    /// socket.
+    ///
+    /// This address is mostly relevant to server (typically bus broker) implementations.
+    TmpDir(PathBuf),
+}
+
+impl Display for UnixSocket {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn fmt_unix_path(f: &mut Formatter<'_>, path: &OsStr) -> std::fmt::Result {
+            #[cfg(unix)]
+            {
+                use std::os::unix::ffi::OsStrExt;
+
+                encode_percents(f, path.as_bytes())?;
+            }
+
+            #[cfg(windows)]
+            write!(f, "{}", path.to_str().ok_or(std::fmt::Error)?)?;
+
+            Ok(())
+        }
+
+        match self {
+            UnixSocket::File(path) => {
+                f.write_str("path=")?;
+                fmt_unix_path(f, path.as_os_str())?;
+            }
+            #[cfg(target_os = "linux")]
+            UnixSocket::Abstract(name) => {
+                f.write_str("abstract=")?;
+                fmt_unix_path(f, name)?;
+            }
+            UnixSocket::Dir(path) => {
+                f.write_str("dir=")?;
+                fmt_unix_path(f, path.as_os_str())?;
+            }
+            UnixSocket::TmpDir(path) => {
+                f.write_str("tmpdir=")?;
+                fmt_unix_path(f, path.as_os_str())?;
+            }
+        }
+
+        Ok(())
     }
 }
