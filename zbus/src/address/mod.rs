@@ -35,6 +35,9 @@ mod percent;
 pub use percent::*;
 use transport::TransportImpl;
 
+pub mod guid;
+use guid::Guid;
+
 #[cfg(test)]
 mod tests;
 
