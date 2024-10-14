@@ -6,9 +6,9 @@ pub use channel::Channel;
 mod split;
 pub use split::{BoxedSplit, Split};
 
-pub(crate) mod tcp;
-pub(crate) mod unix;
-pub(crate) mod vsock;
+mod tcp;
+mod unix;
+mod vsock;
 
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
