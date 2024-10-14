@@ -218,6 +218,12 @@ impl From<OwnedGuid> for Str<'_> {
     }
 }
 
+impl From<&crate::address::guid::Guid> for OwnedGuid {
+    fn from(value: &crate::address::guid::Guid) -> Self {
+        Guid(value.to_string().into()).into()
+    }
+}
+
 impl<'de> Deserialize<'de> for OwnedGuid {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where

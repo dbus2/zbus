@@ -2,7 +2,7 @@ use tracing::debug;
 
 use crate::{
     address::{transport::Transport, OwnedAddress},
-    Error, Guid, OwnedGuid, Result,
+    Error, OwnedGuid, Result,
 };
 
 use super::socket::{self, BoxedSplit};
@@ -28,10 +28,7 @@ pub(crate) async fn connect_address(
 }
 
 async fn connect(addr: &OwnedAddress) -> ConnectResult {
-    let guid = match addr.guid() {
-        Some(g) => Some(Guid::try_from(g)?.into()),
-        _ => None,
-    };
+    let guid = addr.guid().map(OwnedGuid::from);
     let split = match addr.transport() {
         Transport::Tcp(t) => socket::tcp::connect(t).await?.into(),
         Transport::NonceTcp(t) => socket::tcp::connect_nonce(t).await?.into(),

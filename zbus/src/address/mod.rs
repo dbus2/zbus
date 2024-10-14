@@ -141,8 +141,12 @@ pub struct Address<'a> {
 
 impl<'a> Address<'a> {
     /// The connection GUID if any.
-    pub fn guid(&self) -> Option<Cow<'_, str>> {
-        self.get_string("guid").and_then(|res| res.ok())
+    pub fn guid(&self) -> Result<Option<Guid>> {
+        if let Some(guid) = self.get_string("guid") {
+            Ok(Some(guid?.as_ref().try_into()?))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Transport connection details
@@ -170,12 +174,14 @@ impl<'a> Address<'a> {
     fn validate(&self) -> Result<()> {
         self.transport()?;
         for (k, v) in self.key_val_iter() {
-            let v = match v {
-                Some(v) => decode_percents(v)?,
-                _ => Cow::from(b"" as &[_]),
-            };
-            if k == "guid" {
-                validate_guid(v.as_ref())?;
+            match (k, v) {
+                ("guid", Some(v)) => {
+                    guid::Guid::try_from(decode_percents_str(v)?.as_ref())?;
+                }
+                (_, Some(v)) => {
+                    decode_percents(v)?;
+                }
+                _ => {}
             }
         }
 
@@ -192,14 +198,6 @@ impl<'a> Address<'a> {
         }
         val.map(decode_percents_str)
     }
-}
-
-fn validate_guid(value: &[u8]) -> Result<()> {
-    if value.len() != 32 || value.iter().any(|&c| !c.is_ascii_hexdigit()) {
-        return Err(Error::InvalidValue("guid".into()));
-    }
-
-    Ok(())
 }
 
 impl<'a> TryFrom<String> for Address<'a> {
@@ -220,7 +218,7 @@ impl<'a> TryFrom<&'a str> for Address<'a> {
 
 impl fmt::Display for Address<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let kv = KeyValFmt::new().add("guid", self.guid());
+        let kv = KeyValFmt::new().add("guid", self.guid().map_err(|_| fmt::Error)?);
         let t = self.transport().map_err(|_| fmt::Error)?;
         let kv = t.fmt_key_val(kv);
         write!(f, "{t}:{kv}")?;
@@ -239,13 +237,13 @@ impl fmt::Display for Address<'_> {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct OwnedAddress {
     transport: transport::Transport<'static>,
-    guid: Option<String>,
+    guid: Option<Guid>,
 }
 
 impl OwnedAddress {
     /// The connection GUID if any.
-    pub fn guid(&self) -> Option<&str> {
-        self.guid.as_ref().map(|g| g.as_ref())
+    pub fn guid(&self) -> Option<&Guid> {
+        self.guid.as_ref()
     }
 
     /// Transport connection details
@@ -256,7 +254,7 @@ impl OwnedAddress {
     fn new(addr: &str) -> Result<Self> {
         let addr = Address { addr: addr.into() };
         let transport = addr.transport()?.into_owned();
-        let guid = addr.guid().map(|c| c.into_owned());
+        let guid = addr.guid()?;
         Ok(Self { transport, guid })
     }
 }
