@@ -770,12 +770,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "glob"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
-
-[[package]]
 name = "gobject-sys"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1369,12 +1363,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rustversion"
-version = "1.0.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e819f2bc632f285be6d7cd36e25940d45b2391dd6d9b939e79de557f7014248"
-
-[[package]]
 name = "ryu"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1569,15 +1557,6 @@ dependencies = [
  "once_cell",
  "rustix",
  "windows-sys 0.59.0",
-]
-
-[[package]]
-name = "termcolor"
-version = "1.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
-dependencies = [
- "winapi-util",
 ]
 
 [[package]]
@@ -1808,20 +1787,6 @@ dependencies = [
  "thread_local",
  "tracing",
  "tracing-core",
-]
-
-[[package]]
-name = "trybuild"
-version = "1.0.99"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "207aa50d36c4be8d8c6ea829478be44a372c6a77669937bb39c698e52f1491e8"
-dependencies = [
- "glob",
- "serde",
- "serde_derive",
- "serde_json",
- "termcolor",
- "toml",
 ]
 
 [[package]]
@@ -2188,10 +2153,8 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "rustversion",
  "serde",
  "syn 2.0.79",
- "trybuild",
  "zbus",
  "zvariant_utils",
 ]
