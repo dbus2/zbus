@@ -284,7 +284,7 @@ fn test_interface() {
                 .unwrap()
                 .build(&(42,))
                 .unwrap();
-            let _ = t.call(&s, &c, &m, "StrU32".try_into().unwrap());
+            let _ = t.call(s, &c, &m, "StrU32".try_into().unwrap());
             let ctxt = SignalEmitter::new(&c, "/does/not/matter").unwrap();
             ctxt.signal(23, "ergo sum").await.unwrap();
         });

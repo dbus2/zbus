@@ -318,10 +318,8 @@ where
 {
     /// Write `buf` and increment internal bytes written counter.
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.writer.write(buf).map(|n| {
+        self.writer.write(buf).inspect(|&n| {
             self.bytes_written += n;
-
-            n
         })
     }
 
