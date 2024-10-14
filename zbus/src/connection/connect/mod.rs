@@ -1,7 +1,7 @@
 use tracing::debug;
 
 use crate::{
-    address::{transport::Transport, Address},
+    address::{transport::Transport, OwnedAddress},
     Error, Guid, OwnedGuid, Result,
 };
 
@@ -11,7 +11,7 @@ mod macos;
 mod win32;
 
 pub(crate) async fn connect_address(
-    address: &[Address<'_>],
+    address: &[OwnedAddress],
 ) -> Result<(BoxedSplit, Option<OwnedGuid>)> {
     for addr in address {
         match connect(addr).await {
@@ -27,27 +27,26 @@ pub(crate) async fn connect_address(
     Err(Error::Failure("No connectable address".into()))
 }
 
-async fn connect(addr: &Address<'_>) -> ConnectResult {
-    let addr = addr.to_owned();
+async fn connect(addr: &OwnedAddress) -> ConnectResult {
     let guid = match addr.guid() {
-        Some(g) => Some(Guid::try_from(g.as_ref())?.into()),
+        Some(g) => Some(Guid::try_from(g)?.into()),
         _ => None,
     };
-    let split = match addr.transport()? {
-        Transport::Tcp(t) => socket::tcp::connect(&t).await?.into(),
-        Transport::NonceTcp(t) => socket::tcp::connect_nonce(&t).await?.into(),
+    let split = match addr.transport() {
+        Transport::Tcp(t) => socket::tcp::connect(t).await?.into(),
+        Transport::NonceTcp(t) => socket::tcp::connect_nonce(t).await?.into(),
         #[cfg(any(unix, not(feature = "tokio")))]
-        Transport::Unix(u) => socket::unix::connect(&u).await?.into(),
+        Transport::Unix(u) => socket::unix::connect(u).await?.into(),
         #[cfg(any(
             all(feature = "vsock", not(feature = "tokio")),
             feature = "tokio-vsock"
         ))]
-        Transport::Vsock(v) => socket::vsock::connect(&v).await?.into(),
+        Transport::Vsock(v) => socket::vsock::connect(v).await?.into(),
         #[cfg(target_os = "macos")]
-        Transport::Launchd(l) => macos::connect(&l).await?.into(),
+        Transport::Launchd(l) => macos::connect(l).await?.into(),
         #[cfg(target_os = "windows")]
         Transport::Autolaunch(l) => {
-            return win32::connect(&l).await;
+            return win32::connect(l).await;
         }
         _ => {
             tracing::debug!("Unsupported address: {addr}");

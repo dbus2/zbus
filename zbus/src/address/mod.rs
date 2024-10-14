@@ -199,13 +199,6 @@ fn validate_guid(value: &[u8]) -> Result<()> {
     Ok(())
 }
 
-impl Address<'_> {
-    pub fn to_owned(&self) -> Address<'static> {
-        let addr = self.addr.to_string();
-        Address { addr: addr.into() }
-    }
-}
-
 impl<'a> TryFrom<String> for Address<'a> {
     type Error = Error;
 

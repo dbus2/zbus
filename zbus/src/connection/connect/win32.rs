@@ -2,7 +2,7 @@
 
 use super::ConnectResult;
 use crate::{
-    address::{transport::Transport, Address},
+    address::{transport::Transport, OwnedAddress},
     win32::autolaunch_bus_address,
     Error,
 };
@@ -17,9 +17,9 @@ pub(crate) fn connect<'l>(
             return Err(Error::Unsupported);
         }
 
-        let addr: Address<'_> = autolaunch_bus_address()?.try_into()?;
+        let addr: OwnedAddress = autolaunch_bus_address()?.try_into()?;
 
-        if let Transport::Autolaunch(_) = addr.transport()? {
+        if let Transport::Autolaunch(_) = addr.transport() {
             return Err(Error::Failure("Recursive autolaunch: address".into()));
         }
 

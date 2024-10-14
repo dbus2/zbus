@@ -15,7 +15,7 @@ use zvariant::ObjectPath;
 #[cfg(feature = "p2p")]
 use crate::Guid;
 use crate::{
-    address::ToAddresses, blocking::Connection, conn::AuthMechanism,
+    address::ToOwnedAddresses, blocking::Connection, conn::AuthMechanism,
     connection::socket::BoxedSplit, names::WellKnownName, object_server::Interface,
     utils::block_on, Error, Result,
 };
@@ -43,7 +43,7 @@ impl<'a> Builder<'a> {
     /// [D-Bus bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub fn address<'t, A>(address: &'t A) -> Result<Self>
     where
-        A: ToAddresses<'t> + ?Sized,
+        A: ToOwnedAddresses<'t> + ?Sized,
     {
         crate::connection::Builder::address(address).map(Self)
     }

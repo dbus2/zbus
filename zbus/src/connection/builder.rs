@@ -24,7 +24,7 @@ use vsock::VsockStream;
 use zvariant::ObjectPath;
 
 use crate::{
-    address::{Address, ToAddresses},
+    address::{OwnedAddress, ToOwnedAddresses},
     names::{InterfaceName, WellKnownName},
     object_server::{ArcInterface, Interface},
     Connection, Error, Executor, Guid, OwnedGuid, Result,
@@ -48,7 +48,7 @@ enum Target {
         feature = "tokio-vsock"
     ))]
     VsockStream(VsockStream),
-    Address(Vec<Address<'static>>),
+    Address(Vec<OwnedAddress>),
     Socket(Split<Box<dyn ReadHalf>, Box<dyn WriteHalf>>),
     AuthenticatedSocket(Split<Box<dyn ReadHalf>, Box<dyn WriteHalf>>),
 }
@@ -119,12 +119,11 @@ impl<'a> Builder<'a> {
     /// [D-Bus bus address]: https://dbus.freedesktop.org/doc/dbus-specification.html#addresses
     pub fn address<'t, A>(address: &'t A) -> Result<Self>
     where
-        A: ToAddresses<'t> + ?Sized,
+        A: ToOwnedAddresses<'t> + ?Sized,
     {
         let addr = address
-            .to_addresses()
+            .to_owned_addresses()
             .filter_map(std::result::Result::ok)
-            .map(|a| a.to_owned())
             .collect();
 
         Ok(Builder::new(Target::Address(addr)))
@@ -492,7 +491,7 @@ impl<'a> Builder<'a> {
             #[cfg(feature = "tokio-vsock")]
             Target::VsockStream(stream) => stream.into(),
             Target::Address(address) => {
-                return connect_address(&address)
+                return connect_address(address.as_slice())
                     .await
                     .map(|(split, guid)| (split, guid, false));
             }
