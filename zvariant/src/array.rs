@@ -206,13 +206,13 @@ impl ArraySeed {
 assert_impl_all!(ArraySeed: Unpin);
 
 impl<'a> DynamicType for Array<'a> {
-    fn dynamic_signature(&self) -> Signature {
+    fn signature(&self) -> Signature {
         self.signature.clone()
     }
 }
 
 impl DynamicType for ArraySeed {
-    fn dynamic_signature(&self) -> Signature {
+    fn signature(&self) -> Signature {
         self.signature.clone()
     }
 }

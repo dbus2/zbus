@@ -300,7 +300,7 @@ impl<'bytes, 'fds> Data<'bytes, 'fds> {
     where
         S: DeserializeSeed<'d> + DynamicType,
     {
-        let signature = S::dynamic_signature(&seed);
+        let signature = S::signature(&seed);
 
         #[cfg(unix)]
         let fds = &self.inner.fds;

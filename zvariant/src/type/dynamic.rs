@@ -11,7 +11,7 @@ pub trait DynamicType {
     /// The type signature for `self`.
     ///
     /// See [`Type::SIGNATURE`] for details.
-    fn dynamic_signature(&self) -> Signature;
+    fn signature(&self) -> Signature;
 }
 
 /// Types that deserialize based on dynamic signatures.
@@ -31,7 +31,7 @@ impl<T> DynamicType for T
 where
     T: Type + ?Sized,
 {
-    fn dynamic_signature(&self) -> Signature {
+    fn signature(&self) -> Signature {
         <T as Type>::SIGNATURE.clone()
     }
 }

@@ -207,7 +207,7 @@ impl<'a> Value<'a> {
         T: Into<Self> + DynamicType,
     {
         // With specialization, we wouldn't have this
-        if value.dynamic_signature() == VARIANT_SIGNATURE_STR {
+        if value.signature() == VARIANT_SIGNATURE_STR {
             Self::Value(Box::new(value.into()))
         } else {
             value.into()

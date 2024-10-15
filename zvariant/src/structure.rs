@@ -259,13 +259,13 @@ pub(crate) fn structure_display_fmt(
 }
 
 impl<'a> DynamicType for Structure<'a> {
-    fn dynamic_signature(&self) -> Signature {
+    fn signature(&self) -> Signature {
         self.signature.clone()
     }
 }
 
 impl<'a> DynamicType for StructureSeed<'a> {
-    fn dynamic_signature(&self) -> Signature {
+    fn signature(&self) -> Signature {
         self.signature.clone()
     }
 }
@@ -390,13 +390,13 @@ pub struct OwnedStructure(pub Structure<'static>);
 pub struct OwnedStructureSeed(Signature);
 
 impl DynamicType for OwnedStructure {
-    fn dynamic_signature(&self) -> Signature {
-        self.0.dynamic_signature()
+    fn signature(&self) -> Signature {
+        self.0.signature().clone()
     }
 }
 
 impl DynamicType for OwnedStructureSeed {
-    fn dynamic_signature(&self) -> Signature {
+    fn signature(&self) -> Signature {
         self.0.clone()
     }
 }

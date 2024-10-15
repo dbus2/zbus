@@ -17,7 +17,7 @@ use std::marker::PhantomData;
 pub struct DynamicTuple<T>(pub T);
 
 impl DynamicType for DynamicTuple<()> {
-    fn dynamic_signature(&self) -> Signature {
+    fn signature(&self) -> Signature {
         Signature::Unit
     }
 }
@@ -43,7 +43,7 @@ pub struct TupleSeed<'a, T, S> {
 }
 
 impl<'a, T, S> DynamicType for TupleSeed<'a, T, S> {
-    fn dynamic_signature(&self) -> Signature {
+    fn signature(&self) -> Signature {
         self.sig.clone()
     }
 }
@@ -60,11 +60,11 @@ macro_rules! tuple_impls {
             where
                 $($name: DynamicType,)+
             {
-                fn dynamic_signature(&self) -> Signature {
+                fn signature(&self) -> Signature {
                     Signature::structure(
                         [
                             $(
-                                self.0.$n.dynamic_signature(),
+                                self.0.$n.signature(),
                             )+
                         ]
                     )
