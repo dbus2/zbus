@@ -161,7 +161,7 @@ impl<'a> Builder<'a> {
         // to efficient handling of ones that are complex to serialize.
         let body_size = zvariant::serialized_size(ctxt, body)?;
 
-        let signature = body.dynamic_signature();
+        let signature = body.signature();
 
         self.build_generic(signature, body_size, move |cursor| {
             // SAFETY: build_generic puts FDs and the body in the same Message.
