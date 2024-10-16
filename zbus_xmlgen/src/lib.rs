@@ -167,7 +167,7 @@ impl<'i> GenTrait<'i> {
             write!(w, ", assume_defaults = true")?;
         }
         writeln!(w, ")]")?;
-        writeln!(w, "trait {name} {{")?;
+        writeln!(w, "pub trait {name} {{")?;
 
         let mut methods = iface.methods().to_vec();
         methods.sort_by(|a, b| a.name().partial_cmp(&b.name()).unwrap());
