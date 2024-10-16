@@ -1,5 +1,5 @@
 #[proxy(interface = "com.example.SampleInterface0", assume_defaults = true)]
-trait SampleInterface0 {
+pub trait SampleInterface0 {
     /// BarplexSig method
     fn barplex_sig(
         &self,
