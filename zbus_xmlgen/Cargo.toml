@@ -26,7 +26,7 @@ path = "src/main.rs"
 
 [dependencies]
 zbus = { path = "../zbus", version = "4.0.0", features = ["blocking-api"] }
-zbus_xml = { path = "../zbus_xml", version = "4.0.0" }
+zbus_xml = { path = "../zbus_xml", version = "5.0.0" }
 snakecase = "0.1.0"
 clap = { version = "4.5.4", features = ["derive", "wrap_help"] }
 
