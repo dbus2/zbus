@@ -5,9 +5,11 @@ use std::{
     process::{Command, Stdio},
 };
 
-use zbus::names::BusName;
+use zbus::{
+    names::BusName,
+    zvariant::{ObjectPath, Signature},
+};
 use zbus_xml::{Arg, ArgDirection, Interface};
-use zvariant::{ObjectPath, Signature};
 
 pub fn write_interfaces(
     interfaces: &[Interface<'_>],
