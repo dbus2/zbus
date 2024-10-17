@@ -1,6 +1,6 @@
 [package]
 name = "zbus"
-version = "4.4.0"
+version = "5.0.0"
 authors = ["Zeeshan Ali Khan <zeeshanak@gnome.org>"]
 edition = "2021"
 rust-version = "1.81"
@@ -44,7 +44,7 @@ blocking-api = ["zbus_macros/blocking-api"]
 serde_bytes = ["zvariant/serde_bytes"]
 
 [dependencies]
-zbus_macros = { path = "../zbus_macros", version = "=4.4.0" }
+zbus_macros = { path = "../zbus_macros", version = "=5.0.0" }
 zvariant = { path = "../zvariant", version = "5.0.0", default-features = false, features = [
   "enumflags2",
 ] }

@@ -2114,7 +2114,7 @@ checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
 
 [[package]]
 name = "zbus"
-version = "4.4.0"
+version = "5.0.0"
 dependencies = [
  "async-broadcast",
  "async-executor",
@@ -2158,7 +2158,7 @@ dependencies = [
 
 [[package]]
 name = "zbus_macros"
-version = "4.4.0"
+version = "5.0.0"
 dependencies = [
  "async-io",
  "futures-util",
