@@ -48,7 +48,7 @@ zbus_macros = { path = "../zbus_macros", version = "=4.4.0" }
 zvariant = { path = "../zvariant", version = "5.0.0", default-features = false, features = [
   "enumflags2",
 ] }
-zbus_names = { path = "../zbus_names", version = "3.0" }
+zbus_names = { path = "../zbus_names", version = "4.0" }
 serde = { version = "1.0.200", features = ["derive"] }
 serde_repr = "0.1.19"
 enumflags2 = { version = "0.7.9", features = ["serde"] }

@@ -15,7 +15,7 @@ readme = "README.md"
 [dependencies]
 serde = { version = "1.0.200", features = ["derive"] }
 zvariant = { path = "../zvariant", version = "5.0.0", default-features = false }
-zbus_names = { path = "../zbus_names", version = "3.0" }
+zbus_names = { path = "../zbus_names", version = "4.0" }
 quick-xml = { version = "0.36", features = ["serialize", "overlapped-lists"] }
 static_assertions = "1.1.0"
 
