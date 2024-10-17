@@ -11,11 +11,11 @@ use snakecase::ascii::to_snakecase;
 use zbus::{
     blocking::{connection, fdo::IntrospectableProxy, Connection},
     names::BusName,
+    zvariant::ObjectPath,
 };
 use zbus_xml::{Interface, Node};
 
 use zbus_xmlgen::write_interfaces;
-use zvariant::ObjectPath;
 
 mod cli;
 

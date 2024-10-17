@@ -2201,7 +2201,6 @@ dependencies = [
  "snakecase",
  "zbus",
  "zbus_xml",
- "zvariant",
 ]
 
 [[package]]
