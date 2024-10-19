@@ -204,7 +204,7 @@ dive in, and derive from a trait to make a convenient Rust binding. Finally, we 
 <em>xmlgen</em>, a tool to help us generate a boilerplate trait from the XML of an introspected service.</p>
 <p>To make this learning “hands-on”, we are going to call and bind the cross-desktop notification
 service (please refer to this
-<a href="https://specifications.freedesktop.org/notification-spec/notification-spec-latest.html">reference</a>
+<a href="https://specifications.freedesktop.org/notification-spec/latest/">reference</a>
 document for further details on this API).</p>
 <p>Let’s start by playing with the service from the shell, and notify the desktop with [<code>busctl</code>]<sup class="footnote-reference"><a href="#busctl">1</a></sup>:</p>
 <pre><code class="language-bash">busctl --user call \
@@ -734,7 +734,7 @@ PolicyKit</a>, for example, which was
 implemented starting from the <em>xmlgen</em> output.</p>
 <p>There you have it, a Rust-friendly binding for your D-Bus service!</p>
 <div class="footnote-definition" id="busctl"><sup class="footnote-definition-label">1</sup>
-<p><code>busctl</code> is part of <a href="https://www.freedesktop.org/wiki/Software/systemd/"><code>systemd</code></a>.</p>
+<p><code>busctl</code> is part of <a href="https://systemd.io/"><code>systemd</code></a>.</p>
 </div>
 
                     </main>

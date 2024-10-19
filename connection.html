@@ -190,7 +190,7 @@ entry point of the zbus API.</p>
 <h2 id="connection-to-the-bus"><a class="header" href="#connection-to-the-bus">Connection to the bus</a></h2>
 <p>To connect to the session bus (the <em>per-user</em> bus), simply call <code>Connection::session()</code>. It
 returns an instance of the connection (if all went well). Similarly, to connect to the system bus
-(to communicate with services such as <a href="https://developer.gnome.org/NetworkManager/stable/spec.html">NetworkManager</a>, <a href="https://git.kernel.org/pub/scm/bluetooth/bluez.git/tree/doc">BlueZ</a> or <a href="https://www.freedesktop.org/wiki/Software/systemd/dbus/">PID1</a>), use
+(to communicate with services such as <a href="https://developer.gnome.org/NetworkManager/stable/spec.html">NetworkManager</a>, <a href="https://git.kernel.org/pub/scm/bluetooth/bluez.git/tree/doc">BlueZ</a> or <a href="https://www.freedesktop.org/software/systemd/man/latest/org.freedesktop.systemd1.html">PID1</a>), use
 <code>Connection::system()</code>.</p>
 <p>Moreover, it can be converted to a <a href="https://docs.rs/zbus/4/zbus/struct.MessageStream.html"><code>MessageStream</code></a> that implements <a href="https://docs.rs/futures/4/futures/stream/trait.Stream.html"><code>futures::stream::Stream</code></a>,
 which can be used to conveniently receive messages, for the times when low-level API is

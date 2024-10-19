@@ -196,6 +196,9 @@ it provides blocking wrapper types, under the <a href="https://docs.rs/zbus/4/zb
 in panics and hangs. This is not a limitation of zbus but rather a
 <a href="https://rust-lang.github.io/wg-async-foundations/vision/shiny_future/users_manual.html#caveat-beware-the-async-sandwich">well-known general problem</a> in the Rust async/await world. The <a href="https://docs.rs/blocking/"><code>blocking</code> crate</a>,
 <a href="https://docs.rs/async-std/4/async_std/task/fn.spawn_blocking.html"><code>async-std</code></a> and <a href="https://docs.rs/tokio/4/tokio/task/fn.spawn_blocking.html"><code>tokio</code></a> crates provide a easy way around this problem.</p>
+<p><strong>Note:</strong> Since zbus 5.0, blocking API can be disabled through the <code>blocking-api</code> cargo feature. If
+you use this API, make sure you are not unintentionally disabling it by disabling the default
+features in your <code>Cargo.toml</code>.</p>
 <h2 id="establishing-a-connection"><a class="header" href="#establishing-a-connection">Establishing a connection</a></h2>
 <p>The only difference to that of <a href="https://docs.rs/zbus/4/zbus/connection/struct.Connection.html">asynchronous <code>Connection</code> API</a> is that you use
 <a href="https://docs.rs/zbus/4/zbus/blocking/connection/struct.Connection.html"><code>blocking::Connection</code></a> type instead. This type’s API is almost identical to that of <code>Connection</code>,
@@ -305,7 +308,7 @@ fn main() -&gt; Result&lt;()&gt; {
 context. Therefore, you can not use blocking API in the method implementation directly. See note at
 the beginning of this chapter for details on why and a possible workaround.</p>
 <pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">use std::error::Error;
-</span><span class="boring">use zbus::{blocking::connection, interface, fdo, SignalContext};
+</span><span class="boring">use zbus::{blocking::connection, interface, fdo, object_server::SignalEmitter};
 </span><span class="boring">
 </span>use event_listener::{Event, Listener};
 
@@ -323,10 +326,10 @@ impl Greeter {
     // Rude!
     async fn go_away(
         &amp;self,
-        #[zbus(signal_context)]
-        ctxt: SignalContext&lt;'_&gt;,
+        #[zbus(signal_emitter)]
+        emitter: SignalEmitter&lt;'_&gt;,
     ) -&gt; fdo::Result&lt;()&gt; {
-        Self::greeted_everyone(&amp;ctxt).await?;
+        emitter.greeted_everyone().await?;
         self.done.notify(1);
 
         Ok(())
@@ -350,7 +353,7 @@ impl Greeter {
 
     /// A signal; the implementation is provided by the macro.
     #[zbus(signal)]
-    async fn greeted_everyone(ctxt: &amp;SignalContext&lt;'_&gt;) -&gt; zbus::Result&lt;()&gt;;
+    async fn greeted_everyone(emitter: &amp;SignalEmitter&lt;'_&gt;) -&gt; zbus::Result&lt;()&gt;;
 }
 
 fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {

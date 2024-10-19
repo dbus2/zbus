@@ -200,7 +200,6 @@ is very commonly used for efficient storage of arbitrary data and is also suppor
 <p>The <a href="https://crates.io/crates/zbus">zbus crate</a> provides the main API you will use to interact with D-Bus from Rust. It takes care
 of the establishment of a connection, the creation, sending and receiving of different kind of D-Bus
 messages (method calls, signals etc) for you.</p>
-<p>zbus crate is currently Unix-specific, with Linux as our main (and tested) target.</p>
 <div class="footnote-definition" id="outdated"><sup class="footnote-definition-label">1</sup>
 <p>D-Bus is ~15y old, unfortunately many documents out there are
 sometime aging or misleading.</p>
@@ -231,7 +230,7 @@ possible to have private buses or no bus at all (i-e direct peer-to-peer communi
 are assigned a unique name by the bus at start. Since this name is not static, most services use
 something called a <em>well-known bus name</em> and typically it’s this name, that you’ll be concerned
 with.</p>
-<p>An example would be the <a href="https://specifications.freedesktop.org/notification-spec/notification-spec-latest.html">FreeDesktop Notifications Service</a> that uses
+<p>An example would be the <a href="https://specifications.freedesktop.org/notification-spec/latest/">FreeDesktop Notifications Service</a> that uses
 <code>org.freedesktop.Notifications</code> as its well-known bus name.</p>
 <p>For further details on bus names, please refer to the <a href="https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus">Bus names chapter</a> of the D-Bus specification.</p>
 <h2 id="objects-and-object-paths"><a class="header" href="#objects-and-object-paths">Objects and Object paths</a></h2>
@@ -240,7 +239,7 @@ services expose at least one object on the bus and all clients interact with the
 these objects. These objects can be ephemeral or they could live as long as the service itself.</p>
 <p>Every object is identified by a string, which is referred to as its path. An example of an object
 path is <code>/org/freedesktop/Notifications</code>, which identities the only object exposed by the
-<a href="https://specifications.freedesktop.org/notification-spec/notification-spec-latest.html">FreeDesktop Notifications Service</a>.</p>
+<a href="https://specifications.freedesktop.org/notification-spec/latest/">FreeDesktop Notifications Service</a>.</p>
 <p>For further details on object paths, please refer to the <a href="https://dbus.freedesktop.org/doc/dbus-specification.html#basic-types">Basic types chapter</a> of the D-Bus
 specification.</p>
 <h2 id="interfaces"><a class="header" href="#interfaces">Interfaces</a></h2>
@@ -270,7 +269,7 @@ entry point of the zbus API.</p>
 <h2 id="connection-to-the-bus"><a class="header" href="#connection-to-the-bus">Connection to the bus</a></h2>
 <p>To connect to the session bus (the <em>per-user</em> bus), simply call <code>Connection::session()</code>. It
 returns an instance of the connection (if all went well). Similarly, to connect to the system bus
-(to communicate with services such as <a href="https://developer.gnome.org/NetworkManager/stable/spec.html">NetworkManager</a>, <a href="https://git.kernel.org/pub/scm/bluetooth/bluez.git/tree/doc">BlueZ</a> or <a href="https://www.freedesktop.org/wiki/Software/systemd/dbus/">PID1</a>), use
+(to communicate with services such as <a href="https://developer.gnome.org/NetworkManager/stable/spec.html">NetworkManager</a>, <a href="https://git.kernel.org/pub/scm/bluetooth/bluez.git/tree/doc">BlueZ</a> or <a href="https://www.freedesktop.org/software/systemd/man/latest/org.freedesktop.systemd1.html">PID1</a>), use
 <code>Connection::system()</code>.</p>
 <p>Moreover, it can be converted to a <a href="https://docs.rs/zbus/4/zbus/struct.MessageStream.html"><code>MessageStream</code></a> that implements <a href="https://docs.rs/futures/4/futures/stream/trait.Stream.html"><code>futures::stream::Stream</code></a>,
 which can be used to conveniently receive messages, for the times when low-level API is
@@ -344,7 +343,7 @@ dive in, and derive from a trait to make a convenient Rust binding. Finally, we 
 <em>xmlgen</em>, a tool to help us generate a boilerplate trait from the XML of an introspected service.</p>
 <p>To make this learning “hands-on”, we are going to call and bind the cross-desktop notification
 service (please refer to this
-<a href="https://specifications.freedesktop.org/notification-spec/notification-spec-latest.html">reference</a>
+<a href="https://specifications.freedesktop.org/notification-spec/latest/">reference</a>
 document for further details on this API).</p>
 <p>Let’s start by playing with the service from the shell, and notify the desktop with [<code>busctl</code>]<sup class="footnote-reference"><a href="#busctl">1</a></sup>:</p>
 <pre><code class="language-bash">busctl --user call \
@@ -874,7 +873,7 @@ PolicyKit</a>, for example, which was
 implemented starting from the <em>xmlgen</em> output.</p>
 <p>There you have it, a Rust-friendly binding for your D-Bus service!</p>
 <div class="footnote-definition" id="busctl"><sup class="footnote-definition-label">1</sup>
-<p><code>busctl</code> is part of <a href="https://www.freedesktop.org/wiki/Software/systemd/"><code>systemd</code></a>.</p>
+<p><code>busctl</code> is part of <a href="https://systemd.io/"><code>systemd</code></a>.</p>
 </div>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="writing-a-service-interface"><a class="header" href="#writing-a-service-interface">Writing a service interface</a></h1>
 <ul>
@@ -957,9 +956,10 @@ by replacing the loop above with this code:</p>
         zbus::message::Type::MethodCall =&gt; {
             // real code would check msg_header path(), interface() and member()
             // handle invalid calls, introspection, errors etc
+            let header = msg.header();
             let body = msg.body();
             let arg: &amp;str = body.deserialize()?;
-            connection.reply(&amp;msg, &amp;(format!("Hello {}!", arg))).await?;
+            connection.reply(&amp;header, &amp;(format!("Hello {}!", arg))).await?;
 
             break;
         }
@@ -1065,7 +1065,7 @@ org.zbus.MyGreeter1                 interface -         -             -
 <p>This is a more complete example, demonstrating some of its usages. It also shows a way to
 synchronize with the interface handlers from outside, thanks to the <code>event_listener</code> crate
 (this is just one of the many ways).</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">use zbus::{object_server::SignalContext, connection::Builder, interface, fdo, Result};
+<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">use zbus::{object_server::SignalEmitter, connection::Builder, interface, fdo, Result};
 </span><span class="boring">
 </span>use event_listener::{Event, Listener};
 
@@ -1083,10 +1083,10 @@ impl Greeter {
     // Rude!
     async fn go_away(
         &amp;self,
-        #[zbus(signal_context)]
-        ctxt: SignalContext&lt;'_&gt;,
+        #[zbus(signal_emitter)]
+        emitter: SignalEmitter&lt;'_&gt;,
     ) -&gt; fdo::Result&lt;()&gt; {
-        Self::greeted_everyone(&amp;ctxt).await?;
+        emitter.greeted_everyone().await?;
         self.done.notify(1);
 
         Ok(())
@@ -1110,7 +1110,7 @@ impl Greeter {
 
     /// A signal; the implementation is provided by the macro.
     #[zbus(signal)]
-    async fn greeted_everyone(ctxt: &amp;SignalContext&lt;'_&gt;) -&gt; Result&lt;()&gt;;
+    async fn greeted_everyone(emitter: &amp;SignalEmitter&lt;'_&gt;) -&gt; Result&lt;()&gt;;
 }
 
 // Although we use `tokio` here, you can use any async runtime of choice.
@@ -1121,13 +1121,21 @@ async fn main() -&gt; Result&lt;()&gt; {
         done: event_listener::Event::new(),
     };
     let done_listener = greeter.done.listen();
-    let _connection = Builder::session()?
+    let connection = Builder::session()?
         .name("org.zbus.MyGreeter")?
         .serve_at("/org/zbus/MyGreeter", greeter)?
         .build()
         .await?;
 
     done_listener.wait();
+
+    // Let's emit the signal again, just for the fun of it.
+    connection
+        .object_server()
+        .interface("/org/zbus/MyGreeter")
+        .await?
+        .greeted_everyone()
+        .await?;
 
     Ok(())
 }</code></pre></pre>
@@ -1161,12 +1169,22 @@ the returned <code>Result&lt;T, E&gt;</code>.</p>
 want to use <a href="https://docs.rs/zbus/4/zbus/fdo/enum.Error.html#variant.UnknownProperty"><code>zbus::fdo::Error::UnknownProperty</code></a> variant.</p>
 <h3 id="sending-signals"><a class="header" href="#sending-signals">Sending signals</a></h3>
 <p>As you might have noticed in the previous example, the signal methods don’t take a <code>&amp;self</code> argument
-but a <code>SignalContext</code> reference. This allows to emit signals whether from inside or outside of the
-<code>interface</code> methods’ context. To make things simpler, <code>interface</code> methods can receive a
-<code>SignalContext</code> passed to them using the special <code>zbus(signal_context)</code> attribute, as demonstrated
-in the previous example.</p>
+but a <code>SignalEmitter</code> reference. While this allows to emit signals whether from inside or outside of
+the <code>interface</code> methods’ context, it does make it a bit inconvenient to use. To make things easier
+<code>interface</code> generates a trait, <code>GreeterSignals</code> that provides the same signal methods but
+without the <code>SignalEmitter</code> argument. The macro provides two implementations of this trait for:</p>
+<ul>
+<li><code>zbus::object_server::InterfaceRef&lt;Greeter&gt;</code></li>
+<li><code>zbus::object_server::SignalEmitter</code></li>
+</ul>
+<p>The former is useful for emitting signals from outside the context of an <code>interface</code> method and the
+latter is useful for emitting signals from inside of it. To make it possible to emit signals from
+inside of an <code>interface</code> method, methods can ask to receive a <code>SignalEmitter</code> passed to them using
+the special <code>zbus(signal_emitter)</code> attribute.</p>
 <p>Please refer to <a href="https://docs.rs/zbus/4/zbus/attr.interface.html"><code>interface</code> documentation</a> for more examples and list of other special
 attributes you can make use of.</p>
+<p>We saw examples of signal emission in action, from both inside and outside an <code>interface</code> method, in
+the previous example.</p>
 <h3 id="notifying-property-changes"><a class="header" href="#notifying-property-changes">Notifying property changes</a></h3>
 <p>For each property declared through the <code>interface</code> macro, a <code>&lt;property_name&gt;_changed</code> method is
 generated that emits the necessary property change signal. Here is how to use it with the previous
@@ -1198,7 +1216,7 @@ example code:</p>
 let iface_ref = object_server.interface::&lt;_, Greeter&gt;("/org/zbus/MyGreeter").await?;
 let mut iface = iface_ref.get_mut().await;
 iface.name = String::from("👋");
-iface.greeter_name_changed(iface_ref.signal_context()).await?;
+iface.greeter_name_changed(iface_ref.signal_emitter()).await?;
 <span class="boring">Ok(())
 </span><span class="boring">}</span></code></pre></pre>
 <h2 id="proxy-generation"><a class="header" href="#proxy-generation">Proxy generation</a></h2>
@@ -1264,8 +1282,6 @@ instead of a <code>&amp;str</code>. This is because the methods in the <code>pro
 type to be returned from its methods.</li>
 <li>Methods returning [<code>object_server::ResponseDispatchNotifier</code>] wrapper type will do the same for
 proxy as well.</li>
-<li>Only <code>interface</code> macro supports this feature, while the deprecated <code>dbus_interface</code> macro does
-not. Still haven’t switched to <code>interface</code> and want to use this feature? Time to switch!</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="blocking-api"><a class="header" href="#blocking-api">Blocking API</a></h1>
 <ul>
@@ -1284,6 +1300,9 @@ it provides blocking wrapper types, under the <a href="https://docs.rs/zbus/4/zb
 in panics and hangs. This is not a limitation of zbus but rather a
 <a href="https://rust-lang.github.io/wg-async-foundations/vision/shiny_future/users_manual.html#caveat-beware-the-async-sandwich">well-known general problem</a> in the Rust async/await world. The <a href="https://docs.rs/blocking/"><code>blocking</code> crate</a>,
 <a href="https://docs.rs/async-std/4/async_std/task/fn.spawn_blocking.html"><code>async-std</code></a> and <a href="https://docs.rs/tokio/4/tokio/task/fn.spawn_blocking.html"><code>tokio</code></a> crates provide a easy way around this problem.</p>
+<p><strong>Note:</strong> Since zbus 5.0, blocking API can be disabled through the <code>blocking-api</code> cargo feature. If
+you use this API, make sure you are not unintentionally disabling it by disabling the default
+features in your <code>Cargo.toml</code>.</p>
 <h2 id="establishing-a-connection-1"><a class="header" href="#establishing-a-connection-1">Establishing a connection</a></h2>
 <p>The only difference to that of <a href="https://docs.rs/zbus/4/zbus/connection/struct.Connection.html">asynchronous <code>Connection</code> API</a> is that you use
 <a href="https://docs.rs/zbus/4/zbus/blocking/connection/struct.Connection.html"><code>blocking::Connection</code></a> type instead. This type’s API is almost identical to that of <code>Connection</code>,
@@ -1393,7 +1412,7 @@ fn main() -&gt; Result&lt;()&gt; {
 context. Therefore, you can not use blocking API in the method implementation directly. See note at
 the beginning of this chapter for details on why and a possible workaround.</p>
 <pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">use std::error::Error;
-</span><span class="boring">use zbus::{blocking::connection, interface, fdo, SignalContext};
+</span><span class="boring">use zbus::{blocking::connection, interface, fdo, object_server::SignalEmitter};
 </span><span class="boring">
 </span>use event_listener::{Event, Listener};
 
@@ -1411,10 +1430,10 @@ impl Greeter {
     // Rude!
     async fn go_away(
         &amp;self,
-        #[zbus(signal_context)]
-        ctxt: SignalContext&lt;'_&gt;,
+        #[zbus(signal_emitter)]
+        emitter: SignalEmitter&lt;'_&gt;,
     ) -&gt; fdo::Result&lt;()&gt; {
-        Self::greeted_everyone(&amp;ctxt).await?;
+        emitter.greeted_everyone().await?;
         self.done.notify(1);
 
         Ok(())
@@ -1438,7 +1457,7 @@ impl Greeter {
 
     /// A signal; the implementation is provided by the macro.
     #[zbus(signal)]
-    async fn greeted_everyone(ctxt: &amp;SignalContext&lt;'_&gt;) -&gt; zbus::Result&lt;()&gt;;
+    async fn greeted_everyone(emitter: &amp;SignalEmitter&lt;'_&gt;) -&gt; zbus::Result&lt;()&gt;;
 }
 
 fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {

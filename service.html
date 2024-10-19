@@ -260,9 +260,10 @@ by replacing the loop above with this code:</p>
         zbus::message::Type::MethodCall =&gt; {
             // real code would check msg_header path(), interface() and member()
             // handle invalid calls, introspection, errors etc
+            let header = msg.header();
             let body = msg.body();
             let arg: &amp;str = body.deserialize()?;
-            connection.reply(&amp;msg, &amp;(format!("Hello {}!", arg))).await?;
+            connection.reply(&amp;header, &amp;(format!("Hello {}!", arg))).await?;
 
             break;
         }
@@ -368,7 +369,7 @@ org.zbus.MyGreeter1                 interface -         -             -
 <p>This is a more complete example, demonstrating some of its usages. It also shows a way to
 synchronize with the interface handlers from outside, thanks to the <code>event_listener</code> crate
 (this is just one of the many ways).</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">use zbus::{object_server::SignalContext, connection::Builder, interface, fdo, Result};
+<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">use zbus::{object_server::SignalEmitter, connection::Builder, interface, fdo, Result};
 </span><span class="boring">
 </span>use event_listener::{Event, Listener};
 
@@ -386,10 +387,10 @@ impl Greeter {
     // Rude!
     async fn go_away(
         &amp;self,
-        #[zbus(signal_context)]
-        ctxt: SignalContext&lt;'_&gt;,
+        #[zbus(signal_emitter)]
+        emitter: SignalEmitter&lt;'_&gt;,
     ) -&gt; fdo::Result&lt;()&gt; {
-        Self::greeted_everyone(&amp;ctxt).await?;
+        emitter.greeted_everyone().await?;
         self.done.notify(1);
 
         Ok(())
@@ -413,7 +414,7 @@ impl Greeter {
 
     /// A signal; the implementation is provided by the macro.
     #[zbus(signal)]
-    async fn greeted_everyone(ctxt: &amp;SignalContext&lt;'_&gt;) -&gt; Result&lt;()&gt;;
+    async fn greeted_everyone(emitter: &amp;SignalEmitter&lt;'_&gt;) -&gt; Result&lt;()&gt;;
 }
 
 // Although we use `tokio` here, you can use any async runtime of choice.
@@ -424,13 +425,21 @@ async fn main() -&gt; Result&lt;()&gt; {
         done: event_listener::Event::new(),
     };
     let done_listener = greeter.done.listen();
-    let _connection = Builder::session()?
+    let connection = Builder::session()?
         .name("org.zbus.MyGreeter")?
         .serve_at("/org/zbus/MyGreeter", greeter)?
         .build()
         .await?;
 
     done_listener.wait();
+
+    // Let's emit the signal again, just for the fun of it.
+    connection
+        .object_server()
+        .interface("/org/zbus/MyGreeter")
+        .await?
+        .greeted_everyone()
+        .await?;
 
     Ok(())
 }</code></pre></pre>
@@ -464,12 +473,22 @@ the returned <code>Result&lt;T, E&gt;</code>.</p>
 want to use <a href="https://docs.rs/zbus/4/zbus/fdo/enum.Error.html#variant.UnknownProperty"><code>zbus::fdo::Error::UnknownProperty</code></a> variant.</p>
 <h3 id="sending-signals"><a class="header" href="#sending-signals">Sending signals</a></h3>
 <p>As you might have noticed in the previous example, the signal methods don’t take a <code>&amp;self</code> argument
-but a <code>SignalContext</code> reference. This allows to emit signals whether from inside or outside of the
-<code>interface</code> methods’ context. To make things simpler, <code>interface</code> methods can receive a
-<code>SignalContext</code> passed to them using the special <code>zbus(signal_context)</code> attribute, as demonstrated
-in the previous example.</p>
+but a <code>SignalEmitter</code> reference. While this allows to emit signals whether from inside or outside of
+the <code>interface</code> methods’ context, it does make it a bit inconvenient to use. To make things easier
+<code>interface</code> generates a trait, <code>GreeterSignals</code> that provides the same signal methods but
+without the <code>SignalEmitter</code> argument. The macro provides two implementations of this trait for:</p>
+<ul>
+<li><code>zbus::object_server::InterfaceRef&lt;Greeter&gt;</code></li>
+<li><code>zbus::object_server::SignalEmitter</code></li>
+</ul>
+<p>The former is useful for emitting signals from outside the context of an <code>interface</code> method and the
+latter is useful for emitting signals from inside of it. To make it possible to emit signals from
+inside of an <code>interface</code> method, methods can ask to receive a <code>SignalEmitter</code> passed to them using
+the special <code>zbus(signal_emitter)</code> attribute.</p>
 <p>Please refer to <a href="https://docs.rs/zbus/4/zbus/attr.interface.html"><code>interface</code> documentation</a> for more examples and list of other special
 attributes you can make use of.</p>
+<p>We saw examples of signal emission in action, from both inside and outside an <code>interface</code> method, in
+the previous example.</p>
 <h3 id="notifying-property-changes"><a class="header" href="#notifying-property-changes">Notifying property changes</a></h3>
 <p>For each property declared through the <code>interface</code> macro, a <code>&lt;property_name&gt;_changed</code> method is
 generated that emits the necessary property change signal. Here is how to use it with the previous
@@ -501,7 +520,7 @@ example code:</p>
 let iface_ref = object_server.interface::&lt;_, Greeter&gt;("/org/zbus/MyGreeter").await?;
 let mut iface = iface_ref.get_mut().await;
 iface.name = String::from("👋");
-iface.greeter_name_changed(iface_ref.signal_context()).await?;
+iface.greeter_name_changed(iface_ref.signal_emitter()).await?;
 <span class="boring">Ok(())
 </span><span class="boring">}</span></code></pre></pre>
 <h2 id="proxy-generation"><a class="header" href="#proxy-generation">Proxy generation</a></h2>
@@ -567,8 +586,6 @@ instead of a <code>&amp;str</code>. This is because the methods in the <code>pro
 type to be returned from its methods.</li>
 <li>Methods returning [<code>object_server::ResponseDispatchNotifier</code>] wrapper type will do the same for
 proxy as well.</li>
-<li>Only <code>interface</code> macro supports this feature, while the deprecated <code>dbus_interface</code> macro does
-not. Still haven’t switched to <code>interface</code> and want to use this feature? Time to switch!</li>
 </ul>
 
                     </main>
