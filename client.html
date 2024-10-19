@@ -344,9 +344,7 @@ to notify interested peers of any changes to the state of the service. zbus prov
 <p>Let’s look at this API in action, with an example where we monitor started systemd units.</p>
 <pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">// NOTE: When changing this, please also keep `zbus/examples/watch-systemd-jobs.rs` in sync.
 </span>use futures_util::stream::StreamExt;
-use zbus::Connection;
-use zbus_macros::proxy;
-use zvariant::OwnedObjectPath;
+use zbus::{zvariant::OwnedObjectPath, proxy, Connection};
 
 <span class="boring">fn main() {
 </span><span class="boring">    async_io::block_on(watch_systemd_jobs()).expect("Error listening to signal");
@@ -541,7 +539,7 @@ Environment variables:
 <code>TryFrom&lt;zvariant::Value&lt;'_&gt;&gt;</code> and/or <code>TryFrom&lt;OwnedValue&gt;</code> implementations. This is because
 properties are always sent as Variants on the bus, so you need to implement these conversions for
 your custom types.</p>
-<p>Not to worry though, the <code>zvariant</code> crate provides a <a href="https://docs.rs/zvariant/4/zvariant/derive.Value.html"><code>Value</code></a> and <a href="https://docs.rs/zvariant/4/zvariant/derive.OwnedValue.html"><code>OwnedValue</code></a> derive macro to
+<p>Not to worry though, the <code>zvariant</code> crate provides a <a href="https://docs.rs/zvariant/5/zvariant/derive.Value.html"><code>Value</code></a> and <a href="https://docs.rs/zvariant/5/zvariant/derive.OwnedValue.html"><code>OwnedValue</code></a> derive macro to
 implement these conversions for you.</p>
 <h4 id="watching-for-changes"><a class="header" href="#watching-for-changes">Watching for changes</a></h4>
 <p>By default, the proxy will cache the properties and watch for changes.</p>

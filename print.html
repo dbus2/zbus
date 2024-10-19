@@ -271,7 +271,7 @@ entry point of the zbus API.</p>
 returns an instance of the connection (if all went well). Similarly, to connect to the system bus
 (to communicate with services such as <a href="https://developer.gnome.org/NetworkManager/stable/spec.html">NetworkManager</a>, <a href="https://git.kernel.org/pub/scm/bluetooth/bluez.git/tree/doc">BlueZ</a> or <a href="https://www.freedesktop.org/software/systemd/man/latest/org.freedesktop.systemd1.html">PID1</a>), use
 <code>Connection::system()</code>.</p>
-<p>Moreover, it can be converted to a <a href="https://docs.rs/zbus/4/zbus/struct.MessageStream.html"><code>MessageStream</code></a> that implements <a href="https://docs.rs/futures/4/futures/stream/trait.Stream.html"><code>futures::stream::Stream</code></a>,
+<p>Moreover, it can be converted to a <a href="https://docs.rs/zbus/5/zbus/struct.MessageStream.html"><code>MessageStream</code></a> that implements <a href="https://docs.rs/futures/4/futures/stream/trait.Stream.html"><code>futures::stream::Stream</code></a>,
 which can be used to conveniently receive messages, for the times when low-level API is
 more appropriate for your use case.</p>
 <p><strong>Note:</strong> it is common for a D-Bus library to provide a “shared” connection to a bus for a process:
@@ -283,7 +283,7 @@ The official dbus installation method via <code>Homebrew</code> provides a sessi
 utilizing macOS <code>LaunchAgents</code> feature. By default, zbus consumes an address for a bus connection that
 is provided via <code>launchctl getenv DBUS_LAUNCHD_SESSION_BUS_SOCKET</code> command output.</p>
 <h2 id="using-a-custom-bus-address"><a class="header" href="#using-a-custom-bus-address">Using a custom bus address</a></h2>
-<p>You may also specify a custom bus with <a href="https://docs.rs/zbus/4/zbus/connection/struct.Builder.html#method.address"><code>connection::Builder::address</code></a> which takes a D-Bus address
+<p>You may also specify a custom bus with <a href="https://docs.rs/zbus/5/zbus/connection/struct.Builder.html#method.address"><code>connection::Builder::address</code></a> which takes a D-Bus address
 <a href="https://dbus.freedesktop.org/doc/dbus-specification.html#addresses">as specified in the specification</a>.</p>
 <h2 id="peer-to-peer-connection"><a class="header" href="#peer-to-peer-connection">Peer to peer connection</a></h2>
 <p>Peer-to-peer connections are bus-less<sup class="footnote-reference"><a href="#bus-less">1</a></sup>, and the initial handshake protocol is a bit
@@ -483,9 +483,7 @@ to notify interested peers of any changes to the state of the service. zbus prov
 <p>Let’s look at this API in action, with an example where we monitor started systemd units.</p>
 <pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">// NOTE: When changing this, please also keep `zbus/examples/watch-systemd-jobs.rs` in sync.
 </span>use futures_util::stream::StreamExt;
-use zbus::Connection;
-use zbus_macros::proxy;
-use zvariant::OwnedObjectPath;
+use zbus::{zvariant::OwnedObjectPath, proxy, Connection};
 
 <span class="boring">fn main() {
 </span><span class="boring">    async_io::block_on(watch_systemd_jobs()).expect("Error listening to signal");
@@ -680,7 +678,7 @@ Environment variables:
 <code>TryFrom&lt;zvariant::Value&lt;'_&gt;&gt;</code> and/or <code>TryFrom&lt;OwnedValue&gt;</code> implementations. This is because
 properties are always sent as Variants on the bus, so you need to implement these conversions for
 your custom types.</p>
-<p>Not to worry though, the <code>zvariant</code> crate provides a <a href="https://docs.rs/zvariant/4/zvariant/derive.Value.html"><code>Value</code></a> and <a href="https://docs.rs/zvariant/4/zvariant/derive.OwnedValue.html"><code>OwnedValue</code></a> derive macro to
+<p>Not to worry though, the <code>zvariant</code> crate provides a <a href="https://docs.rs/zvariant/5/zvariant/derive.Value.html"><code>Value</code></a> and <a href="https://docs.rs/zvariant/5/zvariant/derive.OwnedValue.html"><code>OwnedValue</code></a> derive macro to
 implement these conversions for you.</p>
 <h4 id="watching-for-changes"><a class="header" href="#watching-for-changes">Watching for changes</a></h4>
 <p>By default, the proxy will cache the properties and watch for changes.</p>
@@ -1154,19 +1152,19 @@ org.zbus.MyGreeter1                 interface -         -             -
 <code>TryFrom&lt;zvariant::Value&lt;'_&gt;&gt;</code> and/or <code>TryFrom&lt;OwnedValue&gt;</code> implementations. This is because
 properties are always sent as Variants on the bus, so you need to implement these conversions for
 your custom types.</p>
-<p>Not to worry though, the <code>zvariant</code> crate provides a <a href="https://docs.rs/zvariant/4/zvariant/derive.Value.html"><code>Value</code></a> and <a href="https://docs.rs/zvariant/4/zvariant/derive.OwnedValue.html"><code>OwnedValue</code></a> derive macro to
+<p>Not to worry though, the <code>zvariant</code> crate provides a <a href="https://docs.rs/zvariant/5/zvariant/derive.Value.html"><code>Value</code></a> and <a href="https://docs.rs/zvariant/5/zvariant/derive.OwnedValue.html"><code>OwnedValue</code></a> derive macro to
 implement these conversions for you.</p>
 <h3 id="method-errors"><a class="header" href="#method-errors">Method errors</a></h3>
 <p>There are two possibilities for the return value of interface methods. The first is for infallible
 method calls, where the return type is a directly serializable value, like the <code>String</code> in
 <code>say_hello()</code> above.</p>
 <p>The second is a result return value, where the <code>Ok</code> variant is the serializable value, and the
-error is any type that implements <a href="https://docs.rs/zbus/4/zbus/trait.DBusError.html"><code>zbus::DBusError</code></a>. The <a href="https://docs.rs/zbus/4/zbus/fdo/enum.Error.html"><code>zbus::fdo::Error</code></a> type implements this
+error is any type that implements <a href="https://docs.rs/zbus/5/zbus/trait.DBusError.html"><code>zbus::DBusError</code></a>. The <a href="https://docs.rs/zbus/5/zbus/fdo/enum.Error.html"><code>zbus::fdo::Error</code></a> type implements this
 trait, and should cover most common use cases. However, when a custom error type needs to be emitted
 from the method as an error reply, it can be created using <code>derive(zbus::DBusError)</code>, and used in
 the returned <code>Result&lt;T, E&gt;</code>.</p>
-<p>Property methods may also return errors, but they must be <a href="https://docs.rs/zbus/4/zbus/fdo/enum.Error.html"><code>zbus::fdo::Error</code></a>. Most often you’ll
-want to use <a href="https://docs.rs/zbus/4/zbus/fdo/enum.Error.html#variant.UnknownProperty"><code>zbus::fdo::Error::UnknownProperty</code></a> variant.</p>
+<p>Property methods may also return errors, but they must be <a href="https://docs.rs/zbus/5/zbus/fdo/enum.Error.html"><code>zbus::fdo::Error</code></a>. Most often you’ll
+want to use <a href="https://docs.rs/zbus/5/zbus/fdo/enum.Error.html#variant.UnknownProperty"><code>zbus::fdo::Error::UnknownProperty</code></a> variant.</p>
 <h3 id="sending-signals"><a class="header" href="#sending-signals">Sending signals</a></h3>
 <p>As you might have noticed in the previous example, the signal methods don’t take a <code>&amp;self</code> argument
 but a <code>SignalEmitter</code> reference. While this allows to emit signals whether from inside or outside of
@@ -1181,7 +1179,7 @@ without the <code>SignalEmitter</code> argument. The macro provides two implemen
 latter is useful for emitting signals from inside of it. To make it possible to emit signals from
 inside of an <code>interface</code> method, methods can ask to receive a <code>SignalEmitter</code> passed to them using
 the special <code>zbus(signal_emitter)</code> attribute.</p>
-<p>Please refer to <a href="https://docs.rs/zbus/4/zbus/attr.interface.html"><code>interface</code> documentation</a> for more examples and list of other special
+<p>Please refer to <a href="https://docs.rs/zbus/5/zbus/attr.interface.html"><code>interface</code> documentation</a> for more examples and list of other special
 attributes you can make use of.</p>
 <p>We saw examples of signal emission in action, from both inside and outside an <code>interface</code> method, in
 the previous example.</p>
@@ -1220,7 +1218,7 @@ iface.greeter_name_changed(iface_ref.signal_emitter()).await?;
 <span class="boring">Ok(())
 </span><span class="boring">}</span></code></pre></pre>
 <h2 id="proxy-generation"><a class="header" href="#proxy-generation">Proxy generation</a></h2>
-<p><code>interface</code> macro can also generate the client-side proxy code for you. It utilizes the <a href="https://docs.rs/zbus/4/zbus/attr.proxy.html"><code>proxy</code></a>
+<p><code>interface</code> macro can also generate the client-side proxy code for you. It utilizes the <a href="https://docs.rs/zbus/5/zbus/attr.proxy.html"><code>proxy</code></a>
 macro behind the scenes to achieve this. Here is how to use it:</p>
 <pre><pre class="playground"><code class="language-rust edition2021">use zbus::interface;
 
@@ -1295,7 +1293,7 @@ proxy as well.</li>
 </ul>
 <p>While zbus API being primarily asynchronous (since 2.0) is a great thing, it could easily feel
 daunting for simple use cases. Not to worry! In the spirit of “ease” being a primary goal of zbus,
-it provides blocking wrapper types, under the <a href="https://docs.rs/zbus/4/zbus/blocking/index.html">blocking module</a>.</p>
+it provides blocking wrapper types, under the <a href="https://docs.rs/zbus/5/zbus/blocking/index.html">blocking module</a>.</p>
 <p><strong>Note:</strong> Use of the blocking API presented in this chapter in an async context will likely result
 in panics and hangs. This is not a limitation of zbus but rather a
 <a href="https://rust-lang.github.io/wg-async-foundations/vision/shiny_future/users_manual.html#caveat-beware-the-async-sandwich">well-known general problem</a> in the Rust async/await world. The <a href="https://docs.rs/blocking/"><code>blocking</code> crate</a>,
@@ -1304,8 +1302,8 @@ in panics and hangs. This is not a limitation of zbus but rather a
 you use this API, make sure you are not unintentionally disabling it by disabling the default
 features in your <code>Cargo.toml</code>.</p>
 <h2 id="establishing-a-connection-1"><a class="header" href="#establishing-a-connection-1">Establishing a connection</a></h2>
-<p>The only difference to that of <a href="https://docs.rs/zbus/4/zbus/connection/struct.Connection.html">asynchronous <code>Connection</code> API</a> is that you use
-<a href="https://docs.rs/zbus/4/zbus/blocking/connection/struct.Connection.html"><code>blocking::Connection</code></a> type instead. This type’s API is almost identical to that of <code>Connection</code>,
+<p>The only difference to that of <a href="https://docs.rs/zbus/5/zbus/connection/struct.Connection.html">asynchronous <code>Connection</code> API</a> is that you use
+<a href="https://docs.rs/zbus/5/zbus/blocking/connection/struct.Connection.html"><code>blocking::Connection</code></a> type instead. This type’s API is almost identical to that of <code>Connection</code>,
 except all its methods are blocking.</p>
 <h2 id="client"><a class="header" href="#client">Client</a></h2>
 <p>Similar to <code>blocking::Connection</code>, you use <code>blocking::Proxy</code> type. Its constructors require
@@ -1406,7 +1404,7 @@ fn main() -&gt; Result&lt;()&gt; {
 }</code></pre></pre>
 <h2 id="server"><a class="header" href="#server">Server</a></h2>
 <p>Similarly here, you’d use [<code>blocking::ObjectServer</code>] that is associated with every
-<a href="https://docs.rs/zbus/4/zbus/blocking/connection/struct.Connection.html"><code>blocking::Connection</code></a> instance. While there is no blocking version of <code>Interface</code>,
+<a href="https://docs.rs/zbus/5/zbus/blocking/connection/struct.Connection.html"><code>blocking::Connection</code></a> instance. While there is no blocking version of <code>Interface</code>,
 <code>interface</code> allows you to write non-async methods.</p>
 <p><strong>Note:</strong> Even though you can write non-async methods, these methods are still called from an async
 context. Therefore, you can not use blocking API in the method implementation directly. See note at
@@ -1498,8 +1496,8 @@ fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
 <p>Since the use of a dictionary, specifically one with strings as keys and variants as value (i-e
 <code>a{sv}</code>) is very common in the D-Bus world and use of HashMaps isn’t as convenient and type-safe as
 a struct, you might find yourself wanting to use a struct as a dictionary.</p>
-<p><code>zvariant</code> provides convenient macros for making this possible: <a href="https://docs.rs/zvariant/4/zvariant/derive.SerializeDict.html"><code>SerializeDict</code></a> and
-<a href="https://docs.rs/zvariant/4/zvariant/derive.DeserializeDict.html"><code>DeserializeDict</code></a>. You’ll also need to tell <a href="https://docs.rs/zvariant/4/zvariant/derive.Type.html"><code>Type</code></a> macro to treat the type as a dictionary using
+<p><code>zvariant</code> provides convenient macros for making this possible: <a href="https://docs.rs/zvariant/5/zvariant/derive.SerializeDict.html"><code>SerializeDict</code></a> and
+<a href="https://docs.rs/zvariant/5/zvariant/derive.DeserializeDict.html"><code>DeserializeDict</code></a>. You’ll also need to tell <a href="https://docs.rs/zvariant/5/zvariant/derive.Type.html"><code>Type</code></a> macro to treat the type as a dictionary using
 the <code>signature</code> attribute. Here is a simple example:</p>
 <pre><code class="language-rust noplayground">use zbus::{
     proxy, interface, fdo::Result,
@@ -1562,7 +1560,7 @@ have to wait in line.</p>
 combined with signals to report the progress of the work to clients. Both of these solutions
 involve converting the methods in question to take <code>&amp;self</code> argument instead of <code>&amp;mut self</code>.</p>
 <h3 id="2-a-stream-eg-signalstream-is-not-being-continuously-polled"><a class="header" href="#2-a-stream-eg-signalstream-is-not-being-continuously-polled">2. A stream (e.g <code>SignalStream</code>) is not being continuously polled</a></h3>
-<p>Please consult <a href="https://docs.rs/zbus/4/zbus/struct.MessageStream.html"><code>MessageStream</code></a> documentation for details.</p>
+<p>Please consult <a href="https://docs.rs/zbus/5/zbus/struct.MessageStream.html"><code>MessageStream</code></a> documentation for details.</p>
 <h2 id="why-arent-property-values-updating-for-my-service-that-doesnt-notify-changes"><a class="header" href="#why-arent-property-values-updating-for-my-service-that-doesnt-notify-changes">Why aren’t property values updating for my service that doesn’t notify changes?</a></h2>
 <p>A common issue might arise when using a zbus proxy is that your proxy’s property values aren’t
 updating. This is due to zbus’ default caching policy, which updates the value of a property only
@@ -1574,14 +1572,14 @@ update accordingly.</p>
 <li>
 <p>Add the <code>#[zbus(property(emits_changed_signal = "false"))]</code> annotation to the property for which
 you desire to disable caching on. For more information about all the possible values for
-<code>emits_changed_signal</code> refer to <a href="https://docs.rs/zbus/4/zbus/attr.proxy.html"><code>proxy</code></a> documentation.</p>
+<code>emits_changed_signal</code> refer to <a href="https://docs.rs/zbus/5/zbus/attr.proxy.html"><code>proxy</code></a> documentation.</p>
 </li>
 <li>
-<p>Use <code>proxy::Builder</code> to build your proxy instance and use <a href="https://docs.rs/zbus/4/zbus/proxy/struct.Builder.html#method.uncached_properties"><code>proxy::Builder::uncached_properties</code></a>
+<p>Use <code>proxy::Builder</code> to build your proxy instance and use <a href="https://docs.rs/zbus/5/zbus/proxy/struct.Builder.html#method.uncached_properties"><code>proxy::Builder::uncached_properties</code></a>
 method to list all properties you wish to disable caching for.</p>
 </li>
 <li>
-<p>In order to disable caching for either type of proxy use the <a href="https://docs.rs/zbus/4/zbus/proxy/struct.Builder.html#method.cache_properties"><code>proxy::Builder::cache_properites</code></a>
+<p>In order to disable caching for either type of proxy use the <a href="https://docs.rs/zbus/5/zbus/proxy/struct.Builder.html#method.cache_properties"><code>proxy::Builder::cache_properites</code></a>
 method.</p>
 </li>
 </ul>
@@ -1594,7 +1592,7 @@ default value for the type in question is a good choice. For example the empty s
 often used as <code>None</code> for strings and string-based types. Note however that this solution can not
 work for all types, for example <code>bool</code>.</p>
 <p>Since this is the most widely used solution in the D-Bus world and is even used by the <a href="http://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces">D-Bus
-standard interfaces</a>, <code>zvariant</code> provides a custom type for this, <a href="https://docs.rs/zvariant/4/zvariant/struct.Optional.html"><code>Optional&lt;T&gt;</code></a> that makes
+standard interfaces</a>, <code>zvariant</code> provides a custom type for this, <a href="https://docs.rs/zvariant/5/zvariant/struct.Optional.html"><code>Optional&lt;T&gt;</code></a> that makes
 it super easy to simulate a nullable type, especially if the contained type implements the <code>Default</code>
 trait.</p>
 <h3 id="2-encoding-as-an-array-a"><a class="header" href="#2-encoding-as-an-array-a">2. Encoding as an array (<code>a?</code>)</a></h3>
@@ -1621,7 +1619,7 @@ enabled.</p>
 <p>By default, <code>zvariant</code> encodes an unit-type enum as a <code>u32</code>, denoting the variant index. Other enums
 are encoded as a structure whose first field is the variant index and the second one are the
 variant’s field(s). The only caveat here is that all variants must have the same number and types
-of fields. Names of fields don’t matter though. You can make use of <a href="https://docs.rs/zvariant/4/zvariant/enum.Value.html"><code>Value</code></a> or <a href="https://docs.rs/zvariant/4/zvariant/struct.OwnedValue.html"><code>OwnedValue</code></a> if you want to encode different data in different fields. Here is a simple example:</p>
+of fields. Names of fields don’t matter though. You can make use of <a href="https://docs.rs/zvariant/5/zvariant/enum.Value.html"><code>Value</code></a> or <a href="https://docs.rs/zvariant/5/zvariant/struct.OwnedValue.html"><code>OwnedValue</code></a> if you want to encode different data in different fields. Here is a simple example:</p>
 <pre><code class="language-rust noplayground">use zbus::zvariant::{serialized::Context, to_bytes, Type, LE};
 use serde::{Deserialize, Serialize};
 

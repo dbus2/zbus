@@ -458,19 +458,19 @@ org.zbus.MyGreeter1                 interface -         -             -
 <code>TryFrom&lt;zvariant::Value&lt;'_&gt;&gt;</code> and/or <code>TryFrom&lt;OwnedValue&gt;</code> implementations. This is because
 properties are always sent as Variants on the bus, so you need to implement these conversions for
 your custom types.</p>
-<p>Not to worry though, the <code>zvariant</code> crate provides a <a href="https://docs.rs/zvariant/4/zvariant/derive.Value.html"><code>Value</code></a> and <a href="https://docs.rs/zvariant/4/zvariant/derive.OwnedValue.html"><code>OwnedValue</code></a> derive macro to
+<p>Not to worry though, the <code>zvariant</code> crate provides a <a href="https://docs.rs/zvariant/5/zvariant/derive.Value.html"><code>Value</code></a> and <a href="https://docs.rs/zvariant/5/zvariant/derive.OwnedValue.html"><code>OwnedValue</code></a> derive macro to
 implement these conversions for you.</p>
 <h3 id="method-errors"><a class="header" href="#method-errors">Method errors</a></h3>
 <p>There are two possibilities for the return value of interface methods. The first is for infallible
 method calls, where the return type is a directly serializable value, like the <code>String</code> in
 <code>say_hello()</code> above.</p>
 <p>The second is a result return value, where the <code>Ok</code> variant is the serializable value, and the
-error is any type that implements <a href="https://docs.rs/zbus/4/zbus/trait.DBusError.html"><code>zbus::DBusError</code></a>. The <a href="https://docs.rs/zbus/4/zbus/fdo/enum.Error.html"><code>zbus::fdo::Error</code></a> type implements this
+error is any type that implements <a href="https://docs.rs/zbus/5/zbus/trait.DBusError.html"><code>zbus::DBusError</code></a>. The <a href="https://docs.rs/zbus/5/zbus/fdo/enum.Error.html"><code>zbus::fdo::Error</code></a> type implements this
 trait, and should cover most common use cases. However, when a custom error type needs to be emitted
 from the method as an error reply, it can be created using <code>derive(zbus::DBusError)</code>, and used in
 the returned <code>Result&lt;T, E&gt;</code>.</p>
-<p>Property methods may also return errors, but they must be <a href="https://docs.rs/zbus/4/zbus/fdo/enum.Error.html"><code>zbus::fdo::Error</code></a>. Most often you’ll
-want to use <a href="https://docs.rs/zbus/4/zbus/fdo/enum.Error.html#variant.UnknownProperty"><code>zbus::fdo::Error::UnknownProperty</code></a> variant.</p>
+<p>Property methods may also return errors, but they must be <a href="https://docs.rs/zbus/5/zbus/fdo/enum.Error.html"><code>zbus::fdo::Error</code></a>. Most often you’ll
+want to use <a href="https://docs.rs/zbus/5/zbus/fdo/enum.Error.html#variant.UnknownProperty"><code>zbus::fdo::Error::UnknownProperty</code></a> variant.</p>
 <h3 id="sending-signals"><a class="header" href="#sending-signals">Sending signals</a></h3>
 <p>As you might have noticed in the previous example, the signal methods don’t take a <code>&amp;self</code> argument
 but a <code>SignalEmitter</code> reference. While this allows to emit signals whether from inside or outside of
@@ -485,7 +485,7 @@ without the <code>SignalEmitter</code> argument. The macro provides two implemen
 latter is useful for emitting signals from inside of it. To make it possible to emit signals from
 inside of an <code>interface</code> method, methods can ask to receive a <code>SignalEmitter</code> passed to them using
 the special <code>zbus(signal_emitter)</code> attribute.</p>
-<p>Please refer to <a href="https://docs.rs/zbus/4/zbus/attr.interface.html"><code>interface</code> documentation</a> for more examples and list of other special
+<p>Please refer to <a href="https://docs.rs/zbus/5/zbus/attr.interface.html"><code>interface</code> documentation</a> for more examples and list of other special
 attributes you can make use of.</p>
 <p>We saw examples of signal emission in action, from both inside and outside an <code>interface</code> method, in
 the previous example.</p>
@@ -524,7 +524,7 @@ iface.greeter_name_changed(iface_ref.signal_emitter()).await?;
 <span class="boring">Ok(())
 </span><span class="boring">}</span></code></pre></pre>
 <h2 id="proxy-generation"><a class="header" href="#proxy-generation">Proxy generation</a></h2>
-<p><code>interface</code> macro can also generate the client-side proxy code for you. It utilizes the <a href="https://docs.rs/zbus/4/zbus/attr.proxy.html"><code>proxy</code></a>
+<p><code>interface</code> macro can also generate the client-side proxy code for you. It utilizes the <a href="https://docs.rs/zbus/5/zbus/attr.proxy.html"><code>proxy</code></a>
 macro behind the scenes to achieve this. Here is how to use it:</p>
 <pre><pre class="playground"><code class="language-rust edition2021">use zbus::interface;
 

@@ -192,7 +192,7 @@ entry point of the zbus API.</p>
 returns an instance of the connection (if all went well). Similarly, to connect to the system bus
 (to communicate with services such as <a href="https://developer.gnome.org/NetworkManager/stable/spec.html">NetworkManager</a>, <a href="https://git.kernel.org/pub/scm/bluetooth/bluez.git/tree/doc">BlueZ</a> or <a href="https://www.freedesktop.org/software/systemd/man/latest/org.freedesktop.systemd1.html">PID1</a>), use
 <code>Connection::system()</code>.</p>
-<p>Moreover, it can be converted to a <a href="https://docs.rs/zbus/4/zbus/struct.MessageStream.html"><code>MessageStream</code></a> that implements <a href="https://docs.rs/futures/4/futures/stream/trait.Stream.html"><code>futures::stream::Stream</code></a>,
+<p>Moreover, it can be converted to a <a href="https://docs.rs/zbus/5/zbus/struct.MessageStream.html"><code>MessageStream</code></a> that implements <a href="https://docs.rs/futures/4/futures/stream/trait.Stream.html"><code>futures::stream::Stream</code></a>,
 which can be used to conveniently receive messages, for the times when low-level API is
 more appropriate for your use case.</p>
 <p><strong>Note:</strong> it is common for a D-Bus library to provide a “shared” connection to a bus for a process:
@@ -204,7 +204,7 @@ The official dbus installation method via <code>Homebrew</code> provides a sessi
 utilizing macOS <code>LaunchAgents</code> feature. By default, zbus consumes an address for a bus connection that
 is provided via <code>launchctl getenv DBUS_LAUNCHD_SESSION_BUS_SOCKET</code> command output.</p>
 <h2 id="using-a-custom-bus-address"><a class="header" href="#using-a-custom-bus-address">Using a custom bus address</a></h2>
-<p>You may also specify a custom bus with <a href="https://docs.rs/zbus/4/zbus/connection/struct.Builder.html#method.address"><code>connection::Builder::address</code></a> which takes a D-Bus address
+<p>You may also specify a custom bus with <a href="https://docs.rs/zbus/5/zbus/connection/struct.Builder.html#method.address"><code>connection::Builder::address</code></a> which takes a D-Bus address
 <a href="https://dbus.freedesktop.org/doc/dbus-specification.html#addresses">as specified in the specification</a>.</p>
 <h2 id="peer-to-peer-connection"><a class="header" href="#peer-to-peer-connection">Peer to peer connection</a></h2>
 <p>Peer-to-peer connections are bus-less<sup class="footnote-reference"><a href="#bus-less">1</a></sup>, and the initial handshake protocol is a bit

@@ -191,7 +191,7 @@
 </ul>
 <p>While zbus API being primarily asynchronous (since 2.0) is a great thing, it could easily feel
 daunting for simple use cases. Not to worry! In the spirit of “ease” being a primary goal of zbus,
-it provides blocking wrapper types, under the <a href="https://docs.rs/zbus/4/zbus/blocking/index.html">blocking module</a>.</p>
+it provides blocking wrapper types, under the <a href="https://docs.rs/zbus/5/zbus/blocking/index.html">blocking module</a>.</p>
 <p><strong>Note:</strong> Use of the blocking API presented in this chapter in an async context will likely result
 in panics and hangs. This is not a limitation of zbus but rather a
 <a href="https://rust-lang.github.io/wg-async-foundations/vision/shiny_future/users_manual.html#caveat-beware-the-async-sandwich">well-known general problem</a> in the Rust async/await world. The <a href="https://docs.rs/blocking/"><code>blocking</code> crate</a>,
@@ -200,8 +200,8 @@ in panics and hangs. This is not a limitation of zbus but rather a
 you use this API, make sure you are not unintentionally disabling it by disabling the default
 features in your <code>Cargo.toml</code>.</p>
 <h2 id="establishing-a-connection"><a class="header" href="#establishing-a-connection">Establishing a connection</a></h2>
-<p>The only difference to that of <a href="https://docs.rs/zbus/4/zbus/connection/struct.Connection.html">asynchronous <code>Connection</code> API</a> is that you use
-<a href="https://docs.rs/zbus/4/zbus/blocking/connection/struct.Connection.html"><code>blocking::Connection</code></a> type instead. This type’s API is almost identical to that of <code>Connection</code>,
+<p>The only difference to that of <a href="https://docs.rs/zbus/5/zbus/connection/struct.Connection.html">asynchronous <code>Connection</code> API</a> is that you use
+<a href="https://docs.rs/zbus/5/zbus/blocking/connection/struct.Connection.html"><code>blocking::Connection</code></a> type instead. This type’s API is almost identical to that of <code>Connection</code>,
 except all its methods are blocking.</p>
 <h2 id="client"><a class="header" href="#client">Client</a></h2>
 <p>Similar to <code>blocking::Connection</code>, you use <code>blocking::Proxy</code> type. Its constructors require
@@ -302,7 +302,7 @@ fn main() -&gt; Result&lt;()&gt; {
 }</code></pre></pre>
 <h2 id="server"><a class="header" href="#server">Server</a></h2>
 <p>Similarly here, you’d use [<code>blocking::ObjectServer</code>] that is associated with every
-<a href="https://docs.rs/zbus/4/zbus/blocking/connection/struct.Connection.html"><code>blocking::Connection</code></a> instance. While there is no blocking version of <code>Interface</code>,
+<a href="https://docs.rs/zbus/5/zbus/blocking/connection/struct.Connection.html"><code>blocking::Connection</code></a> instance. While there is no blocking version of <code>Interface</code>,
 <code>interface</code> allows you to write non-async methods.</p>
 <p><strong>Note:</strong> Even though you can write non-async methods, these methods are still called from an async
 context. Therefore, you can not use blocking API in the method implementation directly. See note at

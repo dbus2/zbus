@@ -202,8 +202,8 @@
 <p>Since the use of a dictionary, specifically one with strings as keys and variants as value (i-e
 <code>a{sv}</code>) is very common in the D-Bus world and use of HashMaps isn’t as convenient and type-safe as
 a struct, you might find yourself wanting to use a struct as a dictionary.</p>
-<p><code>zvariant</code> provides convenient macros for making this possible: <a href="https://docs.rs/zvariant/4/zvariant/derive.SerializeDict.html"><code>SerializeDict</code></a> and
-<a href="https://docs.rs/zvariant/4/zvariant/derive.DeserializeDict.html"><code>DeserializeDict</code></a>. You’ll also need to tell <a href="https://docs.rs/zvariant/4/zvariant/derive.Type.html"><code>Type</code></a> macro to treat the type as a dictionary using
+<p><code>zvariant</code> provides convenient macros for making this possible: <a href="https://docs.rs/zvariant/5/zvariant/derive.SerializeDict.html"><code>SerializeDict</code></a> and
+<a href="https://docs.rs/zvariant/5/zvariant/derive.DeserializeDict.html"><code>DeserializeDict</code></a>. You’ll also need to tell <a href="https://docs.rs/zvariant/5/zvariant/derive.Type.html"><code>Type</code></a> macro to treat the type as a dictionary using
 the <code>signature</code> attribute. Here is a simple example:</p>
 <pre><code class="language-rust noplayground">use zbus::{
     proxy, interface, fdo::Result,
@@ -266,7 +266,7 @@ have to wait in line.</p>
 combined with signals to report the progress of the work to clients. Both of these solutions
 involve converting the methods in question to take <code>&amp;self</code> argument instead of <code>&amp;mut self</code>.</p>
 <h3 id="2-a-stream-eg-signalstream-is-not-being-continuously-polled"><a class="header" href="#2-a-stream-eg-signalstream-is-not-being-continuously-polled">2. A stream (e.g <code>SignalStream</code>) is not being continuously polled</a></h3>
-<p>Please consult <a href="https://docs.rs/zbus/4/zbus/struct.MessageStream.html"><code>MessageStream</code></a> documentation for details.</p>
+<p>Please consult <a href="https://docs.rs/zbus/5/zbus/struct.MessageStream.html"><code>MessageStream</code></a> documentation for details.</p>
 <h2 id="why-arent-property-values-updating-for-my-service-that-doesnt-notify-changes"><a class="header" href="#why-arent-property-values-updating-for-my-service-that-doesnt-notify-changes">Why aren’t property values updating for my service that doesn’t notify changes?</a></h2>
 <p>A common issue might arise when using a zbus proxy is that your proxy’s property values aren’t
 updating. This is due to zbus’ default caching policy, which updates the value of a property only
@@ -278,14 +278,14 @@ update accordingly.</p>
 <li>
 <p>Add the <code>#[zbus(property(emits_changed_signal = "false"))]</code> annotation to the property for which
 you desire to disable caching on. For more information about all the possible values for
-<code>emits_changed_signal</code> refer to <a href="https://docs.rs/zbus/4/zbus/attr.proxy.html"><code>proxy</code></a> documentation.</p>
+<code>emits_changed_signal</code> refer to <a href="https://docs.rs/zbus/5/zbus/attr.proxy.html"><code>proxy</code></a> documentation.</p>
 </li>
 <li>
-<p>Use <code>proxy::Builder</code> to build your proxy instance and use <a href="https://docs.rs/zbus/4/zbus/proxy/struct.Builder.html#method.uncached_properties"><code>proxy::Builder::uncached_properties</code></a>
+<p>Use <code>proxy::Builder</code> to build your proxy instance and use <a href="https://docs.rs/zbus/5/zbus/proxy/struct.Builder.html#method.uncached_properties"><code>proxy::Builder::uncached_properties</code></a>
 method to list all properties you wish to disable caching for.</p>
 </li>
 <li>
-<p>In order to disable caching for either type of proxy use the <a href="https://docs.rs/zbus/4/zbus/proxy/struct.Builder.html#method.cache_properties"><code>proxy::Builder::cache_properites</code></a>
+<p>In order to disable caching for either type of proxy use the <a href="https://docs.rs/zbus/5/zbus/proxy/struct.Builder.html#method.cache_properties"><code>proxy::Builder::cache_properites</code></a>
 method.</p>
 </li>
 </ul>
@@ -298,7 +298,7 @@ default value for the type in question is a good choice. For example the empty s
 often used as <code>None</code> for strings and string-based types. Note however that this solution can not
 work for all types, for example <code>bool</code>.</p>
 <p>Since this is the most widely used solution in the D-Bus world and is even used by the <a href="http://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces">D-Bus
-standard interfaces</a>, <code>zvariant</code> provides a custom type for this, <a href="https://docs.rs/zvariant/4/zvariant/struct.Optional.html"><code>Optional&lt;T&gt;</code></a> that makes
+standard interfaces</a>, <code>zvariant</code> provides a custom type for this, <a href="https://docs.rs/zvariant/5/zvariant/struct.Optional.html"><code>Optional&lt;T&gt;</code></a> that makes
 it super easy to simulate a nullable type, especially if the contained type implements the <code>Default</code>
 trait.</p>
 <h3 id="2-encoding-as-an-array-a"><a class="header" href="#2-encoding-as-an-array-a">2. Encoding as an array (<code>a?</code>)</a></h3>
@@ -325,7 +325,7 @@ enabled.</p>
 <p>By default, <code>zvariant</code> encodes an unit-type enum as a <code>u32</code>, denoting the variant index. Other enums
 are encoded as a structure whose first field is the variant index and the second one are the
 variant’s field(s). The only caveat here is that all variants must have the same number and types
-of fields. Names of fields don’t matter though. You can make use of <a href="https://docs.rs/zvariant/4/zvariant/enum.Value.html"><code>Value</code></a> or <a href="https://docs.rs/zvariant/4/zvariant/struct.OwnedValue.html"><code>OwnedValue</code></a> if you want to encode different data in different fields. Here is a simple example:</p>
+of fields. Names of fields don’t matter though. You can make use of <a href="https://docs.rs/zvariant/5/zvariant/enum.Value.html"><code>Value</code></a> or <a href="https://docs.rs/zvariant/5/zvariant/struct.OwnedValue.html"><code>OwnedValue</code></a> if you want to encode different data in different fields. Here is a simple example:</p>
 <pre><code class="language-rust noplayground">use zbus::zvariant::{serialized::Context, to_bytes, Type, LE};
 use serde::{Deserialize, Serialize};
 
