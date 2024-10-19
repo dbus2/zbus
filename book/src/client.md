@@ -164,9 +164,7 @@ Let's look at this API in action, with an example where we monitor started syste
 ```rust,no_run
 # // NOTE: When changing this, please also keep `zbus/examples/watch-systemd-jobs.rs` in sync.
 use futures_util::stream::StreamExt;
-use zbus::Connection;
-use zbus_macros::proxy;
-use zvariant::OwnedObjectPath;
+use zbus::{zvariant::OwnedObjectPath, proxy, Connection};
 
 # fn main() {
 #     async_io::block_on(watch_systemd_jobs()).expect("Error listening to signal");
