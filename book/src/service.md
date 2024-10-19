@@ -457,8 +457,8 @@ While it's extremely useful to be able to generate the client-side proxy code di
 
 [D-Bus concepts]: concepts.html#bus-name--service-name
 [didoc]: https://docs.rs/zbus/5/zbus/attr.interface.html
-[`Value`]: https://docs.rs/zvariant/4/zvariant/derive.Value.html
-[`OwnedValue`]: https://docs.rs/zvariant/4/zvariant/derive.OwnedValue.html
+[`Value`]: https://docs.rs/zvariant/5/zvariant/derive.Value.html
+[`OwnedValue`]: https://docs.rs/zvariant/5/zvariant/derive.OwnedValue.html
 [`zbus::DBusError`]:https://docs.rs/zbus/5/zbus/trait.DBusError.html
 [`zbus::fdo::Error`]: https://docs.rs/zbus/5/zbus/fdo/enum.Error.html
 [`zbus::fdo::Error::UnknownProperty`]: https://docs.rs/zbus/5/zbus/fdo/enum.Error.html#variant.UnknownProperty
