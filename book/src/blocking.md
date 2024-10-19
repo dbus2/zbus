@@ -203,10 +203,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 ```
 
-[asynchronous `Connection` API]: https://docs.rs/zbus/4/zbus/connection/struct.Connection.html
-[`blocking::Connection`]: https://docs.rs/zbus/4/zbus/blocking/connection/struct.Connection.html
+[asynchronous `Connection` API]: https://docs.rs/zbus/5/zbus/connection/struct.Connection.html
+[`blocking::Connection`]: https://docs.rs/zbus/5/zbus/blocking/connection/struct.Connection.html
 [`std::iter::Iterator`]: https://doc.rust-lang.org/nightly/std/iter/trait.Iterator.html
-[blocking module]: https://docs.rs/zbus/4/zbus/blocking/index.html
+[blocking module]: https://docs.rs/zbus/5/zbus/blocking/index.html
 [wkgp]: https://rust-lang.github.io/wg-async-foundations/vision/shiny_future/users_manual.html#caveat-beware-the-async-sandwich
 [`blocking` crate]: https://docs.rs/blocking/
 [assb]: https://docs.rs/async-std/4/async_std/task/fn.spawn_blocking.html

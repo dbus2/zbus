@@ -221,19 +221,19 @@ let s: &str = encoded.deserialize().unwrap().0;
 assert_eq!(s, "Variant2");
 ```
 
-[`proxy::Builder::uncached_properties`]: https://docs.rs/zbus/4/zbus/proxy/struct.Builder.html#method.uncached_properties
-[`proxy::Builder::cache_properites`]: https://docs.rs/zbus/4/zbus/proxy/struct.Builder.html#method.cache_properties
-[`proxy`]: https://docs.rs/zbus/4/zbus/attr.proxy.html
+[`proxy::Builder::uncached_properties`]: https://docs.rs/zbus/5/zbus/proxy/struct.Builder.html#method.uncached_properties
+[`proxy::Builder::cache_properites`]: https://docs.rs/zbus/5/zbus/proxy/struct.Builder.html#method.cache_properties
+[`proxy`]: https://docs.rs/zbus/5/zbus/attr.proxy.html
 [tctiog]: https://github.com/tokio-rs/tokio/issues/2201
-[`Type`]: https://docs.rs/zvariant/4/zvariant/derive.Type.html
-[`SerializeDict`]: https://docs.rs/zvariant/4/zvariant/derive.SerializeDict.html
-[`DeserializeDict`]: https://docs.rs/zvariant/4/zvariant/derive.DeserializeDict.html
-[`MessageStream`]: https://docs.rs/zbus/4/zbus/struct.MessageStream.html
+[`Type`]: https://docs.rs/zvariant/5/zvariant/derive.Type.html
+[`SerializeDict`]: https://docs.rs/zvariant/5/zvariant/derive.SerializeDict.html
+[`DeserializeDict`]: https://docs.rs/zvariant/5/zvariant/derive.DeserializeDict.html
+[`MessageStream`]: https://docs.rs/zbus/5/zbus/struct.MessageStream.html
 [nonull]: https://gitlab.freedesktop.org/dbus/dbus/-/issues/25
 [dsi]: http://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces
-[`Optional<T>`]: https://docs.rs/zvariant/4/zvariant/struct.Optional.html
+[`Optional<T>`]: https://docs.rs/zvariant/5/zvariant/struct.Optional.html
 [`d-feet`]: https://wiki.gnome.org/Apps/DFeet
 [specialization]: https://rust-lang.github.io/rfcs/1210-impl-specialization.html
-[`Value`]: https://docs.rs/zvariant/4/zvariant/enum.Value.html
-[`OwnedValue`]: https://docs.rs/zvariant/4/zvariant/struct.OwnedValue.html
+[`Value`]: https://docs.rs/zvariant/5/zvariant/enum.Value.html
+[`OwnedValue`]: https://docs.rs/zvariant/5/zvariant/struct.OwnedValue.html
 [`serde_repr`]: https://crates.io/crates/serde_repr

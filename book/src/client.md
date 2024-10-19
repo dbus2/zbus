@@ -164,9 +164,7 @@ Let's look at this API in action, with an example where we monitor started syste
 ```rust,no_run
 # // NOTE: When changing this, please also keep `zbus/examples/watch-systemd-jobs.rs` in sync.
 use futures_util::stream::StreamExt;
-use zbus::Connection;
-use zbus_macros::proxy;
-use zvariant::OwnedObjectPath;
+use zbus::{zvariant::OwnedObjectPath, proxy, Connection};
 
 # fn main() {
 #     async_io::block_on(watch_systemd_jobs()).expect("Error listening to signal");
@@ -618,7 +616,7 @@ There you have it, a Rust-friendly binding for your D-Bus service!
 [`pkg-config`]: https://www.freedesktop.org/wiki/Software/pkg-config/
 [cob]: blocking.html
 [`Stream`]: https://docs.rs/futures/4/futures/stream/trait.Stream.html
-[`Value`]: https://docs.rs/zvariant/4/zvariant/derive.Value.html
-[`OwnedValue`]: https://docs.rs/zvariant/4/zvariant/derive.OwnedValue.html
+[`Value`]: https://docs.rs/zvariant/5/zvariant/derive.Value.html
+[`OwnedValue`]: https://docs.rs/zvariant/5/zvariant/derive.OwnedValue.html
 
 [^busctl]: `busctl` is part of [`systemd`](https://systemd.io/).
