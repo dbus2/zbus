@@ -3,7 +3,7 @@ name: Deployments
 on:
   push:
     tags:
-      - zbus-4.*
+      - zbus-5.*
     paths:
       - book/**/*
       - .github/workflows/deploy.yml

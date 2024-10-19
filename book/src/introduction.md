@@ -30,8 +30,6 @@ The [zbus crate] provides the main API you will use to interact with D-Bus from 
 of the establishment of a connection, the creation, sending and receiving of different kind of D-Bus
 messages (method calls, signals etc) for you.
 
-zbus crate is currently Unix-specific, with Linux as our main (and tested) target.
-
 [zbus]: https://github.com/dbus2/zbus
 [Rust]: https://www.rust-lang.org/
 [D-Bus]: https://dbus.freedesktop.org/
