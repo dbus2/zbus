@@ -221,14 +221,14 @@ let s: &str = encoded.deserialize().unwrap().0;
 assert_eq!(s, "Variant2");
 ```
 
-[`proxy::Builder::uncached_properties`]: https://docs.rs/zbus/4/zbus/proxy/struct.Builder.html#method.uncached_properties
-[`proxy::Builder::cache_properites`]: https://docs.rs/zbus/4/zbus/proxy/struct.Builder.html#method.cache_properties
-[`proxy`]: https://docs.rs/zbus/4/zbus/attr.proxy.html
+[`proxy::Builder::uncached_properties`]: https://docs.rs/zbus/5/zbus/proxy/struct.Builder.html#method.uncached_properties
+[`proxy::Builder::cache_properites`]: https://docs.rs/zbus/5/zbus/proxy/struct.Builder.html#method.cache_properties
+[`proxy`]: https://docs.rs/zbus/5/zbus/attr.proxy.html
 [tctiog]: https://github.com/tokio-rs/tokio/issues/2201
 [`Type`]: https://docs.rs/zvariant/4/zvariant/derive.Type.html
 [`SerializeDict`]: https://docs.rs/zvariant/4/zvariant/derive.SerializeDict.html
 [`DeserializeDict`]: https://docs.rs/zvariant/4/zvariant/derive.DeserializeDict.html
-[`MessageStream`]: https://docs.rs/zbus/4/zbus/struct.MessageStream.html
+[`MessageStream`]: https://docs.rs/zbus/5/zbus/struct.MessageStream.html
 [nonull]: https://gitlab.freedesktop.org/dbus/dbus/-/issues/25
 [dsi]: http://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces
 [`Optional<T>`]: https://docs.rs/zvariant/4/zvariant/struct.Optional.html
