@@ -23,7 +23,7 @@ camino = ["dep:camino"]
 
 [dependencies]
 zvariant_derive = { version = "=5.0.0", path = "../zvariant_derive" }
-zvariant_utils = { version = "=3.0.0", path = "../zvariant_utils" }
+zvariant_utils = { version = "3.0.0", path = "../zvariant_utils" }
 endi = "1.1.0"
 serde = { version = "1.0.200", features = ["derive"] }
 static_assertions = "1.1.0"
