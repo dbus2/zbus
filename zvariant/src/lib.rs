@@ -1192,7 +1192,7 @@ mod tests {
             let gv_ser_value_encoded =
                 zvariant::to_bytes(ctxt, &zvariant::SerializeValue(&map)).unwrap();
             let gv_value_encoded = to_bytes(ctxt, &zvariant::Value::new(map)).unwrap();
-            assert_eq!(gv_value_encoded.as_ref(), gv_ser_value_encoded.as_ref());
+            assert_eq!(*gv_value_encoded, *gv_ser_value_encoded);
 
             // Check encoding against GLib
             let bytes = Bytes::from_owned(gv_encoded);
