@@ -394,31 +394,23 @@ pub fn validate(bytes: &[u8]) -> Result<(), Error> {
 /// When `check_only` is true, the function will not allocate memory for the dynamic types.
 /// Instead it will return dummy values in the parsed Signature.
 fn parse(bytes: &[u8], check_only: bool) -> Result<Signature, Error> {
-    use nom::{
-        branch::alt,
-        combinator::{all_consuming, eof, map},
-        multi::{fold_many1, many1_count},
-        sequence::{delimited, pair},
+    use winnow::{
+        combinator::{alt, delimited, empty, eof, fail, repeat},
+        dispatch,
+        token::any,
+        Parser,
     };
 
-    let empty = map(eof, |_| Signature::Unit);
-
-    fn byte<'bytes, Error: nom::error::ParseError<&'bytes [u8]>>(
-        b: u8,
-    ) -> impl Fn(&'bytes [u8]) -> nom::IResult<&'bytes [u8], &'bytes [u8], Error> {
-        move |bytes: &'bytes [u8]| nom::bytes::complete::tag(&[b])(bytes)
-    }
+    let unit = eof.map(|_| Signature::Unit);
 
     // `many1` allocates so we only want to use it when `check_only == false`
-    type ManyError<'b> = nom::Err<nom::error::Error<&'b [u8]>>;
-    fn many(
-        bytes: &[u8],
-        check_only: bool,
-        top_level: bool,
-    ) -> Result<(&[u8], Signature), ManyError<'_>> {
-        let parser = |s| parse_signature(s, check_only);
+    type ManyError = winnow::error::ErrMode<()>;
+    fn many(bytes: &mut &[u8], check_only: bool, top_level: bool) -> Result<Signature, ManyError> {
+        let parser = |s: &mut _| parse_signature(s, check_only);
         if check_only {
-            return map(many1_count(parser), |_| Signature::Unit)(bytes);
+            return repeat(1.., parser)
+                .map(|_: ()| Signature::Unit)
+                .parse_next(bytes);
         }
 
         // Avoid the allocation of `Vec<Signature>` in case of a single signature on the top-level.
@@ -430,9 +422,8 @@ fn parse(bytes: &[u8], check_only: bool) -> Result<Signature, Error> {
             Structure(Vec<Signature>),
         }
 
-        map(
-            fold_many1(
-                parser,
+        repeat(1.., parser)
+            .fold(
                 || SignatureList::Unit,
                 |acc, signature| match acc {
                     // On the top-level, we want to return the signature directly if there is only
@@ -445,46 +436,40 @@ fn parse(bytes: &[u8], check_only: bool) -> Result<Signature, Error> {
                         SignatureList::Structure(signatures)
                     }
                 },
-            ),
-            |sig_list| match sig_list {
+            )
+            .map(|sig_list| match sig_list {
                 SignatureList::Unit => Signature::Unit,
                 SignatureList::One(sig) => sig,
                 SignatureList::Structure(signatures) => Signature::structure(signatures),
-            },
-        )(bytes)
+            })
+            .parse_next(bytes)
     }
 
-    fn parse_signature(bytes: &[u8], check_only: bool) -> nom::IResult<&[u8], Signature> {
-        let parse_with_context = |bytes| parse_signature(bytes, check_only);
+    fn parse_signature(bytes: &mut &[u8], check_only: bool) -> Result<Signature, ManyError> {
+        let parse_with_context = |bytes: &mut _| parse_signature(bytes, check_only);
 
-        let simple_type = alt((
-            map(byte(b'y'), |_| Signature::U8),
-            map(byte(b'b'), |_| Signature::Bool),
-            map(byte(b'n'), |_| Signature::I16),
-            map(byte(b'q'), |_| Signature::U16),
-            map(byte(b'i'), |_| Signature::I32),
-            map(byte(b'u'), |_| Signature::U32),
-            map(byte(b'x'), |_| Signature::I64),
-            map(byte(b't'), |_| Signature::U64),
-            map(byte(b'd'), |_| Signature::F64),
-            map(byte(b's'), |_| Signature::Str),
-            map(byte(b'g'), |_| Signature::Signature),
-            map(byte(b'o'), |_| Signature::ObjectPath),
-            map(byte(b'v'), |_| Signature::Variant),
-            #[cfg(unix)]
-            map(byte(b'h'), |_| Signature::Fd),
-        ));
+        let simple_type = dispatch! {any;
+            b'y' => empty.value(Signature::U8),
+            b'b' => empty.value(Signature::Bool),
+            b'n' => empty.value(Signature::I16),
+            b'q' => empty.value(Signature::U16),
+            b'i' => empty.value(Signature::I32),
+            b'u' => empty.value(Signature::U32),
+            b'x' => empty.value(Signature::I64),
+            b't' => empty.value(Signature::U64),
+            b'd' => empty.value(Signature::F64),
+            b's' => empty.value(Signature::Str),
+            b'g' => empty.value(Signature::Signature),
+            b'o' => empty.value(Signature::ObjectPath),
+            b'v' => empty.value(Signature::Variant),
+            _ => fail,
+        };
 
-        let dict = map(
-            pair(
-                byte(b'a'),
-                delimited(
-                    byte(b'{'),
-                    pair(parse_with_context, parse_with_context),
-                    byte(b'}'),
-                ),
-            ),
-            |(_, (key, value))| {
+        let dict = (
+            b'a',
+            delimited(b'{', (parse_with_context, parse_with_context), b'}'),
+        )
+            .map(|(_, (key, value))| {
                 if check_only {
                     return Signature::Dict {
                         key: Signature::Unit.into(),
@@ -496,10 +481,9 @@ fn parse(bytes: &[u8], check_only: bool) -> Result<Signature, Error> {
                     key: key.into(),
                     value: value.into(),
                 }
-            },
-        );
+            });
 
-        let array = map(pair(byte(b'a'), parse_with_context), |(_, child)| {
+        let array = (b'a', parse_with_context).map(|(_, child)| {
             if check_only {
                 return Signature::Array(Signature::Unit.into());
             }
@@ -507,10 +491,10 @@ fn parse(bytes: &[u8], check_only: bool) -> Result<Signature, Error> {
             Signature::Array(child.into())
         });
 
-        let structure = delimited(byte(b'('), |s| many(s, check_only, false), byte(b')'));
+        let structure = delimited(b'(', |s: &mut _| many(s, check_only, false), b')');
 
         #[cfg(feature = "gvariant")]
-        let maybe = map(pair(byte(b'm'), parse_with_context), |(_, child)| {
+        let maybe = (b'm', parse_with_context).map(|(_, child)| {
             if check_only {
                 return Signature::Maybe(Signature::Unit.into());
             }
@@ -525,10 +509,16 @@ fn parse(bytes: &[u8], check_only: bool) -> Result<Signature, Error> {
             structure,
             #[cfg(feature = "gvariant")]
             maybe,
-        ))(bytes)
+            // FIXME: Should be part of `simple_type` but that's not possible right now:
+            // https://github.com/winnow-rs/winnow/issues/609
+            #[cfg(unix)]
+            b'h'.map(|_| Signature::Fd),
+        ))
+        .parse_next(bytes)
     }
 
-    let (_, signature) = all_consuming(alt((empty, |s| many(s, check_only, true))))(bytes)
+    let signature = alt((unit, |s: &mut _| many(s, check_only, true)))
+        .parse(bytes)
         .map_err(|_| Error::InvalidSignature)?;
 
     Ok(signature)

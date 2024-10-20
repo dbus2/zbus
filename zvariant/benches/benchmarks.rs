@@ -72,21 +72,6 @@ fn fixed_size_array(c: &mut Criterion) {
 }
 
 fn big_array(c: &mut Criterion) {
-    #[derive(Deserialize, Serialize, Type, PartialEq, Debug, Clone)]
-    struct BigArrayField<'f> {
-        int2: u64,
-        string2: &'f str,
-    }
-
-    #[derive(Deserialize, Serialize, Type, PartialEq, Debug, Clone)]
-    struct BigArrayStruct<'s> {
-        string1: &'s str,
-        int1: u64,
-        field: BigArrayField<'s>,
-        int_array: Vec<u64>,
-        string_array: Vec<&'s str>,
-    }
-
     let mut asv_dict = HashMap::new();
     let mut ass_dict = HashMap::new();
     let int_array = vec![0u64; 1024 * 10];
@@ -116,24 +101,11 @@ fn big_array(c: &mut Criterion) {
 
     benchmark!(c, structure, BigArrayStruct<'_>, "big_array");
 
-    #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
-    struct BigArrayDictStruct<'s> {
-        #[serde(borrow)]
-        array_struct: BigArrayStruct<'s>,
-        dict: HashMap<&'s str, &'s str>,
-    }
     let data = BigArrayDictStruct {
         array_struct: structure.clone(),
         dict: ass_dict,
     };
     benchmark!(c, data, BigArrayDictStruct<'_>, "big_array_and_ass_dict");
-
-    #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
-    struct BigArrayDictVariantStruct<'s> {
-        #[serde(borrow)]
-        array_struct: BigArrayStruct<'s>,
-        dict: HashMap<&'s str, Value<'s>>,
-    }
 
     let data = BigArrayDictVariantStruct {
         array_struct: structure,
@@ -147,8 +119,72 @@ fn big_array(c: &mut Criterion) {
     );
 }
 
+fn signature_parse(c: &mut Criterion) {
+    #[derive(Type, PartialEq, Debug)]
+    struct LongSignatureStruct {
+        f1: BigArrayDictVariantStruct<'static>,
+        f2: BigArrayDictVariantStruct<'static>,
+        f3: BigArrayDictVariantStruct<'static>,
+        f4: BigArrayDictVariantStruct<'static>,
+        f5: BigArrayDictVariantStruct<'static>,
+        f6: BigArrayDictVariantStruct<'static>,
+        f7: BigArrayDictVariantStruct<'static>,
+        f8: BigArrayDictVariantStruct<'static>,
+        f9: BigArrayDictVariantStruct<'static>,
+        f10: BigArrayDictVariantStruct<'static>,
+        f11: BigArrayDictVariantStruct<'static>,
+        f12: BigArrayDictVariantStruct<'static>,
+        f13: BigArrayDictVariantStruct<'static>,
+        f14: (u32, String, u64, i32),
+    }
+    let signature_str = LongSignatureStruct::SIGNATURE.to_string();
+    // Ensure we have the maximum signature length allowed by the spec.
+    assert_eq!(signature_str.len(), 255);
+
+    c.bench_function("signature_parse", |b| {
+        b.iter(|| {
+            zvariant::Signature::try_from(black_box(signature_str.as_str())).unwrap();
+        })
+    });
+}
+
+#[derive(Deserialize, Serialize, Type, PartialEq, Debug, Clone)]
+struct BigArrayField<'f> {
+    int2: u64,
+    string2: &'f str,
+}
+
+#[derive(Deserialize, Serialize, Type, PartialEq, Debug, Clone)]
+struct BigArrayStruct<'s> {
+    string1: &'s str,
+    int1: u64,
+    field: BigArrayField<'s>,
+    int_array: Vec<u64>,
+    string_array: Vec<&'s str>,
+}
+
+#[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
+struct BigArrayDictStruct<'s> {
+    #[serde(borrow)]
+    array_struct: BigArrayStruct<'s>,
+    dict: HashMap<&'s str, &'s str>,
+}
+
+#[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
+struct BigArrayDictVariantStruct<'s> {
+    #[serde(borrow)]
+    array_struct: BigArrayStruct<'s>,
+    dict: HashMap<&'s str, Value<'s>>,
+}
+
 #[cfg(feature = "serde_bytes")]
-criterion_group!(benches, big_array, byte_array, fixed_size_array);
+criterion_group!(
+    benches,
+    big_array,
+    byte_array,
+    fixed_size_array,
+    signature_parse
+);
 #[cfg(not(feature = "serde_bytes"))]
-criterion_group!(benches, big_array, fixed_size_array);
+criterion_group!(benches, big_array, fixed_size_array, signature_parse);
 criterion_main!(benches);
