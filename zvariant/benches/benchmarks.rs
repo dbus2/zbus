@@ -148,6 +148,17 @@ fn signature_parse(c: &mut Criterion) {
     });
 }
 
+fn object_path_parse(c: &mut Criterion) {
+    const PATH: &'static str = "/a/very/very_very/veeeeeeeeeeeeeery/long/long_long/long/long/\
+        _/long_path/to_test_parsing_of/paths/you/see";
+
+    c.bench_function("object_path_parse", |b| {
+        b.iter(|| {
+            zvariant::ObjectPath::try_from(black_box(PATH)).unwrap();
+        })
+    });
+}
+
 #[derive(Deserialize, Serialize, Type, PartialEq, Debug, Clone)]
 struct BigArrayField<'f> {
     int2: u64,
@@ -183,8 +194,15 @@ criterion_group!(
     big_array,
     byte_array,
     fixed_size_array,
-    signature_parse
+    signature_parse,
+    object_path_parse
 );
 #[cfg(not(feature = "serde_bytes"))]
-criterion_group!(benches, big_array, fixed_size_array, signature_parse);
+criterion_group!(
+    benches,
+    big_array,
+    fixed_size_array,
+    signature_parse,
+    object_path_parse
+);
 criterion_main!(benches);
