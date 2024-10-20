@@ -26,6 +26,7 @@ quote = "1.0.36"
 static_assertions = "1.1.0"
 serde = "1.0.200"
 nom = "7"
+winnow = "0.6"
 
 [dev-dependencies]
 zvariant = { path = "../zvariant" }
