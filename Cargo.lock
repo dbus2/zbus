@@ -2113,6 +2113,7 @@ dependencies = [
  "uds_windows",
  "vsock 0.5.1",
  "windows-sys 0.59.0",
+ "winnow",
  "xdg-home",
  "zbus_macros",
  "zbus_names",
