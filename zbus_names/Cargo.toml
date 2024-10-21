@@ -18,6 +18,7 @@ zvariant = { path = "../zvariant", version = "5.0.0", default-features = false, 
     "enumflags2",
 ] }
 static_assertions = "1.1.0"
+winnow = "0.6"
 
 [package.metadata.docs.rs]
 all-features = true
