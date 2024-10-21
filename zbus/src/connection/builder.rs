@@ -492,6 +492,8 @@ impl<'a> Builder<'a> {
                 match address.connect().await? {
                     #[cfg(any(unix, not(feature = "tokio")))]
                     address::transport::Stream::Unix(stream) => stream.into(),
+                    #[cfg(unix)]
+                    address::transport::Stream::Unixexec(stream) => stream.into(),
                     address::transport::Stream::Tcp(stream) => stream.into(),
                     #[cfg(any(
                         all(feature = "vsock", not(feature = "tokio")),
