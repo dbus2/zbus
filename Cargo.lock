@@ -2188,6 +2188,7 @@ dependencies = [
  "time",
  "url",
  "uuid",
+ "winnow",
  "zvariant_derive",
  "zvariant_utils",
 ]
