@@ -38,7 +38,7 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 #[derive(
     Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
 )]
-pub struct UniqueName<'name>(Str<'name>);
+pub struct UniqueName<'name>(pub(crate) Str<'name>);
 
 assert_impl_all!(UniqueName<'_>: Send, Sync, Unpin);
 
@@ -152,7 +152,7 @@ fn validate(name: &str) -> Result<()> {
     })
 }
 
-fn validate_bytes(bytes: &[u8]) -> std::result::Result<(), ()> {
+pub(crate) fn validate_bytes(bytes: &[u8]) -> std::result::Result<(), ()> {
     use winnow::{
         combinator::{alt, separated},
         stream::AsChar,
