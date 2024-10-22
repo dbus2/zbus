@@ -66,7 +66,7 @@ impl<'name> MemberName<'name> {
 
     /// Same as `try_from`, except it takes a `&'static str`.
     pub fn from_static_str(name: &'static str) -> Result<Self> {
-        ensure_correct_member_name(name)?;
+        validate(name)?;
         Ok(Self(Str::from_static(name)))
     }
 
@@ -152,47 +152,44 @@ impl<'name> From<MemberName<'name>> for Str<'name> {
 impl_try_from! {
     ty: MemberName<'s>,
     owned_ty: OwnedMemberName,
-    validate_fn: ensure_correct_member_name,
+    validate_fn: validate,
     try_from: [&'s str, String, Arc<str>, Cow<'s, str>, Str<'s>],
 }
 
-fn ensure_correct_member_name(name: &str) -> Result<()> {
+fn validate(name: &str) -> Result<()> {
+    validate_bytes(name.as_bytes()).map_err(|_| {
+        Error::InvalidMemberName(
+            "Invalid member name. See \
+            https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-member"
+                .to_string(),
+        )
+    })
+}
+
+pub(crate) fn validate_bytes(bytes: &[u8]) -> std::result::Result<(), ()> {
+    use winnow::{
+        stream::AsChar,
+        token::{one_of, take_while},
+        Parser,
+    };
     // Rules
     //
     // * Only ASCII alphanumeric or `_`.
     // * Must not begin with a digit.
     // * Must contain at least 1 character.
     // * <= 255 characters.
-    if name.is_empty() {
-        return Err(Error::InvalidMemberName(format!(
-            "`{}` is {} characters long, which is smaller than minimum allowed (1)",
-            name,
-            name.len(),
-        )));
-    } else if name.len() > 255 {
-        return Err(Error::InvalidMemberName(format!(
-            "`{}` is {} characters long, which is longer than maximum allowed (255)",
-            name,
-            name.len(),
-        )));
-    }
+    let first_element_char = one_of((AsChar::is_alpha, b'_'));
+    let subsequent_element_chars = take_while::<_, _, ()>(0.., (AsChar::is_alphanum, b'_'));
+    let mut member_name = (first_element_char, subsequent_element_chars);
 
-    // SAFETY: We established above that there is at least 1 character so unwrap is fine.
-    if name.chars().next().unwrap().is_ascii_digit() {
-        return Err(Error::InvalidMemberName(String::from(
-            "must not start with a digit",
-        )));
-    }
-
-    for c in name.chars() {
-        if !c.is_ascii_alphanumeric() && c != '_' {
-            return Err(Error::InvalidMemberName(format!(
-                "`{c}` character not allowed"
-            )));
+    member_name.parse(bytes).map_err(|_| ()).and_then(|_| {
+        // Least likely scenario so we check this last.
+        if bytes.len() > 255 {
+            return Err(());
         }
-    }
 
-    Ok(())
+        Ok(())
+    })
 }
 
 /// This never succeeds but is provided so it's easier to pass `Option::None` values for API
