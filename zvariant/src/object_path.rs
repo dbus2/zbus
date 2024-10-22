@@ -75,7 +75,7 @@ impl<'a> ObjectPath<'a> {
 
     /// Same as `try_from`, except it takes a `&'static str`.
     pub fn from_static_str(name: &'static str) -> Result<Self> {
-        ensure_correct_object_path_str(name.as_bytes())?;
+        validate(name.as_bytes())?;
 
         Ok(Self::from_static_str_unchecked(name))
     }
@@ -133,7 +133,7 @@ impl<'a> TryFrom<&'a [u8]> for ObjectPath<'a> {
     type Error = Error;
 
     fn try_from(value: &'a [u8]) -> Result<Self> {
-        ensure_correct_object_path_str(value)?;
+        validate(value)?;
 
         // SAFETY: ensure_correct_object_path_str checks UTF-8
         unsafe { Ok(Self::from_bytes_unchecked(value)) }
@@ -153,7 +153,7 @@ impl<'a> TryFrom<String> for ObjectPath<'a> {
     type Error = Error;
 
     fn try_from(value: String) -> Result<Self> {
-        ensure_correct_object_path_str(value.as_bytes())?;
+        validate(value.as_bytes())?;
 
         Ok(Self::from_string_unchecked(value))
     }
@@ -246,9 +246,8 @@ impl<'de> Visitor<'de> for ObjectPathVisitor {
     }
 }
 
-fn ensure_correct_object_path_str(path: &[u8]) -> Result<()> {
-    let mut prev = b'\0';
-
+fn validate(path: &[u8]) -> Result<()> {
+    use winnow::{combinator::separated, stream::AsChar, token::take_while, Parser};
     // Rules
     //
     // * At least 1 character.
@@ -256,38 +255,12 @@ fn ensure_correct_object_path_str(path: &[u8]) -> Result<()> {
     // * No trailing `/`
     // * No `//`
     // * Only ASCII alphanumeric, `_` or '/'
-    if path.is_empty() {
-        return Err(serde::de::Error::invalid_length(0, &"> 0 character"));
-    }
 
-    for i in 0..path.len() {
-        let c = path[i];
+    let allowed_chars = (AsChar::is_alphanum, b'_');
+    let name = take_while::<_, _, ()>(1.., allowed_chars);
+    let mut full_path = (b'/', separated(0.., name, b'/')).map(|_: (u8, ())| ());
 
-        if i == 0 && c != b'/' {
-            return Err(serde::de::Error::invalid_value(
-                serde::de::Unexpected::Char(c as char),
-                &"/",
-            ));
-        } else if c == b'/' && prev == b'/' {
-            return Err(serde::de::Error::invalid_value(
-                serde::de::Unexpected::Str("//"),
-                &"/",
-            ));
-        } else if path.len() > 1 && i == (path.len() - 1) && c == b'/' {
-            return Err(serde::de::Error::invalid_value(
-                serde::de::Unexpected::Char('/'),
-                &"an alphanumeric character or `_`",
-            ));
-        } else if !c.is_ascii_alphanumeric() && c != b'/' && c != b'_' {
-            return Err(serde::de::Error::invalid_value(
-                serde::de::Unexpected::Char(c as char),
-                &"an alphanumeric character, `_` or `/`",
-            ));
-        }
-        prev = c;
-    }
-
-    Ok(())
+    full_path.parse(path).map_err(|_| Error::InvalidObjectPath)
 }
 
 /// Owned [`ObjectPath`](struct.ObjectPath.html)
