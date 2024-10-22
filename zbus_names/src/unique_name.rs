@@ -65,7 +65,7 @@ impl<'name> UniqueName<'name> {
 
     /// Same as `try_from`, except it takes a `&'static str`.
     pub fn from_static_str(name: &'static str) -> Result<Self> {
-        ensure_correct_unique_name(name)?;
+        validate(name)?;
         Ok(Self(Str::from_static(name)))
     }
 
@@ -142,67 +142,43 @@ impl<'de: 'name, 'name> Deserialize<'de> for UniqueName<'name> {
     }
 }
 
-fn ensure_correct_unique_name(name: &str) -> Result<()> {
+fn validate(name: &str) -> Result<()> {
+    validate_bytes(name.as_bytes()).map_err(|_| {
+        Error::InvalidUniqueName(
+            "Invalid unique name. \
+            See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus"
+            .to_string(),
+        )
+    })
+}
+
+fn validate_bytes(bytes: &[u8]) -> std::result::Result<(), ()> {
+    use winnow::{
+        combinator::{alt, separated},
+        stream::AsChar,
+        token::take_while,
+        Parser,
+    };
     // Rules
     //
     // * Only ASCII alphanumeric, `_` or '-'
     // * Must begin with a `:`.
     // * Must contain at least one `.`.
+    // * Each element must be 1 character (so name must be minimum 4 characters long).
     // * <= 255 characters.
-    if name.is_empty() {
-        return Err(Error::InvalidUniqueName(String::from(
-            "must contain at least 4 characters",
-        )));
-    } else if name.len() > 255 {
-        return Err(Error::InvalidUniqueName(format!(
-            "`{}` is {} characters long, which is longer than maximum allowed (255)",
-            name,
-            name.len(),
-        )));
-    } else if name == "org.freedesktop.DBus" {
-        // Bus itself uses its well-known name as its unique name.
-        return Ok(());
-    }
+    let element = take_while::<_, _, ()>(1.., (AsChar::is_alphanum, b'_', b'-'));
+    let peer_name = (b':', (separated(2.., element, b'.'))).map(|_: (_, ())| ());
+    let bus_name = b"org.freedesktop.DBus".map(|_| ());
+    let mut unique_name = alt((bus_name, peer_name));
 
-    // SAFETY: Just checked above that we've at least 1 character.
-    let mut chars = name.chars();
-    let mut prev = match chars.next().expect("no first char") {
-        first @ ':' => first,
-        _ => {
-            return Err(Error::InvalidUniqueName(String::from(
-                "must start with a `:`",
-            )));
-        }
-    };
-
-    let mut no_dot = true;
-    for c in chars {
-        if c == '.' {
-            if prev == '.' {
-                return Err(Error::InvalidUniqueName(String::from(
-                    "must not contain a double `.`",
-                )));
-            }
-
-            if no_dot {
-                no_dot = false;
-            }
-        } else if !c.is_ascii_alphanumeric() && c != '_' && c != '-' {
-            return Err(Error::InvalidUniqueName(format!(
-                "`{c}` character not allowed"
-            )));
+    unique_name.parse(bytes).map_err(|_| ()).and_then(|_: ()| {
+        // Least likely scenario so we check this last.
+        if bytes.len() > 255 {
+            return Err(());
         }
 
-        prev = c;
-    }
-
-    if no_dot {
-        return Err(Error::InvalidUniqueName(String::from(
-            "must contain at least 1 `.`",
-        )));
-    }
-
-    Ok(())
+        Ok(())
+    })
 }
 
 /// This never succeeds but is provided so it's easier to pass `Option::None` values for API
@@ -290,7 +266,7 @@ impl From<UniqueName<'_>> for OwnedUniqueName {
 impl_try_from! {
     ty: UniqueName<'s>,
     owned_ty: OwnedUniqueName,
-    validate_fn: ensure_correct_unique_name,
+    validate_fn: validate,
     try_from: [&'s str, String, Arc<str>, Cow<'s, str>, Str<'s>],
 }
 
