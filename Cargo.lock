@@ -2139,6 +2139,7 @@ dependencies = [
 name = "zbus_names"
 version = "4.0.0"
 dependencies = [
+ "criterion",
  "serde",
  "static_assertions",
  "winnow",
