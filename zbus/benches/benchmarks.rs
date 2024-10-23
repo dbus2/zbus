@@ -107,5 +107,28 @@ impl<'s> BigBoy<'s> {
     }
 }
 
-criterion_group!(benches, msg_ser, msg_de);
+fn address_parse(c: &mut Criterion) {
+    const UNIX_ADDRESS: &'static str = "unix:path=/tmp/dbus/long/loooooooong/path/to/socket\
+        /so/we/need/to/keeeeeeeeeep/going/where/no/man/has/gone/before,runtime=yes,\
+        guid=0123456789ABCDEF0123456789ABCDEF";
+    const TCP_ADDRESS: &'static str = "tcp:host=some.looong.name.so.we.must.keep.going.on.and.on.\
+        on,port=1234,family=ipv4,guid=0123456789ABCDEF0123456789ABCDEF";
+
+    let mut group = c.benchmark_group("parse_dbus_address");
+    group.sample_size(1000);
+
+    group.bench_function("unix", |b| {
+        b.iter(|| {
+            zbus::Address::try_from(black_box(UNIX_ADDRESS)).unwrap();
+        })
+    });
+
+    group.bench_function("tcp", |b| {
+        b.iter(|| {
+            zbus::Address::try_from(black_box(TCP_ADDRESS)).unwrap();
+        })
+    });
+}
+
+criterion_group!(benches, msg_ser, msg_de, address_parse);
 criterion_main!(benches);
