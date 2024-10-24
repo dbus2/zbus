@@ -26,6 +26,8 @@ camino = ["zvariant/camino"]
 bus-impl = ["p2p"]
 # Enables API that is only needed for peer-to-peer (p2p) connections.
 p2p = ["dep:rand"]
+# Enables API that is only needed for IBus Daemon.
+ibus = []
 async-io = [
   "dep:async-io",
   "async-executor",
