@@ -134,11 +134,12 @@ impl<'de> Deserialize<'de> for Guid<'de> {
 }
 
 fn validate_guid(value: &str) -> crate::Result<()> {
-    if value.as_bytes().len() != 32 || value.chars().any(|c| !char::is_ascii_hexdigit(&c)) {
-        return Err(crate::Error::InvalidGUID);
-    }
+    use winnow::{stream::AsChar, token::take_while, Parser};
 
-    Ok(())
+    take_while::<_, _, ()>(32, AsChar::is_hex_digit)
+        .map(|_| ())
+        .parse(value.as_bytes())
+        .map_err(|_| crate::Error::InvalidGUID)
 }
 
 impl From<Guid<'_>> for String {
