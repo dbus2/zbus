@@ -248,12 +248,12 @@ impl Display for OwnedGuid {
 }
 
 #[cfg(test)]
-#[cfg(feature = "p2p")]
 mod tests {
     use crate::Guid;
     use test_log::test;
 
     #[test]
+    #[cfg(feature = "p2p")]
     fn generate() {
         let u1 = Guid::generate();
         let u2 = Guid::generate();
@@ -261,5 +261,15 @@ mod tests {
         assert_eq!(u2.as_str().len(), 32);
         assert_ne!(u1, u2);
         assert_ne!(u1.as_str(), u2.as_str());
+    }
+
+    #[test]
+    fn parse() {
+        let valid = "0123456789ABCDEF0123456789ABCDEF";
+        // Not 32 chars.
+        let invalid = "0123456789ABCDEF0123456789ABCD";
+
+        assert!(Guid::try_from(valid).is_ok());
+        assert!(Guid::try_from(invalid).is_err());
     }
 }
