@@ -689,40 +689,44 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                         quote!(self.#ident()#method_await)
                     };
 
-                    let prop_changed_method = quote!(
-                        pub async fn #prop_changed_method_name(
-                            &self,
-                            signal_emitter: &#zbus::object_server::SignalEmitter<'_>,
-                        ) -> #zbus::Result<()> {
-                            let mut changed = ::std::collections::HashMap::new();
-                            let value = <#zbus::zvariant::Value as ::std::convert::From<_>>::from(#prop_value_handled);
-                            changed.insert(#member_name, value);
-                            #zbus::fdo::Properties::properties_changed(
-                                signal_emitter,
-                                #zbus::names::InterfaceName::from_static_str_unchecked(#iface_name),
-                                changed,
-                                ::std::borrow::Cow::Borrowed(&[]),
-                            ).await
-                        }
-                    );
+                    if p.emits_changed_signal == PropertyEmitsChangedSignal::True {
+                        let prop_changed_method = quote!(
+                            pub async fn #prop_changed_method_name(
+                                &self,
+                                signal_emitter: &#zbus::object_server::SignalEmitter<'_>,
+                            ) -> #zbus::Result<()> {
+                                let mut changed = ::std::collections::HashMap::new();
+                                let value = <#zbus::zvariant::Value as ::std::convert::From<_>>::from(#prop_value_handled);
+                                changed.insert(#member_name, value);
+                                #zbus::fdo::Properties::properties_changed(
+                                    signal_emitter,
+                                    #zbus::names::InterfaceName::from_static_str_unchecked(#iface_name),
+                                    changed,
+                                    ::std::borrow::Cow::Borrowed(&[]),
+                                ).await
+                            }
+                        );
 
-                    generated_signals.extend(prop_changed_method);
+                        generated_signals.extend(prop_changed_method);
+                    }
 
-                    let prop_invalidate_method = quote!(
-                        pub async fn #prop_invalidate_method_name(
-                            &self,
-                            signal_emitter: &#zbus::object_server::SignalEmitter<'_>,
-                        ) -> #zbus::Result<()> {
-                            #zbus::fdo::Properties::properties_changed(
-                                signal_emitter,
-                                #zbus::names::InterfaceName::from_static_str_unchecked(#iface_name),
-                                ::std::collections::HashMap::new(),
-                                ::std::borrow::Cow::Borrowed(&[#member_name]),
-                            ).await
-                        }
-                    );
+                    if p.emits_changed_signal == PropertyEmitsChangedSignal::Invalidates {
+                        let prop_invalidate_method = quote!(
+                            pub async fn #prop_invalidate_method_name(
+                                &self,
+                                signal_emitter: &#zbus::object_server::SignalEmitter<'_>,
+                            ) -> #zbus::Result<()> {
+                                #zbus::fdo::Properties::properties_changed(
+                                    signal_emitter,
+                                    #zbus::names::InterfaceName::from_static_str_unchecked(#iface_name),
+                                    ::std::collections::HashMap::new(),
+                                    ::std::borrow::Cow::Borrowed(&[#member_name]),
+                                ).await
+                            }
+                        );
 
-                    generated_signals.extend(prop_invalidate_method);
+                        generated_signals.extend(prop_invalidate_method);
+                    }
                 }
             }
             MethodType::Other => {
