@@ -6,8 +6,8 @@ use core::{
 use std::{borrow::Cow, sync::Arc};
 
 use crate::{
-    utils::impl_str_basic, Error, OwnedUniqueName, OwnedWellKnownName, Result, UniqueName,
-    WellKnownName,
+    unique_name, utils::impl_str_basic, Error, OwnedUniqueName, OwnedWellKnownName, Result,
+    UniqueName, WellKnownName,
 };
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
@@ -214,8 +214,8 @@ impl<'s> TryFrom<Str<'s>> for BusName<'s> {
     type Error = Error;
 
     fn try_from(value: Str<'s>) -> Result<Self> {
-        if value.starts_with(':') || value == "org.freedesktop.DBus" {
-            UniqueName::try_from(value).map(BusName::Unique)
+        if unique_name::validate_bytes(value.as_bytes()).is_ok() {
+            Ok(BusName::Unique(UniqueName(value)))
         } else {
             WellKnownName::try_from(value).map(BusName::WellKnown)
         }

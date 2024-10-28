@@ -152,12 +152,6 @@ impl_try_from! {
 }
 
 fn ensure_correct_property_name(name: &str) -> Result<()> {
-    // Rules
-    //
-    // * Only ASCII alphanumeric or `_`.
-    // * Must not begin with a digit.
-    // * Must contain at least 1 character.
-    // * <= 255 characters.
     if name.is_empty() {
         return Err(Error::InvalidPropertyName(format!(
             "`{}` is {} characters long, which is smaller than minimum allowed (1)",

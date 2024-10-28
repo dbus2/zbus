@@ -134,11 +134,12 @@ impl<'de> Deserialize<'de> for Guid<'de> {
 }
 
 fn validate_guid(value: &str) -> crate::Result<()> {
-    if value.as_bytes().len() != 32 || value.chars().any(|c| !char::is_ascii_hexdigit(&c)) {
-        return Err(crate::Error::InvalidGUID);
-    }
+    use winnow::{stream::AsChar, token::take_while, Parser};
 
-    Ok(())
+    take_while::<_, _, ()>(32, AsChar::is_hex_digit)
+        .map(|_| ())
+        .parse(value.as_bytes())
+        .map_err(|_| crate::Error::InvalidGUID)
 }
 
 impl From<Guid<'_>> for String {
@@ -248,12 +249,12 @@ impl Display for OwnedGuid {
 }
 
 #[cfg(test)]
-#[cfg(feature = "p2p")]
 mod tests {
     use crate::Guid;
     use test_log::test;
 
     #[test]
+    #[cfg(feature = "p2p")]
     fn generate() {
         let u1 = Guid::generate();
         let u2 = Guid::generate();
@@ -261,5 +262,15 @@ mod tests {
         assert_eq!(u2.as_str().len(), 32);
         assert_ne!(u1, u2);
         assert_ne!(u1.as_str(), u2.as_str());
+    }
+
+    #[test]
+    fn parse() {
+        let valid = "0123456789ABCDEF0123456789ABCDEF";
+        // Not 32 chars.
+        let invalid = "0123456789ABCDEF0123456789ABCD";
+
+        assert!(Guid::try_from(valid).is_ok());
+        assert!(Guid::try_from(invalid).is_err());
     }
 }

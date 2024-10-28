@@ -2113,6 +2113,7 @@ dependencies = [
  "uds_windows",
  "vsock 0.5.1",
  "windows-sys 0.59.0",
+ "winnow",
  "xdg-home",
  "zbus_macros",
  "zbus_names",
@@ -2139,8 +2140,10 @@ dependencies = [
 name = "zbus_names"
 version = "4.0.0"
 dependencies = [
+ "criterion",
  "serde",
  "static_assertions",
+ "winnow",
  "zvariant",
 ]
 
@@ -2188,6 +2191,7 @@ dependencies = [
  "time",
  "url",
  "uuid",
+ "winnow",
  "zvariant_derive",
  "zvariant_utils",
 ]

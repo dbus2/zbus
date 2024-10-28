@@ -18,6 +18,17 @@ zvariant = { path = "../zvariant", version = "5.0.0", default-features = false, 
     "enumflags2",
 ] }
 static_assertions = "1.1.0"
+winnow = "0.6"
+
+[dev-dependencies]
+criterion = "0.5.1"
+
+[lib]
+bench = false
+
+[[bench]]
+name = "benchmarks"
+harness = false
 
 [package.metadata.docs.rs]
 all-features = true
@@ -25,4 +36,3 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [lints]
 workspace = true
-
