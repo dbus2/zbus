@@ -174,15 +174,20 @@ pub fn create_proxy(
                 .map(|p| p.to_string())
         })
         .transpose()?;
+    let default_service = default_service
+        .map(|srv| {
+            // Ensure the service is valid.
+            zbus_names::BusName::try_from(srv)
+                .map_err(|e| Error::new(input.span(), format!("{e}")))
+                .map(|n| n.to_string())
+        })
+        .transpose()?;
     let (default_path, default_service) = if assume_defaults {
         let path = default_path.or_else(|| Some(format!("/org/freedesktop/{ident}")));
-        let svc = default_service
-            .map(ToString::to_string)
-            .or_else(|| Some(iface_name.clone()));
+        let svc = default_service.or_else(|| Some(iface_name.clone()));
         (path, svc)
     } else {
-        let svc = default_service.map(ToString::to_string);
-        (default_path, svc)
+        (default_path, default_service)
     };
     let mut methods = TokenStream::new();
     let mut stream_types = TokenStream::new();
