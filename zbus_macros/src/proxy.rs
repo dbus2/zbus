@@ -163,21 +163,37 @@ pub fn create_proxy(
     let proxy_name = Ident::new(proxy_name, Span::call_site());
     let ident = input.ident.to_string();
     let iface_name = iface_name
-        .map(ToString::to_string)
+        .map(|iface| {
+            // Ensure the interface name is valid.
+            zbus_names::InterfaceName::try_from(iface)
+                .map_err(|e| Error::new(input.span(), format!("{e}")))
+                .map(|i| i.to_string())
+        })
+        .transpose()?
         .unwrap_or(format!("org.freedesktop.{ident}"));
     let assume_defaults = assume_defaults.unwrap_or(false);
+    let default_path = default_path
+        .map(|path| {
+            // Ensure the path is valid.
+            zvariant::ObjectPath::try_from(path)
+                .map_err(|e| Error::new(input.span(), format!("{e}")))
+                .map(|p| p.to_string())
+        })
+        .transpose()?;
+    let default_service = default_service
+        .map(|srv| {
+            // Ensure the service is valid.
+            zbus_names::BusName::try_from(srv)
+                .map_err(|e| Error::new(input.span(), format!("{e}")))
+                .map(|n| n.to_string())
+        })
+        .transpose()?;
     let (default_path, default_service) = if assume_defaults {
-        let path = default_path
-            .map(ToString::to_string)
-            .or_else(|| Some(format!("/org/freedesktop/{ident}")));
-        let svc = default_service
-            .map(ToString::to_string)
-            .or_else(|| Some(iface_name.clone()));
+        let path = default_path.or_else(|| Some(format!("/org/freedesktop/{ident}")));
+        let svc = default_service.or_else(|| Some(iface_name.clone()));
         (path, svc)
     } else {
-        let path = default_path.map(ToString::to_string);
-        let svc = default_service.map(ToString::to_string);
-        (path, svc)
+        (default_path, default_service)
     };
     let mut methods = TokenStream::new();
     let mut stream_types = TokenStream::new();

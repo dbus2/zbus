@@ -2133,6 +2133,8 @@ dependencies = [
  "serde",
  "syn 2.0.85",
  "zbus",
+ "zbus_names",
+ "zvariant",
  "zvariant_utils",
 ]
 
