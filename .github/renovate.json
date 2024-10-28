@@ -1,19 +1,24 @@
 {
   "packageRules": [
     {
-      "matchManagers": ["github-actions"],
+      "matchManagers": [
+        "github-actions"
+      ],
       "commitMessagePrefix": "⬆️  "
     },
     {
-      "matchManagers": ["cargo"],
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
       "commitMessagePrefix": "⬆️  ",
       "commitMessageTopic": "{{depName}}",
-      "lockFileMaintenance": { "enabled": true }
-    },
-    {
-      "matchUpdateTypes": ["patch", "pin", "digest"],
-      "automerge": true,
-      "rebaseWhen": "conflicted"
+      "lockFileMaintenance": {
+        "enabled": true
+      }
     }
   ]
 }
