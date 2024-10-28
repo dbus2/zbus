@@ -232,5 +232,11 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@v2
-      - name: Check documentation build
-        run: cargo --locked doc --all-features
+      - name: Check zvariant documentation build
+        run: cargo --locked doc --all-features -p zvariant
+      - name: Check zbus_names documentation build
+        run: cargo --locked doc --all-features -p zbus_names
+      - name: Check zbus documentation build
+        run: cargo --locked doc --all-features -p zbus
+      - name: Check zbus_xml documentation build
+        run: cargo --locked doc --all-features -p zbus_xml
