@@ -166,18 +166,23 @@ pub fn create_proxy(
         .map(ToString::to_string)
         .unwrap_or(format!("org.freedesktop.{ident}"));
     let assume_defaults = assume_defaults.unwrap_or(false);
+    let default_path = default_path
+        .map(|path| {
+            // Ensure the path is valid.
+            zvariant::ObjectPath::try_from(path)
+                .map_err(|e| Error::new(input.span(), format!("{e}")))
+                .map(|p| p.to_string())
+        })
+        .transpose()?;
     let (default_path, default_service) = if assume_defaults {
-        let path = default_path
-            .map(ToString::to_string)
-            .or_else(|| Some(format!("/org/freedesktop/{ident}")));
+        let path = default_path.or_else(|| Some(format!("/org/freedesktop/{ident}")));
         let svc = default_service
             .map(ToString::to_string)
             .or_else(|| Some(iface_name.clone()));
         (path, svc)
     } else {
-        let path = default_path.map(ToString::to_string);
         let svc = default_service.map(ToString::to_string);
-        (path, svc)
+        (default_path, svc)
     };
     let mut methods = TokenStream::new();
     let mut stream_types = TokenStream::new();
