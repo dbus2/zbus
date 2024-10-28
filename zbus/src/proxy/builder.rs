@@ -151,15 +151,9 @@ where
     pub fn new(conn: &Connection) -> Self {
         Self {
             conn: conn.clone(),
-            destination: T::DESTINATION
-                .as_ref()
-                .map(|d| BusName::from_static_str(d).expect("invalid bus name")),
-            path: T::PATH
-                .as_ref()
-                .map(|p| ObjectPath::from_static_str(p).expect("invalid default path")),
-            interface: T::INTERFACE
-                .as_ref()
-                .map(|i| InterfaceName::from_static_str(i).expect("invalid interface name")),
+            destination: T::DESTINATION.clone(),
+            path: T::PATH.clone(),
+            interface: T::INTERFACE.clone(),
             cache: CacheProperties::default(),
             uncached_properties: None,
             proxy_type: PhantomData,
