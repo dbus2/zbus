@@ -321,15 +321,19 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
     let (iface_name, with_spawn, mut proxy) = {
         let impl_attrs = ImplAttributes::parse_nested_metas(args)?;
 
-        let name =
-            match (impl_attrs.name, impl_attrs.interface) {
-                (Some(name), None) | (None, Some(name)) => name,
-                (None, None) => format!("org.freedesktop.{ty}"),
-                (Some(_), Some(_)) => return Err(syn::Error::new(
+        let name = match (impl_attrs.name, impl_attrs.interface) {
+            // Ensure the interface name is valid.
+            (Some(name), None) | (None, Some(name)) => zbus_names::InterfaceName::try_from(name)
+                .map_err(|e| Error::new(input.span(), format!("{e}")))
+                .map(|i| i.to_string())?,
+            (None, None) => format!("org.freedesktop.{ty}"),
+            (Some(_), Some(_)) => {
+                return Err(syn::Error::new(
                     input.span(),
                     "`name` and `interface` attributes should not be specified at the same time",
-                )),
-            };
+                ))
+            }
+        };
         let proxy = impl_attrs.proxy.map(|p| Proxy::new(ty, &name, p, &zbus));
 
         (name, impl_attrs.spawn.unwrap_or(true), proxy)

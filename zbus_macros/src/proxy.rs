@@ -163,7 +163,13 @@ pub fn create_proxy(
     let proxy_name = Ident::new(proxy_name, Span::call_site());
     let ident = input.ident.to_string();
     let iface_name = iface_name
-        .map(ToString::to_string)
+        .map(|iface| {
+            // Ensure the interface name is valid.
+            zbus_names::InterfaceName::try_from(iface)
+                .map_err(|e| Error::new(input.span(), format!("{e}")))
+                .map(|i| i.to_string())
+        })
+        .transpose()?
         .unwrap_or(format!("org.freedesktop.{ident}"));
     let assume_defaults = assume_defaults.unwrap_or(false);
     let default_path = default_path
