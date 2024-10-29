@@ -10,7 +10,7 @@ authors = [
     "Zeeshan Ali Khan <zeeshanak@gnome.org>",
 ]
 edition = "2021"
-rust-version = "1.81"
+rust-version = "1.80"
 
 description = "D-Bus XML interface code generator"
 repository = "https://github.com/dbus2/zbus/"
