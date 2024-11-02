@@ -974,6 +974,20 @@ impl<'a> TryFrom<&Value<'a>> for Value<'a> {
     }
 }
 
+impl Clone for Value<'_> {
+    /// Clone the value.
+    ///
+    /// # Panics
+    ///
+    /// This method can only fail on Unix platforms for [`Value::Fd`] variant containing an
+    /// [`Fd::Owned`] variant. This happens when the current process exceeds the limit on maximum
+    /// number of open file descriptors.
+    fn clone(&self) -> Self {
+        self.try_clone()
+            .expect("Process exceeded limit on maximum number of open file descriptors")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
