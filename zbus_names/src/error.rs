@@ -11,18 +11,53 @@ pub enum Error {
     Variant(VariantError),
     /// Invalid bus name. The strings describe why the bus name is neither a valid unique nor
     /// well-known name, respectively.
+    #[deprecated(
+        since = "4.1.0",
+        note = "This variant is no longer returned from any of our API.\
+                Use `Error::InvalidName` instead."
+    )]
     InvalidBusName(String, String),
     /// Invalid well-known bus name.
+    #[deprecated(
+        since = "4.1.0",
+        note = "This variant is no longer returned from any of our API.\
+                Use `Error::InvalidName` instead."
+    )]
     InvalidWellKnownName(String),
     /// Invalid unique bus name.
+    #[deprecated(
+        since = "4.1.0",
+        note = "This variant is no longer returned from any of our API.\
+                Use `Error::InvalidName` instead."
+    )]
     InvalidUniqueName(String),
     /// Invalid interface name.
+    #[deprecated(
+        since = "4.1.0",
+        note = "This variant is no longer returned from any of our API.\
+                Use `Error::InvalidName` instead."
+    )]
     InvalidInterfaceName(String),
     /// Invalid member (method or signal) name.
+    #[deprecated(
+        since = "4.1.0",
+        note = "This variant is no longer returned from any of our API.\
+                Use `Error::InvalidName` instead."
+    )]
     InvalidMemberName(String),
     /// Invalid property name.
+    #[deprecated(
+        since = "4.1.0",
+        note = "This variant is no longer returned from any of our API.\
+                Use `Error::InvalidName` instead."
+    )]
     InvalidPropertyName(String),
     /// Invalid error name.
+    #[deprecated(
+        since = "4.1.0",
+        note = "This variant is no longer returned from any of our API.\
+                Use `Error::InvalidName` instead."
+    )]
     InvalidErrorName(String),
     /// An invalid name.
     InvalidName(&'static str),
@@ -31,6 +66,7 @@ pub enum Error {
 assert_impl_all!(Error: Send, Sync, Unpin);
 
 impl PartialEq for Error {
+    #[allow(deprecated)]
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::InvalidBusName(_, _), Self::InvalidBusName(_, _)) => true,
@@ -48,6 +84,7 @@ impl PartialEq for Error {
 }
 
 impl error::Error for Error {
+    #[allow(deprecated)]
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
             Error::InvalidBusName(_, _) => None,
@@ -64,6 +101,7 @@ impl error::Error for Error {
 }
 
 impl fmt::Display for Error {
+    #[allow(deprecated)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::Variant(e) => write!(f, "{e}"),
