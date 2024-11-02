@@ -2215,7 +2215,7 @@ dependencies = [
 
 [[package]]
 name = "zvariant_utils"
-version = "3.0.1"
+version = "3.0.2"
 dependencies = [
  "proc-macro2",
  "quote",
