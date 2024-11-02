@@ -83,6 +83,18 @@ impl PartialEq for Error {
             (Error::UnknownFd, Error::UnknownFd) => true,
             (Error::MaxDepthExceeded(max1), Error::MaxDepthExceeded(max2)) => max1 == max2,
             (Error::MissingFramingOffset, Error::MissingFramingOffset) => true,
+            (
+                Error::IncompatibleFormat(sig1, format1),
+                Error::IncompatibleFormat(sig2, format2),
+            ) => sig1 == sig2 && format1 == format2,
+            (
+                Error::SignatureMismatch(provided1, expected1),
+                Error::SignatureMismatch(provided2, expected2),
+            ) => provided1 == provided2 && expected1 == expected2,
+            (Error::OutOfBounds, Error::OutOfBounds) => true,
+            (Error::SignatureParse(e1), Error::SignatureParse(e2)) => e1 == e2,
+            (Error::EmptyStructure, Error::EmptyStructure) => true,
+            (Error::InvalidObjectPath, Error::InvalidObjectPath) => true,
             (_, _) => false,
         }
     }
