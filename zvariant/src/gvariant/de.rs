@@ -530,6 +530,12 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> MapAccess<'de
 
         let key_end = match self.key_offset_size {
             Some(_) => {
+                if self.de.0.pos > element_end {
+                    return Err(serde::de::Error::invalid_length(
+                        self.de.0.pos,
+                        &format!("< {}", element_end).as_str(),
+                    ));
+                }
                 let offset_size =
                     FramingOffsetSize::for_encoded_container(element_end - self.de.0.pos);
                 self.key_offset_size.replace(offset_size);
@@ -574,7 +580,15 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> MapAccess<'de
         );
         let element_end = self.element_end(true)?;
         let value_end = match self.key_offset_size {
-            Some(key_offset_size) => element_end - key_offset_size as usize,
+            Some(key_offset_size) => {
+                if key_offset_size as usize > element_end {
+                    return Err(serde::de::Error::invalid_length(
+                        key_offset_size as usize,
+                        &format!("< {}", element_end).as_str(),
+                    ));
+                }
+                element_end - key_offset_size as usize
+            }
             None => element_end,
         };
 
