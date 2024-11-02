@@ -143,10 +143,10 @@ impl Ord for Value<'_> {
             .unwrap_or_else(|| match (self, other) {
                 (Self::F64(lhs), Self::F64(rhs)) => lhs.total_cmp(rhs),
                 // `partial_cmp` returns `Some(_)` if either the discriminants are different
-                // or if both the left hand side and right hand side is `Self::F64(_)`,
-                // because `f64` is the only type in this enum, that does not implement `Ord`.
-                // This `match`-arm is therefore unreachable.
-                _ => unreachable!(),
+                // or if both the left hand side and right hand side is `Self::F64(_)`. We can only
+                // reach this arm, if only one of the sides is `Self::F64(_)`. So we can just
+                // pretend the ordering is equal.
+                _ => Ordering::Equal,
             })
     }
 }
