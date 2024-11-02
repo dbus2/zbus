@@ -160,10 +160,9 @@ impl<'name> From<InterfaceName<'name>> for Str<'name> {
 
 fn validate(name: &str) -> Result<()> {
     validate_bytes(name.as_bytes()).map_err(|_| {
-        Error::InvalidInterfaceName(
+        Error::InvalidName(
             "Invalid interface name. See \
             https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-interface"
-            .to_string(),
         )
     })
 }
