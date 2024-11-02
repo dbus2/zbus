@@ -2163,7 +2163,7 @@ dependencies = [
 
 [[package]]
 name = "zbus_xmlgen"
-version = "5.0.0"
+version = "5.0.1"
 dependencies = [
  "clap",
  "pretty_assertions",
