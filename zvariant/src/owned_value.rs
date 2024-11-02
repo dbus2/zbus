@@ -283,6 +283,19 @@ impl<'de> Deserialize<'de> for OwnedValue {
     }
 }
 
+impl Clone for OwnedValue {
+    /// Clone the value.
+    ///
+    /// # Panics
+    ///
+    /// This method can only fail on Unix platforms for [`Value::Fd`] variant containing an
+    /// [`Fd::Owned`] variant. This happens when the current process exceeds the limit on maximum
+    /// number of open file descriptors.
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{collections::HashMap, error::Error};
