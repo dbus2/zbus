@@ -2151,7 +2151,7 @@ dependencies = [
 
 [[package]]
 name = "zbus_xml"
-version = "5.0.0"
+version = "5.0.1"
 dependencies = [
  "doc-comment",
  "quick-xml",
