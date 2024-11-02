@@ -6,8 +6,8 @@ use core::{
 use std::{borrow::Cow, sync::Arc};
 
 use crate::{
-    unique_name, utils::impl_str_basic, Error, OwnedUniqueName, OwnedWellKnownName, Result,
-    UniqueName, WellKnownName,
+    unique_name, utils::impl_str_basic, well_known_name, Error, OwnedUniqueName,
+    OwnedWellKnownName, Result, UniqueName, WellKnownName,
 };
 use serde::{de, Deserialize, Serialize};
 use static_assertions::assert_impl_all;
@@ -216,8 +216,10 @@ impl<'s> TryFrom<Str<'s>> for BusName<'s> {
     fn try_from(value: Str<'s>) -> Result<Self> {
         if unique_name::validate_bytes(value.as_bytes()).is_ok() {
             Ok(BusName::Unique(UniqueName(value)))
+        } else if well_known_name::validate_bytes(value.as_bytes()).is_ok() {
+            Ok(BusName::WellKnown(WellKnownName(value)))
         } else {
-            WellKnownName::try_from(value).map(BusName::WellKnown)
+            Err(Error::InvalidName(INVALID_BUS_NAME_ERROR))
         }
     }
 }
@@ -539,3 +541,6 @@ impl NoneValue for OwnedBusName {
         BusName::null_value()
     }
 }
+
+const INVALID_BUS_NAME_ERROR: &str = "Invalid bus name. \
+    See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus";

@@ -39,7 +39,7 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 #[derive(
     Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
 )]
-pub struct WellKnownName<'name>(Str<'name>);
+pub struct WellKnownName<'name>(pub(crate) Str<'name>);
 
 impl_str_basic!(WellKnownName<'_>);
 
@@ -152,7 +152,7 @@ fn validate(name: &str) -> Result<()> {
     })
 }
 
-fn validate_bytes(bytes: &[u8]) -> std::result::Result<(), ()> {
+pub(crate) fn validate_bytes(bytes: &[u8]) -> std::result::Result<(), ()> {
     use winnow::{
         combinator::separated,
         stream::AsChar,
