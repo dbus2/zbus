@@ -61,6 +61,11 @@ pub enum Error {
     InvalidErrorName(String),
     /// An invalid name.
     InvalidName(&'static str),
+    /// Invalid conversion from name type `from` to name type `to`.
+    InvalidNameConversion {
+        from: &'static str,
+        to: &'static str,
+    },
 }
 
 assert_impl_all!(Error: Send, Sync, Unpin);
@@ -77,6 +82,7 @@ impl PartialEq for Error {
             (Self::InvalidPropertyName(_), Self::InvalidPropertyName(_)) => true,
             (Self::InvalidErrorName(_), Self::InvalidErrorName(_)) => true,
             (Self::InvalidName(_), Self::InvalidName(_)) => true,
+            (Self::InvalidNameConversion { .. }, Self::InvalidNameConversion { .. }) => true,
             (Self::Variant(s), Self::Variant(o)) => s == o,
             (_, _) => false,
         }
@@ -95,6 +101,7 @@ impl error::Error for Error {
             Error::InvalidMemberName(_) => None,
             Error::InvalidPropertyName(_) => None,
             Error::InvalidName(_) => None,
+            Error::InvalidNameConversion { .. } => None,
             Error::Variant(e) => Some(e),
         }
     }
@@ -118,6 +125,9 @@ impl fmt::Display for Error {
             Error::InvalidMemberName(s) => write!(f, "Invalid method or signal name: {s}"),
             Error::InvalidPropertyName(s) => write!(f, "Invalid property name: {s}"),
             Error::InvalidName(s) => write!(f, "{s}"),
+            Error::InvalidNameConversion { from, to } => {
+                write!(f, "Invalid conversion from `{from}` to `{to}`")
+            }
         }
     }
 }
