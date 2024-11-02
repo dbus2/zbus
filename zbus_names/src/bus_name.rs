@@ -227,7 +227,10 @@ impl<'s> TryFrom<BusName<'s>> for WellKnownName<'s> {
 
     fn try_from(value: BusName<'s>) -> Result<Self> {
         match value {
-            BusName::Unique(name) => Err(Error::InvalidWellKnownName(name.to_string())),
+            BusName::Unique(_) => Err(Error::InvalidNameConversion {
+                from: "UniqueName",
+                to: "WellKnownName",
+            }),
             BusName::WellKnown(name) => Ok(name),
         }
     }
@@ -239,7 +242,10 @@ impl<'s> TryFrom<BusName<'s>> for UniqueName<'s> {
     fn try_from(value: BusName<'s>) -> Result<Self> {
         match value {
             BusName::Unique(name) => Ok(name),
-            BusName::WellKnown(name) => Err(Error::InvalidUniqueName(name.to_string())),
+            BusName::WellKnown(_) => Err(Error::InvalidNameConversion {
+                from: "WellKnownName",
+                to: "UniqueName",
+            }),
         }
     }
 }

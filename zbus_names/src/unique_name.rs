@@ -144,10 +144,9 @@ impl<'de: 'name, 'name> Deserialize<'de> for UniqueName<'name> {
 
 fn validate(name: &str) -> Result<()> {
     validate_bytes(name.as_bytes()).map_err(|_| {
-        Error::InvalidUniqueName(
+        Error::InvalidName(
             "Invalid unique name. \
             See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus"
-            .to_string(),
         )
     })
 }

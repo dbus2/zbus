@@ -145,10 +145,9 @@ impl<'de: 'name, 'name> Deserialize<'de> for WellKnownName<'name> {
 
 fn validate(name: &str) -> Result<()> {
     validate_bytes(name.as_bytes()).map_err(|_| {
-        Error::InvalidWellKnownName(
+        Error::InvalidName(
             "Invalid well-known name. \
             See https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus"
-            .to_string(),
         )
     })
 }

@@ -153,17 +153,13 @@ impl_try_from! {
 
 fn ensure_correct_property_name(name: &str) -> Result<()> {
     if name.is_empty() {
-        return Err(Error::InvalidPropertyName(format!(
-            "`{}` is {} characters long, which is smaller than minimum allowed (1)",
-            name,
-            name.len(),
-        )));
+        return Err(Error::InvalidName(
+            "Invalid property name. It has to be at least 1 character long.",
+        ));
     } else if name.len() > 255 {
-        return Err(Error::InvalidPropertyName(format!(
-            "`{}` is {} characters long, which is longer than maximum allowed (255)",
-            name,
-            name.len(),
-        )));
+        return Err(Error::InvalidName(
+            "Invalid property name. It can not be longer than 255 characters.",
+        ));
     }
 
     Ok(())

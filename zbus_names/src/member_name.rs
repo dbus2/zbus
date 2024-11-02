@@ -158,10 +158,9 @@ impl_try_from! {
 
 fn validate(name: &str) -> Result<()> {
     validate_bytes(name.as_bytes()).map_err(|_| {
-        Error::InvalidMemberName(
+        Error::InvalidName(
             "Invalid member name. See \
-            https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-member"
-                .to_string(),
+            https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-member",
         )
     })
 }

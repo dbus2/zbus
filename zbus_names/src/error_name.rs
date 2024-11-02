@@ -157,10 +157,9 @@ impl_try_from! {
 fn validate(name: &str) -> Result<()> {
     // Error names follow the same rules as interface names.
     crate::interface_name::validate_bytes(name.as_bytes()).map_err(|_| {
-        Error::InvalidErrorName(
+        Error::InvalidName(
             "Invalid error name. See \
-            https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-error"
-                .to_string(),
+            https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-error",
         )
     })
 }
