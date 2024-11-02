@@ -1,6 +1,6 @@
 use core::fmt;
 
-/// Enum representing the max depth exceeded error.
+/// Error you get on failure to parse a signature string.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
     /// Invalid signature.
