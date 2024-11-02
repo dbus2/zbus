@@ -35,4 +35,3 @@ pretty_assertions = "1.4"
 
 [lints]
 workspace = true
-
