@@ -2078,7 +2078,7 @@ checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
 
 [[package]]
 name = "zbus"
-version = "5.0.1"
+version = "5.1.0"
 dependencies = [
  "async-broadcast",
  "async-executor",
@@ -2123,7 +2123,7 @@ dependencies = [
 
 [[package]]
 name = "zbus_macros"
-version = "5.0.1"
+version = "5.1.0"
 dependencies = [
  "async-io",
  "futures-util",
@@ -2140,7 +2140,7 @@ dependencies = [
 
 [[package]]
 name = "zbus_names"
-version = "4.0.0"
+version = "4.1.0"
 dependencies = [
  "criterion",
  "serde",
@@ -2151,7 +2151,7 @@ dependencies = [
 
 [[package]]
 name = "zbus_xml"
-version = "5.0.0"
+version = "5.0.1"
 dependencies = [
  "doc-comment",
  "quick-xml",
@@ -2163,7 +2163,7 @@ dependencies = [
 
 [[package]]
 name = "zbus_xmlgen"
-version = "5.0.0"
+version = "5.0.1"
 dependencies = [
  "clap",
  "pretty_assertions",
@@ -2174,7 +2174,7 @@ dependencies = [
 
 [[package]]
 name = "zvariant"
-version = "5.0.1"
+version = "5.1.0"
 dependencies = [
  "arrayvec",
  "camino",
@@ -2200,7 +2200,7 @@ dependencies = [
 
 [[package]]
 name = "zvariant_derive"
-version = "5.0.1"
+version = "5.1.0"
 dependencies = [
  "enumflags2",
  "proc-macro-crate",
@@ -2215,7 +2215,7 @@ dependencies = [
 
 [[package]]
 name = "zvariant_utils"
-version = "3.0.1"
+version = "3.0.2"
 dependencies = [
  "proc-macro2",
  "quote",

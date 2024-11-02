@@ -1,6 +1,6 @@
 [package]
 name = "zbus_xmlgen"
-version = "5.0.0"
+version = "5.0.1"
 authors = [
     "Bilal Elmoussaoui <bil.elmoussaoui@gmail.com>",
     "Federico Mena Quintero <federico@gnome.org>",
@@ -35,4 +35,3 @@ pretty_assertions = "1.4"
 
 [lints]
 workspace = true
-
