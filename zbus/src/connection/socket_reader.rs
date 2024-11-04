@@ -76,12 +76,15 @@ impl SocketReader {
                     // 1. the channel is closed.
                     // 2. No active receivers.
                     //
-                    // In either case, just log it.
-                    trace!(
-                        "Error broadcasting message to stream for `{:?}`: {:?}",
-                        rule,
-                        e
-                    );
+                    // In either case, just log it unless this is the channel for the generic
+                    // unfiltered stream, where the channel is not created on-demand.
+                    if rule.is_some() {
+                        trace!(
+                            "Error broadcasting message to stream for `{:?}`: {:?}",
+                            rule,
+                            e
+                        );
+                    }
                 }
             }
             trace!("Broadcasted to all streams: {:?}", msg);
