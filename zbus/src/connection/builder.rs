@@ -351,63 +351,7 @@ impl<'a> Builder<'a> {
         #[cfg(not(feature = "p2p"))]
         let is_bus_conn = true;
 
-        #[cfg(not(feature = "bus-impl"))]
-        let unique_name = None;
-        #[cfg(feature = "bus-impl")]
-        let unique_name = self.unique_name.take().map(Into::into);
-
-        #[allow(unused_mut)]
-        let (mut stream, server_guid, authenticated) = self.target_connect().await?;
-        let mut auth = if authenticated {
-            let (socket_read, socket_write) = stream.take();
-            Authenticated {
-                #[cfg(unix)]
-                cap_unix_fd: socket_read.can_pass_unix_fd(),
-                socket_read: Some(socket_read),
-                socket_write,
-                // SAFETY: `server_guid` is provided as arg of `Builder::authenticated_socket`.
-                server_guid: server_guid.unwrap(),
-                already_received_bytes: vec![],
-                unique_name,
-                #[cfg(unix)]
-                already_received_fds: vec![],
-            }
-        } else {
-            #[cfg(feature = "p2p")]
-            match self.guid {
-                None => {
-                    // SASL Handshake
-                    Authenticated::client(stream, server_guid, self.auth_mechanism, is_bus_conn)
-                        .await?
-                }
-                Some(guid) => {
-                    if !self.p2p {
-                        return Err(Error::Unsupported);
-                    }
-
-                    let creds = stream.read_mut().peer_credentials().await?;
-                    #[cfg(unix)]
-                    let client_uid = creds.unix_user_id();
-                    #[cfg(windows)]
-                    let client_sid = creds.into_windows_sid();
-
-                    Authenticated::server(
-                        stream,
-                        guid.to_owned().into(),
-                        #[cfg(unix)]
-                        client_uid,
-                        #[cfg(windows)]
-                        client_sid,
-                        self.auth_mechanism,
-                        unique_name,
-                    )
-                    .await?
-                }
-            }
-
-            #[cfg(not(feature = "p2p"))]
-            Authenticated::client(stream, server_guid, self.auth_mechanism, is_bus_conn).await?
-        };
+        let mut auth = self.connect(is_bus_conn).await?;
 
         // SAFETY: `Authenticated` is always built with these fields set to `Some`.
         let socket_read = auth.socket_read.take().unwrap();
@@ -466,6 +410,66 @@ impl<'a> Builder<'a> {
             auth_mechanism: None,
             #[cfg(feature = "bus-impl")]
             unique_name: None,
+        }
+    }
+
+    async fn connect(&mut self, is_bus_conn: bool) -> Result<Authenticated> {
+        #[cfg(not(feature = "bus-impl"))]
+        let unique_name = None;
+        #[cfg(feature = "bus-impl")]
+        let unique_name = self.unique_name.take().map(Into::into);
+
+        #[allow(unused_mut)]
+        let (mut stream, server_guid, authenticated) = self.target_connect().await?;
+        if authenticated {
+            let (socket_read, socket_write) = stream.take();
+            Ok(Authenticated {
+                #[cfg(unix)]
+                cap_unix_fd: socket_read.can_pass_unix_fd(),
+                socket_read: Some(socket_read),
+                socket_write,
+                // SAFETY: `server_guid` is provided as arg of `Builder::authenticated_socket`.
+                server_guid: server_guid.unwrap(),
+                already_received_bytes: vec![],
+                unique_name,
+                #[cfg(unix)]
+                already_received_fds: vec![],
+            })
+        } else {
+            #[cfg(feature = "p2p")]
+            match self.guid.take() {
+                None => {
+                    // SASL Handshake
+                    Authenticated::client(stream, server_guid, self.auth_mechanism, is_bus_conn)
+                        .await
+                }
+                Some(guid) => {
+                    if !self.p2p {
+                        return Err(Error::Unsupported);
+                    }
+
+                    let creds = stream.read_mut().peer_credentials().await?;
+                    #[cfg(unix)]
+                    let client_uid = creds.unix_user_id();
+                    #[cfg(windows)]
+                    let client_sid = creds.into_windows_sid();
+
+                    Authenticated::server(
+                        stream,
+                        guid.to_owned().into(),
+                        #[cfg(unix)]
+                        client_uid,
+                        #[cfg(windows)]
+                        client_sid,
+                        self.auth_mechanism,
+                        unique_name,
+                    )
+                    .await
+                }
+            }
+
+            #[cfg(not(feature = "p2p"))]
+            Authenticated::client(stream, server_guid, self.auth_mechanism, is_bus_conn).await
         }
     }
 
