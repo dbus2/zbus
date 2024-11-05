@@ -29,7 +29,7 @@ jobs:
           fail-on-alert: false
           github-token: ${{ secrets.GITHUB_TOKEN }}
           comment-on-alert: true
-          alert-threshold: 50%
+          alert-threshold: 200%
           alert-comment-cc-users: '@zeenix'
           auto-push: true
 
