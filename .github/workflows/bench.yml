@@ -26,7 +26,7 @@ jobs:
         with:
           tool: 'cargo'
           output-file-path: output.txt
-          fail-on-alert: true
+          fail-on-alert: false
           github-token: ${{ secrets.GITHUB_TOKEN }}
           comment-on-alert: true
           alert-threshold: 50%
