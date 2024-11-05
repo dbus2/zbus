@@ -1,0 +1,36 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  benchmarks:
+    runs-on: ubuntu-latest
+    permissions:
+      # deployments permission to deploy GitHub pages website
+      deployments: write
+      # contents permission to update benchmark contents in gh-pages branch
+      contents: write
+    env:
+      RUST_BACKTRACE: full
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+      - name: Run benchmark
+        run: cargo bench -p zbus -p zbus_names -p zvariant -- --output-format bencher | tee output.txt
+      - name: Store benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: 'cargo'
+          output-file-path: output.txt
+          fail-on-alert: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-on-alert: true
+          alert-threshold: 50%
+          alert-comment-cc-users: '@zeenix'
+          auto-push: true
+
+
