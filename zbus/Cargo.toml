@@ -32,6 +32,9 @@ async-io = [
   "async-task",
   "async-lock",
   "async-fs",
+  # FIXME: We only currently only need this for unix but Cargo doesn't provide a way to enable
+  # features for only specific target OS: https://github.com/rust-lang/cargo/issues/1197.
+  "async-process",
   "blocking",
   "futures-util/io",
 ]
@@ -76,6 +79,7 @@ async-executor = { version = "1.11.0", optional = true }
 blocking = { version = "1.6.0", optional = true }
 async-task = { version = "4.7.1", optional = true }
 async-fs = { version = "2.1.2", optional = true }
+async-process = { version = "2.2.2", optional = true }
 # FIXME: We should only enable process feature for Mac OS. See comment on async-process below for why we can't.
 tokio = { version = "1.37.0", optional = true, features = [
   "rt",
@@ -110,11 +114,6 @@ nix = { version = "0.29", default-features = false, features = [
   "uio",
   "user",
 ] }
-
-[target.'cfg(target_family = "unix")'.dependencies]
-# FIXME: This should only be enabled if async-io feature is enabled but currently
-# Cargo doesn't provide a way to do that for only specific target OS: https://github.com/rust-lang/cargo/issues/1197.
-async-process = "2.2.2"
 
 [target.'cfg(any(target_os = "macos", windows))'.dependencies]
 async-recursion = "1.1.1"
