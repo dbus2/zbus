@@ -84,7 +84,7 @@ If you intend to contribute often or think that's very likely, we recommend you 
 scripts contained within this repository. You can enable them with:
 
 ```sh
-git config --local core.hooksPath .githooks/
+cp .githooks/* .git/hooks/
 ```
 
 ## Adding public API
