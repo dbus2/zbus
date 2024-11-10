@@ -814,6 +814,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
     };
 
     let proxy = proxy.map(|proxy| proxy.gen()).transpose()?;
+    let introspect_format_str = format!("{}<interface name=\"{iface_name}\">", "{:indent$}");
 
     Ok(quote! {
         #input
@@ -911,9 +912,8 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
             fn introspect_to_writer(&self, writer: &mut dyn ::std::fmt::Write, level: usize) {
                 ::std::writeln!(
                     writer,
-                    r#"{:indent$}<interface name="{}">"#,
+                    #introspect_format_str,
                     "",
-                    <Self as #zbus::object_server::Interface>::name(),
                     indent = level
                 ).unwrap();
                 {
@@ -1052,8 +1052,9 @@ fn clear_input_arg_attrs(inputs: &mut Punctuated<FnArg, Token![,]>) {
 }
 
 fn introspect_signal(name: &str, args: &TokenStream) -> TokenStream {
+    let format_str = format!("{}<signal name=\"{name}\">", "{:indent$}");
     quote!(
-        ::std::writeln!(writer, "{:indent$}<signal name=\"{}\">", "", #name, indent = level).unwrap();
+        ::std::writeln!(writer, #format_str, "", indent = level).unwrap();
         {
             let level = level + 2;
             #args
@@ -1063,8 +1064,9 @@ fn introspect_signal(name: &str, args: &TokenStream) -> TokenStream {
 }
 
 fn introspect_method(name: &str, args: &TokenStream) -> TokenStream {
+    let format_str = format!("{}<method name=\"{name}\">", "{:indent$}");
     quote!(
-        ::std::writeln!(writer, "{:indent$}<method name=\"{}\">", "", #name, indent = level).unwrap();
+        ::std::writeln!(writer, #format_str, "", indent = level).unwrap();
         {
             let level = level + 2;
             #args
@@ -1116,10 +1118,13 @@ fn introspect_input_args<'i>(
             let ident = pat_ident(pat_type).unwrap();
             let arg_name = quote!(#ident).to_string();
             let dir = if is_signal { "" } else { " direction=\"in\"" };
+            let format_str = format!(
+                "{}<arg name=\"{arg_name}\" type=\"{}\"{dir}/>",
+                "{:indent$}", "{}",
+            );
             Some(quote!(
                 #(#cfg_attrs)*
-                ::std::writeln!(writer, "{:indent$}<arg name=\"{}\" type=\"{}\"{}/>", "",
-                         #arg_name, <#ty>::SIGNATURE, #dir, indent = level).unwrap();
+                ::std::writeln!(writer, #format_str, "", <#ty>::SIGNATURE, indent = level).unwrap();
             ))
         })
 }
@@ -1129,15 +1134,18 @@ fn introspect_output_arg(
     arg_name: Option<&String>,
     cfg_attrs: &[&syn::Attribute],
 ) -> TokenStream {
-    let arg_name = match arg_name {
+    let arg_name_attr = match arg_name {
         Some(name) => format!("name=\"{name}\" "),
         None => String::from(""),
     };
 
+    let format_str = format!(
+        "{}<arg {arg_name_attr}type=\"{}\" direction=\"out\"/>",
+        "{:indent$}", "{}",
+    );
     quote!(
         #(#cfg_attrs)*
-        ::std::writeln!(writer, "{:indent$}<arg {}type=\"{}\" direction=\"out\"/>", "",
-                 #arg_name, <#ty>::SIGNATURE, indent = level).unwrap();
+        ::std::writeln!(writer, #format_str, "", <#ty>::SIGNATURE, indent = level).unwrap();
     )
 }
 
@@ -1246,31 +1254,29 @@ fn introspect_properties(
 
         let doc_comments = prop.doc_comments;
         if prop.emits_changed_signal == PropertyEmitsChangedSignal::True {
+            let format_str = format!(
+                "{}<property name=\"{name}\" type=\"{}\" access=\"{access}\"/>",
+                "{:indent$}", "{}",
+            );
             introspection.extend(quote!(
                 #doc_comments
-                ::std::writeln!(
-                    writer,
-                    "{:indent$}<property name=\"{}\" type=\"{}\" access=\"{}\"/>",
-                    "", #name, <#ty>::SIGNATURE, #access, indent = level,
-                ).unwrap();
+                ::std::writeln!(writer, #format_str, "", <#ty>::SIGNATURE, indent = level).unwrap();
             ));
         } else {
             let emits_changed_signal = prop.emits_changed_signal.to_string();
+            let annot_name = "org.freedesktop.DBus.Property.EmitsChangedSignal";
+            let format_str = format!(
+                "{}<property name=\"{name}\" type=\"{}\" access=\"{access}\">\n\
+                    {}<annotation name=\"{annot_name}\" value=\"{emits_changed_signal}\"/>\n\
+                {}</property>",
+                "{:indent$}", "{}", "{:annot_indent$}", "{:indent$}",
+            );
             introspection.extend(quote!(
                 #doc_comments
                 ::std::writeln!(
                     writer,
-                    "{:indent$}<property name=\"{}\" type=\"{}\" access=\"{}\">",
-                    "", #name, <#ty>::SIGNATURE, #access, indent = level,
-                ).unwrap();
-                ::std::writeln!(
-                    writer,
-                    "{:indent$}<annotation name=\"org.freedesktop.DBus.Property.EmitsChangedSignal\" value=\"{}\"/>",
-                    "", #emits_changed_signal, indent = level + 2,
-                ).unwrap();
-                ::std::writeln!(
-                    writer,
-                    "{:indent$}</property>", "", indent = level,
+                    #format_str,
+                    "", <#ty>::SIGNATURE, "", "", indent = level, annot_indent = level + 2,
                 ).unwrap();
             ));
         }
