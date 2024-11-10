@@ -318,10 +318,9 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
         _ => return Err(Error::new_spanned(&input.self_ty, "Invalid type")),
     };
 
-    let (iface_name, with_spawn, mut proxy) = {
-        let impl_attrs = ImplAttributes::parse_nested_metas(args)?;
-
-        let name = match (impl_attrs.name, impl_attrs.interface) {
+    let impl_attrs = ImplAttributes::parse_nested_metas(args)?;
+    let iface_name = {
+        match (impl_attrs.name, impl_attrs.interface) {
             // Ensure the interface name is valid.
             (Some(name), None) | (None, Some(name)) => zbus_names::InterfaceName::try_from(name)
                 .map_err(|e| Error::new(input.span(), format!("{e}")))
@@ -333,11 +332,12 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                     "`name` and `interface` attributes should not be specified at the same time",
                 ))
             }
-        };
-        let proxy = impl_attrs.proxy.map(|p| Proxy::new(ty, &name, p, &zbus));
-
-        (name, impl_attrs.spawn.unwrap_or(true), proxy)
+        }
     };
+    let with_spawn = impl_attrs.spawn.unwrap_or(true);
+    let mut proxy = impl_attrs
+        .proxy
+        .map(|p| Proxy::new(ty, &iface_name, p, &zbus));
 
     // Store parsed information about each method
     let mut methods = vec![];
