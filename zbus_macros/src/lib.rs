@@ -231,6 +231,10 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///   supports all the [`macro@proxy`]-specific sub-attributes (e.g `gen_async`). The common
 ///   sub-attributes (e.g `name`) are automatically forworded to the [`macro@proxy`] macro.
 ///
+/// * `introspection_docs` - whether to include the documentation in the introspection data
+///   (Default: `true`). If your interface is well-known or well-documented, you may want to set
+///   this to `false` to reduce the the size of your binary and D-Bus traffic.
+///
 /// The methods accepts the `interface` attributes:
 ///
 /// * `name` - override the D-Bus name (pascal case form of the method by default)

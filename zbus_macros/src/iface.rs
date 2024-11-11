@@ -24,6 +24,7 @@ def_attrs! {
         interface str,
         name str,
         spawn bool,
+        introspection_docs bool,
         proxy {
             // Keep this in sync with proxy's method attributes.
             // TODO: Find a way to share code with proxy module.
@@ -155,6 +156,7 @@ impl MethodInfo {
         attrs: &MethodAttributes,
         cfg_attrs: &[&Attribute],
         doc_attrs: &[&Attribute],
+        introspect_docs: bool,
     ) -> syn::Result<MethodInfo> {
         let is_async = method.sig.asyncness.is_some();
         let Signature {
@@ -163,23 +165,27 @@ impl MethodInfo {
             output,
             ..
         } = &method.sig;
-        let docs = get_doc_attrs(&method.attrs)
-            .iter()
-            .filter_map(|attr| {
-                if let Ok(MetaNameValue {
-                    value: Expr::Lit(ExprLit { lit: Str(s), .. }),
-                    ..
-                }) = &attr.meta.require_name_value()
-                {
-                    Some(s.value())
-                } else {
-                    // non #[doc = "..."] attributes are not our concern
-                    // we leave them for rustc to handle
-                    None
-                }
-            })
-            .collect();
-        let doc_comments = to_xml_docs(docs);
+        let doc_comments = if introspect_docs {
+            let docs = get_doc_attrs(&method.attrs)
+                .iter()
+                .filter_map(|attr| {
+                    if let Ok(MetaNameValue {
+                        value: Expr::Lit(ExprLit { lit: Str(s), .. }),
+                        ..
+                    }) = &attr.meta.require_name_value()
+                    {
+                        Some(s.value())
+                    } else {
+                        // non #[doc = "..."] attributes are not our concern
+                        // we leave them for rustc to handle
+                        None
+                    }
+                })
+                .collect();
+            to_xml_docs(docs)
+        } else {
+            quote!()
+        };
         let is_property = attrs.property.is_some();
         let is_signal = attrs.signal;
         assert!(!is_property || !is_signal);
@@ -338,6 +344,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
     let mut proxy = impl_attrs
         .proxy
         .map(|p| Proxy::new(ty, &iface_name, p, &zbus));
+    let introspect_docs = impl_attrs.introspection_docs.unwrap_or(true);
 
     // Store parsed information about each method
     let mut methods = vec![];
@@ -387,7 +394,14 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
             .filter(|a| a.path().is_ident("doc"))
             .collect();
 
-        let method_info = MethodInfo::new(&zbus, method, &method_attrs, &cfg_attrs, &doc_attrs)?;
+        let method_info = MethodInfo::new(
+            &zbus,
+            method,
+            &method_attrs,
+            &cfg_attrs,
+            &doc_attrs,
+            introspect_docs,
+        )?;
         let attr_property = method_attrs.property;
         if let Some(prop_attrs) = &attr_property {
             if method_info.method_type == MethodType::Property(PropertyType::NoInputs) {
