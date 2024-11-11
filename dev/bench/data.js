@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1731189775468,
+  "lastUpdate": 1731369493889,
   "repoUrl": "https://github.com/dbus2/zbus",
   "entries": {
     "Benchmark": [
@@ -929,6 +929,162 @@ window.BENCHMARK_DATA = {
             "name": "signature_parse",
             "value": 10857,
             "range": "± 28",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "object_path_parse",
+            "value": 136,
+            "range": "± 0",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "zeenix@gmail.com",
+            "name": "Zeeshan Ali Khan",
+            "username": "zeenix"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ae3404ea28a97c051e477b6b498461fe12d0bd8b",
+          "message": "Merge pull request #1136 from zeenix/introspect-bloat\n\n⚡️ zm: interface allows to disable docs in introspection + do that for fdo interfaces",
+          "timestamp": "2024-11-12T00:46:59+01:00",
+          "tree_id": "087ccf3e1444b2923019f90982ca9e4c62ccd886",
+          "url": "https://github.com/dbus2/zbus/commit/ae3404ea28a97c051e477b6b498461fe12d0bd8b"
+        },
+        "date": 1731369492911,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "message-ser/small",
+            "value": 2135,
+            "range": "± 17",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "message-ser/big",
+            "value": 2944026,
+            "range": "± 49743",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "message-de/header",
+            "value": 237,
+            "range": "± 7",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "message-de/body",
+            "value": 3981808,
+            "range": "± 16474",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_dbus_address/unix",
+            "value": 413,
+            "range": "± 9",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_dbus_address/tcp",
+            "value": 515,
+            "range": "± 6",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/well_known",
+            "value": 111,
+            "range": "± 9",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/unique",
+            "value": 108,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/bus",
+            "value": 116,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/interface",
+            "value": 99,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/error",
+            "value": 103,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/member",
+            "value": 104,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_ser",
+            "value": 221902,
+            "range": "± 3846",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_de",
+            "value": 422116,
+            "range": "± 1957",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_and_ass_dict_ser",
+            "value": 635925,
+            "range": "± 1424",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_and_ass_dict_de",
+            "value": 2127248,
+            "range": "± 18126",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_and_asv_dict_ser",
+            "value": 1756704,
+            "range": "± 11661",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_and_asv_dict_de",
+            "value": 3798466,
+            "range": "± 9557",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/fixed_size_array_ser",
+            "value": 166517,
+            "range": "± 432",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/fixed_size_array_de",
+            "value": 1132763,
+            "range": "± 11160",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "signature_parse",
+            "value": 10979,
+            "range": "± 26",
             "unit": "ns/iter"
           },
           {
