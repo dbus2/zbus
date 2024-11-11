@@ -24,6 +24,7 @@ def_attrs! {
         interface str,
         name str,
         spawn bool,
+        introspection_docs bool,
         proxy {
             // Keep this in sync with proxy's method attributes.
             // TODO: Find a way to share code with proxy module.
@@ -155,6 +156,7 @@ impl MethodInfo {
         attrs: &MethodAttributes,
         cfg_attrs: &[&Attribute],
         doc_attrs: &[&Attribute],
+        introspect_docs: bool,
     ) -> syn::Result<MethodInfo> {
         let is_async = method.sig.asyncness.is_some();
         let Signature {
@@ -163,23 +165,27 @@ impl MethodInfo {
             output,
             ..
         } = &method.sig;
-        let docs = get_doc_attrs(&method.attrs)
-            .iter()
-            .filter_map(|attr| {
-                if let Ok(MetaNameValue {
-                    value: Expr::Lit(ExprLit { lit: Str(s), .. }),
-                    ..
-                }) = &attr.meta.require_name_value()
-                {
-                    Some(s.value())
-                } else {
-                    // non #[doc = "..."] attributes are not our concern
-                    // we leave them for rustc to handle
-                    None
-                }
-            })
-            .collect();
-        let doc_comments = to_xml_docs(docs);
+        let doc_comments = if introspect_docs {
+            let docs = get_doc_attrs(&method.attrs)
+                .iter()
+                .filter_map(|attr| {
+                    if let Ok(MetaNameValue {
+                        value: Expr::Lit(ExprLit { lit: Str(s), .. }),
+                        ..
+                    }) = &attr.meta.require_name_value()
+                    {
+                        Some(s.value())
+                    } else {
+                        // non #[doc = "..."] attributes are not our concern
+                        // we leave them for rustc to handle
+                        None
+                    }
+                })
+                .collect();
+            to_xml_docs(docs)
+        } else {
+            quote!()
+        };
         let is_property = attrs.property.is_some();
         let is_signal = attrs.signal;
         assert!(!is_property || !is_signal);
@@ -318,10 +324,9 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
         _ => return Err(Error::new_spanned(&input.self_ty, "Invalid type")),
     };
 
-    let (iface_name, with_spawn, mut proxy) = {
-        let impl_attrs = ImplAttributes::parse_nested_metas(args)?;
-
-        let name = match (impl_attrs.name, impl_attrs.interface) {
+    let impl_attrs = ImplAttributes::parse_nested_metas(args)?;
+    let iface_name = {
+        match (impl_attrs.name, impl_attrs.interface) {
             // Ensure the interface name is valid.
             (Some(name), None) | (None, Some(name)) => zbus_names::InterfaceName::try_from(name)
                 .map_err(|e| Error::new(input.span(), format!("{e}")))
@@ -333,11 +338,13 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                     "`name` and `interface` attributes should not be specified at the same time",
                 ))
             }
-        };
-        let proxy = impl_attrs.proxy.map(|p| Proxy::new(ty, &name, p, &zbus));
-
-        (name, impl_attrs.spawn.unwrap_or(true), proxy)
+        }
     };
+    let with_spawn = impl_attrs.spawn.unwrap_or(true);
+    let mut proxy = impl_attrs
+        .proxy
+        .map(|p| Proxy::new(ty, &iface_name, p, &zbus));
+    let introspect_docs = impl_attrs.introspection_docs.unwrap_or(true);
 
     // Store parsed information about each method
     let mut methods = vec![];
@@ -387,7 +394,14 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
             .filter(|a| a.path().is_ident("doc"))
             .collect();
 
-        let method_info = MethodInfo::new(&zbus, method, &method_attrs, &cfg_attrs, &doc_attrs)?;
+        let method_info = MethodInfo::new(
+            &zbus,
+            method,
+            &method_attrs,
+            &cfg_attrs,
+            &doc_attrs,
+            introspect_docs,
+        )?;
         let attr_property = method_attrs.property;
         if let Some(prop_attrs) = &attr_property {
             if method_info.method_type == MethodType::Property(PropertyType::NoInputs) {
@@ -814,6 +828,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
     };
 
     let proxy = proxy.map(|proxy| proxy.gen()).transpose()?;
+    let introspect_format_str = format!("{}<interface name=\"{iface_name}\">", "{:indent$}");
 
     Ok(quote! {
         #input
@@ -911,9 +926,8 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
             fn introspect_to_writer(&self, writer: &mut dyn ::std::fmt::Write, level: usize) {
                 ::std::writeln!(
                     writer,
-                    r#"{:indent$}<interface name="{}">"#,
+                    #introspect_format_str,
                     "",
-                    <Self as #zbus::object_server::Interface>::name(),
                     indent = level
                 ).unwrap();
                 {
@@ -1052,8 +1066,9 @@ fn clear_input_arg_attrs(inputs: &mut Punctuated<FnArg, Token![,]>) {
 }
 
 fn introspect_signal(name: &str, args: &TokenStream) -> TokenStream {
+    let format_str = format!("{}<signal name=\"{name}\">", "{:indent$}");
     quote!(
-        ::std::writeln!(writer, "{:indent$}<signal name=\"{}\">", "", #name, indent = level).unwrap();
+        ::std::writeln!(writer, #format_str, "", indent = level).unwrap();
         {
             let level = level + 2;
             #args
@@ -1063,8 +1078,9 @@ fn introspect_signal(name: &str, args: &TokenStream) -> TokenStream {
 }
 
 fn introspect_method(name: &str, args: &TokenStream) -> TokenStream {
+    let format_str = format!("{}<method name=\"{name}\">", "{:indent$}");
     quote!(
-        ::std::writeln!(writer, "{:indent$}<method name=\"{}\">", "", #name, indent = level).unwrap();
+        ::std::writeln!(writer, #format_str, "", indent = level).unwrap();
         {
             let level = level + 2;
             #args
@@ -1116,10 +1132,13 @@ fn introspect_input_args<'i>(
             let ident = pat_ident(pat_type).unwrap();
             let arg_name = quote!(#ident).to_string();
             let dir = if is_signal { "" } else { " direction=\"in\"" };
+            let format_str = format!(
+                "{}<arg name=\"{arg_name}\" type=\"{}\"{dir}/>",
+                "{:indent$}", "{}",
+            );
             Some(quote!(
                 #(#cfg_attrs)*
-                ::std::writeln!(writer, "{:indent$}<arg name=\"{}\" type=\"{}\"{}/>", "",
-                         #arg_name, <#ty>::SIGNATURE, #dir, indent = level).unwrap();
+                ::std::writeln!(writer, #format_str, "", <#ty>::SIGNATURE, indent = level).unwrap();
             ))
         })
 }
@@ -1129,15 +1148,18 @@ fn introspect_output_arg(
     arg_name: Option<&String>,
     cfg_attrs: &[&syn::Attribute],
 ) -> TokenStream {
-    let arg_name = match arg_name {
+    let arg_name_attr = match arg_name {
         Some(name) => format!("name=\"{name}\" "),
         None => String::from(""),
     };
 
+    let format_str = format!(
+        "{}<arg {arg_name_attr}type=\"{}\" direction=\"out\"/>",
+        "{:indent$}", "{}",
+    );
     quote!(
         #(#cfg_attrs)*
-        ::std::writeln!(writer, "{:indent$}<arg {}type=\"{}\" direction=\"out\"/>", "",
-                 #arg_name, <#ty>::SIGNATURE, indent = level).unwrap();
+        ::std::writeln!(writer, #format_str, "", <#ty>::SIGNATURE, indent = level).unwrap();
     )
 }
 
@@ -1246,31 +1268,29 @@ fn introspect_properties(
 
         let doc_comments = prop.doc_comments;
         if prop.emits_changed_signal == PropertyEmitsChangedSignal::True {
+            let format_str = format!(
+                "{}<property name=\"{name}\" type=\"{}\" access=\"{access}\"/>",
+                "{:indent$}", "{}",
+            );
             introspection.extend(quote!(
                 #doc_comments
-                ::std::writeln!(
-                    writer,
-                    "{:indent$}<property name=\"{}\" type=\"{}\" access=\"{}\"/>",
-                    "", #name, <#ty>::SIGNATURE, #access, indent = level,
-                ).unwrap();
+                ::std::writeln!(writer, #format_str, "", <#ty>::SIGNATURE, indent = level).unwrap();
             ));
         } else {
             let emits_changed_signal = prop.emits_changed_signal.to_string();
+            let annot_name = "org.freedesktop.DBus.Property.EmitsChangedSignal";
+            let format_str = format!(
+                "{}<property name=\"{name}\" type=\"{}\" access=\"{access}\">\n\
+                    {}<annotation name=\"{annot_name}\" value=\"{emits_changed_signal}\"/>\n\
+                {}</property>",
+                "{:indent$}", "{}", "{:annot_indent$}", "{:indent$}",
+            );
             introspection.extend(quote!(
                 #doc_comments
                 ::std::writeln!(
                     writer,
-                    "{:indent$}<property name=\"{}\" type=\"{}\" access=\"{}\">",
-                    "", #name, <#ty>::SIGNATURE, #access, indent = level,
-                ).unwrap();
-                ::std::writeln!(
-                    writer,
-                    "{:indent$}<annotation name=\"org.freedesktop.DBus.Property.EmitsChangedSignal\" value=\"{}\"/>",
-                    "", #emits_changed_signal, indent = level + 2,
-                ).unwrap();
-                ::std::writeln!(
-                    writer,
-                    "{:indent$}</property>", "", indent = level,
+                    #format_str,
+                    "", <#ty>::SIGNATURE, "", "", indent = level, annot_indent = level + 2,
                 ).unwrap();
             ));
         }

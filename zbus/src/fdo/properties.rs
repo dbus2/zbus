@@ -18,7 +18,11 @@ pub struct Properties;
 
 assert_impl_all!(Properties: Send, Sync, Unpin);
 
-#[interface(name = "org.freedesktop.DBus.Properties", proxy(visibility = "pub"))]
+#[interface(
+    name = "org.freedesktop.DBus.Properties",
+    introspection_docs = false,
+    proxy(visibility = "pub")
+)]
 impl Properties {
     /// Get a property value.
     async fn get(
