@@ -15,6 +15,7 @@ pub(crate) struct Introspectable;
 
 #[interface(
     name = "org.freedesktop.DBus.Introspectable",
+    introspection_docs = false,
     proxy(default_path = "/", visibility = "pub")
 )]
 impl Introspectable {

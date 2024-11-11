@@ -12,7 +12,11 @@ pub(crate) struct Peer;
 /// Service-side implementation for the `org.freedesktop.DBus.Peer` interface.
 /// This interface is implemented automatically for any object registered to the
 /// [ObjectServer](crate::ObjectServer).
-#[crate::interface(name = "org.freedesktop.DBus.Peer", proxy(visibility = "pub"))]
+#[crate::interface(
+    name = "org.freedesktop.DBus.Peer",
+    introspection_docs = false,
+    proxy(visibility = "pub")
+)]
 impl Peer {
     /// On receipt, an application should do nothing other than reply as usual. It does not matter
     /// which object path a ping is sent to.

@@ -32,7 +32,11 @@ pub type ManagedObjects =
 #[derive(Debug, Clone)]
 pub struct ObjectManager;
 
-#[interface(name = "org.freedesktop.DBus.ObjectManager", proxy(visibility = "pub"))]
+#[interface(
+    name = "org.freedesktop.DBus.ObjectManager",
+    introspection_docs = false,
+    proxy(visibility = "pub")
+)]
 impl ObjectManager {
     /// The return value of this method is a dict whose keys are object paths. All returned object
     /// paths are children of the object path implementing this interface, i.e. their object paths
