@@ -21,10 +21,9 @@ use futures_util::StreamExt;
 
 use crate::{
     async_lock::{Mutex, Semaphore, SemaphorePermit},
-    fdo::{self, ConnectionCredentials, RequestNameFlags, RequestNameReply},
+    fdo::{ConnectionCredentials, ReleaseNameReply, RequestNameFlags, RequestNameReply},
     is_flatpak,
     message::{Flags, Message, Type},
-    proxy::CacheProperties,
     DBusError, Error, Executor, MatchRule, MessageStream, ObjectServer, OwnedGuid, OwnedMatchRule,
     Result, Task,
 };
@@ -544,12 +543,12 @@ impl Connection {
     /// requesting the name.
     ///
     /// If the [`RequestNameFlags::DoNotQueue`] flag is not specified and request ends up in the
-    /// queue, you can use [`fdo::NameAcquiredStream`] to be notified when the name is acquired. A
-    /// queued name request can be cancelled using [`Connection::release_name`].
+    /// queue, you can use [`crate::fdo::NameAcquiredStream`] to be notified when the name is
+    /// acquired. A queued name request can be cancelled using [`Connection::release_name`].
     ///
     /// If the [`RequestNameFlags::AllowReplacement`] flag is specified, the requested name can be
-    /// lost if another peer requests the same name. You can use [`fdo::NameLostStream`] to be
-    /// notified when the name is lost
+    /// lost if another peer requests the same name. You can use [`crate::fdo::NameLostStream`] to
+    /// be notified when the name is lost
     ///
     /// # Example
     ///
@@ -608,9 +607,9 @@ impl Connection {
     ///
     /// * Same as that of [`Connection::request_name`].
     /// * If you wish to track changes to name ownership after this call, make sure that the
-    ///   [`fdo::NameAcquired`] and/or [`fdo::NameLostStream`] instance(s) are created **before**
-    ///   calling this method. Otherwise, you may loose the signal if it's emitted after this call
-    ///   but just before the stream instance get created.
+    ///   [`crate::fdo::NameAcquired`] and/or [`crate::fdo::NameLostStream`] instance(s) are created
+    ///   **before** calling this method. Otherwise, you may loose the signal if it's emitted after
+    ///   this call but just before the stream instance get created.
     pub async fn request_name_with_flags<'w, W>(
         &self,
         well_known_name: W,
@@ -637,15 +636,28 @@ impl Connection {
             return Ok(RequestNameReply::PrimaryOwner);
         }
 
-        let dbus_proxy = fdo::DBusProxy::builder(self)
-            .cache_properties(CacheProperties::No)
-            .build()
-            .await?;
-        let mut acquired_stream = dbus_proxy.receive_name_acquired().await?;
-        let mut lost_stream = dbus_proxy.receive_name_lost().await?;
-        let reply = dbus_proxy
-            .request_name(well_known_name.clone(), flags)
-            .await?;
+        let acquired_match_rule = MatchRule::fdo_signal_builder("NameAcquired")
+            .arg(0, well_known_name.as_ref())
+            .unwrap()
+            .build();
+        let mut acquired_stream =
+            MessageStream::for_match_rule(acquired_match_rule, self, None).await?;
+        let lost_match_rule = MatchRule::fdo_signal_builder("NameLost")
+            .arg(0, well_known_name.as_ref())
+            .unwrap()
+            .build();
+        let mut lost_stream = MessageStream::for_match_rule(lost_match_rule, self, None).await?;
+        let reply = self
+            .call_method(
+                Some("org.freedesktop.DBus"),
+                "/org/freedesktop/DBus",
+                Some("org.freedesktop.DBus"),
+                "RequestName",
+                &(well_known_name.clone(), flags),
+            )
+            .await?
+            .body()
+            .deserialize::<RequestNameReply>()?;
         let lost_task_name = format!("monitor name {well_known_name} lost");
         let name_lost_fut = if flags.contains(RequestNameFlags::AllowReplacement) {
             let weak_conn = WeakConnection::from(self);
@@ -660,8 +672,8 @@ impl Connection {
                         };
 
                         match signal {
-                            Some(signal) => match signal.args() {
-                                Ok(args) if args.name == well_known_name => {
+                            Some(signal) => match signal {
+                                Ok(_) => {
                                     tracing::info!(
                                         "Connection `{}` lost name `{}`",
                                         // SAFETY: This is bus connection so unique name can't be
@@ -673,7 +685,6 @@ impl Connection {
 
                                     break;
                                 }
-                                Ok(_) => (),
                                 Err(e) => warn!("Failed to parse `NameLost` signal: {}", e),
                             },
                             None => {
@@ -710,8 +721,8 @@ impl Connection {
                                 None => break,
                             };
                             match signal {
-                                Some(signal) => match signal.args() {
-                                    Ok(args) if args.name == well_known_name => {
+                                Some(signal) => match signal {
+                                    Ok(_) => {
                                         let mut names = inner.registered_names.lock().await;
                                         if let Some(status) = names.get_mut(&well_known_name) {
                                             let task = name_lost_fut.map(|fut| {
@@ -723,7 +734,6 @@ impl Connection {
                                         }
                                         // else the name was released in the meantime. :shrug:
                                     }
-                                    Ok(_) => (),
                                     Err(e) => warn!("Failed to parse `NameAcquired` signal: {}", e),
                                 },
                                 None => {
@@ -778,14 +788,17 @@ impl Connection {
             return Ok(true);
         }
 
-        fdo::DBusProxy::builder(self)
-            .cache_properties(CacheProperties::No)
-            .build()
-            .await?
-            .release_name(well_known_name)
-            .await
-            .map(|_| true)
-            .map_err(Into::into)
+        self.call_method(
+            Some("org.freedesktop.DBus"),
+            "/org/freedesktop/DBus",
+            Some("org.freedesktop.DBus"),
+            "ReleaseName",
+            &well_known_name,
+        )
+        .await?
+        .body()
+        .deserialize::<ReleaseNameReply>()
+        .map(|r| r == ReleaseNameReply::Released)
     }
 
     /// Check if `self` is a connection to a message bus.
@@ -1038,12 +1051,14 @@ impl Connection {
                 let (sender, mut receiver) = broadcast(max_queued);
                 receiver.set_await_active(false);
                 if self.is_bus() && msg_type == Type::Signal {
-                    fdo::DBusProxy::builder(self)
-                        .cache_properties(CacheProperties::No)
-                        .build()
-                        .await?
-                        .add_match_rule(e.key().inner().clone())
-                        .await?;
+                    self.call_method(
+                        Some("org.freedesktop.DBus"),
+                        "/org/freedesktop/DBus",
+                        Some("org.freedesktop.DBus"),
+                        "AddMatch",
+                        &e.key(),
+                    )
+                    .await?;
                 }
                 e.insert((1, receiver.clone().deactivate()));
                 self.inner
@@ -1081,12 +1096,14 @@ impl Connection {
                 e.get_mut().0 -= 1;
                 if e.get().0 == 0 {
                     if self.is_bus() && msg_type == Type::Signal {
-                        fdo::DBusProxy::builder(self)
-                            .cache_properties(CacheProperties::No)
-                            .build()
-                            .await?
-                            .remove_match_rule(rule.clone())
-                            .await?;
+                        self.call_method(
+                            Some("org.freedesktop.DBus"),
+                            "/org/freedesktop/DBus",
+                            Some("org.freedesktop.DBus"),
+                            "RemoveMatch",
+                            &rule,
+                        )
+                        .await?;
                     }
                     e.remove();
                     self.inner
