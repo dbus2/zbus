@@ -57,7 +57,6 @@ serde_repr = "0.1.19"
 enumflags2 = { version = "0.7.9", features = ["serde"] }
 futures-core = "0.3.30"
 futures-util = { version = "0.3.30", default-features = false, features = [
-  "sink",
   "std",
 ] }
 async-broadcast = "0.7.0"
