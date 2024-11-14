@@ -98,7 +98,7 @@ impl SocketReader {
         }
     }
 
-    #[instrument]
+    #[instrument(skip(self))]
     async fn read_socket(&mut self) -> crate::Result<Message> {
         self.activity_event.notify(usize::MAX);
         let seq = self.prev_seq + 1;
