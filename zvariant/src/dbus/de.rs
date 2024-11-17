@@ -188,7 +188,13 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
             .endian()
             .read_f64(self.0.next_const_size_slice::<f64>()?);
 
-        visitor.visit_f32(f64_to_f32(v))
+        if v.is_finite() && v > (f32::MAX as f64) {
+            return Err(de::Error::invalid_value(
+                de::Unexpected::Float(v),
+                &"Too large for f32",
+            ));
+        }
+        visitor.visit_f32(v as f32)
     }
 
     fn deserialize_str<V>(self, visitor: V) -> Result<V::Value>

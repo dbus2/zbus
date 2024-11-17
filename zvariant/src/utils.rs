@@ -66,12 +66,6 @@ pub(crate) fn usize_to_u8(value: usize) -> u8 {
     value as u8
 }
 
-pub(crate) fn f64_to_f32(value: f64) -> f32 {
-    assert!(value <= (f32::MAX as f64), "{} too large for `f32`", value,);
-
-    value as f32
-}
-
 /// Slice the given slice of bytes safely and return an error if the slice is too small.
 pub(crate) fn subslice<I, T>(input: &[T], index: I) -> Result<&I::Output>
 where
