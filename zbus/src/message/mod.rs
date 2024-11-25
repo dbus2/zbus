@@ -69,6 +69,27 @@ pub(super) struct Inner {
 assert_impl_all!(Message: Send, Sync, Unpin);
 
 impl Message {
+    pub fn into_body(self) -> Body {
+        Body::new(self.inner.bytes.slice(self.inner.body_offset..), self)
+    }
+    pub fn signature(&self) -> &zvariant::Signature {
+        self.quick_fields().signature()
+    }
+    pub fn interface(&self) -> Option<InterfaceName<'_>> {
+        self.quick_fields().interface(self)
+    }
+    pub fn member(&self) -> Option<MemberName<'_>> {
+        self.quick_fields().member(self)
+    }
+    pub fn path(&self) -> Option<zvariant::ObjectPath<'_>> {
+        self.quick_fields().path(self)
+    }
+    pub fn sender(&self) -> Option<zbus_names::UniqueName<'_>> {
+        self.quick_fields().sender(self)
+    }
+}
+
+impl Message {
     /// Create a builder for a message of type [`Type::MethodCall`].
     pub fn method_call<'b, 'p: 'b, 'm: 'b, P, M>(path: P, method_name: M) -> Result<Builder<'b>>
     where
