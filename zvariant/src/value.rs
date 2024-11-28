@@ -576,7 +576,7 @@ pub(crate) fn value_display_fmt(
     }
 }
 
-impl<'a> Serialize for Value<'a> {
+impl Serialize for Value<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -722,7 +722,7 @@ struct ValueSeed<'sig, T> {
     phantom: PhantomData<T>,
 }
 
-impl<'sig, 'de, T> ValueSeed<'sig, T>
+impl<'de, T> ValueSeed<'_, T>
 where
     T: Deserialize<'de>,
 {
@@ -962,7 +962,7 @@ where
     }
 }
 
-impl<'a> Type for Value<'a> {
+impl Type for Value<'_> {
     const SIGNATURE: &'static Signature = &Signature::Variant;
 }
 

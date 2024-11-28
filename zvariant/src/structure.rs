@@ -258,13 +258,13 @@ pub(crate) fn structure_display_fmt(
     f.write_char(')')
 }
 
-impl<'a> DynamicType for Structure<'a> {
+impl DynamicType for Structure<'_> {
     fn signature(&self) -> Signature {
         self.signature.clone()
     }
 }
 
-impl<'a> DynamicType for StructureSeed<'a> {
+impl DynamicType for StructureSeed<'_> {
     fn signature(&self) -> Signature {
         self.signature.clone()
     }
@@ -286,7 +286,7 @@ impl<'a> DynamicDeserialize<'a> for Structure<'a> {
     }
 }
 
-impl<'a> Serialize for Structure<'a> {
+impl Serialize for Structure<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -401,7 +401,7 @@ impl DynamicType for OwnedStructureSeed {
     }
 }
 
-impl<'de> DynamicDeserialize<'de> for OwnedStructure {
+impl DynamicDeserialize<'_> for OwnedStructure {
     type Deserializer = OwnedStructureSeed;
 
     fn deserializer_for_signature(signature: &Signature) -> zvariant::Result<Self::Deserializer> {

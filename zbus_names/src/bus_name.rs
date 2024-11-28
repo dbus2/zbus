@@ -59,7 +59,7 @@ assert_impl_all!(BusName<'_>: Send, Sync, Unpin);
 
 impl_str_basic!(BusName<'_>);
 
-impl<'name> BusName<'name> {
+impl BusName<'_> {
     /// This is faster than `Clone::clone` when `self` contains owned data.
     pub fn as_ref(&self) -> BusName<'_> {
         match self {
@@ -260,7 +260,7 @@ impl<'s> TryFrom<&'s str> for BusName<'s> {
     }
 }
 
-impl<'s> TryFrom<String> for BusName<'s> {
+impl TryFrom<String> for BusName<'_> {
     type Error = Error;
 
     fn try_from(value: String) -> Result<Self> {
@@ -268,7 +268,7 @@ impl<'s> TryFrom<String> for BusName<'s> {
     }
 }
 
-impl<'s> TryFrom<Arc<str>> for BusName<'s> {
+impl TryFrom<Arc<str>> for BusName<'_> {
     type Error = Error;
 
     fn try_from(value: Arc<str>) -> Result<Self> {

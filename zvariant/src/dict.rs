@@ -201,7 +201,7 @@ pub(crate) fn dict_display_fmt(
     Ok(())
 }
 
-impl<'k, 'v> Serialize for Dict<'k, 'v> {
+impl Serialize for Dict<'_, '_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,

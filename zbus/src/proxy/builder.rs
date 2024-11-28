@@ -32,7 +32,7 @@ pub struct Builder<'a, T = ()> {
     uncached_properties: Option<HashSet<Str<'a>>>,
 }
 
-impl<'a, T> Clone for Builder<'a, T> {
+impl<T> Clone for Builder<'_, T> {
     fn clone(&self) -> Self {
         Self {
             conn: self.conn.clone(),
@@ -142,7 +142,7 @@ impl<'a, T> Builder<'a, T> {
     }
 }
 
-impl<'a, T> Builder<'a, T>
+impl<T> Builder<'_, T>
 where
     T: super::Defaults,
 {

@@ -36,7 +36,7 @@ enum Inner<'a> {
     Owned(Arc<str>),
 }
 
-impl<'a> Default for Inner<'a> {
+impl Default for Inner<'_> {
     fn default() -> Self {
         Self::Static("")
     }
@@ -60,13 +60,13 @@ impl<'a> PartialOrd for Inner<'a> {
     }
 }
 
-impl<'a> Hash for Inner<'a> {
+impl Hash for Inner<'_> {
     fn hash<H: Hasher>(&self, h: &mut H) {
         self.as_str().hash(h)
     }
 }
 
-impl<'a> Inner<'a> {
+impl Inner<'_> {
     /// The underlying string.
     pub fn as_str(&self) -> &str {
         match self {
@@ -77,7 +77,7 @@ impl<'a> Inner<'a> {
     }
 }
 
-impl<'a> Serialize for Inner<'a> {
+impl Serialize for Inner<'_> {
     fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         s.serialize_str(self.as_str())
     }
@@ -94,7 +94,7 @@ impl<'de: 'a, 'a> Deserialize<'de> for Inner<'a> {
 
 assert_impl_all!(Str<'_>: Send, Sync, Unpin);
 
-impl<'a> Str<'a> {
+impl Str<'_> {
     /// An owned string without allocations
     pub const fn from_static(s: &'static str) -> Self {
         Str(Inner::Static(s))
@@ -129,12 +129,12 @@ impl<'a> Str<'a> {
     }
 }
 
-impl<'a> Basic for Str<'a> {
+impl Basic for Str<'_> {
     const SIGNATURE_CHAR: char = <&str>::SIGNATURE_CHAR;
     const SIGNATURE_STR: &'static str = <&str>::SIGNATURE_STR;
 }
 
-impl<'a> Type for Str<'a> {
+impl Type for Str<'_> {
     const SIGNATURE: &'static crate::Signature = &crate::Signature::Str;
 }
 
@@ -150,13 +150,13 @@ impl<'a> From<&'a String> for Str<'a> {
     }
 }
 
-impl<'a> From<String> for Str<'a> {
+impl From<String> for Str<'_> {
     fn from(value: String) -> Self {
         Self(Inner::Owned(value.into()))
     }
 }
 
-impl<'a> From<Arc<str>> for Str<'a> {
+impl From<Arc<str>> for Str<'_> {
     fn from(value: Arc<str>) -> Self {
         Self(Inner::Owned(value))
     }
@@ -187,7 +187,7 @@ impl<'a> From<&'a Str<'_>> for &'a str {
     }
 }
 
-impl<'a> std::ops::Deref for Str<'a> {
+impl std::ops::Deref for Str<'_> {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
@@ -195,25 +195,25 @@ impl<'a> std::ops::Deref for Str<'a> {
     }
 }
 
-impl<'a> PartialEq<str> for Str<'a> {
+impl PartialEq<str> for Str<'_> {
     fn eq(&self, other: &str) -> bool {
         self.as_str() == other
     }
 }
 
-impl<'a> PartialEq<&str> for Str<'a> {
+impl PartialEq<&str> for Str<'_> {
     fn eq(&self, other: &&str) -> bool {
         self.as_str() == *other
     }
 }
 
-impl<'a> std::fmt::Debug for Str<'a> {
+impl std::fmt::Debug for Str<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Debug::fmt(self.as_str(), f)
     }
 }
 
-impl<'a> std::fmt::Display for Str<'a> {
+impl std::fmt::Display for Str<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self.as_str(), f)
     }

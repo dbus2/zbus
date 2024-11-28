@@ -42,7 +42,7 @@ pub struct TupleSeed<'a, T, S> {
     markers: (PhantomData<T>, PhantomData<&'a ()>),
 }
 
-impl<'a, T, S> DynamicType for TupleSeed<'a, T, S> {
+impl<T, S> DynamicType for TupleSeed<'_, T, S> {
     fn signature(&self) -> Signature {
         self.sig.clone()
     }

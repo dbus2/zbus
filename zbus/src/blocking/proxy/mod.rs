@@ -449,7 +449,7 @@ where
 pub struct PropertyChanged<'a, T>(crate::proxy::PropertyChanged<'a, T>);
 
 // split this out to avoid the trait bound on `name` method
-impl<'a, T> PropertyChanged<'a, T> {
+impl<T> PropertyChanged<'_, T> {
     /// Get the name of the property that changed.
     pub fn name(&self) -> &str {
         self.0.name()
@@ -465,7 +465,7 @@ impl<'a, T> PropertyChanged<'a, T> {
     }
 }
 
-impl<'a, T> PropertyChanged<'a, T>
+impl<T> PropertyChanged<'_, T>
 where
     T: TryFrom<zvariant::OwnedValue>,
     T::Error: Into<crate::Error>,
@@ -492,7 +492,7 @@ impl<'a> OwnerChangedIterator<'a> {
     }
 }
 
-impl<'a> std::iter::Iterator for OwnerChangedIterator<'a> {
+impl std::iter::Iterator for OwnerChangedIterator<'_> {
     type Item = Option<UniqueName<'static>>;
 
     fn next(&mut self) -> Option<Self::Item> {

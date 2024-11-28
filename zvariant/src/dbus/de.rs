@@ -16,6 +16,7 @@ use crate::{
 #[derive(Debug)]
 pub(crate) struct Deserializer<'de, 'sig, 'f, F>(pub(crate) DeserializerCommon<'de, 'sig, 'f, F>);
 
+#[allow(clippy::needless_lifetimes)]
 impl<'de, 'sig, 'f, F> Deserializer<'de, 'sig, 'f, F> {
     /// Create a Deserializer struct instance.
     ///
@@ -74,8 +75,8 @@ macro_rules! deserialize_as {
     }
 }
 
-impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deserializer<'de>
-    for &'d mut Deserializer<'de, 'sig, 'f, F>
+impl<'de, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deserializer<'de>
+    for &mut Deserializer<'de, '_, '_, F>
 {
     type Error = Error;
 
@@ -481,8 +482,8 @@ fn deserialize_ay<'de, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F>(
 
 struct ArraySeqDeserializer<'d, 'de, 'sig, 'f, F>(ArrayDeserializer<'d, 'de, 'sig, 'f, F>);
 
-impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de>
-    for ArraySeqDeserializer<'d, 'de, 'sig, 'f, F>
+impl<'de, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de>
+    for ArraySeqDeserializer<'_, 'de, '_, '_, F>
 {
     type Error = Error;
 
@@ -522,8 +523,8 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F>
     }
 }
 
-impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> MapAccess<'de>
-    for ArrayMapDeserializer<'d, 'de, 'sig, 'f, F>
+impl<'de, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> MapAccess<'de>
+    for ArrayMapDeserializer<'_, 'de, '_, '_, F>
 {
     type Error = Error;
 
@@ -574,8 +575,8 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F>
     }
 }
 
-impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de>
-    for StructureDeserializer<'d, 'de, 'sig, 'f, F>
+impl<'de, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de>
+    for StructureDeserializer<'_, 'de, '_, '_, F>
 {
     type Error = Error;
 
@@ -640,8 +641,8 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F>
     }
 }
 
-impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de>
-    for ValueDeserializer<'d, 'de, 'sig, 'f, F>
+impl<'de, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de>
+    for ValueDeserializer<'_, 'de, '_, '_, F>
 {
     type Error = Error;
 
@@ -692,8 +693,8 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de
     }
 }
 
-impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> EnumAccess<'de>
-    for crate::de::Enum<&'d mut Deserializer<'de, 'sig, 'f, F>, F>
+impl<'de, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> EnumAccess<'de>
+    for crate::de::Enum<&mut Deserializer<'de, '_, '_, F>, F>
 {
     type Error = Error;
     type Variant = Self;

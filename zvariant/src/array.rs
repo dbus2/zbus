@@ -205,7 +205,7 @@ impl ArraySeed {
 
 assert_impl_all!(ArraySeed: Unpin);
 
-impl<'a> DynamicType for Array<'a> {
+impl DynamicType for Array<'_> {
     fn signature(&self) -> Signature {
         self.signature.clone()
     }
@@ -311,7 +311,7 @@ where
 // TODO: this could be useful
 // impl<'a, 'b, T> TryFrom<&'a Array<'b>> for Vec<T>
 
-impl<'a> Serialize for Array<'a> {
+impl Serialize for Array<'_> {
     fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
     where
         S: Serializer,

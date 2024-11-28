@@ -137,7 +137,7 @@ pub struct GenTrait<'i> {
     pub format: bool,
 }
 
-impl<'i> Display for GenTrait<'i> {
+impl Display for GenTrait<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if self.format {
             let mut unformatted = String::new();
@@ -152,7 +152,7 @@ impl<'i> Display for GenTrait<'i> {
     }
 }
 
-impl<'i> GenTrait<'i> {
+impl GenTrait<'_> {
     fn write_interface<W: Write>(&self, w: &mut W) -> std::fmt::Result {
         let iface = self.interface;
         let idx = iface.name().rfind('.').unwrap() + 1;

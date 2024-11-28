@@ -259,7 +259,7 @@ pub(crate) enum FdList {
     Number(u32),
 }
 
-impl<'ser, W> SerializerCommon<'ser, W>
+impl<W> SerializerCommon<'_, W>
 where
     W: Write + Seek,
 {
@@ -312,7 +312,7 @@ where
     }
 }
 
-impl<'ser, W> Write for SerializerCommon<'ser, W>
+impl<W> Write for SerializerCommon<'_, W>
 where
     W: Write + Seek,
 {

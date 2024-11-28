@@ -501,7 +501,7 @@ pub enum PathSpec<'m> {
 
 assert_impl_all!(PathSpec<'_>: Send, Sync, Unpin);
 
-impl<'m> PathSpec<'m> {
+impl PathSpec<'_> {
     /// Create an owned clone of `self`.
     fn to_owned(&self) -> PathSpec<'static> {
         match self {

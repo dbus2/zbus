@@ -18,7 +18,7 @@ pub enum Fd<'f> {
     Owned(fd::OwnedFd),
 }
 
-impl<'f> Fd<'f> {
+impl Fd<'_> {
     /// Try to create an owned version of `self`.
     pub fn try_to_owned(&self) -> crate::Result<Fd<'static>> {
         self.as_fd()

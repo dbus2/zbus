@@ -1,13 +1,13 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 fn name_parse(c: &mut Criterion) {
-    const WELL_KNOWN_NAME: &'static str = "a.very.loooooooooooooooooo-ooooooo_0000o0ng.Name.\
+    const WELL_KNOWN_NAME: &str = "a.very.loooooooooooooooooo-ooooooo_0000o0ng.Name.\
             That.Is.Valid.For.DBus.and_good.For.benchmarks.I-guess";
-    const UNIQUE_NAME: &'static str = ":a.very.loooooooooooooooooo-ooooooo_0000o0ng.Name.\
+    const UNIQUE_NAME: &str = ":a.very.loooooooooooooooooo-ooooooo_0000o0ng.Name.\
             That.Is.Valid.For.DBus.and_good.For.benchmarks.I-guess";
-    const INTERFACE_NAME: &'static str = "a.very.loooooooooooooooooo_ooooooo_0000o0ng.Name.\
+    const INTERFACE_NAME: &str = "a.very.loooooooooooooooooo_ooooooo_0000o0ng.Name.\
             That.Is.Valid.For.DBus.and_good.For.benchmarks.I_guess";
-    const MEMBER_NAME: &'static str = "a_very_loooooooooooooooooo_ooooooo_0000o0ng_Name_\
+    const MEMBER_NAME: &str = "a_very_loooooooooooooooooo_ooooooo_0000o0ng_Name_\
             That_Is_Valid_For_DBus_and_good_For_benchmarks_I_guess";
 
     let mut group = c.benchmark_group("parse_name");

@@ -114,13 +114,13 @@ impl Display for WellKnownName<'_> {
     }
 }
 
-impl<'a> PartialEq<str> for WellKnownName<'a> {
+impl PartialEq<str> for WellKnownName<'_> {
     fn eq(&self, other: &str) -> bool {
         self.as_str() == other
     }
 }
 
-impl<'a> PartialEq<&str> for WellKnownName<'a> {
+impl PartialEq<&str> for WellKnownName<'_> {
     fn eq(&self, other: &&str) -> bool {
         self.as_str() == *other
     }

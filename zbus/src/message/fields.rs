@@ -36,7 +36,7 @@ impl Fields<'_> {
     }
 }
 
-impl<'f> Serialize for Fields<'f> {
+impl Serialize for Fields<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -82,7 +82,7 @@ impl<'f> Serialize for Fields<'f> {
 #[zvariant(signature = "v")]
 struct SignatureSerializer<'a>(&'a Signature);
 
-impl<'a> Serialize for SignatureSerializer<'a> {
+impl Serialize for SignatureSerializer<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
