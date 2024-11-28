@@ -369,7 +369,7 @@ pub struct SeqSerializer<'ser, 'b, W> {
     array_signature: &'ser Signature,
 }
 
-impl<'ser, 'b, W> SeqSerializer<'ser, 'b, W>
+impl<W> SeqSerializer<'_, '_, W>
 where
     W: Write + Seek,
 {
@@ -401,7 +401,7 @@ where
     }
 }
 
-impl<'ser, 'b, W> ser::SerializeSeq for SeqSerializer<'ser, 'b, W>
+impl<W> ser::SerializeSeq for SeqSerializer<'_, '_, W>
 where
     W: Write + Seek,
 {
@@ -613,7 +613,7 @@ pub(crate) struct MapSerializer<'ser, 'b, W> {
     value_signature: &'ser Signature,
 }
 
-impl<'ser, 'b, W> ser::SerializeMap for MapSerializer<'ser, 'b, W>
+impl<W> ser::SerializeMap for MapSerializer<'_, '_, W>
 where
     W: Write + Seek,
 {

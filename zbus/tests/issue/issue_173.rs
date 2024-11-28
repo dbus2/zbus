@@ -34,7 +34,7 @@ fn issue_173() {
 
             // We receive two signals, each time from different unique names. W/o the fix for
             // issue#173, the second iteration hangs.
-            while let Some(_) = signals.next().await {
+            while signals.next().await.is_some() {
                 tx.broadcast_direct(()).await.unwrap();
             }
         })

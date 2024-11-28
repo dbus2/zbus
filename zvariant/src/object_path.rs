@@ -120,12 +120,12 @@ impl std::default::Default for ObjectPath<'_> {
     }
 }
 
-impl<'a> Basic for ObjectPath<'a> {
+impl Basic for ObjectPath<'_> {
     const SIGNATURE_CHAR: char = 'o';
     const SIGNATURE_STR: &'static str = "o";
 }
 
-impl<'a> Type for ObjectPath<'a> {
+impl Type for ObjectPath<'_> {
     const SIGNATURE: &'static crate::Signature = &crate::Signature::ObjectPath;
 }
 
@@ -149,7 +149,7 @@ impl<'a> TryFrom<&'a str> for ObjectPath<'a> {
     }
 }
 
-impl<'a> TryFrom<String> for ObjectPath<'a> {
+impl TryFrom<String> for ObjectPath<'_> {
     type Error = Error;
 
     fn try_from(value: String) -> Result<Self> {
@@ -176,7 +176,7 @@ impl<'o> From<&ObjectPath<'o>> for ObjectPath<'o> {
     }
 }
 
-impl<'a> std::ops::Deref for ObjectPath<'a> {
+impl std::ops::Deref for ObjectPath<'_> {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
@@ -184,31 +184,31 @@ impl<'a> std::ops::Deref for ObjectPath<'a> {
     }
 }
 
-impl<'a> PartialEq<str> for ObjectPath<'a> {
+impl PartialEq<str> for ObjectPath<'_> {
     fn eq(&self, other: &str) -> bool {
         self.as_str() == other
     }
 }
 
-impl<'a> PartialEq<&str> for ObjectPath<'a> {
+impl PartialEq<&str> for ObjectPath<'_> {
     fn eq(&self, other: &&str) -> bool {
         self.as_str() == *other
     }
 }
 
-impl<'a> Debug for ObjectPath<'a> {
+impl Debug for ObjectPath<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("ObjectPath").field(&self.as_str()).finish()
     }
 }
 
-impl<'a> std::fmt::Display for ObjectPath<'a> {
+impl std::fmt::Display for ObjectPath<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(&self.as_str(), f)
     }
 }
 
-impl<'a> Serialize for ObjectPath<'a> {
+impl Serialize for ObjectPath<'_> {
     fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
     where
         S: Serializer,

@@ -42,7 +42,7 @@ pub(crate) enum Deserializer<'ser, 'sig, 'f, F> {
 }
 
 #[cfg(unix)]
-impl<'de, 'sig, 'f, F> DeserializerCommon<'de, 'sig, 'f, F>
+impl<F> DeserializerCommon<'_, '_, '_, F>
 where
     F: AsFd,
 {
@@ -53,7 +53,7 @@ where
     }
 }
 
-impl<'de, 'sig, 'f, F> DeserializerCommon<'de, 'sig, 'f, F> {
+impl<'de, F> DeserializerCommon<'de, '_, '_, F> {
     pub fn parse_padding(&mut self, alignment: usize) -> Result<usize> {
         let padding = padding_for_n_bytes(self.abs_pos(), alignment);
         if padding > 0 {
@@ -133,8 +133,8 @@ macro_rules! deserialize_method {
     }
 }
 
-impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deserializer<'de>
-    for &'d mut Deserializer<'de, 'sig, 'f, F>
+impl<'de, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deserializer<'de>
+    for &mut Deserializer<'de, '_, '_, F>
 {
     type Error = Error;
 

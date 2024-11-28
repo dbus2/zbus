@@ -82,7 +82,7 @@ struct Property<'a> {
     doc_comments: TokenStream,
 }
 
-impl<'a> Property<'a> {
+impl Property<'_> {
     fn new() -> Self {
         Self {
             read: false,

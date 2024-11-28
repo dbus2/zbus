@@ -20,7 +20,7 @@ pub struct SerializeValue<'a, T: Type + Serialize>(pub &'a T);
 
 assert_impl_all!(SerializeValue<'_, i32>: Send, Sync, Unpin);
 
-impl<'a, T: Type + Serialize> Serialize for SerializeValue<'a, T> {
+impl<T: Type + Serialize> Serialize for SerializeValue<'_, T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -35,6 +35,6 @@ impl<'a, T: Type + Serialize> Serialize for SerializeValue<'a, T> {
     }
 }
 
-impl<'a, T: Type + Serialize> Type for SerializeValue<'a, T> {
+impl<T: Type + Serialize> Type for SerializeValue<'_, T> {
     const SIGNATURE: &'static crate::Signature = &crate::Signature::Variant;
 }

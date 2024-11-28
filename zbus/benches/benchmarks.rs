@@ -108,10 +108,10 @@ impl<'s> BigBoy<'s> {
 }
 
 fn address_parse(c: &mut Criterion) {
-    const UNIX_ADDRESS: &'static str = "unix:path=/tmp/dbus/long/loooooooong/path/to/socket\
+    const UNIX_ADDRESS: &str = "unix:path=/tmp/dbus/long/loooooooong/path/to/socket\
         /so/we/need/to/keeeeeeeeeep/going/where/no/man/has/gone/before,runtime=yes,\
         guid=0123456789ABCDEF0123456789ABCDEF";
-    const TCP_ADDRESS: &'static str = "tcp:host=some.looong.name.so.we.must.keep.going.on.and.on.\
+    const TCP_ADDRESS: &str = "tcp:host=some.looong.name.so.we.must.keep.going.on.and.on.\
         on,port=1234,family=ipv4,guid=0123456789ABCDEF0123456789ABCDEF";
 
     let mut group = c.benchmark_group("parse_dbus_address");

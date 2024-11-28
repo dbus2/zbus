@@ -117,7 +117,7 @@ struct DBusInfo<'a>(
     String,
 );
 
-impl<'a> DBusInfo<'a> {
+impl DBusInfo<'_> {
     fn new(
         connection: Connection,
         service: String,

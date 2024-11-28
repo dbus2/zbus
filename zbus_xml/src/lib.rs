@@ -106,7 +106,7 @@ pub struct Method<'a> {
 
 assert_impl_all!(Method<'_>: Send, Sync, Unpin);
 
-impl<'a> Method<'a> {
+impl Method<'_> {
     /// Return the method name.
     pub fn name(&self) -> MemberName<'_> {
         self.name.as_ref()
@@ -137,7 +137,7 @@ pub struct Signal<'a> {
 
 assert_impl_all!(Signal<'_>: Send, Sync, Unpin);
 
-impl<'a> Signal<'a> {
+impl Signal<'_> {
     /// Return the signal name.
     pub fn name(&self) -> MemberName<'_> {
         self.name.as_ref()
@@ -192,7 +192,7 @@ pub struct Property<'a> {
 
 assert_impl_all!(Property<'_>: Send, Sync, Unpin);
 
-impl<'a> Property<'a> {
+impl Property<'_> {
     /// Returns the property name.
     pub fn name(&self) -> PropertyName<'_> {
         self.name.as_ref()

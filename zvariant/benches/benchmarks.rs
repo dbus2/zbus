@@ -149,7 +149,7 @@ fn signature_parse(c: &mut Criterion) {
 }
 
 fn object_path_parse(c: &mut Criterion) {
-    const PATH: &'static str = "/a/very/very_very/veeeeeeeeeeeeeery/long/long_long/long/long/\
+    const PATH: &str = "/a/very/very_very/veeeeeeeeeeeeeery/long/long_long/long/long/\
         _/long_path/to_test_parsing_of/paths/you/see";
 
     c.bench_function("object_path_parse", |b| {
