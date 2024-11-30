@@ -14,7 +14,7 @@ static_assertions::assert_impl_all!(Child: Send, Sync, Unpin);
 
 impl Child {
     /// The underlying child `Signature`.
-    pub fn signature(&self) -> &Signature {
+    pub const fn signature(&self) -> &Signature {
         match self {
             Child::Static { child } => child,
             Child::Dynamic { child } => child,
