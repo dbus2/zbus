@@ -20,6 +20,11 @@ impl Child {
             Child::Dynamic { child } => child,
         }
     }
+
+    /// The length of the child signature in string form.
+    pub const fn string_len(&self) -> usize {
+        self.signature().string_len()
+    }
 }
 
 impl Deref for Child {
