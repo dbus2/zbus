@@ -14,11 +14,16 @@ static_assertions::assert_impl_all!(Child: Send, Sync, Unpin);
 
 impl Child {
     /// The underlying child `Signature`.
-    pub fn signature(&self) -> &Signature {
+    pub const fn signature(&self) -> &Signature {
         match self {
             Child::Static { child } => child,
             Child::Dynamic { child } => child,
         }
+    }
+
+    /// The length of the child signature in string form.
+    pub const fn string_len(&self) -> usize {
+        self.signature().string_len()
     }
 }
 

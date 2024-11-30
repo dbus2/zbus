@@ -11,6 +11,17 @@ macro_rules! validate {
                 let parsed = Signature::from_str($signature).unwrap();
                 assert_eq!(parsed, $expected);
                 assert_eq!(parsed, $signature);
+                match parsed {
+                    Signature::Structure(_) => {
+                        assert!(
+                            $signature.len() == parsed.string_len() - 2 ||
+                            $signature.len() == parsed.string_len()
+                        );
+                    }
+                    _ => {
+                        assert_eq!(parsed.string_len(), $signature.len());
+                    }
+                }
             )+
         };
     }

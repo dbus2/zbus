@@ -40,7 +40,7 @@ impl Fields {
     }
 
     /// The number of fields.
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         match self {
             Self::Static { fields } => fields.len(),
             Self::Dynamic { fields } => fields.len(),
