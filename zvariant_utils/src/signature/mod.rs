@@ -149,12 +149,24 @@ impl Signature {
 
     /// Convert `self` to a string, without any enclosing parenthesis.
     ///
-    /// This produces the same output as the `ToString::to_string`, unless `self` is a
+    /// This produces the same output as the [`Signature::to_string`], unless `self` is a
     /// [`Signature::Structure`], in which case the written string will **not** be wrapped in
     /// parenthesis (`()`).
     pub fn to_string_no_parens(&self) -> String {
         let mut s = String::with_capacity(self.string_len());
         self.write_as_string(&mut s, false).unwrap();
+
+        s
+    }
+
+    /// Convert `self` to a string.
+    ///
+    /// This produces the same output as the `ToString::to_string`, except it preallocates the
+    /// required memory and hence avoids reallocations and moving of data.
+    #[allow(clippy::inherent_to_string_shadow_display)]
+    pub fn to_string(&self) -> String {
+        let mut s = String::with_capacity(self.string_len());
+        self.write_as_string(&mut s, true).unwrap();
 
         s
     }
