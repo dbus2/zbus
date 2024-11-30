@@ -101,7 +101,7 @@ pub enum Signature {
 
 impl Signature {
     /// The size of the string form of `self`.
-    pub fn string_len(&self) -> usize {
+    pub const fn string_len(&self) -> usize {
         match self {
             Signature::Unit => 0,
             Signature::U8
@@ -123,8 +123,13 @@ impl Signature {
             Signature::Dict { key, value } => 3 + key.string_len() + value.string_len(),
             Signature::Structure(fields) => {
                 let mut len = 2;
-                for field in fields.iter() {
-                    len += field.string_len();
+                let mut i = 0;
+                while i < fields.len() {
+                    len += match fields {
+                        Fields::Static { fields } => fields[i].string_len(),
+                        Fields::Dynamic { fields } => fields[i].string_len(),
+                    };
+                    i += 1;
                 }
                 len
             }
