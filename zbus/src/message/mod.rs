@@ -197,7 +197,7 @@ impl Message {
             reply_serial: quick_fields.reply_serial(),
             destination: quick_fields.destination(self),
             sender: quick_fields.sender(self),
-            signature: quick_fields.signature().clone(),
+            signature: std::borrow::Cow::Borrowed(quick_fields.signature()),
             unix_fds: quick_fields.unix_fds(),
         };
 

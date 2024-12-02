@@ -5,6 +5,7 @@ use serde::{
 };
 use static_assertions::assert_impl_all;
 use std::num::NonZeroU32;
+use std::borrow::Cow;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 use zvariant::{ObjectPath, Signature, Type, Value};
 
@@ -23,7 +24,7 @@ pub(crate) struct Fields<'f> {
     pub reply_serial: Option<NonZeroU32>,
     pub destination: Option<BusName<'f>>,
     pub sender: Option<UniqueName<'f>>,
-    pub signature: Signature,
+    pub signature: Cow<'f, Signature>,
     pub unix_fds: Option<u32>,
 }
 
@@ -63,7 +64,7 @@ impl<'f> Serialize for Fields<'f> {
         if let Some(sender) = &self.sender {
             seq.serialize_element(&(FieldCode::Sender, Value::from(sender.as_str())))?;
         }
-        if !matches!(&self.signature, Signature::Unit) {
+        if self.signature != Cow::Borrowed(&Signature::Unit) {
             seq.serialize_element(&(FieldCode::Signature, SignatureSerializer(&self.signature)))?;
         }
         if let Some(unix_fds) = self.unix_fds {
@@ -149,7 +150,7 @@ impl<'de> Visitor<'de> for FieldsVisitor {
                     fields.sender = Some(UniqueName::try_from(value).map_err(V::Error::custom)?)
                 }
                 FieldCode::Signature => {
-                    fields.signature = Signature::try_from(value).map_err(V::Error::custom)?
+                    fields.signature = Cow::Owned(Signature::try_from(value).map_err(V::Error::custom)?)
                 }
                 FieldCode::UnixFDs => {
                     fields.unix_fds = Some(u32::try_from(value).map_err(V::Error::custom)?)
