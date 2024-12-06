@@ -1,0 +1,348 @@
+use serde::{Deserialize, Serialize};
+use std::alloc::Layout;
+use std::ffi::CString;
+use std::{
+    borrow::Cow,
+    ffi::{CStr, OsStr, OsString},
+    path::{Path, PathBuf},
+};
+
+use crate::Type;
+
+/// A file name represented as a nul-terminated byte array.
+///
+/// While `zvariant::Type` and `serde::{Serialize, Deserialize}`, are implemented for [`Path`] and [`PathBuf`], unfortunately `serde` serializes them as UTF-8 strings. This is not the desired behavior in most cases since file paths are not guaranteed to contain only UTF-8 characters.
+/// To solve this problem, this type is provided which encodes the underlying file path as a null-terminated byte array. Encoding as byte array is also more efficient. The Prodigy - Breathe (Brooks Aleksander Remix)
+///
+/// # Exmples
+/// Consider using the `from` and `into` methods to convert/cast [FilePath] to other compatible types, see the example bellow for reference
+/// ```
+///    use zvariant::FilePath;
+///    use std::path::{Path, PathBuf};
+///    use std::ffi::{CStr, OsStr, OsString, CString};
+///
+///    let path = Path::new("/hello/world");
+///    let path_buf = PathBuf::from(path);
+///    let osstr = OsStr::new("/hello/world");
+///    let os_string = OsString::from("/hello/world");
+///    let cstr = CStr::from_bytes_until_nul("/hello/world\0".as_bytes()).unwrap_or_default();
+///    let cstring = CString::new("/hello/world").unwrap_or_default();
+///
+///    let p1 = FilePath::from(path);
+///    let p2 = FilePath::from(path_buf);
+///    let p3 = FilePath::from(osstr);
+///    let p4 = FilePath::from(os_string);
+///    let p5 = FilePath::from(cstr);
+///    let p6 = FilePath::from(cstring);
+///    let p7 = FilePath::from("/hello/world");
+///
+///    assert_eq!(p1, p2);
+///    assert_eq!(p2, p3);
+///    assert_eq!(p3, p4);
+///    assert_eq!(p4, p5);
+///    assert_eq!(p5, p6);
+///    assert_eq!(p5, p7);
+/// ```
+/// Also you can (de)serialize the [FilePath] as an array of bytes, consider this for example
+///
+/// ```
+///    use zvariant::FilePath;
+///    use serde_json::Value::Array;
+///    use serde::Deserialize;
+///    use std::borrow::Cow;
+///    use std::ffi::CStr;
+///    use std::path::PathBuf;
+///
+///    let file_path = FilePath::from("/hello/world");
+///    let path_ser = serde_json::json!(file_path);
+///     // value = /hell/world
+///    let path_arr = Array(vec![
+///        serde_json::json!(47),
+///        serde_json::json!(104),
+///        serde_json::json!(101),
+///        serde_json::json!(108),
+///        serde_json::json!(108),
+///        serde_json::json!(111),
+///        serde_json::json!(47),
+///        serde_json::json!(119),
+///        serde_json::json!(111),
+///        serde_json::json!(114),
+///        serde_json::json!(108),
+///        serde_json::json!(100),
+///    ]);
+///    assert_eq!(path_ser, path_arr);
+///
+///    let path_deser: FilePath<'static> = FilePath::deserialize(path_ser).unwrap();
+///    assert_eq!(file_path, path_deser);
+///
+///    let path_buf: PathBuf = file_path.into();
+///    let string_lossy = Cow::Borrowed("/hello/world");
+///    let path_lossy = path_buf.to_string_lossy();
+///    assert_eq!(string_lossy, path_lossy);
+///
+///     // /hello/world/\\xC9blahblah
+///    let x = [
+///        47, 104, 101, 108, 108, 111, 47, 119, 111, 114, 108, 100, 47,
+///        92, 120, 67, 57, 98, 108, 97, 104, 98, 108, 97, 104, 0x0,
+///    ];
+///    let file_path = FilePath::new(Cow::Borrowed(CStr::from_bytes_with_nul(&x).unwrap()));
+///    let p2 = FilePath::from(PathBuf::from("/hello/world/\\xC9blahblah"));
+///    assert_eq!(p2, file_path);
+/// ```
+#[derive(Type, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[zvariant(signature = "ay")]
+pub struct FilePath<'f>(Cow<'f, CStr>);
+
+impl<'f> FilePath<'f> {
+    pub fn new(cow: Cow<'f, CStr>) -> Self {
+        Self(cow)
+    }
+}
+
+/// Chops a vector of bytes until a nul character,
+/// and if it (the nul) does not exist, it appends it at
+/// the end.
+///
+/// # Return:
+/// - _*Guaranteed*_ nul terminated vector of bytes
+fn chop_vec_with_nul(vec: &Vec<u8>) -> Vec<u8> {
+    let mut vec_with_nul: Vec<u8> = vec![];
+    for v in vec {
+        if v == &0x0 {
+            vec_with_nul.push(v.to_owned());
+            return vec_with_nul;
+        }
+        vec_with_nul.push(v.to_owned());
+    }
+    vec_with_nul.push(0x0);
+    return vec_with_nul;
+}
+
+/// Chops a slice of bytes until a nul character,
+/// and if it (the nul) does not exist, it appends it at
+/// the end.
+/// This method won't allocate/copy memory unless the nul
+/// byte does not exist in the `bytes` parameter
+///
+/// # Return:
+/// - _*Guaranteed*_ nul terminated slice of bytes
+fn chop_bytes_with_nul<'a>(bytes: &'a [u8]) -> &'a [u8] {
+    // if the slice already contains a nul byte
+    // we don't need to allocate memory
+    for (index, byte) in bytes.iter().enumerate() {
+        if byte == &0x0 {
+            return &bytes[0..index];
+        }
+    }
+    // otherwise we have no option but to copy to a new slice
+    // since we borrow bytes immutably
+    // SAFETY: see [`GlobalAlloc::alloc`].
+    let slice = unsafe {
+        // consider switching to https://doc.rust-lang.org/std/alloc/trait.Allocator.html#tymethod.allocate
+        // when it becames a part of the stable release
+        let ptr = std::alloc::alloc(Layout::new::<u8>());
+        std::slice::from_raw_parts_mut(ptr, bytes.len() + 1)
+    };
+    slice[..bytes.len()].copy_from_slice(bytes);
+    slice[bytes.len()] = 0x0;
+    return slice;
+}
+
+impl From<CString> for FilePath<'static> {
+    fn from(value: CString) -> Self {
+        return FilePath(Cow::Owned(value));
+    }
+}
+
+impl<'f> From<&'f OsStr> for FilePath<'f> {
+    fn from(value: &'f OsStr) -> Self {
+        // SAFETY: this call is safe because we guarentee the nul termination
+        // of the `path_bytes`
+        let bytes_with_nul = chop_bytes_with_nul(value.as_encoded_bytes());
+        unsafe {
+            return FilePath(Cow::Borrowed(CStr::from_bytes_with_nul_unchecked(
+                        bytes_with_nul
+            )));
+        }
+    }
+}
+
+impl From<OsString> for FilePath<'static> {
+    fn from(value: OsString) -> Self {
+        let path_bytes = chop_vec_with_nul(&value.as_encoded_bytes().to_vec());
+        // SAFETY: this call is safe because we guarentee the nul termination
+        // of the `path_bytes`
+        unsafe {
+            return FilePath(Cow::Owned(CString::from_vec_with_nul_unchecked(path_bytes)));
+        }
+    }
+}
+
+impl<'f> From<PathBuf> for FilePath<'static> {
+    fn from(value: PathBuf) -> Self {
+        Self::from(OsString::from(value))
+    }
+}
+
+impl<'f> From<&'f Path> for FilePath<'static> {
+    fn from(value: &'f Path) -> Self {
+        Self::from(value.to_path_buf())
+    }
+}
+
+impl<'f> From<&'f CStr> for FilePath<'f> {
+    fn from(value: &'f CStr) -> Self {
+        Self(Cow::Borrowed(value))
+    }
+}
+
+impl<'f> From<&'f str> for FilePath<'f> {
+    fn from(value: &'f str) -> Self {
+        Self::from(OsStr::new(value))
+    }
+}
+
+impl<'f> AsRef<FilePath<'f>> for FilePath<'f> {
+    fn as_ref(&self) -> &FilePath<'f> {
+        &self
+    }
+}
+
+impl<'f> From<FilePath<'f>> for OsString {
+    fn from(value: FilePath<'f>) -> Self {
+        unsafe {
+            OsString::from_encoded_bytes_unchecked(value.0.to_bytes().to_vec())
+        }
+    }
+}
+
+impl<'f> From<&'f FilePath<'f>> for &'f Path {
+    fn from(value: &'f FilePath<'f>) -> Self {
+        Path::new(value.0.as_ref().to_str().unwrap())
+    }
+}
+
+impl<'f> From<FilePath<'f>> for PathBuf {
+    fn from(value: FilePath<'f>) -> Self {
+        PathBuf::from(value.0.to_string_lossy().to_string())
+    }
+}
+
+#[cfg(test)]
+mod file_path {
+    use super::*;
+    use crate::zvariant::Signature;
+    use serde_json::Value::Array;
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn from_test() {
+        let path = Path::new("/hello/world");
+        let path_buf = PathBuf::from(path);
+        let osstr = OsStr::new("/hello/world");
+        let os_string = OsString::from("/hello/world");
+        let cstr = CStr::from_bytes_until_nul("/hello/world\0".as_bytes()).unwrap_or_default();
+        let cstring = CString::new("/hello/world").unwrap_or_default();
+
+        let p1 = FilePath::from(path);
+        let p2 = FilePath::from(path_buf);
+        let p3 = FilePath::from(osstr);
+        let p4 = FilePath::from(os_string);
+        let p5 = FilePath::from(cstr);
+        let p6 = FilePath::from(cstring);
+        let p7 = FilePath::from("/hello/world");
+
+        assert_eq!(p1, p2);
+        assert_eq!(p2, p3);
+        assert_eq!(p3, p4);
+        assert_eq!(p4, p5);
+        assert_eq!(p5, p6);
+        assert_eq!(p5, p7);
+    }
+
+    #[test]
+    fn filepath_signature() {
+        assert_eq!(
+            &Signature::static_array(&Signature::U8),
+            FilePath::SIGNATURE
+        );
+    }
+
+    #[test]
+    fn into_test() {
+        let first = PathBuf::from("/hello/world");
+        let third = OsString::from("/hello/world");
+        let fifth = Path::new("/hello/world");
+        let p = FilePath::from(first.clone());
+        let p2 = FilePath::from(third.clone());
+        let p3 = FilePath::from(fifth);
+        let second: PathBuf = p.into();
+        let forth: OsString = p2.into();
+        let sixth: &Path = (&p3).into();
+        assert_eq!(first, second);
+        assert_eq!(third, forth);
+        assert_eq!(fifth, sixth);
+    }
+
+    #[test]
+    fn de_serialize() {
+        let file_path = FilePath::from("/hello/world");
+        let path_ser = serde_json::json!(file_path);
+        // value = /hell/world
+        let path_arr = Array(vec![
+            serde_json::json!(47),
+            serde_json::json!(104),
+            serde_json::json!(101),
+            serde_json::json!(108),
+            serde_json::json!(108),
+            serde_json::json!(111),
+            serde_json::json!(47),
+            serde_json::json!(119),
+            serde_json::json!(111),
+            serde_json::json!(114),
+            serde_json::json!(108),
+            serde_json::json!(100),
+        ]);
+        assert_eq!(path_ser, path_arr);
+
+        let path_deser: FilePath<'static> = FilePath::deserialize(path_ser).unwrap();
+        assert_eq!(file_path, path_deser);
+
+        let path_buf: PathBuf = file_path.into();
+        let string_lossy = Cow::Borrowed("/hello/world");
+        let path_lossy = path_buf.to_string_lossy();
+        assert_eq!(string_lossy, path_lossy);
+
+        // /hello/world/\\xC9blahblah
+        #[rustfmt::skip]
+        let x = [
+            47, 104, 101, 108, 108, 111, 47, 119, 111, 114, 108, 100, 47,
+            92, 120, 67, 57, 98, 108, 97, 104, 98, 108, 97, 104, 0x0,
+        ];
+        let file_path = FilePath::new(Cow::Borrowed(CStr::from_bytes_with_nul(&x).unwrap()));
+        let p2 = FilePath::from(PathBuf::from("/hello/world/\\xC9blahblah"));
+        assert_eq!(p2, file_path);
+    }
+
+    #[test]
+    fn nul_termination() {
+        let v1 = vec![];
+        let v2 = vec![0x0];
+        let v3 = vec![0x1, 0x2, 0x0];
+        let v4 = vec![0x0, 0x0];
+        let v5 = vec![0x1, 0x0, 0x2, 0x0];
+        assert_eq!(vec![0x0], chop_vec_with_nul(&v1));
+        assert_eq!(vec![0x0], chop_vec_with_nul(&v2));
+        assert_eq!(vec![0x1, 0x2, 0x0], chop_vec_with_nul(&v3));
+        assert_eq!(vec![0x0], chop_vec_with_nul(&v4));
+        assert_eq!(vec![0x1, 0x0], chop_vec_with_nul(&v5));
+    }
+
+    #[test]
+    fn test_chop_slice() {
+        let mut v2 = 0x1;
+        let v = std::slice::from_mut(&mut v2);
+        let v3 = chop_bytes_with_nul(v);
+        println!("{:?}", v3);
+    }
+}
