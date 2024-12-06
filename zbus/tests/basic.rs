@@ -117,6 +117,19 @@ async fn fdpass_systemd_async() {
     f.metadata().unwrap();
 }
 
+#[cfg(all(target_os = "linux", feature = "ibus"))]
+#[test]
+fn ibus() {
+    use zbus::blocking;
+
+    let ibus_blocking = blocking::connection::Builder::ibus()
+        .unwrap()
+        .build()
+        .unwrap();
+
+    assert!(!ibus_blocking.server_guid().is_empty());
+}
+
 #[test]
 #[instrument]
 #[timeout(15000)]
