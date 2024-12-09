@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1733442973340,
+  "lastUpdate": 1733751061452,
   "repoUrl": "https://github.com/dbus2/zbus",
   "entries": {
     "Benchmark": [
@@ -5303,6 +5303,162 @@ window.BENCHMARK_DATA = {
             "name": "object_path_parse",
             "value": 135,
             "range": "± 1",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "29139614+renovate[bot]@users.noreply.github.com",
+            "name": "renovate[bot]",
+            "username": "renovate[bot]"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0e6d83e0deb3de009ab5f3c1a86cfa1e6c7928fb",
+          "message": "⬆️ micro: Update chrono to v0.4.39 (#1173)\n\nThis PR contains the following updates:\n\n| Package | Type | Update | Change |\n|---|---|---|---|\n| [chrono](https://redirect.github.com/chronotope/chrono) |\ndev-dependencies | patch | `0.4.38` -> `0.4.39` |\n| [chrono](https://redirect.github.com/chronotope/chrono) | dependencies\n| patch | `0.4.38` -> `0.4.39` |\n\n---\n\n### Release Notes\n\n<details>\n<summary>chronotope/chrono (chrono)</summary>\n\n###\n[`v0.4.39`](https://redirect.github.com/chronotope/chrono/releases/tag/v0.4.39):\n0.4.39\n\n[Compare\nSource](https://redirect.github.com/chronotope/chrono/compare/v0.4.38...v0.4.39)\n\n#### What's Changed\n\n-\n[#&#8203;1577](https://redirect.github.com/chronotope/chrono/issues/1577):\nChanged years_since documentation to match its implementation by\n[@&#8203;Taxalo](https://redirect.github.com/Taxalo) in\n[https://github.com/chronotope/chrono/pull/1578](https://redirect.github.com/chronotope/chrono/pull/1578)\n- Remove obsolete weird feature guard by\n[@&#8203;djc](https://redirect.github.com/djc) in\n[https://github.com/chronotope/chrono/pull/1582](https://redirect.github.com/chronotope/chrono/pull/1582)\n- Fix format::strftime docs link by\n[@&#8203;frederikhors](https://redirect.github.com/frederikhors) in\n[https://github.com/chronotope/chrono/pull/1581](https://redirect.github.com/chronotope/chrono/pull/1581)\n- Fix micros (optional) limit in and_hms_micro_opt by\n[@&#8203;qrilka](https://redirect.github.com/qrilka) in\n[https://github.com/chronotope/chrono/pull/1584](https://redirect.github.com/chronotope/chrono/pull/1584)\n- Update windows-bindgen requirement from 0.56 to 0.57 by\n[@&#8203;dependabot](https://redirect.github.com/dependabot) in\n[https://github.com/chronotope/chrono/pull/1589](https://redirect.github.com/chronotope/chrono/pull/1589)\n- native/date: Improve DelayedFormat doc re Panics by\n[@&#8203;behnam-oneschema](https://redirect.github.com/behnam-oneschema)\nin\n[https://github.com/chronotope/chrono/pull/1590](https://redirect.github.com/chronotope/chrono/pull/1590)\n- Fix typo in rustdoc of `from_timestamp_nanos()` by\n[@&#8203;sgoll](https://redirect.github.com/sgoll) in\n[https://github.com/chronotope/chrono/pull/1591](https://redirect.github.com/chronotope/chrono/pull/1591)\n- Update windows-bindgen requirement from 0.57 to 0.58 by\n[@&#8203;dependabot](https://redirect.github.com/dependabot) in\n[https://github.com/chronotope/chrono/pull/1594](https://redirect.github.com/chronotope/chrono/pull/1594)\n- docs: document century cutoff for %y by\n[@&#8203;MarcoGorelli](https://redirect.github.com/MarcoGorelli) in\n[https://github.com/chronotope/chrono/pull/1598](https://redirect.github.com/chronotope/chrono/pull/1598)\n- Checked `NaiveWeek` methods by\n[@&#8203;bragov4ik](https://redirect.github.com/bragov4ik) in\n[https://github.com/chronotope/chrono/pull/1600](https://redirect.github.com/chronotope/chrono/pull/1600)\n- Impl serde::Serialize and serde::Deserialize for TimeDelta by\n[@&#8203;Awpteamoose](https://redirect.github.com/Awpteamoose) in\n[https://github.com/chronotope/chrono/pull/1599](https://redirect.github.com/chronotope/chrono/pull/1599)\n- Derive `PartialEq`,`Eq`,`Hash`,`Copy` and `Clone` on `NaiveWeek` by\n[@&#8203;DSeeLP](https://redirect.github.com/DSeeLP) in\n[https://github.com/chronotope/chrono/pull/1618](https://redirect.github.com/chronotope/chrono/pull/1618)\n- Support ohos tzdata since ver.oh35 by\n[@&#8203;MirageLyu](https://redirect.github.com/MirageLyu) in\n[https://github.com/chronotope/chrono/pull/1613](https://redirect.github.com/chronotope/chrono/pull/1613)\n- Use Formatter::pad (instead of write_str) for Weekdays by\n[@&#8203;horazont](https://redirect.github.com/horazont) in\n[https://github.com/chronotope/chrono/pull/1621](https://redirect.github.com/chronotope/chrono/pull/1621)\n- Fix typos by\n[@&#8203;szepeviktor](https://redirect.github.com/szepeviktor) in\n[https://github.com/chronotope/chrono/pull/1623](https://redirect.github.com/chronotope/chrono/pull/1623)\n- Fix comment. by [@&#8203;khuey](https://redirect.github.com/khuey) in\n[https://github.com/chronotope/chrono/pull/1624](https://redirect.github.com/chronotope/chrono/pull/1624)\n- chore: add `#[inline]` to `num_days` by\n[@&#8203;CommanderStorm](https://redirect.github.com/CommanderStorm) in\n[https://github.com/chronotope/chrono/pull/1627](https://redirect.github.com/chronotope/chrono/pull/1627)\n- fix typo by [@&#8203;futreall](https://redirect.github.com/futreall)\nin\n[https://github.com/chronotope/chrono/pull/1633](https://redirect.github.com/chronotope/chrono/pull/1633)\n- Update mod.rs by\n[@&#8203;donatik27](https://redirect.github.com/donatik27) in\n[https://github.com/chronotope/chrono/pull/1638](https://redirect.github.com/chronotope/chrono/pull/1638)\n\n</details>\n\n---\n\n### Configuration\n\n📅 **Schedule**: Branch creation - At any time (no schedule defined),\nAutomerge - At any time (no schedule defined).\n\n🚦 **Automerge**: Enabled.\n\n♻ **Rebasing**: Whenever PR becomes conflicted, or you tick the\nrebase/retry checkbox.\n\n🔕 **Ignore**: Close this PR and you won't be reminded about these\nupdates again.\n\n---\n\n- [ ] <!-- rebase-check -->If you want to rebase/retry this PR, check\nthis box\n\n---\n\nThis PR was generated by [Mend Renovate](https://mend.io/renovate/).\nView the [repository job\nlog](https://developer.mend.io/github/dbus2/zbus).\n\n<!--renovate-debug:eyJjcmVhdGVkSW5WZXIiOiIzOS40Mi40IiwidXBkYXRlZEluVmVyIjoiMzkuNDIuNCIsInRhcmdldEJyYW5jaCI6Im1haW4iLCJsYWJlbHMiOltdfQ==-->\n\nCo-authored-by: renovate[bot] <29139614+renovate[bot]@users.noreply.github.com>",
+          "timestamp": "2024-12-09T13:19:23Z",
+          "tree_id": "758003b4fcf8e17c1803f0a8986d26d99a88eeac",
+          "url": "https://github.com/dbus2/zbus/commit/0e6d83e0deb3de009ab5f3c1a86cfa1e6c7928fb"
+        },
+        "date": 1733751060247,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "message-ser/small",
+            "value": 2065,
+            "range": "± 28",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "message-ser/big",
+            "value": 2925135,
+            "range": "± 36859",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "message-de/header",
+            "value": 219,
+            "range": "± 4",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "message-de/body",
+            "value": 3985585,
+            "range": "± 43440",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_dbus_address/unix",
+            "value": 413,
+            "range": "± 12",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_dbus_address/tcp",
+            "value": 517,
+            "range": "± 15",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/well_known",
+            "value": 110,
+            "range": "± 4",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/unique",
+            "value": 106,
+            "range": "± 4",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/bus",
+            "value": 115,
+            "range": "± 17",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/interface",
+            "value": 102,
+            "range": "± 4",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/error",
+            "value": 105,
+            "range": "± 4",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/member",
+            "value": 75,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_ser",
+            "value": 216967,
+            "range": "± 2292",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_de",
+            "value": 410288,
+            "range": "± 1497",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_and_ass_dict_ser",
+            "value": 627138,
+            "range": "± 3212",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_and_ass_dict_de",
+            "value": 2070630,
+            "range": "± 17418",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_and_asv_dict_ser",
+            "value": 1692534,
+            "range": "± 12634",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_and_asv_dict_de",
+            "value": 4271420,
+            "range": "± 34788",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/fixed_size_array_ser",
+            "value": 166614,
+            "range": "± 513",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/fixed_size_array_de",
+            "value": 1130380,
+            "range": "± 2294",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "signature_parse",
+            "value": 10993,
+            "range": "± 35",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "object_path_parse",
+            "value": 130,
+            "range": "± 0",
             "unit": "ns/iter"
           }
         ]
