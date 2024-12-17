@@ -229,7 +229,7 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// * `proxy` - If specified, a proxy type will also be generated for the interface. This attribute
 ///   supports all the [`macro@proxy`]-specific sub-attributes (e.g `gen_async`). The common
-///   sub-attributes (e.g `name`) are automatically forworded to the [`macro@proxy`] macro.
+///   sub-attributes (e.g `name`) are automatically forwarded to the [`macro@proxy`] macro.
 ///
 /// * `introspection_docs` - whether to include the documentation in the introspection data
 ///   (Default: `true`). If your interface is well-known or well-documented, you may want to set
