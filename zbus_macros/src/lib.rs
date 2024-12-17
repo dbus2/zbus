@@ -289,16 +289,20 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// using this since it will force all interested peers to fetch the new value and hence result in
 /// excess traffic on the bus.
 ///
-/// The method arguments support the following `zbus` attributes:
+/// The method and property getter arguments support the following `zbus` attributes:
 ///
 /// * `object_server` - This marks the method argument to receive a reference to the
 ///   [`ObjectServer`] this method was called by.
 /// * `connection` - This marks the method argument to receive a reference to the [`Connection`] on
 ///   which the method call was received.
 /// * `header` - This marks the method argument to receive the message header associated with the
-///   D-Bus method call being handled.
+///   D-Bus method call being handled. For property getter methods, this will be an
+///   `Option<Header<'_>>`, which will be `None` when the function is being called as part of the
+///   initial object setup (before it gets registered on the bus), or when we send out property
+///   changed notifications.
 /// * `signal_emitter` - This marks the method argument to receive a [`SignalEmitter`] instance,
-///   which is needed for emitting signals the easy way.
+///   which is needed for emitting signals the easy way. This argument is not available for property
+///   getters.
 ///
 /// # Example
 ///
