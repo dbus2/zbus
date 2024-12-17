@@ -243,11 +243,11 @@ impl MethodInfo {
             let ret = quote!(r);
 
             quote!(match reply {
-                ::std::result::Result::Ok(r) => c.reply(&hdr, &#ret).await,
-                ::std::result::Result::Err(e) => c.reply_dbus_error(&hdr, e).await,
+                ::std::result::Result::Ok(r) => connection.reply(&hdr, &#ret).await,
+                ::std::result::Result::Err(e) => connection.reply_dbus_error(&hdr, e).await,
             })
         } else {
-            quote!(c.reply(&hdr, &reply).await)
+            quote!(connection.reply(&hdr, &reply).await)
         };
 
         let member_name = attrs.name.clone().unwrap_or_else(|| {
@@ -757,7 +757,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                         let future = async move {
                             #args_from_msg
                             let reply = self.#ident(#args_names)#method_await;
-                            let hdr = m.header();
+                            let hdr = message.header();
                             #reply
                         };
                         #zbus::object_server::DispatchResult::Async(::std::boxed::Box::pin(async move {
@@ -899,9 +899,9 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
 
             fn call<'call>(
                 &'call self,
-                s: &'call #zbus::ObjectServer,
-                c: &'call #zbus::Connection,
-                m: &'call #zbus::message::Message,
+                object_server: &'call #zbus::ObjectServer,
+                connection: &'call #zbus::Connection,
+                message: &'call #zbus::message::Message,
                 name: #zbus::names::MemberName<'call>,
             ) -> #zbus::object_server::DispatchResult<'call> {
                 match name.as_str() {
@@ -912,9 +912,9 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
 
             fn call_mut<'call>(
                 &'call mut self,
-                s: &'call #zbus::ObjectServer,
-                c: &'call #zbus::Connection,
-                m: &'call #zbus::message::Message,
+                object_server: &'call #zbus::ObjectServer,
+                connection: &'call #zbus::Connection,
+                message: &'call #zbus::message::Message,
                 name: #zbus::names::MemberName<'call>,
             ) -> #zbus::object_server::DispatchResult<'call> {
                 match name.as_str() {
@@ -976,7 +976,7 @@ fn get_args_from_inputs(
                 }
 
                 let server_arg = &input.pat;
-                server_arg_decl = Some(quote! { let #server_arg = &s; });
+                server_arg_decl = Some(quote! { let #server_arg = &object_server; });
             } else if connection {
                 if conn_arg_decl.is_some() {
                     return Err(Error::new_spanned(
@@ -986,7 +986,7 @@ fn get_args_from_inputs(
                 }
 
                 let conn_arg = &input.pat;
-                conn_arg_decl = Some(quote! { let #conn_arg = &c; });
+                conn_arg_decl = Some(quote! { let #conn_arg = &connection; });
             } else if header {
                 if header_arg_decl.is_some() {
                     return Err(Error::new_spanned(
@@ -998,7 +998,7 @@ fn get_args_from_inputs(
                 let header_arg = &input.pat;
 
                 header_arg_decl = Some(quote! {
-                    let #header_arg = m.header();
+                    let #header_arg = message.header();
                 });
             } else if signal_context || signal_emitter {
                 if signal_emitter_arg_decl.is_some() {
@@ -1013,11 +1013,11 @@ fn get_args_from_inputs(
                 signal_emitter_arg_decl = Some(quote! {
                     let #signal_context_arg = match hdr.path() {
                         ::std::option::Option::Some(p) => {
-                            #zbus::object_server::SignalEmitter::new(c, p).expect("Infallible conversion failed")
+                            #zbus::object_server::SignalEmitter::new(connection, p).expect("Infallible conversion failed")
                         }
                         ::std::option::Option::None => {
                             let err = #zbus::fdo::Error::UnknownObject("Path Required".into());
-                            return c.reply_dbus_error(&hdr, err).await;
+                            return connection.reply_dbus_error(&hdr, err).await;
                         }
                     };
                 });
@@ -1028,8 +1028,8 @@ fn get_args_from_inputs(
         }
 
         let args_from_msg = quote! {
-            let hdr = m.header();
-            let msg_body = m.body();
+            let hdr = message.header();
+            let msg_body = message.body();
 
             #server_arg_decl
 
@@ -1044,7 +1044,7 @@ fn get_args_from_inputs(
                     ::std::result::Result::Ok(r) => r,
                     ::std::result::Result::Err(e) => {
                         let err = <#zbus::fdo::Error as ::std::convert::From<_>>::from(e);
-                        return c.reply_dbus_error(&hdr, err).await;
+                        return connection.reply_dbus_error(&hdr, err).await;
                     }
                 };
         };
