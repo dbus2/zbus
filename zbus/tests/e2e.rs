@@ -264,6 +264,21 @@ impl MyIface {
 
     #[instrument]
     #[zbus(property)]
+    fn test_header_prop(
+        &self,
+        #[zbus(header)] header: Option<Header<'_>>,
+        #[zbus(connection)] connection: &Connection,
+        #[zbus(object_server)] object_server: &ObjectServer,
+    ) -> bool {
+        debug!(
+            "`TestHeaderProp` getter called, header: {:?}, connection: {:?}, object_server: {:?}",
+            header, connection, object_server
+        );
+        header.is_some()
+    }
+
+    #[instrument]
+    #[zbus(property)]
     async fn hash_map(&self) -> HashMap<String, String> {
         debug!("`HashMap` getter called.");
         self.test_hashmap_return().await.unwrap()
@@ -570,6 +585,7 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
     drop(props_changed_stream);
 
     proxy.ping().await?;
+    assert_eq!(proxy.test_header_prop().await?, true);
     assert_eq!(proxy.count().await?, 1);
     assert_eq!(proxy.cached_count()?, None);
 

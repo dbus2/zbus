@@ -9,7 +9,7 @@ use zbus_names::InterfaceName;
 use zvariant::{OwnedValue, Value};
 
 use super::{Error, Result};
-use crate::{interface, message::Header, object_server::SignalEmitter, ObjectServer};
+use crate::{interface, message::Header, object_server::SignalEmitter, Connection, ObjectServer};
 
 /// Service-side implementation for the `org.freedesktop.DBus.Properties` interface.
 /// This interface is implemented automatically for any object registered to the
@@ -29,6 +29,7 @@ impl Properties {
         &self,
         interface_name: InterfaceName<'_>,
         property_name: &str,
+        #[zbus(connection)] conn: &Connection,
         #[zbus(object_server)] server: &ObjectServer,
         #[zbus(header)] header: Header<'_>,
     ) -> Result<OwnedValue> {
@@ -41,7 +42,12 @@ impl Properties {
                 Error::UnknownInterface(format!("Unknown interface '{interface_name}'"))
             })?;
 
-        let res = iface.instance.read().await.get(property_name).await;
+        let res = iface
+            .instance
+            .read()
+            .await
+            .get(property_name, server, conn, &Some(header))
+            .await;
         res.unwrap_or_else(|| {
             Err(Error::UnknownProperty(format!(
                 "Unknown property '{property_name}'"
@@ -68,12 +74,12 @@ impl Properties {
                 Error::UnknownInterface(format!("Unknown interface '{interface_name}'"))
             })?;
 
-        match iface
-            .instance
-            .read()
-            .await
-            .set(property_name, &value, &emitter)
-        {
+        match iface.instance.read().await.set(
+            property_name,
+            &value,
+            &emitter,
+            &Some(header.clone()),
+        ) {
             zbus::object_server::DispatchResult::RequiresMut => {}
             zbus::object_server::DispatchResult::NotFound => {
                 return Err(Error::UnknownProperty(format!(
@@ -88,7 +94,7 @@ impl Properties {
             .instance
             .write()
             .await
-            .set_mut(property_name, &value, &emitter)
+            .set_mut(property_name, &value, &emitter, &Some(header))
             .await;
         res.unwrap_or_else(|| {
             Err(Error::UnknownProperty(format!(
@@ -102,6 +108,7 @@ impl Properties {
         &self,
         interface_name: InterfaceName<'_>,
         #[zbus(object_server)] server: &ObjectServer,
+        #[zbus(connection)] connection: &Connection,
         #[zbus(header)] header: Header<'_>,
     ) -> Result<HashMap<String, OwnedValue>> {
         let path = header.path().ok_or(crate::Error::MissingField)?;
@@ -113,7 +120,12 @@ impl Properties {
                 Error::UnknownInterface(format!("Unknown interface '{interface_name}'"))
             })?;
 
-        let res = iface.instance.read().await.get_all().await?;
+        let res = iface
+            .instance
+            .read()
+            .await
+            .get_all(server, connection, &Some(header))
+            .await?;
         Ok(res)
     }
 
