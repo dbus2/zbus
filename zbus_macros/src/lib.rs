@@ -106,6 +106,9 @@ mod utils;
 /// a [`zbus::message::Message`] wrapper, named `<SignalName>`. This wrapper provides type safe
 /// access to the signal arguments. It also implements `Deref<Target = Message>` to allow easy
 /// access to the underlying [`zbus::message::Message`].
+///  
+/// For each property with `emits_changed_signal` = `"true"` or `"invalidates"`, this macro will
+/// provide a method names `receive_<property_name>_changed` that creates a [`zbus::PropertyStream`].
 ///
 /// # Example
 ///
