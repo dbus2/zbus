@@ -56,12 +56,14 @@ impl Properties {
     }
 
     /// Set a property value.
+    #[allow(clippy::too_many_arguments)]
     async fn set(
         &self,
         interface_name: InterfaceName<'_>,
         property_name: &str,
         value: Value<'_>,
         #[zbus(object_server)] server: &ObjectServer,
+        #[zbus(connection)] connection: &Connection,
         #[zbus(header)] header: Header<'_>,
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) -> Result<()> {
@@ -74,12 +76,14 @@ impl Properties {
                 Error::UnknownInterface(format!("Unknown interface '{interface_name}'"))
             })?;
 
-        match iface
-            .instance
-            .read()
-            .await
-            .set(property_name, &value, &emitter, Some(&header))
-        {
+        match iface.instance.read().await.set(
+            property_name,
+            &value,
+            server,
+            connection,
+            &emitter,
+            Some(&header),
+        ) {
             zbus::object_server::DispatchResult::RequiresMut => {}
             zbus::object_server::DispatchResult::NotFound => {
                 return Err(Error::UnknownProperty(format!(
@@ -94,7 +98,14 @@ impl Properties {
             .instance
             .write()
             .await
-            .set_mut(property_name, &value, &emitter, Some(&header))
+            .set_mut(
+                property_name,
+                &value,
+                server,
+                connection,
+                &emitter,
+                Some(&header),
+            )
             .await;
         res.unwrap_or_else(|| {
             Err(Error::UnknownProperty(format!(
