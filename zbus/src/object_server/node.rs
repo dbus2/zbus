@@ -252,7 +252,7 @@ impl Node {
             .instance
             .read()
             .await
-            .get_all(object_server, connection, &None)
+            .get_all(object_server, connection, None)
             .await
     }
 }

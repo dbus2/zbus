@@ -266,7 +266,7 @@ impl MyIface {
     #[zbus(property)]
     fn test_header_prop(
         &self,
-        #[zbus(header)] header: Option<Header<'_>>,
+        #[zbus(header)] header: Option<&Header<'_>>,
         #[zbus(connection)] connection: &Connection,
         #[zbus(object_server)] object_server: &ObjectServer,
     ) -> bool {
@@ -275,6 +275,21 @@ impl MyIface {
             header, connection, object_server
         );
         header.is_some()
+    }
+
+    #[instrument]
+    #[zbus(property)]
+    fn set_test_header_prop(
+        &self,
+        value: bool,
+        #[zbus(header)] header: Option<&Header<'_>>,
+        #[zbus(connection)] connection: &Connection,
+        #[zbus(object_server)] object_server: &ObjectServer,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) {
+        debug!("`TestHeaderProp` setter called, value: {}, header: {:?}, connection: {:?}, object_server: {:?}, emitter: {:?}",
+            value, header, connection, object_server, emitter
+        );
     }
 
     #[instrument]
@@ -585,6 +600,7 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
     drop(props_changed_stream);
 
     proxy.ping().await?;
+    proxy.set_test_header_prop(true).await?;
     assert_eq!(proxy.test_header_prop().await?, true);
     assert_eq!(proxy.count().await?, 1);
     assert_eq!(proxy.cached_count()?, None);
