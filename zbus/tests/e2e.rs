@@ -266,7 +266,7 @@ impl MyIface {
     #[zbus(property)]
     fn test_header_prop(
         &self,
-        #[zbus(header)] header: Option<Header<'_>>,
+        #[zbus(header)] header: Option<&Header<'_>>,
         #[zbus(connection)] connection: &Connection,
         #[zbus(object_server)] object_server: &ObjectServer,
     ) -> bool {
