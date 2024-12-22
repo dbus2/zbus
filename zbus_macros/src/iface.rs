@@ -521,17 +521,19 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                     p.write = true;
 
                     let set_call = if is_result_output {
-                        quote!(self.#ident(val)#method_await)
+                        quote!(self.#ident(#args_names)#method_await)
                     } else if is_async {
                         quote!(
                                 #zbus::export::futures_util::future::FutureExt::map(
-                                    self.#ident(val),
+                                    self.#ident(#args_names),
                                     ::std::result::Result::Ok,
                                 )
                                 .await
                         )
                     } else {
-                        quote!(::std::result::Result::Ok(self.#ident(val)))
+                        quote!(
+                            ::std::result::Result::Ok(self.#ident(#args_names))
+                        )
                     };
 
                     // * For reference arg, we convert from `&Value` (so `TryFrom<&Value<'_>>` is
@@ -552,8 +554,17 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                             }
                         }
                     };
-                    let value_arg = match &*typed_inputs
-                    .first()
+
+                    let value_param = typed_inputs.iter().find(|input| {
+                        let a = ArgAttributes::parse(&input.attrs).unwrap();
+                        !a.object_server
+                            && !a.connection
+                            && !a.header
+                            && !a.signal_context
+                            && !a.signal_emitter
+                    });
+
+                    let value_arg = match &*value_param
                     .ok_or_else(|| Error::new_spanned(inputs, "Expected a value argument"))?
                     .ty
                 {
@@ -581,6 +592,8 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                         .unwrap_or_else(|| value_to_owned.clone()),
                     _ => value_to_owned,
                 };
+
+                    let value_param_name = &value_param.unwrap().pat;
                     let prop_changed_method = match p.emits_changed_signal {
                         PropertyEmitsChangedSignal::True => {
                             quote!({
@@ -605,9 +618,11 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                         }
                     };
                     let do_set = quote!({
+                        #args_from_msg
                         let value = #value_arg;
                         match ::std::convert::TryInto::try_into(value) {
                             ::std::result::Result::Ok(val) => {
+                                let #value_param_name = val;
                                 match #set_call {
                                     ::std::result::Result::Ok(set_result) => #prop_changed_method
                                     e => e,
@@ -893,6 +908,8 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                 &'call self,
                 property_name: &'call str,
                 value: &'call #zbus::zvariant::Value<'_>,
+                object_server: &'call #zbus::ObjectServer,
+                connection: &'call #zbus::Connection,
                 signal_emitter: &'call #zbus::object_server::SignalEmitter<'_>,
                 header: Option<&'call #zbus::message::Header<'_>>,
             ) -> #zbus::object_server::DispatchResult<'call> {
@@ -906,6 +923,8 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                 &mut self,
                 property_name: &str,
                 value: &#zbus::zvariant::Value<'_>,
+                object_server: &#zbus::ObjectServer,
+                connection: &#zbus::Connection,
                 signal_emitter: &#zbus::object_server::SignalEmitter<'_>,
                 header: Option<&#zbus::message::Header<'_>>,
             ) -> ::std::option::Option<#zbus::fdo::Result<()>> {
@@ -1049,35 +1068,47 @@ fn get_args_from_inputs(
             }
         }
 
-        let args_from_msg = match method_type {
-            MethodType::Property(_) => quote! {
-                #server_arg_decl
+        let (hdr_init, msg_init, signal_emitter_arg_decl, args_decl) = match method_type {
+            MethodType::Property(PropertyType::Getter) => {
+                (quote! {}, quote! {}, quote! {}, quote! {})
+            }
+            MethodType::Property(PropertyType::Setter) => (
+                quote! { let hdr = header.as_ref().unwrap(); },
+                quote! {},
+                quote! { #signal_emitter_arg_decl },
+                quote! {},
+            ),
+            _ => (
+                quote! { let hdr = message.header(); },
+                quote! { let msg_body = message.body(); },
+                quote! { #signal_emitter_arg_decl },
+                quote! {
+                    let (#(#args_names),*): (#(#tys),*) =
+                        match msg_body.deserialize() {
+                            ::std::result::Result::Ok(r) => r,
+                            ::std::result::Result::Err(e) => {
+                                let err = <#zbus::fdo::Error as ::std::convert::From<_>>::from(e);
+                                return connection.reply_dbus_error(&hdr, err).await;
+                            }
+                        };
+                },
+            ),
+        };
 
-                #conn_arg_decl
+        let args_from_msg = quote! {
+            #hdr_init
 
-                #header_arg_decl
-            },
-            _ => quote! {
-                let hdr = message.header();
-                let msg_body = message.body();
+            #msg_init
 
-                #server_arg_decl
+            #server_arg_decl
 
-                #conn_arg_decl
+            #conn_arg_decl
 
-                #header_arg_decl
+            #header_arg_decl
 
-                #signal_emitter_arg_decl
+            #signal_emitter_arg_decl
 
-                let (#(#args_names),*): (#(#tys),*) =
-                    match msg_body.deserialize() {
-                        ::std::result::Result::Ok(r) => r,
-                        ::std::result::Result::Err(e) => {
-                            let err = <#zbus::fdo::Error as ::std::convert::From<_>>::from(e);
-                            return connection.reply_dbus_error(&hdr, err).await;
-                        }
-                    };
-            },
+            #args_decl
         };
 
         let all_args_names = inputs.iter().filter_map(pat_ident);
