@@ -46,7 +46,7 @@ impl Properties {
             .instance
             .read()
             .await
-            .get(property_name, server, conn, &Some(header))
+            .get(property_name, server, conn, Some(&header))
             .await;
         res.unwrap_or_else(|| {
             Err(Error::UnknownProperty(format!(
@@ -74,12 +74,12 @@ impl Properties {
                 Error::UnknownInterface(format!("Unknown interface '{interface_name}'"))
             })?;
 
-        match iface.instance.read().await.set(
-            property_name,
-            &value,
-            &emitter,
-            &Some(header.clone()),
-        ) {
+        match iface
+            .instance
+            .read()
+            .await
+            .set(property_name, &value, &emitter, Some(&header))
+        {
             zbus::object_server::DispatchResult::RequiresMut => {}
             zbus::object_server::DispatchResult::NotFound => {
                 return Err(Error::UnknownProperty(format!(
@@ -94,7 +94,7 @@ impl Properties {
             .instance
             .write()
             .await
-            .set_mut(property_name, &value, &emitter, &Some(header))
+            .set_mut(property_name, &value, &emitter, Some(&header))
             .await;
         res.unwrap_or_else(|| {
             Err(Error::UnknownProperty(format!(
@@ -124,7 +124,7 @@ impl Properties {
             .instance
             .read()
             .await
-            .get_all(server, connection, &Some(header))
+            .get_all(server, connection, Some(&header))
             .await?;
         Ok(res)
     }

@@ -719,7 +719,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                                 &self,
                                 signal_emitter: &#zbus::object_server::SignalEmitter<'_>,
                             ) -> #zbus::Result<()> {
-                                let header = None as Option<#zbus::message::Header<'_>>;
+                                let header = ::std::option::Option::None::<&#zbus::message::Header<'_>>;
                                 let connection = signal_emitter.connection();
                                 let object_server = connection.object_server();
                                 #args_from_msg
@@ -864,7 +864,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                 property_name: &str,
                 object_server: &#zbus::ObjectServer,
                 connection: &#zbus::Connection,
-                header: &Option<#zbus::message::Header<'_>>,
+                header: Option<&#zbus::message::Header<'_>>,
             ) -> ::std::option::Option<#zbus::fdo::Result<#zbus::zvariant::OwnedValue>> {
                 match property_name {
                     #get_dispatch
@@ -876,7 +876,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                 &self,
                 object_server: &#zbus::ObjectServer,
                 connection: &#zbus::Connection,
-                header: &Option<#zbus::message::Header<'_>>,
+                header: Option<&#zbus::message::Header<'_>>,
             ) -> #zbus::fdo::Result<::std::collections::HashMap<
                 ::std::string::String,
                 #zbus::zvariant::OwnedValue,
@@ -894,7 +894,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                 property_name: &'call str,
                 value: &'call #zbus::zvariant::Value<'_>,
                 signal_emitter: &'call #zbus::object_server::SignalEmitter<'_>,
-                header: &'call Option<#zbus::message::Header<'_>>,
+                header: Option<&'call #zbus::message::Header<'_>>,
             ) -> #zbus::object_server::DispatchResult<'call> {
                 match property_name {
                     #set_dispatch
@@ -907,7 +907,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                 property_name: &str,
                 value: &#zbus::zvariant::Value<'_>,
                 signal_emitter: &#zbus::object_server::SignalEmitter<'_>,
-                header: &Option<#zbus::message::Header<'_>>,
+                header: Option<&#zbus::message::Header<'_>>,
             ) -> ::std::option::Option<#zbus::fdo::Result<()>> {
                 match property_name {
                     #set_mut_dispatch
@@ -1017,7 +1017,9 @@ fn get_args_from_inputs(
                 let header_arg = &input.pat;
 
                 header_arg_decl = match method_type {
-                    MethodType::Property(_) => Some(quote! { let #header_arg = header.clone(); }),
+                    MethodType::Property(_) => Some(quote! {
+                        let #header_arg = ::std::option::Option::<&#zbus::message::Header<'_>>::cloned(header);
+                    }),
                     _ => Some(quote! { let #header_arg = message.header(); }),
                 };
             } else if signal_context || signal_emitter {
