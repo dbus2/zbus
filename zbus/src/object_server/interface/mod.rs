@@ -59,6 +59,7 @@ pub trait Interface: Any + Send + Sync {
         server: &ObjectServer,
         connection: &Connection,
         header: Option<&message::Header<'_>>,
+        emitter: &SignalEmitter<'_>,
     ) -> Option<fdo::Result<OwnedValue>>;
 
     /// Return all the properties.
@@ -67,6 +68,7 @@ pub trait Interface: Any + Send + Sync {
         object_server: &ObjectServer,
         connection: &Connection,
         header: Option<&message::Header<'_>>,
+        emitter: &SignalEmitter<'_>,
     ) -> fdo::Result<HashMap<String, OwnedValue>>;
 
     /// Set a property value.

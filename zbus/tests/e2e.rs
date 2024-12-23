@@ -269,10 +269,11 @@ impl MyIface {
         #[zbus(header)] header: Option<Header<'_>>,
         #[zbus(connection)] connection: &Connection,
         #[zbus(object_server)] object_server: &ObjectServer,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) -> bool {
         debug!(
-            "`TestHeaderProp` getter called, header: {:?}, connection: {:?}, object_server: {:?}",
-            header, connection, object_server
+            "`TestHeaderProp` getter called, header: {:?}, connection: {:?}, object_server: {:?}, emitter: {:?}",
+            header, connection, object_server, emitter
         );
         header.is_some()
     }

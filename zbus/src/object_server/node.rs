@@ -10,6 +10,7 @@ use zvariant::{ObjectPath, OwnedObjectPath, OwnedValue};
 
 use crate::{
     fdo::{self, Introspectable, ManagedObjects, ObjectManager, Peer, Properties},
+    object_server::SignalEmitter,
     Connection, ObjectServer,
 };
 
@@ -247,12 +248,13 @@ impl Node {
         connection: &Connection,
         interface_name: InterfaceName<'_>,
     ) -> fdo::Result<HashMap<String, OwnedValue>> {
+        let emitter = SignalEmitter::new(connection, self.path.clone())?;
         self.interface_lock(interface_name)
             .expect("Interface was added but not found")
             .instance
             .read()
             .await
-            .get_all(object_server, connection, None)
+            .get_all(object_server, connection, None, &emitter)
             .await
     }
 }

@@ -880,6 +880,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                 object_server: &#zbus::ObjectServer,
                 connection: &#zbus::Connection,
                 header: Option<&#zbus::message::Header<'_>>,
+                signal_emitter: &#zbus::object_server::SignalEmitter<'_>,
             ) -> ::std::option::Option<#zbus::fdo::Result<#zbus::zvariant::OwnedValue>> {
                 match property_name {
                     #get_dispatch
@@ -892,6 +893,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                 object_server: &#zbus::ObjectServer,
                 connection: &#zbus::Connection,
                 header: Option<&#zbus::message::Header<'_>>,
+                signal_emitter: &#zbus::object_server::SignalEmitter<'_>,
             ) -> #zbus::fdo::Result<::std::collections::HashMap<
                 ::std::string::String,
                 #zbus::zvariant::OwnedValue,
@@ -1051,37 +1053,38 @@ fn get_args_from_inputs(
 
                 let signal_context_arg = &input.pat;
 
-                signal_emitter_arg_decl = Some(quote! {
-                    let #signal_context_arg = match hdr.path() {
-                        ::std::option::Option::Some(p) => {
-                            #zbus::object_server::SignalEmitter::new(connection, p).expect("Infallible conversion failed")
-                        }
-                        ::std::option::Option::None => {
-                            let err = #zbus::fdo::Error::UnknownObject("Path Required".into());
-                            return connection.reply_dbus_error(&hdr, err).await;
-                        }
-                    };
-                });
+                signal_emitter_arg_decl = match method_type {
+                    MethodType::Property(_) => Some(
+                        quote! { let #signal_context_arg = ::std::clone::Clone::clone(signal_emitter); },
+                    ),
+                    _ => Some(quote! {
+                        let #signal_context_arg = match hdr.path() {
+                            ::std::option::Option::Some(p) => {
+                                #zbus::object_server::SignalEmitter::new(connection, p).expect("Infallible conversion failed")
+                            }
+                            ::std::option::Option::None => {
+                                let err = #zbus::fdo::Error::UnknownObject("Path Required".into());
+                                return connection.reply_dbus_error(&hdr, err).await;
+                            }
+                        };
+                    }),
+                };
             } else {
                 args_names.push(pat_ident(input).unwrap());
                 tys.push(&input.ty);
             }
         }
 
-        let (hdr_init, msg_init, signal_emitter_arg_decl, args_decl) = match method_type {
-            MethodType::Property(PropertyType::Getter) => {
-                (quote! {}, quote! {}, quote! {}, quote! {})
-            }
+        let (hdr_init, msg_init, args_decl) = match method_type {
+            MethodType::Property(PropertyType::Getter) => (quote! {}, quote! {}, quote! {}),
             MethodType::Property(PropertyType::Setter) => (
                 quote! { let hdr = header.as_ref().unwrap(); },
                 quote! {},
-                quote! { #signal_emitter_arg_decl },
                 quote! {},
             ),
             _ => (
                 quote! { let hdr = message.header(); },
                 quote! { let msg_body = message.body(); },
-                quote! { #signal_emitter_arg_decl },
                 quote! {
                     let (#(#args_names),*): (#(#tys),*) =
                         match msg_body.deserialize() {
