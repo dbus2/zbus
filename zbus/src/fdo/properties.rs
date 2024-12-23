@@ -81,8 +81,8 @@ impl Properties {
             &value,
             server,
             connection,
-            &emitter,
             Some(&header),
+            &emitter,
         ) {
             zbus::object_server::DispatchResult::RequiresMut => {}
             zbus::object_server::DispatchResult::NotFound => {
@@ -103,8 +103,8 @@ impl Properties {
                 &value,
                 server,
                 connection,
-                &emitter,
                 Some(&header),
+                &emitter,
             )
             .await;
         res.unwrap_or_else(|| {

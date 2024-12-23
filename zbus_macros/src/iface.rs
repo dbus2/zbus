@@ -910,8 +910,8 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                 value: &'call #zbus::zvariant::Value<'_>,
                 object_server: &'call #zbus::ObjectServer,
                 connection: &'call #zbus::Connection,
-                signal_emitter: &'call #zbus::object_server::SignalEmitter<'_>,
                 header: Option<&'call #zbus::message::Header<'_>>,
+                signal_emitter: &'call #zbus::object_server::SignalEmitter<'_>,
             ) -> #zbus::object_server::DispatchResult<'call> {
                 match property_name {
                     #set_dispatch
@@ -925,8 +925,8 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                 value: &#zbus::zvariant::Value<'_>,
                 object_server: &#zbus::ObjectServer,
                 connection: &#zbus::Connection,
-                signal_emitter: &#zbus::object_server::SignalEmitter<'_>,
                 header: Option<&#zbus::message::Header<'_>>,
+                signal_emitter: &#zbus::object_server::SignalEmitter<'_>,
             ) -> ::std::option::Option<#zbus::fdo::Result<()>> {
                 match property_name {
                     #set_mut_dispatch
