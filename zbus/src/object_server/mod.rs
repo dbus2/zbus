@@ -147,7 +147,7 @@ impl ObjectServer {
         if added {
             if name == ObjectManager::name() {
                 // Just added an object manager. Need to signal all managed objects under it.
-                let ctxt = SignalEmitter::new(&self.connection(), path)?;
+                let emitter = SignalEmitter::new(&self.connection(), path)?;
                 let objects = node.get_managed_objects(self, &self.connection()).await?;
                 for (path, owned_interfaces) in objects {
                     let interfaces = owned_interfaces
@@ -160,10 +160,10 @@ impl ObjectServer {
                             Ok((i.into(), props?))
                         })
                         .collect::<Result<_>>()?;
-                    ObjectManager::interfaces_added(&ctxt, path.into(), interfaces).await?;
+                    ObjectManager::interfaces_added(&emitter, path.into(), interfaces).await?;
                 }
             } else if let Some(manager_path) = manager_path {
-                let ctxt = SignalEmitter::new(&self.connection(), manager_path.clone())?;
+                let emitter = SignalEmitter::new(&self.connection(), manager_path.clone())?;
                 let mut interfaces = HashMap::new();
                 let owned_props = node
                     .get_properties(self, &self.connection(), name.clone())
@@ -174,7 +174,7 @@ impl ObjectServer {
                     .collect::<Result<_>>()?;
                 interfaces.insert(name, props);
 
-                ObjectManager::interfaces_added(&ctxt, path, interfaces).await?;
+                ObjectManager::interfaces_added(&emitter, path, interfaces).await?;
             }
         }
 

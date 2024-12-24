@@ -59,6 +59,7 @@ pub trait Interface: Any + Send + Sync {
         server: &ObjectServer,
         connection: &Connection,
         header: Option<&message::Header<'_>>,
+        emitter: &SignalEmitter<'_>,
     ) -> Option<fdo::Result<OwnedValue>>;
 
     /// Return all the properties.
@@ -67,6 +68,7 @@ pub trait Interface: Any + Send + Sync {
         object_server: &ObjectServer,
         connection: &Connection,
         header: Option<&message::Header<'_>>,
+        emitter: &SignalEmitter<'_>,
     ) -> fdo::Result<HashMap<String, OwnedValue>>;
 
     /// Set a property value.
@@ -80,16 +82,16 @@ pub trait Interface: Any + Send + Sync {
         value: &'call Value<'_>,
         object_server: &'call ObjectServer,
         connection: &'call Connection,
-        emitter: &'call SignalEmitter<'_>,
         header: Option<&'call message::Header<'_>>,
+        emitter: &'call SignalEmitter<'_>,
     ) -> DispatchResult<'call> {
         let _ = (
             property_name,
             value,
             object_server,
             connection,
-            emitter,
             header,
+            emitter,
         );
         DispatchResult::RequiresMut
     }
@@ -105,8 +107,8 @@ pub trait Interface: Any + Send + Sync {
         value: &Value<'_>,
         object_server: &ObjectServer,
         connection: &Connection,
-        emitter: &SignalEmitter<'_>,
         header: Option<&Header<'_>>,
+        emitter: &SignalEmitter<'_>,
     ) -> Option<fdo::Result<()>>;
 
     /// Call a method.

@@ -300,8 +300,7 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///   which will be set to `None` if the method is called for reasons other than to respond to an
 ///   external property access.
 /// * `signal_emitter` - This marks the method argument to receive a [`SignalEmitter`] instance,
-///   which is needed for emitting signals the easy way. This argument is not available for property
-///   getters.
+///   which is needed for emitting signals the easy way.
 ///
 /// # Example
 ///

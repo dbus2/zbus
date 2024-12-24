@@ -32,6 +32,7 @@ impl Properties {
         #[zbus(connection)] conn: &Connection,
         #[zbus(object_server)] server: &ObjectServer,
         #[zbus(header)] header: Header<'_>,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) -> Result<OwnedValue> {
         let path = header.path().ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
@@ -46,7 +47,7 @@ impl Properties {
             .instance
             .read()
             .await
-            .get(property_name, server, conn, Some(&header))
+            .get(property_name, server, conn, Some(&header), &emitter)
             .await;
         res.unwrap_or_else(|| {
             Err(Error::UnknownProperty(format!(
@@ -81,8 +82,8 @@ impl Properties {
             &value,
             server,
             connection,
-            &emitter,
             Some(&header),
+            &emitter,
         ) {
             zbus::object_server::DispatchResult::RequiresMut => {}
             zbus::object_server::DispatchResult::NotFound => {
@@ -103,8 +104,8 @@ impl Properties {
                 &value,
                 server,
                 connection,
-                &emitter,
                 Some(&header),
+                &emitter,
             )
             .await;
         res.unwrap_or_else(|| {
@@ -121,6 +122,7 @@ impl Properties {
         #[zbus(object_server)] server: &ObjectServer,
         #[zbus(connection)] connection: &Connection,
         #[zbus(header)] header: Header<'_>,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) -> Result<HashMap<String, OwnedValue>> {
         let path = header.path().ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
@@ -135,7 +137,7 @@ impl Properties {
             .instance
             .read()
             .await
-            .get_all(server, connection, Some(&header))
+            .get_all(server, connection, Some(&header), &emitter)
             .await?;
         Ok(res)
     }
