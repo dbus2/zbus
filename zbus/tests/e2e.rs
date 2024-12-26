@@ -266,7 +266,7 @@ impl MyIface {
     #[zbus(property)]
     fn test_header_prop(
         &self,
-        #[zbus(header)] header: Option<Header<'_>>,
+        #[zbus(header)] header: Option<&Header<'_>>,
         #[zbus(connection)] connection: &Connection,
         #[zbus(object_server)] object_server: &ObjectServer,
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
@@ -283,7 +283,7 @@ impl MyIface {
     fn set_test_header_prop(
         &self,
         value: bool,
-        #[zbus(header)] header: Option<Header<'_>>,
+        #[zbus(header)] header: Option<&Header<'_>>,
         #[zbus(connection)] connection: &Connection,
         #[zbus(object_server)] object_server: &ObjectServer,
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,

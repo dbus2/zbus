@@ -1038,9 +1038,7 @@ fn get_args_from_inputs(
                 let header_arg = &input.pat;
 
                 header_arg_decl = match method_type {
-                    MethodType::Property(_) => Some(quote! {
-                        let #header_arg = ::std::option::Option::<&#zbus::message::Header<'_>>::cloned(header);
-                    }),
+                    MethodType::Property(_) => Some(quote! { let #header_arg = header; }),
                     _ => Some(quote! { let #header_arg = message.header(); }),
                 };
             } else if signal_context || signal_emitter {

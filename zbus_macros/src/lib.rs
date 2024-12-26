@@ -296,7 +296,7 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// * `connection` - This marks the method argument to receive a reference to the [`Connection`] on
 ///   which the method call was received.
 /// * `header` - This marks the method argument to receive the message header associated with the
-///   D-Bus method call being handled. For property methods, this will be an `Option<Header<'_>>`,
+///   D-Bus method call being handled. For property methods, this will be an `Option<&Header<'_>>`,
 ///   which will be set to `None` if the method is called for reasons other than to respond to an
 ///   external property access.
 /// * `signal_emitter` - This marks the method argument to receive a [`SignalEmitter`] instance,
