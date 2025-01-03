@@ -26,7 +26,7 @@ Same rules apply here as for bug reports and feature requests. Plus:
   [this excellent blog post](https://www.aleksandrhovhannisyan.com/blog/atomic-git-commits/) for
   more information, including the rationale. For larger changes addressing several packages
   consider splitting your pull request, using a single commit for each package changed.
-* Please try your best to follow [these guidelines](https://wiki.gnome.org/Git/CommitMessages) for
+* Please try your best to follow [these guidelines](https://handbook.gnome.org/development/commit-messages.html) for
   commit messages.
 * We also prefer adding [emoji prefixes to commit messages](https://gitmoji.carloscuesta.me/). Since
   the `gitmoji` CLI tool can be very [slow](https://github.com/zeenix/gimoji#rationale), we

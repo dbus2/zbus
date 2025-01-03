@@ -479,7 +479,12 @@ fn format_generated_code(generated_code: &str) -> std::io::Result<String> {
     writeln!(rustfmt_stdin)?;
     rustfmt_stdin.write_all(generated_code.as_bytes())?;
 
-    process.wait()?;
+    let exit_status = process.wait()?;
+    if !exit_status.success() {
+        eprintln!("`rustfmt` did not exit successfully. Continuing with unformatted code.");
+        return Ok(generated_code.to_string());
+    }
+
     let mut formatted = String::new();
     rustfmt_stdout.read_to_string(&mut formatted)?;
 
