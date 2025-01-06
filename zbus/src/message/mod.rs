@@ -1,5 +1,5 @@
 //! D-Bus Message.
-use std::{fmt, sync::Arc};
+use std::{borrow::Cow, fmt, sync::Arc};
 
 use static_assertions::assert_impl_all;
 use zbus_names::{ErrorName, InterfaceName, MemberName};
@@ -176,7 +176,7 @@ impl Message {
             reply_serial: quick_fields.reply_serial(),
             destination: quick_fields.destination(self),
             sender: quick_fields.sender(self),
-            signature: quick_fields.signature().clone(),
+            signature: Cow::Borrowed(quick_fields.signature()),
             unix_fds: quick_fields.unix_fds(),
         };
 

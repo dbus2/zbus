@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     io::{Cursor, Write},
     sync::Arc,
 };
@@ -231,7 +232,7 @@ impl<'a> Builder<'a> {
         let ctxt = dbus_context!(self, 0);
         let mut header = self.header;
 
-        header.fields_mut().signature = signature;
+        header.fields_mut().signature = Cow::Owned(signature);
 
         let body_len_u32 = body_size.size().try_into().map_err(|_| Error::ExcessData)?;
         header.primary_mut().set_body_len(body_len_u32);
@@ -285,7 +286,7 @@ impl<'m> From<Header<'m>> for Builder<'m> {
     fn from(mut header: Header<'m>) -> Self {
         // Signature and Fds are added by body* methods.
         let fields = header.fields_mut();
-        fields.signature = Signature::Unit;
+        fields.signature = Cow::Owned(Signature::Unit);
         fields.unix_fds = None;
 
         Self { header }
