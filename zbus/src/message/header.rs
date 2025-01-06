@@ -329,7 +329,7 @@ static SERIAL_NUM: AtomicU32 = AtomicU32::new(0);
 mod tests {
     use crate::message::{Fields, Header, PrimaryHeader, Type};
 
-    use std::error::Error;
+    use std::{borrow::Cow, error::Error};
     use test_log::test;
     use zbus_names::{InterfaceName, MemberName};
     use zvariant::{ObjectPath, Signature};
@@ -361,7 +361,7 @@ mod tests {
         f.error_name = Some("org.zbus.Error".try_into()?);
         f.destination = Some(":1.11".try_into()?);
         f.reply_serial = Some(88.try_into()?);
-        f.signature = "say".try_into().unwrap();
+        f.signature = Cow::Owned("say".try_into().unwrap());
         f.unix_fds = Some(12);
         let h = Header::new(PrimaryHeader::new(Type::MethodReturn, 77), f);
 
