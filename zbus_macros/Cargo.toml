@@ -7,7 +7,7 @@ authors = [
     "Zeeshan Ali Khan <zeeshanak@gnome.org>",
 ]
 edition = "2021"
-rust-version = "1.80"
+rust-version = { workspace = true }
 
 description = "proc-macros for zbus"
 repository = "https://github.com/dbus2/zbus/"
