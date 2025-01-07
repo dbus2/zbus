@@ -15,6 +15,9 @@ resolver = "2"
 # This optional cfg flag is used by tokio code to set task name
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tokio_unstable)'] }
 
+[workspace.package]
+rust-version = "1.80"
+
 [profile.bench]
 debug = true
 strip = "none"
