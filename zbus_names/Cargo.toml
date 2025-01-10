@@ -2,13 +2,13 @@
 name = "zbus_names"
 version = "4.1.0"
 authors = ["Zeeshan Ali Khan <zeeshanak@gnome.org>"]
-edition = "2021"
+edition = { workspace = true }
 rust-version = { workspace = true }
 
 description = "A collection of D-Bus bus names types"
-repository = "https://github.com/dbus2/zbus/"
+repository = { workspace = true }
 keywords = ["D-Bus", "DBus", "IPC"]
-license = "MIT"
+license = { workspace = true }
 categories = ["os::unix-apis"]
 readme = "README.md"
 

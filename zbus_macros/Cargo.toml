@@ -6,13 +6,13 @@ authors = [
     "Marc-André Lureau <marcandre.lureau@redhat.com>",
     "Zeeshan Ali Khan <zeeshanak@gnome.org>",
 ]
-edition = "2021"
+edition = { workspace = true }
 rust-version = { workspace = true }
 
 description = "proc-macros for zbus"
-repository = "https://github.com/dbus2/zbus/"
+repository = { workspace = true }
 keywords = ["D-Bus", "DBus", "IPC"]
-license = "MIT"
+license = { workspace = true }
 categories = ["data-structures", "encoding", "parsing"]
 readme = "README.md"
 

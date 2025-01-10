@@ -2,13 +2,13 @@
 name = "zbus_xml"
 version = "5.0.1"
 authors = ["Zeeshan Ali Khan <zeeshanak@gnome.org>"]
-edition = "2021"
+edition = { workspace = true }
 rust-version = { workspace = true }
 
 description = "API to handle D-Bus introspection XML"
-repository = "https://github.com/dbus2/zbus/"
+repository = { workspace = true }
 keywords = ["D-Bus", "DBus", "IPC", "XML"]
-license = "MIT"
+license = { workspace = true }
 categories = ["parsing"]
 readme = "README.md"
 
