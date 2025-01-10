@@ -2246,7 +2246,7 @@ dependencies = [
 
 [[package]]
 name = "zvariant"
-version = "5.1.0"
+version = "5.2.0"
 dependencies = [
  "arrayvec",
  "camino",
@@ -2271,7 +2271,7 @@ dependencies = [
 
 [[package]]
 name = "zvariant_derive"
-version = "5.1.0"
+version = "5.2.0"
 dependencies = [
  "enumflags2",
  "proc-macro-crate",
