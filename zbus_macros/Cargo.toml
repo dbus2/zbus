@@ -32,7 +32,7 @@ quote = "1.0.36"
 proc-macro-crate = "3.2.0"
 zvariant = { path = "../zvariant", version = "5.0.0", default-features = false }
 zbus_names = { path = "../zbus_names", version = "4.0" }
-zvariant_utils = { path = "../zvariant_utils", version = "3.0.0" }
+zvariant_utils = { path = "../zvariant_utils", version = "3.1.0" }
 
 [dev-dependencies]
 zbus = { path = "../zbus" }
