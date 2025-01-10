@@ -5,13 +5,13 @@ authors = [
     "Zeeshan Ali Khan <zeeshanak@gnome.org>",
     "turbocooler <turbocooler@cocaine.ninja>",
 ]
-edition = "2021"
+edition = { workspace = true }
 rust-version = { workspace = true }
 
 description = "Various utilities used internally by the zvariant crate."
-repository = "https://github.com/dbus2/zbus/"
+repository = { workspace = true }
 keywords = ["D-Bus", "DBus", "IPC", "GVariant"]
-license = "MIT"
+license = { workspace = true }
 categories = ["data-structures", "encoding", "parsing"]
 readme = "README.md"
 

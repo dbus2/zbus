@@ -9,14 +9,14 @@ authors = [
     "Tim Small <tim@seoss.co.uk>",
     "Zeeshan Ali Khan <zeeshanak@gnome.org>",
 ]
-edition = "2021"
+edition = { workspace = true }
 rust-version = { workspace = true }
 
 description = "D-Bus XML interface code generator"
-repository = "https://github.com/dbus2/zbus/"
+repository = { workspace = true }
 documentation = "https://dbus2.github.io/zbus/"
 keywords = ["D-Bus", "DBus", "IPC"]
-license = "MIT"
+license = { workspace = true }
 categories = ["os::unix-apis", "development-tools"]
 readme = "README.md"
 
