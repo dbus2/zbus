@@ -32,7 +32,7 @@ pub struct Executor<'a> {
     phantom: PhantomData<&'a ()>,
 }
 
-impl<'a> Executor<'a> {
+impl Executor<'_> {
     /// Spawns a task onto the executor.
     #[doc(hidden)]
     pub fn spawn<T: Send + 'static>(

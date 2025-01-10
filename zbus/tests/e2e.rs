@@ -603,7 +603,7 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
 
     proxy.ping().await?;
     proxy.set_test_header_prop(true).await?;
-    assert_eq!(proxy.test_header_prop().await?, true);
+    assert!(proxy.test_header_prop().await?);
     assert_eq!(proxy.count().await?, 1);
     assert_eq!(proxy.cached_count()?, None);
 
