@@ -1,6 +1,6 @@
 [package]
 name = "zbus_names"
-version = "4.1.0"
+version = "4.1.1"
 authors = ["Zeeshan Ali Khan <zeeshanak@gnome.org>"]
 edition = { workspace = true }
 rust-version = { workspace = true }
