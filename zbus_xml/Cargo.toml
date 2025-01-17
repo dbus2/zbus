@@ -1,6 +1,6 @@
 [package]
 name = "zbus_xml"
-version = "5.0.1"
+version = "5.0.2"
 authors = ["Zeeshan Ali Khan <zeeshanak@gnome.org>"]
 edition = { workspace = true }
 rust-version = { workspace = true }
