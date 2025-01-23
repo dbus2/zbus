@@ -693,7 +693,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                     get_dispatch.extend(q);
 
                     let q = if is_fallible_property {
-                        quote!(
+                        quote!({
                             #args_from_msg
                             if let Ok(prop) = self.#ident(#args_names)#method_await {
                             props.insert(
@@ -705,9 +705,9 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                                 )
                                 .map_err(|e| #zbus::fdo::Error::Failed(e.to_string()))?,
                             );
-                        })
+                        }})
                     } else {
-                        quote!(
+                        quote!({
                             #args_from_msg
                             props.insert(
                         ::std::string::ToString::to_string(#member_name),
@@ -717,7 +717,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                             ),
                         )
                         .map_err(|e| #zbus::fdo::Error::Failed(e.to_string()))?,
-                    );)
+                    );})
                     };
 
                     get_all.extend(q);
