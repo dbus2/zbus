@@ -290,9 +290,9 @@ pub fn create_proxy(
                 /// Creates a new proxy with the given service destination and path.
                 pub #usage fn new<D, P>(conn: &#connection, destination: D, path: P) -> #zbus::Result<#proxy_name<'p>>
                 where
-                    D: ::std::convert::TryInto<#zbus::names::BusName<'static>>,
+                    D: ::std::convert::TryInto<#zbus::names::BusName<'p>>,
                     D::Error: ::std::convert::Into<#zbus::Error>,
-                    P: ::std::convert::TryInto<#zbus::zvariant::ObjectPath<'static>>,
+                    P: ::std::convert::TryInto<#zbus::zvariant::ObjectPath<'p>>,
                     P::Error: ::std::convert::Into<#zbus::Error>,
                 {
                     let obj_path = path.try_into().map_err(::std::convert::Into::into)?;
@@ -309,7 +309,7 @@ pub fn create_proxy(
                 /// Creates a new proxy with the given destination, and the default path.
                 pub #usage fn new<D>(conn: &#connection, destination: D) -> #zbus::Result<#proxy_name<'p>>
                 where
-                    D: ::std::convert::TryInto<#zbus::names::BusName<'static>>,
+                    D: ::std::convert::TryInto<#zbus::names::BusName<'p>>,
                     D::Error: ::std::convert::Into<#zbus::Error>,
                 {
                     let obj_dest = destination.try_into().map_err(::std::convert::Into::into)?;
@@ -324,7 +324,7 @@ pub fn create_proxy(
                 /// Creates a new proxy with the given path, and the default destination.
                 pub #usage fn new<P>(conn: &#connection, path: P) -> #zbus::Result<#proxy_name<'p>>
                 where
-                    P: ::std::convert::TryInto<#zbus::zvariant::ObjectPath<'static>>,
+                    P: ::std::convert::TryInto<#zbus::zvariant::ObjectPath<'p>>,
                     P::Error: ::std::convert::Into<#zbus::Error>,
                 {
                     let obj_path = path.try_into().map_err(::std::convert::Into::into)?;
