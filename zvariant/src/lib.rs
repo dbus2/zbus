@@ -800,7 +800,7 @@ mod tests {
         // GVariant format now
         #[cfg(feature = "gvariant")]
         {
-            use rand::{distributions::Alphanumeric, thread_rng, Rng};
+            use rand::{distr::Alphanumeric, rng, Rng};
 
             let ctxt = Context::new_gvariant(LE, 0);
             let gv_encoded = to_bytes(ctxt, &v).unwrap();
@@ -837,7 +837,7 @@ mod tests {
                 panic!();
             }
 
-            let mut rng = thread_rng();
+            let mut rng = rng();
             // Let's test GVariant ser/de of a 254 byte array with variable-width elements as to
             // ensure no problems with non-normal BS of GVariant.
             let as_ = vec![
