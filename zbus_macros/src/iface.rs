@@ -783,7 +783,11 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                             #args_from_msg
                             let reply = self.#ident(#args_names)#method_await;
                             let hdr = message.header();
-                            #reply
+                            if hdr.primary().flags().contains(zbus::message::Flags::NoReplyExpected) {
+                                Ok(())
+                            } else {
+                                #reply
+                            }
                         };
                         #zbus::object_server::DispatchResult::Async(::std::boxed::Box::pin(async move {
                             future.await
