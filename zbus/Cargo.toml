@@ -68,7 +68,7 @@ static_assertions = "1.1.0"
 async-trait = "0.1.80"
 xdg-home = "1.1.0"
 tracing = "0.1.40"
-winnow = "0.6"
+winnow = "0.7"
 
 # Optional and target-specific dependencies.
 
