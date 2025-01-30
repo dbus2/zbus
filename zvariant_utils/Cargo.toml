@@ -25,7 +25,7 @@ syn = { version = "2.0.64", features = ["extra-traits", "full"] }
 quote = "1.0.36"
 static_assertions = "1.1.0"
 serde = "1.0.200"
-winnow = "0.6"
+winnow = "0.7"
 
 [dev-dependencies]
 zvariant = { path = "../zvariant" }
