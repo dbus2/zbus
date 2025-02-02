@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::BuildHasher};
+use std::{borrow::Cow, collections::HashMap, hash::BuildHasher, sync::Arc};
 
 #[cfg(feature = "gvariant")]
 use crate::Maybe;
@@ -48,6 +48,9 @@ into_value_from_both!(u64, U64);
 into_value_from_both!(i64, I64);
 into_value_from_both!(f32, F64);
 into_value_from_both!(f64, F64);
+
+into_value!(Arc<str>, Str);
+into_value!(Cow<'a, str>, Str);
 
 into_value_from_both!(&'a str, Str);
 into_value_from_both!(Str<'a>, Str);
