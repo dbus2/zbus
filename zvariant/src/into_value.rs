@@ -51,6 +51,7 @@ into_value_from_both!(f64, F64);
 
 into_value!(Arc<str>, Str);
 into_value!(Cow<'a, str>, Str);
+into_value_from_both!(String, Str);
 
 into_value_from_both!(&'a str, Str);
 into_value_from_both!(Str<'a>, Str);
@@ -80,12 +81,6 @@ try_into_value_from_ref!(Maybe<'a>, Maybe);
 into_value!(Fd<'a>, Fd);
 #[cfg(unix)]
 try_into_value_from_ref!(Fd<'a>, Fd);
-
-impl From<String> for Value<'_> {
-    fn from(v: String) -> Self {
-        Value::Str(crate::Str::from(v))
-    }
-}
 
 impl<'v, 's: 'v, T> From<T> for Value<'v>
 where
@@ -133,12 +128,6 @@ where
 {
     fn from(value: HashMap<K, V, H>) -> Self {
         Self::Dict(value.into())
-    }
-}
-
-impl<'v> From<&'v String> for Value<'v> {
-    fn from(v: &'v String) -> Value<'v> {
-        Value::Str(v.into())
     }
 }
 
