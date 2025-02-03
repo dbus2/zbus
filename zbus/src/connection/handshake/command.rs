@@ -80,7 +80,7 @@ impl FromStr for Command {
             Some("ERROR") => Command::Error(s.into()),
             Some("NEGOTIATE_UNIX_FD") => Command::NegotiateUnixFD,
             Some("REJECTED") => {
-                let mechs = words.map(|s| s.to_owned()).collect();
+                let mechs = words.collect::<Vec<_>>().join(" ").into();
                 Command::Rejected(mechs)
             }
             Some("OK") => {
