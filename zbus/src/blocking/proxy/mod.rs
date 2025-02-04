@@ -1,7 +1,7 @@
 //! The client-side proxy API.
 
 use enumflags2::BitFlags;
-use futures_util::StreamExt;
+use futures_lite::StreamExt;
 use static_assertions::assert_impl_all;
 use std::{fmt, ops::Deref};
 use zbus_names::{BusName, InterfaceName, MemberName, UniqueName};

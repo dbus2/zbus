@@ -524,11 +524,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                         quote!(self.#ident(#args_names)#method_await)
                     } else if is_async {
                         quote!(
-                                #zbus::export::futures_util::future::FutureExt::map(
-                                    self.#ident(#args_names),
-                                    ::std::result::Result::Ok,
-                                )
-                                .await
+                            ::std::result::Result::Ok(self.#ident(#args_names).await)
                         )
                     } else {
                         quote!(

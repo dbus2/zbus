@@ -14,7 +14,7 @@ use super::{Socket, Split};
 #[async_trait::async_trait]
 impl ReadHalf for Arc<Async<TcpStream>> {
     async fn recvmsg(&mut self, buf: &mut [u8]) -> RecvmsgResult {
-        match futures_util::AsyncReadExt::read(&mut self.as_ref(), buf).await {
+        match futures_lite::AsyncReadExt::read(&mut self.as_ref(), buf).await {
             Err(e) => Err(e),
             Ok(len) => {
                 #[cfg(unix)]
@@ -69,7 +69,7 @@ impl WriteHalf for Arc<Async<TcpStream>> {
             ));
         }
 
-        futures_util::AsyncWriteExt::write(&mut self.as_ref(), buf).await
+        futures_lite::AsyncWriteExt::write(&mut self.as_ref(), buf).await
     }
 
     async fn close(&mut self) -> io::Result<()> {

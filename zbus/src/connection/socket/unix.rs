@@ -208,7 +208,7 @@ impl super::WriteHalf for tokio::net::unix::OwnedWriteHalf {
 #[async_trait::async_trait]
 impl super::ReadHalf for Arc<Async<UnixStream>> {
     async fn recvmsg(&mut self, buf: &mut [u8]) -> super::RecvmsgResult {
-        match futures_util::AsyncReadExt::read(&mut self.as_ref(), buf).await {
+        match futures_lite::AsyncReadExt::read(&mut self.as_ref(), buf).await {
             Err(e) => Err(e),
             Ok(len) => {
                 #[cfg(unix)]
@@ -247,7 +247,7 @@ impl super::WriteHalf for Arc<Async<UnixStream>> {
         buf: &[u8],
         #[cfg(unix)] _fds: &[BorrowedFd<'_>],
     ) -> std::io::Result<usize> {
-        futures_util::AsyncWriteExt::write(&mut self.as_ref(), buf).await
+        futures_lite::AsyncWriteExt::write(&mut self.as_ref(), buf).await
     }
 
     async fn close(&mut self) -> std::io::Result<()> {

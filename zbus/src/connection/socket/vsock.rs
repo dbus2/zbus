@@ -5,7 +5,7 @@ use super::{Socket, Split};
 #[async_trait::async_trait]
 impl super::ReadHalf for std::sync::Arc<async_io::Async<vsock::VsockStream>> {
     async fn recvmsg(&mut self, buf: &mut [u8]) -> super::RecvmsgResult {
-        match futures_util::AsyncReadExt::read(&mut self.as_ref(), buf).await {
+        match futures_lite::AsyncReadExt::read(&mut self.as_ref(), buf).await {
             Err(e) => Err(e),
             Ok(len) => {
                 #[cfg(unix)]
@@ -40,7 +40,7 @@ impl super::WriteHalf for std::sync::Arc<async_io::Async<vsock::VsockStream>> {
             ));
         }
 
-        futures_util::AsyncWriteExt::write(&mut self.as_ref(), buf).await
+        futures_lite::AsyncWriteExt::write(&mut self.as_ref(), buf).await
     }
 
     async fn close(&mut self) -> std::io::Result<()> {

@@ -60,7 +60,7 @@ impl TryFrom<&mut Child> for Command {
 #[async_trait::async_trait]
 impl ReadHalf for ChildStdout {
     async fn recvmsg(&mut self, buf: &mut [u8]) -> RecvmsgResult {
-        match futures_util::AsyncReadExt::read(&mut self, buf).await {
+        match futures_lite::AsyncReadExt::read(&mut self, buf).await {
             Err(e) => Err(e),
             Ok(len) => {
                 #[cfg(unix)]
@@ -104,11 +104,11 @@ impl WriteHalf for ChildStdin {
             ));
         }
 
-        futures_util::AsyncWriteExt::write(&mut self, buf).await
+        futures_lite::AsyncWriteExt::write(&mut self, buf).await
     }
 
     async fn close(&mut self) -> io::Result<()> {
-        futures_util::AsyncWriteExt::close(&mut self).await
+        futures_lite::AsyncWriteExt::close(&mut self).await
     }
 }
 
