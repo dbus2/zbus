@@ -1,7 +1,7 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens};
 use syn::{
-    spanned::Spanned, Attribute, Data, DataEnum, DeriveInput, Error, Expr, Fields, Generics, Ident,
+    spanned::Spanned, Attribute, Data, DataEnum, DeriveInput, Error, Fields, Generics, Ident,
     Lifetime, LifetimeParam,
 };
 
@@ -244,20 +244,11 @@ fn impl_enum(
         match variant.fields {
             Fields::Unit => {
                 variant_names.push(&variant.ident);
-                let value = match &variant
+                let value = &variant
                     .discriminant
                     .as_ref()
                     .ok_or_else(|| Error::new(variant.span(), "expected `Name = Value` variants"))?
-                    .1
-                {
-                    Expr::Lit(lit_exp) => &lit_exp.lit,
-                    _ => {
-                        return Err(Error::new(
-                            variant.span(),
-                            "expected `Name = Value` variants",
-                        ))
-                    }
-                };
+                    .1;
                 variant_values.push(value);
             }
             _ => return Err(Error::new(variant.span(), "must be a unit variant")),
@@ -315,7 +306,7 @@ fn impl_enum(
 
                 ::std::result::Result::Ok(match v {
                     #(
-                        #variant_values => #name::#variant_names
+                        x if x == #name::#variant_names as #repr => #name::#variant_names
                      ),*,
                     _ => return ::std::result::Result::Err(#zv::Error::IncorrectType),
                 })
