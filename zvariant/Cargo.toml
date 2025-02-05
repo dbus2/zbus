@@ -1,6 +1,6 @@
 [package]
 name = "zvariant"
-version = "5.2.0"
+version = "5.3.0"
 authors = ["Zeeshan Ali Khan <zeeshanak@gnome.org>"]
 edition = { workspace = true }
 rust-version = { workspace = true }
@@ -22,7 +22,7 @@ option-as-array = []
 camino = ["dep:camino"]
 
 [dependencies]
-zvariant_derive = { version = "=5.2.0", path = "../zvariant_derive" }
+zvariant_derive = { version = "=5.3.0", path = "../zvariant_derive" }
 zvariant_utils = { version = "3.1.0", path = "../zvariant_utils" }
 endi = "1.1.0"
 serde = { version = "1.0.200", features = ["derive"] }
