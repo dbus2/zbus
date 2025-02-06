@@ -1,4 +1,4 @@
-use futures_util::StreamExt;
+use futures_lite::StreamExt;
 use static_assertions::assert_impl_all;
 
 use crate::{

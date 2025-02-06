@@ -5,8 +5,7 @@ use std::{
 };
 
 use async_broadcast::Receiver as ActiveReceiver;
-use futures_core::stream;
-use futures_util::stream::FusedStream;
+use futures_core::stream::{self, FusedStream};
 use ordered_stream::{OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 use tracing::warn;

@@ -3,7 +3,7 @@
 use enumflags2::{bitflags, BitFlags};
 use event_listener::{Event, EventListener};
 use futures_core::{ready, stream};
-use futures_util::{future::Either, stream::Map};
+use futures_lite::stream::Map;
 use ordered_stream::{join as join_streams, FromFuture, Join, OrderedStream, PollResult};
 use static_assertions::assert_impl_all;
 use std::{
@@ -401,7 +401,7 @@ impl PropertiesCache {
         interface: InterfaceName<'static>,
         uncached_properties: HashSet<zvariant::Str<'static>>,
     ) -> Result<()> {
-        use futures_util::StreamExt;
+        use futures_lite::StreamExt;
 
         trace!("Listening for property changes on {interface}...");
         while let Some(update) = prop_changes.next().await {
@@ -1004,7 +1004,7 @@ impl<'a> Proxy<'a> {
     /// Note that zbus doesn't queue the updates. If the listener is slower than the receiver, it
     /// will only receive the last update.
     pub async fn receive_owner_changed(&self) -> Result<OwnerChangedStream<'a>> {
-        use futures_util::StreamExt;
+        use futures_lite::StreamExt;
         let dbus_proxy = fdo::DBusProxy::builder(self.connection())
             .cache_properties(CacheProperties::No)
             .build()
@@ -1100,8 +1100,7 @@ impl stream::Stream for OwnerChangedStream<'_> {
     type Item = Option<UniqueName<'static>>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        use futures_util::StreamExt;
-        self.get_mut().stream.poll_next_unpin(cx)
+        Pin::new(&mut self.get_mut().stream).poll_next(cx)
     }
 }
 
@@ -1355,6 +1354,11 @@ where
 
     /// The reference to the underlying `zbus::Proxy`.
     fn inner(&self) -> &Proxy<'c>;
+}
+
+enum Either<L, R> {
+    Left(L),
+    Right(R),
 }
 
 #[cfg(test)]

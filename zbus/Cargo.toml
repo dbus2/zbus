@@ -36,7 +36,6 @@ async-io = [
   # features for only specific target OS: https://github.com/rust-lang/cargo/issues/1197.
   "async-process",
   "blocking",
-  "futures-util/io",
 ]
 tokio = ["dep:tokio"]
 vsock = ["dep:vsock", "dep:async-io"]
@@ -56,7 +55,7 @@ serde = { version = "1.0.200", features = ["derive"] }
 serde_repr = "0.1.19"
 enumflags2 = { version = "0.7.9", features = ["serde"] }
 futures-core = "0.3.30"
-futures-util = { version = "0.3.30", default-features = false, features = [
+futures-lite = { version = "2.6.0", default-features = false, features = [
   "std",
 ] }
 async-broadcast = "0.7.0"
@@ -121,7 +120,7 @@ async-recursion = "1.1.1"
 [dev-dependencies]
 zbus_xml = { path = "../zbus_xml", version = "5.0.0" }
 doc-comment = "0.3.3"
-futures-util = "0.3.30" # activate default features
+futures-util = { version = "0.3.30", features = ["io"] }
 ntest = "0.9.2"
 test-log = { version = "0.2.16", features = [
   "trace",

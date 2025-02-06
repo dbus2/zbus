@@ -17,7 +17,7 @@ use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName,
 use zvariant::ObjectPath;
 
 use futures_core::Future;
-use futures_util::StreamExt;
+use futures_lite::StreamExt;
 
 use crate::{
     async_lock::{Mutex, Semaphore, SemaphorePermit},
@@ -1541,14 +1541,14 @@ mod tests {
 #[cfg(feature = "p2p")]
 #[cfg(test)]
 mod p2p_tests {
-    use futures_util::stream::TryStreamExt;
+    use event_listener::Event;
+    use futures_util::TryStreamExt;
     use ntest::timeout;
     use test_log::test;
     use zvariant::{Endian, NATIVE_ENDIAN};
 
-    use crate::{conn::AuthMechanism, Guid};
-
-    use super::*;
+    use super::{socket, Builder, Connection};
+    use crate::{conn::AuthMechanism, Guid, Message, MessageStream, Result};
 
     // Same numbered client and server are already paired up.
     async fn test_p2p(
@@ -1740,6 +1740,9 @@ mod p2p_tests {
         feature = "tokio-vsock"
     ))]
     async fn test_vsock_connect() -> Result<(Connection, Connection)> {
+        #[cfg(feature = "tokio-vsock")]
+        use futures_util::StreamExt;
+
         let guid = Guid::generate();
 
         #[cfg(all(feature = "vsock", not(feature = "tokio")))]
@@ -1814,6 +1817,7 @@ mod p2p_tests {
 
     #[cfg(feature = "tokio-vsock")]
     async fn vsock_p2p_pipe() -> Result<(Connection, Connection)> {
+        use futures_util::StreamExt;
         use tokio_vsock::VsockAddr;
 
         let guid = Guid::generate();
