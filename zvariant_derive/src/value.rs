@@ -4,6 +4,7 @@ use syn::{
     spanned::Spanned, Attribute, Data, DataEnum, DeriveInput, Error, Fields, Generics, Ident,
     Lifetime, LifetimeParam,
 };
+use zvariant_utils::macros;
 
 use crate::utils::*;
 
@@ -123,32 +124,70 @@ fn impl_struct(
                 .map(|field| field.ident.to_token_stream())
                 .collect();
             let (from_value_impl, into_value_impl) = match signature {
-                Some(signature) if signature == "a{sv}" => (
+                Some(signature) if signature == "a{sv}" => {
                     // User wants the type to be encoded as a dict.
                     // FIXME: Not the most efficient implementation.
-                    quote! {
-                        let mut fields = <::std::collections::HashMap::<::std::string::String, #zv::Value>>::try_from(value)?;
+                    let (fields_init, entries_init): (TokenStream, TokenStream) = fields
+                        .iter()
+                        .map(|field| {
+                            let field_name = field.ident.to_token_stream();
+                            let convert = if macros::ty_is_option(&field.ty) {
+                                quote! {
+                                    .map(#zv::Value::downcast)
+                                    .transpose()?
+                                }
+                            } else {
+                                quote! {
+                                    .ok_or_else(|| #zv::Error::IncorrectType)?
+                                    .downcast()?
+                                }
+                            };
 
-                        ::std::result::Result::Ok(Self {
-                            #(
-                                #field_names:
-                                    fields
-                                        .remove(stringify!(#field_names))
-                                        .ok_or_else(|| #zv::Error::IncorrectType)?
-                                        .downcast()?
-                            ),*
+                            let fields_init = quote! {
+                                #field_name: fields
+                                    .remove(stringify!(#field_name))
+                                    #convert,
+                            };
+                            let entries_init = if macros::ty_is_option(&field.ty) {
+                                quote! {
+                                    if let Some(v) = s.#field_name {
+                                        fields.insert(
+                                            stringify!(#field_name),
+                                            #zv::Value::from(v),
+                                        );
+                                    }
+                                }
+                            } else {
+                                quote! {
+                                    fields.insert(
+                                        stringify!(#field_name),
+                                        #zv::Value::from(s.#field_name),
+                                    );
+                                }
+                            };
+
+                            (fields_init, entries_init)
                         })
-                    },
-                    quote! {
-                        let mut fields = ::std::collections::HashMap::new();
-                        #(
-                            fields.insert(stringify!(#field_names), #zv::Value::from(s.#field_names));
-                        )*
+                        .unzip();
 
-                        <#value_type>::#into_value_method(#zv::Value::from(fields))
-                            #into_value_error_transform
-                    },
-                ),
+                    (
+                        quote! {
+                            let mut fields = <::std::collections::HashMap::<
+                                ::std::string::String,
+                                #zv::Value,
+                            >>::try_from(value)?;
+
+                            ::std::result::Result::Ok(Self { #fields_init })
+                        },
+                        quote! {
+                            let mut fields = ::std::collections::HashMap::new();
+                            #entries_init
+
+                            <#value_type>::#into_value_method(#zv::Value::from(fields))
+                                #into_value_error_transform
+                        },
+                    )
+                }
                 Some(_) | None => (
                     quote! {
                         let mut fields = #zv::Structure::try_from(value)?.into_fields();
