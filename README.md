@@ -114,8 +114,8 @@ right, please [file an issue](https://github.com/dbus2/zbus/issues/new).
 
 ## Portability
 
-Supported targets include Unix, Windows and macOS with Linux as the main (and tested) target.
-Integration tests of zbus crate currently require a session bus running on the build host.
+Supported targets include Unix, Windows and macOS with Linux as the main target. Integration tests
+of zbus crate currently require a session bus running on the build host.
 
 ## License
 
