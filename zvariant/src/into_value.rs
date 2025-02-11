@@ -91,11 +91,11 @@ where
     }
 }
 
-impl<'v, V> From<&'v [V]> for Value<'v>
+impl<'b, 'v, V> From<&'b [V]> for Value<'v>
 where
-    &'v [V]: Into<Array<'v>>,
+    &'b [V]: Into<Array<'v>>,
 {
-    fn from(v: &'v [V]) -> Value<'v> {
+    fn from(v: &'b [V]) -> Value<'v> {
         Value::Array(v.into())
     }
 }
@@ -109,11 +109,11 @@ where
     }
 }
 
-impl<'v, V> From<&'v Vec<V>> for Value<'v>
+impl<'b, 'v, V> From<&'b Vec<V>> for Value<'v>
 where
-    &'v Vec<V>: Into<Array<'v>>,
+    &'b Vec<V>: Into<Array<'v>>,
 {
-    fn from(v: &'v Vec<V>) -> Value<'v> {
+    fn from(v: &'b Vec<V>) -> Value<'v> {
         Value::Array(v.into())
     }
 }
