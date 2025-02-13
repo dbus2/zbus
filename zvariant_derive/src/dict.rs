@@ -196,8 +196,8 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> Result<TokenStream, Erro
                         #( let mut #fields = ::std::default::Default::default(); )*
 
                         // does not check duplicated fields, since those shouldn't exist in stream
-                        while let ::std::option::Option::Some(key) = access.next_key::<&str>()? {
-                            match key {
+                        while let ::std::option::Option::Some(__key) = access.next_key::<&str>()? {
+                            match __key {
                                 #(#entries)*
                             }
                         }
