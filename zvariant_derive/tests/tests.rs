@@ -99,3 +99,16 @@ fn issues_311() {
         pub sinr: Option<i32>,
     }
 }
+
+#[test]
+#[ignore]
+fn issues_1252() {
+    // Issue 1252: Naming a field `key` in a dict struct causes a conflict with variables created by
+    // `DeserializeDict` macro, ending up with a strange error.
+    #[derive(DeserializeDict, Type)]
+    #[zvariant(signature = "a{sv}")]
+    pub struct OwnedProperties {
+        key: String,
+        val: OwnedValue,
+    }
+}
