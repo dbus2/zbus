@@ -1,7 +1,7 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use syn::{punctuated::Punctuated, spanned::Spanned, Data, DeriveInput, Error, Field};
-use zvariant_utils::{case, macros};
+use zvariant_utils::macros;
 
 use crate::utils::*;
 
@@ -10,25 +10,9 @@ fn dict_name_for_field(
     rename_attr: Option<String>,
     rename_all_attr: Option<&str>,
 ) -> Result<String, Error> {
-    if let Some(name) = rename_attr {
-        Ok(name)
-    } else {
-        let ident = f.ident.as_ref().unwrap().to_string();
+    let ident = f.ident.as_ref().unwrap().to_string();
 
-        match rename_all_attr {
-            Some("lowercase") => Ok(ident.to_ascii_lowercase()),
-            Some("UPPERCASE") => Ok(ident.to_ascii_uppercase()),
-            Some("PascalCase") => Ok(case::pascal_or_camel_case(&ident, true)),
-            Some("camelCase") => Ok(case::pascal_or_camel_case(&ident, false)),
-            Some("snake_case") => Ok(case::snake_or_kebab_case(&ident, true)),
-            Some("kebab-case") => Ok(case::snake_or_kebab_case(&ident, false)),
-            None => Ok(ident),
-            Some(other) => Err(Error::new(
-                f.span(),
-                format!("invalid `rename_all` attribute value {other}"),
-            )),
-        }
-    }
+    rename_identifier(ident, f.span(), rename_attr, rename_all_attr)
 }
 
 pub fn expand_serialize_derive(input: DeriveInput) -> Result<TokenStream, Error> {
