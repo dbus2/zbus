@@ -2,7 +2,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens};
 use syn::{
     spanned::Spanned, Attribute, Data, DataEnum, DeriveInput, Error, Fields, Generics, Ident,
-    Lifetime, LifetimeParam,
+    Lifetime, LifetimeParam, Variant,
 };
 use zvariant_utils::macros;
 
@@ -275,24 +275,44 @@ fn impl_enum(
         Some(repr_attr) => repr_attr.parse_args()?,
         None => quote! { u32 },
     };
+    let enum_attrs = EnumAttributes::parse(&attrs)?;
+    let str_enum = enum_attrs
+        .signature
+        .map(|sig| sig == "s")
+        .unwrap_or_default();
 
     let mut variant_names = vec![];
-    let mut variant_values = vec![];
+    let mut str_values = vec![];
     for variant in &data.variants {
+        let variant_attrs = VariantAttributes::parse(&variant.attrs)?;
         // Ensure all variants of the enum are unit type
         match variant.fields {
             Fields::Unit => {
                 variant_names.push(&variant.ident);
-                let value = &variant
-                    .discriminant
-                    .as_ref()
-                    .ok_or_else(|| Error::new(variant.span(), "expected `Name = Value` variants"))?
-                    .1;
-                variant_values.push(value);
+                if str_enum {
+                    let str_value = enum_name_for_variant(
+                        variant,
+                        variant_attrs.rename,
+                        enum_attrs.rename_all.as_ref().map(AsRef::as_ref),
+                    )?;
+                    str_values.push(str_value);
+                }
             }
             _ => return Err(Error::new(variant.span(), "must be a unit variant")),
         }
     }
+
+    let into_val = if str_enum {
+        quote! {
+            match e {
+                #(
+                    #name::#variant_names => #str_values,
+                )*
+            }
+        }
+    } else {
+        quote! { e as #repr }
+    };
 
     let (value_type, into_value) = match value_type {
         ValueType::Value => (
@@ -301,13 +321,7 @@ fn impl_enum(
                 impl ::std::convert::From<#name> for #zv::Value<'_> {
                     #[inline]
                     fn from(e: #name) -> Self {
-                        let u: #repr = match e {
-                            #(
-                                #name::#variant_names => #variant_values
-                            ),*
-                        };
-
-                        <#zv::Value as ::std::convert::From<_>>::from(u).into()
+                        <#zv::Value as ::std::convert::From<_>>::from(#into_val)
                     }
                 }
             },
@@ -320,19 +334,37 @@ fn impl_enum(
 
                     #[inline]
                     fn try_from(e: #name) -> #zv::Result<Self> {
-                        let u: #repr = match e {
-                            #(
-                                #name::#variant_names => #variant_values
-                            ),*
-                        };
-
                         <#zv::OwnedValue as ::std::convert::TryFrom<_>>::try_from(
-                            <#zv::Value as ::std::convert::From<_>>::from(u)
+                            <#zv::Value as ::std::convert::From<_>>::from(#into_val)
                         )
                     }
                 }
             },
         ),
+    };
+
+    let from_val = if str_enum {
+        quote! {
+            let v: #zv::Str = ::std::convert::TryInto::try_into(value)?;
+
+            ::std::result::Result::Ok(match v.as_str() {
+                #(
+                    #str_values => #name::#variant_names,
+                )*
+                _ => return ::std::result::Result::Err(#zv::Error::IncorrectType),
+            })
+        }
+    } else {
+        quote! {
+            let v: #repr = ::std::convert::TryInto::try_into(value)?;
+
+            ::std::result::Result::Ok(match v {
+                #(
+                    x if x == #name::#variant_names as #repr => #name::#variant_names
+                 ),*,
+                _ => return ::std::result::Result::Err(#zv::Error::IncorrectType),
+            })
+        }
     };
 
     Ok(quote! {
@@ -341,17 +373,20 @@ fn impl_enum(
 
             #[inline]
             fn try_from(value: #value_type) -> #zv::Result<Self> {
-                let v: #repr = ::std::convert::TryInto::try_into(value)?;
-
-                ::std::result::Result::Ok(match v {
-                    #(
-                        x if x == #name::#variant_names as #repr => #name::#variant_names
-                     ),*,
-                    _ => return ::std::result::Result::Err(#zv::Error::IncorrectType),
-                })
+                #from_val
             }
         }
 
         #into_value
     })
+}
+
+fn enum_name_for_variant(
+    v: &Variant,
+    rename_attr: Option<String>,
+    rename_all_attr: Option<&str>,
+) -> Result<String, Error> {
+    let ident = v.ident.to_string();
+
+    rename_identifier(ident, v.span(), rename_attr, rename_all_attr)
 }

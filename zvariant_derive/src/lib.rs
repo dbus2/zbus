@@ -382,24 +382,46 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// assert_eq!(s.field2.as_str(), "/blah");
 /// ```
 ///
-/// Enums also supported but currently only simple ones w/ an integer representation:
+/// Enums also supported but currently only with unit variants:
 ///
 /// ```
 /// # use zvariant::{OwnedValue, Value};
 /// #
 /// #[derive(Debug, PartialEq, Value, OwnedValue)]
+/// // Default representation is `u32`.
 /// #[repr(u8)]
 /// enum Enum {
-///     Variant1 = 1,
-///     Variant2 = 2,
+///     Variant1 = 0,
+///     Variant2,
 /// }
 ///
 /// let value = Value::from(Enum::Variant1);
 /// let e = Enum::try_from(value).unwrap();
 /// assert_eq!(e, Enum::Variant1);
+/// assert_eq!(e as u8, 0);
 /// let value = OwnedValue::try_from(Enum::Variant2).unwrap();
 /// let e = Enum::try_from(value).unwrap();
 /// assert_eq!(e, Enum::Variant2);
+/// ```
+///
+/// String-encoded enums are also supported:
+///
+/// ```
+/// # use zvariant::{OwnedValue, Value};
+/// #
+/// #[derive(Debug, PartialEq, Value, OwnedValue)]
+/// #[zvariant(signature = "s")]
+/// enum StrEnum {
+///     Variant1,
+///     Variant2,
+/// }
+///
+/// let value = Value::from(StrEnum::Variant1);
+/// let e = StrEnum::try_from(value).unwrap();
+/// assert_eq!(e, StrEnum::Variant1);
+/// let value = OwnedValue::try_from(StrEnum::Variant2).unwrap();
+/// let e = StrEnum::try_from(value).unwrap();
+/// assert_eq!(e, StrEnum::Variant2);
 /// ```
 ///
 /// # Dictionary encoding
@@ -410,7 +432,7 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 ///
 /// [`Value`]: https://docs.rs/zvariant/latest/zvariant/enum.Value.html
 /// [`Type`]: derive.Type.html#custom-types
-#[proc_macro_derive(Value)]
+#[proc_macro_derive(Value, attributes(zbus, zvariant))]
 pub fn value_macro_derive(input: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(input).unwrap();
     value::expand_derive(ast, value::ValueType::Value)
@@ -425,7 +447,7 @@ pub fn value_macro_derive(input: TokenStream) -> TokenStream {
 /// See [`Value`] documentation for examples.
 ///
 /// [`OwnedValue`]: https://docs.rs/zvariant/latest/zvariant/struct.OwnedValue.html
-#[proc_macro_derive(OwnedValue)]
+#[proc_macro_derive(OwnedValue, attributes(zbus, zvariant))]
 pub fn owned_value_macro_derive(input: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(input).unwrap();
     value::expand_derive(ast, value::ValueType::OwnedValue)
