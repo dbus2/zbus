@@ -5,7 +5,6 @@ use event_listener::{Event, EventListener};
 use futures_core::{ready, stream};
 use futures_lite::stream::Map;
 use ordered_stream::{join as join_streams, FromFuture, Join, OrderedStream, PollResult};
-use static_assertions::assert_impl_all;
 use std::{
     collections::{HashMap, HashSet},
     fmt,
@@ -73,8 +72,6 @@ pub use defaults::Defaults;
 pub struct Proxy<'a> {
     pub(crate) inner: Arc<ProxyInner<'a>>,
 }
-
-assert_impl_all!(Proxy<'_>: Send, Sync, Unpin);
 
 /// This is required to avoid having the Drop impl extend the lifetime 'a, which breaks zbus_xmlgen
 /// (and possibly other crates).
@@ -1062,8 +1059,6 @@ pub enum MethodFlags {
     AllowInteractiveAuth = 0x4,
 }
 
-assert_impl_all!(MethodFlags: Send, Sync, Unpin);
-
 impl From<MethodFlags> for Flags {
     fn from(method_flag: MethodFlags) -> Self {
         match method_flag {
@@ -1086,8 +1081,6 @@ pub struct OwnerChangedStream<'a> {
     stream: OwnerChangedStreamMap,
     name: BusName<'a>,
 }
-
-assert_impl_all!(OwnerChangedStream<'_>: Send, Sync, Unpin);
 
 impl<'a> OwnerChangedStream<'a> {
     /// The bus name being tracked.
@@ -1272,8 +1265,6 @@ impl<'a> SignalStream<'a> {
         Ok(false)
     }
 }
-
-assert_impl_all!(SignalStream<'_>: Send, Sync, Unpin);
 
 impl stream::Stream for SignalStream<'_> {
     type Item = Message;

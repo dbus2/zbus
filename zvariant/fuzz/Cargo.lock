@@ -132,12 +132,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
-name = "static_assertions"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
 name = "syn"
 version = "2.0.86"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -162,7 +156,7 @@ checksum = "4ae48d6208a266e853d946088ed816055e556cc6028c5e8e2b84d9fa5dd7c7f5"
 dependencies = [
  "indexmap",
  "toml_datetime",
- "winnow",
+ "winnow 0.6.20",
 ]
 
 [[package]]
@@ -181,13 +175,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "winnow"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59690dea168f2198d1a3b0cac23b8063efcd11012f10ae4698f284808c8ef603"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "zvariant"
-version = "5.2.0"
+version = "5.4.0"
 dependencies = [
  "endi",
  "serde",
- "static_assertions",
- "winnow",
+ "winnow 0.7.2",
  "zvariant_derive",
  "zvariant_utils",
 ]
@@ -203,7 +205,7 @@ dependencies = [
 
 [[package]]
 name = "zvariant_derive"
-version = "5.2.0"
+version = "5.4.0"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -214,12 +216,11 @@ dependencies = [
 
 [[package]]
 name = "zvariant_utils"
-version = "3.1.0"
+version = "3.2.0"
 dependencies = [
  "proc-macro2",
  "quote",
  "serde",
- "static_assertions",
  "syn",
- "winnow",
+ "winnow 0.7.2",
 ]

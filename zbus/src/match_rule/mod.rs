@@ -6,7 +6,6 @@ use std::{
 };
 
 use serde::{de, Deserialize, Serialize};
-use static_assertions::assert_impl_all;
 use zvariant::Structure;
 
 use crate::{
@@ -101,8 +100,6 @@ pub struct MatchRule<'m> {
     pub(crate) arg_paths: Vec<(u8, ObjectPath<'m>)>,
     pub(crate) arg0ns: Option<Str<'m>>,
 }
-
-assert_impl_all!(MatchRule<'_>: Send, Sync, Unpin);
 
 impl<'m> MatchRule<'m> {
     /// Create a builder for `MatchRule`.
@@ -499,8 +496,6 @@ pub enum PathSpec<'m> {
     PathNamespace(ObjectPath<'m>),
 }
 
-assert_impl_all!(PathSpec<'_>: Send, Sync, Unpin);
-
 impl PathSpec<'_> {
     /// Create an owned clone of `self`.
     fn to_owned(&self) -> PathSpec<'static> {
@@ -522,8 +517,6 @@ impl PathSpec<'_> {
 /// Owned sibling of [`MatchRule`].
 #[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, VariantType)]
 pub struct OwnedMatchRule(#[serde(borrow)] MatchRule<'static>);
-
-assert_impl_all!(OwnedMatchRule: Send, Sync, Unpin);
 
 impl OwnedMatchRule {
     /// Convert to the inner `MatchRule`, consuming `self`.

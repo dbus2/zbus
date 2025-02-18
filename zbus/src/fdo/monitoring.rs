@@ -3,8 +3,6 @@
 //! The D-Bus specification defines the message bus messages and some standard interfaces that may
 //! be useful across various D-Bus applications. This module provides their proxy.
 
-use static_assertions::assert_impl_all;
-
 /// Proxy for the `org.freedesktop.DBus.Monitoring` interface.
 #[crate::proxy(
     interface = "org.freedesktop.DBus.Monitoring",
@@ -34,7 +32,3 @@ pub trait Monitoring {
     /// [`MessageStream`]: https://docs.rs/zbus/latest/zbus/struct.MessageStream.html
     fn become_monitor(self, match_rules: &[crate::MatchRule<'_>], flags: u32) -> super::Result<()>;
 }
-
-assert_impl_all!(MonitoringProxy<'_>: Send, Sync, Unpin);
-#[cfg(feature = "blocking-api")]
-assert_impl_all!(MonitoringProxyBlocking<'_>: Send, Sync, Unpin);

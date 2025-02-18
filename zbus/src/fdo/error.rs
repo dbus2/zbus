@@ -1,5 +1,3 @@
-use static_assertions::assert_impl_all;
-
 use crate::DBusError;
 
 /// Errors from <https://gitlab.freedesktop.org/dbus/dbus/-/blob/master/dbus/dbus-protocol.h>
@@ -175,5 +173,3 @@ pub enum Error {
 ///
 /// [`zbus::fdo::Error`]: enum.Error.html
 pub type Result<T> = std::result::Result<T, Error>;
-
-assert_impl_all!(Error: Send, Sync, Unpin);

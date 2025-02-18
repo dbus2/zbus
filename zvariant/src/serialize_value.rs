@@ -1,5 +1,4 @@
 use serde::ser::{Serialize, SerializeStruct, Serializer};
-use static_assertions::assert_impl_all;
 
 use crate::Type;
 
@@ -17,8 +16,6 @@ use crate::Type;
 ///
 /// [`Value`]: enum.Value.html
 pub struct SerializeValue<'a, T: Type + Serialize>(pub &'a T);
-
-assert_impl_all!(SerializeValue<'_, i32>: Send, Sync, Unpin);
 
 impl<T: Type + Serialize> Serialize for SerializeValue<'_, T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

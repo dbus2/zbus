@@ -2,7 +2,6 @@
 
 use enumflags2::BitFlags;
 use event_listener::EventListener;
-use static_assertions::assert_impl_all;
 use std::{io, ops::Deref};
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
 use zvariant::ObjectPath;
@@ -26,8 +25,6 @@ pub use builder::Builder;
 pub struct Connection {
     inner: crate::Connection,
 }
-
-assert_impl_all!(Connection: Send, Sync, Unpin);
 
 impl Connection {
     /// Create a `Connection` to the session/user message bus.

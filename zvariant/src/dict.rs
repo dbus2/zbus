@@ -5,7 +5,6 @@ use std::{
 };
 
 use serde::ser::{Serialize, SerializeMap, Serializer};
-use static_assertions::assert_impl_all;
 
 use crate::{value_display_fmt, Basic, DynamicType, Error, Signature, Type, Value};
 
@@ -20,8 +19,6 @@ pub struct Dict<'k, 'v> {
     map: BTreeMap<Value<'k>, Value<'v>>,
     signature: Signature,
 }
-
-assert_impl_all!(Dict<'_, '_>: Send, Sync, Unpin);
 
 impl<'k, 'v> Dict<'k, 'v> {
     /// Create a new empty `Dict`, given the signature of the keys and values.

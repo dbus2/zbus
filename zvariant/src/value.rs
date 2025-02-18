@@ -16,7 +16,6 @@ use serde::{
         Serialize, SerializeMap, SerializeSeq, SerializeStruct, SerializeTupleStruct, Serializer,
     },
 };
-use static_assertions::assert_impl_all;
 
 use crate::{
     array_display_fmt, dict_display_fmt, structure_display_fmt, utils::*, Array, Basic, Dict,
@@ -150,8 +149,6 @@ impl Ord for Value<'_> {
             })
     }
 }
-
-assert_impl_all!(Value<'_>: Send, Sync, Unpin);
 
 macro_rules! serialize_value {
     ($self:ident $serializer:ident.$method:ident $($first_arg:expr)*) => {

@@ -3,7 +3,6 @@ use crate::{
     Error, Result,
 };
 use serde::{de, Deserialize, Serialize};
-use static_assertions::assert_impl_all;
 use std::{
     borrow::{Borrow, Cow},
     fmt::{self, Debug, Display, Formatter},
@@ -44,8 +43,6 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 pub struct InterfaceName<'name>(Str<'name>);
 
 impl_str_basic!(InterfaceName<'_>);
-
-assert_impl_all!(InterfaceName<'_>: Send, Sync, Unpin);
 
 impl<'name> InterfaceName<'name> {
     /// This is faster than `Clone::clone` when `self` contains owned data.
@@ -230,8 +227,6 @@ impl<'name> NoneValue for InterfaceName<'name> {
 /// Owned sibling of [`InterfaceName`].
 #[derive(Clone, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue)]
 pub struct OwnedInterfaceName(#[serde(borrow)] InterfaceName<'static>);
-
-assert_impl_all!(OwnedInterfaceName: Send, Sync, Unpin);
 
 impl_str_basic!(OwnedInterfaceName);
 

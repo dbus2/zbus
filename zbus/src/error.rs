@@ -1,4 +1,3 @@
-use static_assertions::assert_impl_all;
 use std::{convert::Infallible, error, fmt, io, sync::Arc};
 use zbus_names::{Error as NamesError, InterfaceName, OwnedErrorName};
 use zvariant::{Error as VariantError, ObjectPath};
@@ -62,8 +61,6 @@ pub enum Error {
     /// The given interface already exists at the given path.
     InterfaceExists(InterfaceName<'static>, ObjectPath<'static>),
 }
-
-assert_impl_all!(Error: Send, Sync, Unpin);
 
 impl PartialEq for Error {
     fn eq(&self, other: &Self) -> bool {

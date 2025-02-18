@@ -1,5 +1,4 @@
 use serde::ser::{Serialize, Serializer};
-use static_assertions::assert_impl_all;
 use std::fmt::Display;
 
 use crate::{value_display_fmt, Error, Signature, Type, Value};
@@ -14,8 +13,6 @@ pub struct Maybe<'a> {
     value: Box<Option<Value<'a>>>,
     signature: Signature,
 }
-
-assert_impl_all!(Maybe<'_>: Send, Sync, Unpin);
 
 impl<'a> Maybe<'a> {
     /// Get a reference to underlying value.

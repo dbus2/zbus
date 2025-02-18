@@ -17,7 +17,6 @@ serde = { version = "1.0.200", features = ["derive"] }
 zvariant = { path = "../zvariant", version = "5.0.0", default-features = false, features = [
     "enumflags2",
 ] }
-static_assertions = "1.1.0"
 winnow = "0.7"
 
 [dev-dependencies]

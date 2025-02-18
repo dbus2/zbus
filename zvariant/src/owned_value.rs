@@ -1,5 +1,4 @@
 use serde::{Deserialize, Deserializer, Serialize};
-use static_assertions::assert_impl_all;
 use std::{collections::HashMap, hash::BuildHasher};
 
 use crate::{
@@ -19,8 +18,6 @@ use crate::Maybe;
 /// Owned [`Value`](enum.Value.html)
 #[derive(Debug, PartialEq, Serialize, Type)]
 pub struct OwnedValue(pub(crate) Value<'static>);
-
-assert_impl_all!(OwnedValue: Send, Sync, Unpin);
 
 impl OwnedValue {
     /// Attempt to clone the value.

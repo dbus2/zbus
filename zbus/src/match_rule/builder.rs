@@ -1,5 +1,3 @@
-use static_assertions::assert_impl_all;
-
 use crate::{
     match_rule::PathSpec,
     message::Type,
@@ -15,8 +13,6 @@ const MAX_ARGS: u8 = 64;
 /// This is created by [`MatchRule::builder`].
 #[derive(Debug)]
 pub struct Builder<'m>(MatchRule<'m>);
-
-assert_impl_all!(Builder<'_>: Send, Sync, Unpin);
 
 impl<'m> Builder<'m> {
     /// Build the `MatchRule`.

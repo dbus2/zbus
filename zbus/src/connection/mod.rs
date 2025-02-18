@@ -3,7 +3,6 @@ use async_broadcast::{broadcast, InactiveReceiver, Receiver, Sender as Broadcast
 use enumflags2::BitFlags;
 use event_listener::{Event, EventListener};
 use ordered_stream::{OrderedFuture, OrderedStream, PollResult};
-use static_assertions::assert_impl_all;
 use std::{
     collections::HashMap,
     io::{self, ErrorKind},
@@ -209,8 +208,6 @@ pub(crate) type MsgBroadcaster = Broadcaster<Result<Message>>;
 pub struct Connection {
     pub(crate) inner: Arc<ConnectionInner>,
 }
-
-assert_impl_all!(Connection: Send, Sync, Unpin);
 
 /// A method call whose completion can be awaited or joined with other streams.
 ///

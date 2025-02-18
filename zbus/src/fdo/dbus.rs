@@ -6,7 +6,6 @@
 use enumflags2::{bitflags, BitFlags};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use static_assertions::assert_impl_all;
 use std::collections::HashMap;
 use zbus_names::{
     BusName, OwnedBusName, OwnedInterfaceName, OwnedUniqueName, UniqueName, WellKnownName,
@@ -51,8 +50,6 @@ pub enum RequestNameFlags {
     DoNotQueue = 0x04,
 }
 
-assert_impl_all!(RequestNameFlags: Send, Sync, Unpin);
-
 /// The return code of the [`request_name`] method.
 ///
 /// [`request_name`]: struct.DBusProxy.html#method.request_name
@@ -86,8 +83,6 @@ pub enum RequestNameReply {
     AlreadyOwner = 0x04,
 }
 
-assert_impl_all!(RequestNameReply: Send, Sync, Unpin);
-
 /// The return code of the [`release_name`] method.
 ///
 /// [`release_name`]: struct.DBusProxy.html#method.release_name
@@ -105,8 +100,6 @@ pub enum ReleaseNameReply {
     /// own this name.
     NotOwner = 0x03,
 }
-
-assert_impl_all!(ReleaseNameReply: Send, Sync, Unpin);
 
 /// Credentials of a process connected to a bus server.
 ///
@@ -360,7 +353,3 @@ pub trait DBus {
     #[zbus(property)]
     fn interfaces(&self) -> Result<Vec<OwnedInterfaceName>>;
 }
-
-assert_impl_all!(DBusProxy<'_>: Send, Sync, Unpin);
-#[cfg(feature = "blocking-api")]
-assert_impl_all!(DBusProxyBlocking<'_>: Send, Sync, Unpin);

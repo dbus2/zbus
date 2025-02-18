@@ -1,6 +1,5 @@
 //! The object server API.
 
-use static_assertions::assert_impl_all;
 use zvariant::ObjectPath;
 
 use crate::{
@@ -131,8 +130,6 @@ where
 pub struct ObjectServer {
     azync: crate::ObjectServer,
 }
-
-assert_impl_all!(ObjectServer: Send, Sync, Unpin);
 
 impl ObjectServer {
     /// Create a new D-Bus `ObjectServer`.

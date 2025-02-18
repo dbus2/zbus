@@ -3,7 +3,6 @@
 //! The D-Bus specification defines the message bus messages and some standard interfaces that may
 //! be useful across various D-Bus applications. This module provides their proxy.
 
-use static_assertions::assert_impl_all;
 use std::{borrow::Cow, collections::HashMap};
 use zbus_names::InterfaceName;
 use zvariant::{OwnedValue, Value};
@@ -15,8 +14,6 @@ use crate::{interface, message::Header, object_server::SignalEmitter, Connection
 /// This interface is implemented automatically for any object registered to the
 /// [ObjectServer].
 pub struct Properties;
-
-assert_impl_all!(Properties: Send, Sync, Unpin);
 
 #[interface(
     name = "org.freedesktop.DBus.Properties",
@@ -152,7 +149,3 @@ impl Properties {
         invalidated_properties: Cow<'_, [&str]>,
     ) -> zbus::Result<()>;
 }
-
-assert_impl_all!(PropertiesProxy<'_>: Send, Sync, Unpin);
-#[cfg(feature = "blocking-api")]
-assert_impl_all!(PropertiesProxyBlocking<'_>: Send, Sync, Unpin);

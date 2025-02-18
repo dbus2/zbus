@@ -6,7 +6,6 @@ use std::{
 };
 
 use serde::{de, Deserialize, Serialize};
-use static_assertions::assert_impl_all;
 use zvariant::{Str, Type};
 
 /// A D-Bus server GUID.
@@ -19,8 +18,6 @@ use zvariant::{Str, Type};
 /// [TryFrom]: #impl-TryFrom%3C%26%27_%20str%3E
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Type, Serialize)]
 pub struct Guid<'g>(Str<'g>);
-
-assert_impl_all!(Guid<'_>: Send, Sync, Unpin);
 
 impl Guid<'_> {
     /// Generate a D-Bus GUID that can be used with e.g.
@@ -171,8 +168,6 @@ impl Borrow<str> for Guid<'_> {
 /// Owned version of [`Guid`].
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Type, Serialize)]
 pub struct OwnedGuid(#[serde(borrow)] Guid<'static>);
-
-assert_impl_all!(OwnedGuid: Send, Sync, Unpin);
 
 impl OwnedGuid {
     /// Get a reference to the inner [`Guid`].

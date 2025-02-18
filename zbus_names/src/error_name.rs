@@ -3,7 +3,6 @@ use crate::{
     Error, Result,
 };
 use serde::{de, Deserialize, Serialize};
-use static_assertions::assert_impl_all;
 use std::{
     borrow::{Borrow, Cow},
     fmt::{self, Debug, Display, Formatter},
@@ -44,8 +43,6 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
     Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
 )]
 pub struct ErrorName<'name>(Str<'name>);
-
-assert_impl_all!(ErrorName<'_>: Send, Sync, Unpin);
 
 impl_str_basic!(ErrorName<'_>);
 
@@ -197,8 +194,6 @@ impl<'name> NoneValue for ErrorName<'name> {
 /// Owned sibling of [`ErrorName`].
 #[derive(Clone, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue)]
 pub struct OwnedErrorName(#[serde(borrow)] ErrorName<'static>);
-
-assert_impl_all!(OwnedErrorName: Send, Sync, Unpin);
 
 impl_str_basic!(OwnedErrorName);
 

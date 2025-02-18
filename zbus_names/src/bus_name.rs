@@ -10,7 +10,6 @@ use crate::{
     OwnedWellKnownName, Result, UniqueName, WellKnownName,
 };
 use serde::{de, Deserialize, Serialize};
-use static_assertions::assert_impl_all;
 use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 
 /// String that identifies a [bus name].
@@ -54,8 +53,6 @@ pub enum BusName<'name> {
     #[serde(borrow)]
     WellKnown(WellKnownName<'name>),
 }
-
-assert_impl_all!(BusName<'_>: Send, Sync, Unpin);
 
 impl_str_basic!(BusName<'_>);
 

@@ -1532,12 +1532,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
-name = "static_assertions"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
 name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2162,7 +2156,6 @@ dependencies = [
  "rand",
  "serde",
  "serde_repr",
- "static_assertions",
  "tempfile",
  "test-log",
  "tokio",
@@ -2203,7 +2196,6 @@ version = "4.2.0"
 dependencies = [
  "criterion",
  "serde",
- "static_assertions",
  "winnow 0.7.2",
  "zvariant",
 ]
@@ -2215,7 +2207,6 @@ dependencies = [
  "doc-comment",
  "quick-xml",
  "serde",
- "static_assertions",
  "zbus_names",
  "zvariant",
 ]
@@ -2310,7 +2301,6 @@ dependencies = [
  "serde_bytes",
  "serde_json",
  "serde_repr",
- "static_assertions",
  "time",
  "url",
  "uuid",
@@ -2341,7 +2331,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "serde",
- "static_assertions",
  "syn 2.0.98",
  "winnow 0.7.2",
  "zvariant",

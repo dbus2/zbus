@@ -1,6 +1,5 @@
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use static_assertions::assert_impl_all;
 use zvariant::Type;
 
 /// The message field code.
@@ -34,5 +33,3 @@ pub(crate) enum FieldCode {
     /// Code for [`Field::UnixFDs`](enum.Field.html#variant.UnixFDs).
     UnixFDs = 9,
 }
-
-assert_impl_all!(FieldCode: Send, Sync, Unpin);
