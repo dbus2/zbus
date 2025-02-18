@@ -87,19 +87,9 @@ scripts contained within this repository. You can enable them with:
 cp .githooks/* .git/hooks/
 ```
 
-## Adding public API
-
-### Assert auto traits on items
-
-Please make sure to add `assert_impl_all!()` macros to ensure that accidental changes to auto trait
-implementations like `Send`, `Sync`, and `Unpin` can be detected easily. You should use the existing
-code to see how it is done with all of the current items already. For further information see the
-Rust API Guidelines on [C-SEND-SYNC].
-
 ## Conduct
 
 In all zbus-related forums, we follow the
 [Rust Code of Conduct](https://www.rust-lang.org/conduct.html). For escalation or moderation issues
 please contact Zeeshan (zeeshanak@gnome.org) instead of the Rust moderation team.
 
-[C-SEND-SYNC]: https://rust-lang.github.io/api-guidelines/interoperability.html#c-send-sync
