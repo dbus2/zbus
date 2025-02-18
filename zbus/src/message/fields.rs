@@ -3,7 +3,6 @@ use serde::{
     ser::{SerializeSeq, SerializeStruct},
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use static_assertions::assert_impl_all;
 use std::{borrow::Cow, num::NonZeroU32};
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 use zvariant::{ObjectPath, Signature, Type, Value};
@@ -26,8 +25,6 @@ pub(crate) struct Fields<'f> {
     pub signature: Cow<'f, Signature>,
     pub unix_fds: Option<u32>,
 }
-
-assert_impl_all!(Fields<'_>: Send, Sync, Unpin);
 
 impl Fields<'_> {
     /// Create an empty collection of fields.

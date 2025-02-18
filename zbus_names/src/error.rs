@@ -1,4 +1,3 @@
-use static_assertions::assert_impl_all;
 use std::{convert::Infallible, error, fmt};
 use zvariant::Error as VariantError;
 
@@ -67,8 +66,6 @@ pub enum Error {
         to: &'static str,
     },
 }
-
-assert_impl_all!(Error: Send, Sync, Unpin);
 
 impl PartialEq for Error {
     #[allow(deprecated)]

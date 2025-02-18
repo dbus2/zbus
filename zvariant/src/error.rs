@@ -1,5 +1,4 @@
 use serde::{de, ser};
-use static_assertions::assert_impl_all;
 use std::{convert::Infallible, error, fmt, io, result, sync::Arc};
 
 use crate::Signature;
@@ -69,8 +68,6 @@ pub enum Error {
     /// Invalid object path.
     InvalidObjectPath,
 }
-
-assert_impl_all!(Error: Send, Sync, Unpin);
 
 impl PartialEq for Error {
     fn eq(&self, other: &Self) -> bool {

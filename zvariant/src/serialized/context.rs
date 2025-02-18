@@ -1,5 +1,3 @@
-use static_assertions::assert_impl_all;
-
 use crate::{serialized::Format, Endian};
 
 /// The encoding context to use with the [serialization and deserialization] API.
@@ -34,8 +32,6 @@ pub struct Context {
     position: usize,
     endian: Endian,
 }
-
-assert_impl_all!(Context: Send, Sync, Unpin);
 
 impl Context {
     /// Create a new encoding context.

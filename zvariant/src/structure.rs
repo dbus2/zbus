@@ -3,7 +3,6 @@ use serde::{
     de::{DeserializeSeed, Deserializer, Error, SeqAccess, Visitor},
     ser::{Serialize, SerializeTupleStruct, Serializer},
 };
-use static_assertions::assert_impl_all;
 use std::fmt::{Display, Write};
 
 use crate::{
@@ -16,8 +15,6 @@ use crate::{
 /// [`Structure`]: struct.Structure.html
 #[derive(Debug, Default, PartialEq)]
 pub struct StructureBuilder<'a>(Vec<Value<'a>>);
-
-assert_impl_all!(StructureBuilder<'_>: Send, Sync, Unpin);
 
 impl<'a> StructureBuilder<'a> {
     /// Create a new `StructureBuilder`.
@@ -103,8 +100,6 @@ pub struct StructureSeed<'a> {
     phantom: std::marker::PhantomData<&'a ()>,
 }
 
-assert_impl_all!(StructureSeed<'_>: Unpin);
-
 impl StructureSeed<'static> {
     /// Create a new `StructureSeed`
     ///
@@ -178,8 +173,6 @@ pub struct Structure<'a> {
     fields: Vec<Value<'a>>,
     signature: Signature,
 }
-
-assert_impl_all!(Structure<'_>: Send, Sync, Unpin);
 
 impl<'a> Structure<'a> {
     /// Get a reference to all the fields of `self`.

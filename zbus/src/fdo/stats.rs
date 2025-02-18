@@ -3,7 +3,6 @@
 //! The D-Bus specification defines the message bus messages and some standard interfaces that may
 //! be useful across various D-Bus applications. This module provides their proxy.
 
-use static_assertions::assert_impl_all;
 use std::collections::HashMap;
 use zbus_names::BusName;
 use zvariant::OwnedValue;
@@ -29,7 +28,3 @@ pub trait Stats {
         &self,
     ) -> Result<Vec<HashMap<crate::names::OwnedUniqueName, Vec<crate::OwnedMatchRule>>>>;
 }
-
-assert_impl_all!(StatsProxy<'_>: Send, Sync, Unpin);
-#[cfg(feature = "blocking-api")]
-assert_impl_all!(StatsProxyBlocking<'_>: Send, Sync, Unpin);

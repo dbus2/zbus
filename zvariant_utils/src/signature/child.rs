@@ -10,7 +10,6 @@ pub enum Child {
     /// A dynamic child signature.
     Dynamic { child: Box<Signature> },
 }
-static_assertions::assert_impl_all!(Child: Send, Sync, Unpin);
 
 impl Child {
     /// The underlying child `Signature`.

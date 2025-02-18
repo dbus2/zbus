@@ -3,7 +3,6 @@ use crate::{
     Error, Result,
 };
 use serde::{de, Deserialize, Serialize};
-use static_assertions::assert_impl_all;
 use std::{
     borrow::{Borrow, Cow},
     fmt::{self, Debug, Display, Formatter},
@@ -40,8 +39,6 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
     Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
 )]
 pub struct MemberName<'name>(Str<'name>);
-
-assert_impl_all!(MemberName<'_>: Send, Sync, Unpin);
 
 impl_str_basic!(MemberName<'_>);
 
@@ -218,8 +215,6 @@ impl<'name> NoneValue for MemberName<'name> {
 /// Owned sibling of [`MemberName`].
 #[derive(Clone, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue)]
 pub struct OwnedMemberName(#[serde(borrow)] MemberName<'static>);
-
-assert_impl_all!(OwnedMemberName: Send, Sync, Unpin);
 
 impl_str_basic!(OwnedMemberName);
 

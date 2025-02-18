@@ -1,5 +1,4 @@
 use futures_lite::StreamExt;
-use static_assertions::assert_impl_all;
 
 use crate::{
     blocking::Connection, message::Message, utils::block_on, MatchRule, OwnedMatchRule, Result,
@@ -18,8 +17,6 @@ pub struct MessageIterator {
     // dropped.
     pub(crate) azync: Option<crate::MessageStream>,
 }
-
-assert_impl_all!(MessageIterator: Send, Sync, Unpin);
 
 impl MessageIterator {
     /// Get a reference to the underlying async message stream.

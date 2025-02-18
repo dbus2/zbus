@@ -1,5 +1,4 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use static_assertions::assert_impl_all;
 use std::{
     borrow::Cow,
     cmp::Ordering,
@@ -91,8 +90,6 @@ impl<'de: 'a, 'a> Deserialize<'de> for Inner<'a> {
         <&'a str>::deserialize(deserializer).map(Inner::Borrowed)
     }
 }
-
-assert_impl_all!(Str<'_>: Send, Sync, Unpin);
 
 impl Str<'_> {
     /// An owned string without allocations

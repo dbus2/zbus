@@ -262,8 +262,6 @@ impl_type_for_wrapper!(Wrapping<T>, Saturating<T>, Reverse<T>);
 macro_rules! atomic_impl {
     ($($ty:ident $size:expr => $primitive:ident)*) => {
         $(
-            static_assertions::assert_impl_all!($ty: From<$primitive>);
-
             #[cfg(target_has_atomic = $size)]
             impl Type for $ty {
                 const SIGNATURE: &'static Signature = <$primitive as Type>::SIGNATURE;

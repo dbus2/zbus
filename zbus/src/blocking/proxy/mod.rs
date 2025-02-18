@@ -2,7 +2,6 @@
 
 use enumflags2::BitFlags;
 use futures_lite::StreamExt;
-use static_assertions::assert_impl_all;
 use std::{fmt, ops::Deref};
 use zbus_names::{BusName, InterfaceName, MemberName, UniqueName};
 use zvariant::{ObjectPath, OwnedValue, Value};
@@ -76,8 +75,6 @@ impl fmt::Debug for Proxy<'_> {
             .finish_non_exhaustive()
     }
 }
-
-assert_impl_all!(Proxy<'_>: Send, Sync, Unpin);
 
 impl<'a> Proxy<'a> {
     /// Create a new `Proxy` for the given destination/path/interface.
@@ -406,8 +403,6 @@ impl<'a> SignalIterator<'a> {
         self.0.as_ref().expect("`SignalStream` is `None`").name()
     }
 }
-
-assert_impl_all!(SignalIterator<'_>: Send, Sync, Unpin);
 
 impl std::iter::Iterator for SignalIterator<'_> {
     type Item = Message;

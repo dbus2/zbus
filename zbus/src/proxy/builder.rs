@@ -1,6 +1,5 @@
 use std::{collections::HashSet, marker::PhantomData, sync::Arc};
 
-use static_assertions::assert_impl_all;
 use zbus_names::{BusName, InterfaceName};
 use zvariant::{ObjectPath, Str};
 
@@ -45,8 +44,6 @@ impl<T> Clone for Builder<'_, T> {
         }
     }
 }
-
-assert_impl_all!(Builder<'_>: Send, Sync, Unpin);
 
 impl<'a, T> Builder<'a, T> {
     /// Set the proxy destination address.

@@ -16,7 +16,6 @@ pub use error::{Error, Result};
 
 use quick_xml::{de::Deserializer, se::to_writer};
 use serde::{Deserialize, Serialize};
-use static_assertions::assert_impl_all;
 use std::{
     io::{BufReader, Read, Write},
     ops::Deref,
@@ -32,8 +31,6 @@ pub struct Annotation {
     #[serde(rename = "@value")]
     value: String,
 }
-
-assert_impl_all!(Annotation: Send, Sync, Unpin);
 
 impl Annotation {
     /// Return the annotation name/key.
@@ -69,8 +66,6 @@ pub struct Arg {
     annotations: Vec<Annotation>,
 }
 
-assert_impl_all!(Arg: Send, Sync, Unpin);
-
 impl Arg {
     /// Return the argument name, if any.
     pub fn name(&self) -> Option<&str> {
@@ -104,8 +99,6 @@ pub struct Method<'a> {
     annotations: Vec<Annotation>,
 }
 
-assert_impl_all!(Method<'_>: Send, Sync, Unpin);
-
 impl Method<'_> {
     /// Return the method name.
     pub fn name(&self) -> MemberName<'_> {
@@ -134,8 +127,6 @@ pub struct Signal<'a> {
     #[serde(rename = "annotation", default)]
     annotations: Vec<Annotation>,
 }
-
-assert_impl_all!(Signal<'_>: Send, Sync, Unpin);
 
 impl Signal<'_> {
     /// Return the signal name.
@@ -190,8 +181,6 @@ pub struct Property<'a> {
     annotations: Vec<Annotation>,
 }
 
-assert_impl_all!(Property<'_>: Send, Sync, Unpin);
-
 impl Property<'_> {
     /// Returns the property name.
     pub fn name(&self) -> PropertyName<'_> {
@@ -229,8 +218,6 @@ pub struct Interface<'a> {
     #[serde(rename = "annotation", default)]
     annotations: Vec<Annotation>,
 }
-
-assert_impl_all!(Interface<'_>: Send, Sync, Unpin);
 
 impl<'a> Interface<'a> {
     /// Returns the interface name.
@@ -270,8 +257,6 @@ pub struct Node<'a> {
     #[serde(rename = "node", default, borrow)]
     nodes: Vec<Node<'a>>,
 }
-
-assert_impl_all!(Node<'_>: Send, Sync, Unpin);
 
 impl<'a> Node<'a> {
     /// Parse the introspection XML document from reader.

@@ -1105,10 +1105,6 @@ fn gen_proxy_signal(
         #[derive(Debug)]
         #visibility struct #stream_name(#zbus::#signal_type<'static>);
 
-        #zbus::export::static_assertions::assert_impl_all!(
-            #stream_name: ::std::marker::Send, ::std::marker::Unpin
-        );
-
         impl #stream_name {
             /// Consumes `self`, returning the underlying `zbus::#signal_type`.
             pub fn into_inner(self) -> #zbus::#signal_type<'static> {

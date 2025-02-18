@@ -1,7 +1,6 @@
 //! D-Bus Message.
 use std::{borrow::Cow, fmt, sync::Arc};
 
-use static_assertions::assert_impl_all;
 use zbus_names::{ErrorName, InterfaceName, MemberName};
 use zvariant::{serialized, Endian};
 
@@ -65,8 +64,6 @@ pub(super) struct Inner {
     pub(crate) body_offset: usize,
     pub(crate) recv_seq: Sequence,
 }
-
-assert_impl_all!(Message: Send, Sync, Unpin);
 
 impl Message {
     /// Create a builder for a message of type [`Type::MethodCall`].

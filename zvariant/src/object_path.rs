@@ -3,7 +3,6 @@ use serde::{
     de::{self, Deserialize, Deserializer, Visitor},
     ser::{Serialize, Serializer},
 };
-use static_assertions::assert_impl_all;
 use std::borrow::Cow;
 
 use crate::{Basic, Error, Result, Str, Type};
@@ -34,8 +33,6 @@ use crate::{Basic, Error, Result, Str, Type};
 /// ```
 #[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
 pub struct ObjectPath<'a>(Str<'a>);
-
-assert_impl_all!(ObjectPath<'_>: Send, Sync, Unpin);
 
 impl<'a> ObjectPath<'a> {
     /// This is faster than `Clone::clone` when `self` contains owned data.
@@ -266,8 +263,6 @@ fn validate(path: &[u8]) -> Result<()> {
 /// Owned [`ObjectPath`](struct.ObjectPath.html)
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash, serde::Serialize, Type)]
 pub struct OwnedObjectPath(ObjectPath<'static>);
-
-assert_impl_all!(OwnedObjectPath: Send, Sync, Unpin);
 
 impl OwnedObjectPath {
     pub fn into_inner(self) -> ObjectPath<'static> {

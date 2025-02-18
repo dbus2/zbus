@@ -1,5 +1,4 @@
 use quick_xml::de::DeError;
-use static_assertions::assert_impl_all;
 use std::{convert::Infallible, error, fmt};
 use zvariant::Error as VariantError;
 
@@ -13,8 +12,6 @@ pub enum Error {
     /// An XML error from quick_xml
     QuickXml(DeError),
 }
-
-assert_impl_all!(Error: Send, Sync, Unpin);
 
 impl PartialEq for Error {
     fn eq(&self, other: &Self) -> bool {

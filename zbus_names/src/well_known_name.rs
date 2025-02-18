@@ -3,7 +3,6 @@ use crate::{
     Error, Result,
 };
 use serde::{de, Deserialize, Serialize};
-use static_assertions::assert_impl_all;
 use std::{
     borrow::{Borrow, Cow},
     fmt::{self, Debug, Display, Formatter},
@@ -42,8 +41,6 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 pub struct WellKnownName<'name>(pub(crate) Str<'name>);
 
 impl_str_basic!(WellKnownName<'_>);
-
-assert_impl_all!(WellKnownName<'_>: Send, Sync, Unpin);
 
 impl<'name> WellKnownName<'name> {
     /// This is faster than `Clone::clone` when `self` contains owned data.
@@ -219,8 +216,6 @@ impl<'name> NoneValue for WellKnownName<'name> {
 /// Owned sibling of [`WellKnownName`].
 #[derive(Clone, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue)]
 pub struct OwnedWellKnownName(#[serde(borrow)] WellKnownName<'static>);
-
-assert_impl_all!(OwnedWellKnownName: Send, Sync, Unpin);
 
 impl OwnedWellKnownName {
     /// Convert to the inner `WellKnownName`, consuming `self`.

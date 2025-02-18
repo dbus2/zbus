@@ -1,4 +1,3 @@
-use static_assertions::assert_impl_all;
 use zbus_names::{BusName, InterfaceName};
 use zvariant::ObjectPath;
 
@@ -9,8 +8,6 @@ pub use crate::proxy::Defaults;
 /// Builder for proxies.
 #[derive(Debug, Clone)]
 pub struct Builder<'a, T = ()>(crate::proxy::Builder<'a, T>);
-
-assert_impl_all!(Builder<'_>: Send, Sync, Unpin);
 
 impl<'a, T> Builder<'a, T> {
     /// Set the proxy destination address.

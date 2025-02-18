@@ -3,7 +3,6 @@
 use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 use tracing::{debug, instrument, trace, trace_span, Instrument};
 
-use static_assertions::assert_impl_all;
 use zbus_names::InterfaceName;
 use zvariant::{ObjectPath, Value};
 
@@ -93,8 +92,6 @@ pub struct ObjectServer {
     conn: WeakConnection,
     root: Arc<RwLock<Node>>,
 }
-
-assert_impl_all!(ObjectServer: Send, Sync, Unpin);
 
 impl ObjectServer {
     /// Create a new D-Bus `ObjectServer`.

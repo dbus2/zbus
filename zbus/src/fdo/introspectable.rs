@@ -3,8 +3,6 @@
 //! The D-Bus specification defines the message bus messages and some standard interfaces that may
 //! be useful across various D-Bus applications. This module provides their proxy.
 
-use static_assertions::assert_impl_all;
-
 use super::{Error, Result};
 use crate::{interface, message::Header, ObjectServer};
 
@@ -35,7 +33,3 @@ impl Introspectable {
         Ok(node.introspect().await)
     }
 }
-
-assert_impl_all!(IntrospectableProxy<'_>: Send, Sync, Unpin);
-#[cfg(feature = "blocking-api")]
-assert_impl_all!(IntrospectableProxyBlocking<'_>: Send, Sync, Unpin);

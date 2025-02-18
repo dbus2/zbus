@@ -10,7 +10,6 @@ pub enum Fields {
         fields: Box<[Signature]>,
     },
 }
-static_assertions::assert_impl_all!(Fields: Send, Sync, Unpin);
 
 impl Fields {
     /// A iterator over the fields' signatures.

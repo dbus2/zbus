@@ -7,7 +7,6 @@ use enumflags2::{bitflags, BitFlags};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use static_assertions::assert_impl_all;
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName};
 use zvariant::{
     serialized::{self, Context},
@@ -30,8 +29,6 @@ pub enum EndianSig {
     /// The D-Bus message is in little-endian byte order.
     Little = b'l',
 }
-
-assert_impl_all!(EndianSig: Send, Sync, Unpin);
 
 // Such a shame I've to do this manually
 impl TryFrom<u8> for EndianSig {
@@ -87,8 +84,6 @@ pub enum Type {
     Signal = 4,
 }
 
-assert_impl_all!(Type: Send, Sync, Unpin);
-
 /// Pre-defined flags that can be passed in message headers.
 #[bitflags]
 #[repr(u8)]
@@ -111,8 +106,6 @@ pub enum Flags {
     AllowInteractiveAuth = 0x4,
 }
 
-assert_impl_all!(Flags: Send, Sync, Unpin);
-
 /// The primary message header, which is present in all D-Bus messages.
 ///
 /// This header contains all the essential information about a message, regardless of its type.
@@ -125,8 +118,6 @@ pub struct PrimaryHeader {
     body_len: u32,
     serial_num: NonZeroU32,
 }
-
-assert_impl_all!(PrimaryHeader: Send, Sync, Unpin);
 
 impl PrimaryHeader {
     /// Create a new `PrimaryHeader` instance.
@@ -243,8 +234,6 @@ pub struct Header<'m> {
     #[serde(borrow)]
     fields: Fields<'m>,
 }
-
-assert_impl_all!(Header<'_>: Send, Sync, Unpin);
 
 impl<'m> Header<'m> {
     /// Create a new `Header` instance.

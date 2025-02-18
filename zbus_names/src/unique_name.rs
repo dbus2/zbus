@@ -3,7 +3,6 @@ use crate::{
     Error, Result,
 };
 use serde::{de, Deserialize, Serialize};
-use static_assertions::assert_impl_all;
 use std::{
     borrow::{Borrow, Cow},
     fmt::{self, Debug, Display, Formatter},
@@ -39,8 +38,6 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
     Clone, Debug, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue,
 )]
 pub struct UniqueName<'name>(pub(crate) Str<'name>);
-
-assert_impl_all!(UniqueName<'_>: Send, Sync, Unpin);
 
 impl_str_basic!(UniqueName<'_>);
 
@@ -213,8 +210,6 @@ impl<'name> NoneValue for UniqueName<'name> {
 /// Owned sibling of [`UniqueName`].
 #[derive(Clone, Hash, PartialEq, Eq, Serialize, Type, Value, PartialOrd, Ord, OwnedValue)]
 pub struct OwnedUniqueName(#[serde(borrow)] UniqueName<'static>);
-
-assert_impl_all!(OwnedUniqueName: Send, Sync, Unpin);
 
 impl_str_basic!(OwnedUniqueName);
 

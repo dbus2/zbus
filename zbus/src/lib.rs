@@ -101,7 +101,6 @@ pub mod export {
     pub use futures_core;
     pub use ordered_stream;
     pub use serde;
-    pub use static_assertions;
 }
 
 pub use zbus_names as names;

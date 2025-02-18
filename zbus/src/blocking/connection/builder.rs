@@ -1,4 +1,3 @@
-use static_assertions::assert_impl_all;
 #[cfg(not(feature = "tokio"))]
 use std::net::TcpStream;
 #[cfg(all(unix, not(feature = "tokio")))]
@@ -23,8 +22,6 @@ use crate::{
 #[derive(Debug)]
 #[must_use]
 pub struct Builder<'a>(crate::connection::Builder<'a>);
-
-assert_impl_all!(Builder<'_>: Send, Sync, Unpin);
 
 impl<'a> Builder<'a> {
     /// Create a builder for the session/user message bus connection.

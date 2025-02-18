@@ -1,5 +1,4 @@
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
-use static_assertions::assert_impl_all;
 use std::os::fd::{self, AsFd, AsRawFd, BorrowedFd, RawFd};
 
 use crate::{Basic, Type};
@@ -97,8 +96,6 @@ impl std::fmt::Display for Fd<'_> {
 
 macro_rules! fd_impl {
     ($i:ty) => {
-        assert_impl_all!($i: Send, Sync, Unpin);
-
         impl Basic for $i {
             const SIGNATURE_CHAR: char = 'h';
             const SIGNATURE_STR: &'static str = "h";

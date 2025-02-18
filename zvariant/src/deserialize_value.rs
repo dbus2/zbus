@@ -2,7 +2,6 @@ use core::str;
 use std::marker::PhantomData;
 
 use serde::de::{Deserialize, Deserializer, SeqAccess, Visitor};
-use static_assertions::assert_impl_all;
 
 use crate::{Signature, Type};
 
@@ -27,8 +26,6 @@ pub struct DeserializeValue<'de, T: Type + Deserialize<'de>>(
     pub T,
     std::marker::PhantomData<&'de T>,
 );
-
-assert_impl_all!(DeserializeValue<'_, i32>: Send, Sync, Unpin);
 
 impl<'de, T: Type + Deserialize<'de>> Deserialize<'de> for DeserializeValue<'de, T> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
