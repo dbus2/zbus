@@ -289,10 +289,10 @@ pub(crate) fn decode_percents(value: &str) -> Result<Vec<u8>> {
             decoded.push(c as u8)
         } else if c == '%' {
             decoded.push(
-                decode_hex(iter.next().ok_or_else(|| {
+                (decode_hex(iter.next().ok_or_else(|| {
                     Error::Address("incomplete percent-encoded sequence".to_owned())
                 })?)?
-                    << 4
+                    << 4)
                     | decode_hex(iter.next().ok_or_else(|| {
                         Error::Address("incomplete percent-encoded sequence".to_owned())
                     })?)?,
