@@ -79,7 +79,6 @@ impl<'a> Array<'a> {
             .get(idx)
             .map(|v| v.downcast_ref::<V>())
             .transpose()
-            .map_err(Into::into)
     }
 
     /// Get the number of elements.
