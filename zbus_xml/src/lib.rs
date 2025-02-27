@@ -262,7 +262,7 @@ impl<'a> Node<'a> {
     /// Parse the introspection XML document from reader.
     pub fn from_reader<R: Read>(reader: R) -> Result<Node<'a>> {
         let mut deserializer = Deserializer::from_reader(BufReader::new(reader));
-        deserializer.event_buffer_size(Some(1024_usize.try_into().unwrap()));
+        deserializer.event_buffer_size(Some(4096_usize.try_into().unwrap()));
         Ok(Node::deserialize(&mut deserializer)?)
     }
 
@@ -307,7 +307,7 @@ impl<'a> TryFrom<&'a str> for Node<'a> {
     /// Parse the introspection XML document from `s`.
     fn try_from(s: &'a str) -> Result<Node<'a>> {
         let mut deserializer = Deserializer::from_str(s);
-        deserializer.event_buffer_size(Some(1024_usize.try_into().unwrap()));
+        deserializer.event_buffer_size(Some(4096_usize.try_into().unwrap()));
         Ok(Node::deserialize(&mut deserializer)?)
     }
 }
