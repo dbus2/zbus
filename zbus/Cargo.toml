@@ -29,6 +29,7 @@ p2p = ["dep:rand"]
 async-io = [
     "dep:async-io",
     "async-executor",
+  "async-fs",
     "async-task",
     "async-lock",
     # FIXME: We only currently only need this for unix but Cargo doesn't provide a way to enable
@@ -43,6 +44,8 @@ tokio-vsock = ["dep:tokio-vsock", "tokio"]
 blocking-api = ["zbus_macros/blocking-api"]
 # Enable `serde_bytes` feature of `zvariant`.
 serde_bytes = ["zvariant/serde_bytes"]
+# Dummy features to satisfy `cargo semver`. Should be removed at the next major version bump.
+async-fs = []
 
 [dependencies]
 zbus_macros.workspace = true
