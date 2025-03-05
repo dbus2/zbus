@@ -24,3 +24,92 @@ repository = "https://github.com/dbus2/zbus/"
 [profile.bench]
 debug = true
 strip = "none"
+
+[workspace.dependencies]
+# Local dependencies
+zvariant_derive = { path = "./zvariant_derive" }
+zvariant_utils = { path = "./zvariant_utils" }
+zvariant = { path = "./zvariant", default-features = false }
+zbus_names = { path = "./zbus_names" }
+zbus_macros = { path = "./zbus_macros" }
+zbus_xml = { path = "./zbus_xml" }
+zbus = { path = "./zbus" }
+
+# 3rd party
+snakecase = "0.1.0"
+pretty_assertions = "1.4"
+clap = { version = "4.5.4", features = ["derive", "wrap_help"] }
+endi = "1.1.0"
+arrayvec = { version = "0.7.4", features = ["serde"] }
+uuid = { version = "1.8.0", features = ["serde"] }
+url = { version = "2.5.0", features = ["serde"] }
+time = { version = "0.3.36", features = ["serde"] }
+chrono = { version = "0.4.38", features = ["serde"], default-features = false }
+heapless = { version = "0.8.0", features = ["serde"] }
+camino = "1.1.9"
+rand = "0.9.0"
+enumflags2 = { version = "0.7.9", features = ["serde"] }
+async-io = "2.3.2"
+async-broadcast = "0.7.0"
+async-lock = "3.3.0"
+async-executor = "1.11.0"
+async-trait = "0.1.80"
+hex = "0.4.3"
+ordered-stream = "0.2"
+futures-util = { version = "0.3.30", default-features = false }
+futures-core = "0.3.30"
+futures-lite = { version = "2.6.0", default-features = false, features = [
+    "std",
+] }
+
+quick-xml = { version = "0.36", features = ["serialize", "overlapped-lists"] }
+event-listener = "5.3.0"
+xdg-home = "1.1.0"
+tracing = "0.1.40"
+blocking = "1.6.0"
+async-task = "4.7.1"
+async-fs = "2.1.2"
+async-process = "2.2.2"
+tokio = "1.37.0"
+vsock = "0.5.0"
+tokio-vsock = "0.7"
+ntest = "0.9.2"
+test-log = { version = "0.2.16", features = [
+    "trace",
+], default-features = false }
+tracing-subscriber = { version = "0.3.18", features = [
+    "env-filter",
+    "fmt",
+    "ansi",
+], default-features = false }
+tempfile = "3.10.1"
+serde = { version = "1.0.200", features = ["derive"] }
+serde_repr = "0.1.19"
+serde_bytes = "0.11.14"
+serde_json = "1.0.116"
+criterion = "0.5.1"
+doc-comment = "0.3.3"
+proc-macro2 = "1.0.81"
+proc-macro-crate = "3.2.0"
+syn = { version = "2.0.64", features = ["extra-traits", "full"] }
+quote = "1.0.36"
+static_assertions = "1.1.0"
+async-recursion = "1.1.1"
+winnow = "0.7"
+uds_windows = "1.1.0"
+nix = { version = "0.29", default-features = false, features = [
+    "socket",
+    "uio",
+    "user",
+] }
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security_Authorization",
+    "Win32_System_Memory",
+    "Win32_Networking",
+    "Win32_Networking_WinSock",
+    "Win32_NetworkManagement",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_System_IO",
+    "Win32_System_Threading",
+] }

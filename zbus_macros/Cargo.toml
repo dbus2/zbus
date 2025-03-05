@@ -26,19 +26,20 @@ gvariant = ["zvariant/gvariant", "zvariant_utils/gvariant"]
 proc-macro = true
 
 [dependencies]
-proc-macro2 = "1.0.81"
-syn = { version = "2.0.64", features = ["extra-traits", "fold", "full"] }
-quote = "1.0.36"
-proc-macro-crate = "3.2.0"
-zvariant = { path = "../zvariant", version = "5.0.0", default-features = false }
-zbus_names = { path = "../zbus_names", version = "4.0" }
-zvariant_utils = { path = "../zvariant_utils", version = "3.1.0" }
+proc-macro2.workspace = true
+syn = { workspace = true, features = ["extra-traits", "fold", "full"] }
+quote.workspace = true
+proc-macro-crate.workspace = true
+
+zvariant.workspace = true
+zbus_names.workspace = true
+zvariant_utils.workspace = true
 
 [dev-dependencies]
-zbus = { path = "../zbus" }
-serde = { version = "1.0.200", features = ["derive"] }
-async-io = "2.3.2"
-futures-util = { version = "0.3.30", default-features = false }
+zbus.workspace = true
+serde.workspace = true
+async-io.workspace = true
+futures-util.workspace = true
 
 [lints]
 workspace = true

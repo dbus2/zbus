@@ -25,13 +25,15 @@ name = "zbus-xmlgen"
 path = "src/main.rs"
 
 [dependencies]
-zbus = { path = "../zbus", version = "5.0.0", features = ["blocking-api"] }
-zbus_xml = { path = "../zbus_xml", version = "5.0.0" }
-snakecase = "0.1.0"
-clap = { version = "4.5.4", features = ["derive", "wrap_help"] }
+zbus = { workspace = true, features = ["blocking-api"] }
+zbus_xml.workspace = true
+
+snakecase.workspace = true
+clap.workspace = true
+
 
 [dev-dependencies]
-pretty_assertions = "1.4"
+pretty_assertions.workspace = true
 
 [lints]
 workspace = true
