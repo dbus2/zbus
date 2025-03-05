@@ -29,9 +29,9 @@ p2p = ["dep:rand"]
 async-io = [
   "dep:async-io",
   "async-executor",
+  "async-fs",
   "async-task",
   "async-lock",
-  "async-fs",
   # FIXME: We only currently only need this for unix but Cargo doesn't provide a way to enable
   # features for only specific target OS: https://github.com/rust-lang/cargo/issues/1197.
   "async-process",
@@ -44,6 +44,8 @@ tokio-vsock = ["dep:tokio-vsock", "tokio"]
 blocking-api = ["zbus_macros/blocking-api"]
 # Enable `serde_bytes` feature of `zvariant`.
 serde_bytes = ["zvariant/serde_bytes"]
+# Dummy features to satisfy `cargo semver`. Should be removed at the next major version bump.
+async-fs = []
 
 [dependencies]
 zbus_macros = { path = "../zbus_macros", version = "=5.5.0" }
@@ -64,7 +66,6 @@ ordered-stream = "0.2"
 rand = { version = "0.9.0", optional = true }
 event-listener = "5.3.0"
 async-trait = "0.1.80"
-xdg-home = "1.1.0"
 tracing = "0.1.40"
 winnow = "0.7"
 
@@ -75,7 +76,6 @@ async-lock = { version = "3.3.0", optional = true }
 async-executor = { version = "1.11.0", optional = true }
 blocking = { version = "1.6.0", optional = true }
 async-task = { version = "4.7.1", optional = true }
-async-fs = { version = "2.1.2", optional = true }
 async-process = { version = "2.2.2", optional = true }
 tokio = { version = "1.37.0", optional = true, features = [
   "rt",
