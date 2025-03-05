@@ -71,7 +71,6 @@ async-io = { workspace = true, optional = true }
 async-lock = { workspace = true, optional = true }
 async-executor = { workspace = true, optional = true }
 blocking = { workspace = true, optional = true }
-async-task = { workspace = true, optional = true }
 async-process = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = [
     "rt",
