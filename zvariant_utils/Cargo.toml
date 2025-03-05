@@ -20,14 +20,12 @@ default = []
 gvariant = []
 
 [dependencies]
-proc-macro2 = "1.0.81"
-syn = { version = "2.0.64", features = ["extra-traits", "full"] }
-quote = "1.0.36"
-serde = "1.0.200"
-winnow = "0.7"
+syn.workspace = true
+serde.workspace = true
+winnow.workspace = true
 
 [dev-dependencies]
-zvariant = { path = "../zvariant" }
+zvariant.workspace = true
 
 [lints]
 workspace = true
