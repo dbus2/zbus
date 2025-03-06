@@ -1249,9 +1249,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro-crate"
-version = "3.2.0"
+version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ecf48c7ca261d60b74ab1a7b20da18bede46776b2e55535cb958eb595c5fa7b"
+checksum = "edce586971a4dfaa28950c6f18ed55e0406c1ab88bbce2c6f6293a7aaba73d35"
 dependencies = [
  "toml_edit",
 ]
@@ -1714,13 +1714,13 @@ checksum = "0dd7358ecb8fc2f8d014bf86f6f638ce72ba252a2c3a2572f2a795f1d23efb41"
 
 [[package]]
 name = "toml_edit"
-version = "0.22.22"
+version = "0.22.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ae48d6208a266e853d946088ed816055e556cc6028c5e8e2b84d9fa5dd7c7f5"
+checksum = "17b4795ff5edd201c7cd6dca065ae59972ce77d1b80fa0a84d94950ece7d1474"
 dependencies = [
  "indexmap",
  "toml_datetime",
- "winnow 0.6.25",
+ "winnow",
 ]
 
 [[package]]
@@ -2040,15 +2040,6 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "winnow"
-version = "0.6.25"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad699df48212c6cc6eb4435f35500ac6fd3b9913324f938aea302022ce19d310"
-dependencies = [
- "memchr",
-]
-
-[[package]]
-name = "winnow"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e7f4ea97f6f78012141bcdb6a216b2609f0979ada50b20ca5b52dde2eac2bb1"
@@ -2143,7 +2134,7 @@ dependencies = [
  "uds_windows",
  "vsock",
  "windows-sys 0.59.0",
- "winnow 0.7.3",
+ "winnow",
  "zbus_macros",
  "zbus_names",
  "zbus_xml",
@@ -2173,7 +2164,7 @@ version = "4.2.0"
 dependencies = [
  "criterion",
  "serde",
- "winnow 0.7.3",
+ "winnow",
  "zvariant",
 ]
 
@@ -2281,7 +2272,7 @@ dependencies = [
  "time",
  "url",
  "uuid",
- "winnow 0.7.3",
+ "winnow",
  "zvariant_derive",
  "zvariant_utils",
 ]
@@ -2309,6 +2300,6 @@ dependencies = [
  "quote",
  "serde",
  "syn 2.0.99",
- "winnow 0.7.3",
+ "winnow",
  "zvariant",
 ]
