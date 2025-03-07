@@ -27,15 +27,15 @@ bus-impl = ["p2p"]
 # Enables API that is only needed for peer-to-peer (p2p) connections.
 p2p = ["dep:rand"]
 async-io = [
-  "dep:async-io",
-  "async-executor",
-  "async-fs",
-  "async-task",
-  "async-lock",
-  # FIXME: We only currently only need this for unix but Cargo doesn't provide a way to enable
-  # features for only specific target OS: https://github.com/rust-lang/cargo/issues/1197.
-  "async-process",
-  "blocking",
+    "dep:async-io",
+    "async-executor",
+    "async-fs",
+    "async-task",
+    "async-lock",
+    # FIXME: We only currently only need this for unix but Cargo doesn't provide a way to enable
+    # features for only specific target OS: https://github.com/rust-lang/cargo/issues/1197.
+    "async-process",
+    "blocking",
 ]
 tokio = ["dep:tokio"]
 vsock = ["dep:vsock", "dep:async-io"]
@@ -48,99 +48,80 @@ serde_bytes = ["zvariant/serde_bytes"]
 async-fs = []
 
 [dependencies]
-zbus_macros = { path = "../zbus_macros", version = "=5.5.0" }
-zvariant = { path = "../zvariant", version = "5.0.0", default-features = false, features = [
-  "enumflags2",
-] }
-zbus_names = { path = "../zbus_names", version = "4.0" }
-serde = { version = "1.0.200", features = ["derive"] }
-serde_repr = "0.1.19"
-enumflags2 = { version = "0.7.9", features = ["serde"] }
-futures-core = "0.3.30"
-futures-lite = { version = "2.6.0", default-features = false, features = [
-  "std",
-] }
-async-broadcast = "0.7.0"
-hex = "0.4.3"
-ordered-stream = "0.2"
-rand = { version = "0.9.0", optional = true }
-event-listener = "5.3.0"
-async-trait = "0.1.80"
-tracing = "0.1.40"
-winnow = "0.7"
+zbus_macros.workspace = true
+zvariant = { workspace = true, features = ["enumflags2"] }
+zbus_names.workspace = true
+
+serde.workspace = true
+serde_repr.workspace = true
+enumflags2.workspace = true
+futures-core.workspace = true
+futures-lite.workspace = true
+async-broadcast.workspace = true
+hex.workspace = true
+ordered-stream.workspace = true
+rand = { workspace = true, optional = true }
+event-listener.workspace = true
+async-trait.workspace = true
+tracing.workspace = true
+winnow.workspace = true
 
 # Optional and target-specific dependencies.
-
-async-io = { version = "2.3.2", optional = true }
-async-lock = { version = "3.3.0", optional = true }
-async-executor = { version = "1.11.0", optional = true }
-blocking = { version = "1.6.0", optional = true }
-async-task = { version = "4.7.1", optional = true }
-async-process = { version = "2.2.2", optional = true }
-tokio = { version = "1.37.0", optional = true, features = [
-  "rt",
-  "net",
-  "time",
-  "fs",
-  "io-util",
-  # FIXME: We should only enable this feature for unix. See comment above regarding `async-process`
-  # on why we can't.
-  "process",
-  "sync",
-  "tracing",
+async-io = { workspace = true, optional = true }
+async-lock = { workspace = true, optional = true }
+async-executor = { workspace = true, optional = true }
+blocking = { workspace = true, optional = true }
+async-task = { workspace = true, optional = true }
+async-process = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true, features = [
+    "rt",
+    "net",
+    "time",
+    "fs",
+    "io-util",
+    # FIXME: We should only enable this feature for unix. See comment above regarding `async-process`
+    # on why we can't.
+    "process",
+    "sync",
+    "tracing",
 ] }
-vsock = { version = "0.5.0", optional = true }
-tokio-vsock = { version = "0.7", optional = true }
+vsock = { workspace = true, optional = true }
+tokio-vsock = { workspace = true, optional = true }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = [
-  "Win32_Foundation",
-  "Win32_Security_Authorization",
-  "Win32_System_Memory",
-  "Win32_Networking",
-  "Win32_Networking_WinSock",
-  "Win32_NetworkManagement",
-  "Win32_NetworkManagement_IpHelper",
-  "Win32_System_IO",
-  "Win32_System_Threading",
-] }
-uds_windows = "1.1.0"
+windows-sys.workspace = true
+uds_windows.workspace = true
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.29", default-features = false, features = [
-  "socket",
-  "uio",
-  "user",
-] }
+nix.workspace = true
 
 [target.'cfg(any(target_os = "macos", windows))'.dependencies]
-async-recursion = "1.1.1"
+async-recursion.workspace = true
 
 [dev-dependencies]
-zbus_xml = { path = "../zbus_xml", version = "5.0.0" }
-doc-comment = "0.3.3"
-futures-util = { version = "0.3.30", features = ["io"] }
-ntest = "0.9.2"
-test-log = { version = "0.2.16", features = [
-  "trace",
-], default-features = false }
-tokio = { version = "1.37.0", features = [
-  "macros",
-  "rt-multi-thread",
-  "fs",
-  "io-util",
-  "net",
-  "sync",
-  "time",
-  "test-util",
+zbus_xml.workspace = true
+
+doc-comment.workspace = true
+futures-util = { workspace = true, features = [
+    "io",
+    "async-await-macro",
+    "async-await",
 ] }
-tracing-subscriber = { version = "0.3.18", features = [
-  "env-filter",
-  "fmt",
-  "ansi",
-], default-features = false }
-tempfile = "3.10.1"
-criterion = "0.5.1"
+ntest.workspace = true
+test-log.workspace = true
+tokio = { workspace = true, features = [
+    "macros",
+    "rt-multi-thread",
+    "fs",
+    "io-util",
+    "net",
+    "sync",
+    "time",
+    "test-util",
+] }
+tracing-subscriber.workspace = true
+tempfile.workspace = true
+criterion.workspace = true
 
 [package.metadata.docs.rs]
 all-features = true
