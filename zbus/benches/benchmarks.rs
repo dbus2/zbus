@@ -33,6 +33,9 @@ fn msg_de(c: &mut Criterion) {
         b.iter(|| {
             let header = msg.header();
             black_box(header);
+            let body = msg.body();
+            let signature = body.signature();
+            black_box(signature);
         })
     });
 
@@ -43,6 +46,8 @@ fn msg_de(c: &mut Criterion) {
     g.bench_function("body", |b| {
         b.iter(|| {
             let body = msg.body();
+            let signature = body.signature();
+            black_box(signature);
             let body: BigBoy<'_> = body.deserialize().unwrap();
             black_box(body);
         })
