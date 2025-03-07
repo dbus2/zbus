@@ -21,17 +21,17 @@ default = []
 gvariant = ["zvariant_utils/gvariant", "zvariant/gvariant"]
 
 [dependencies]
-proc-macro2 = "1.0.81"
-syn = { version = "2.0.64", features = ["extra-traits", "full"] }
-quote = "1.0.36"
-proc-macro-crate = "3.2.0"
-zvariant_utils = { path = "../zvariant_utils", version = "3.1.0" }
+proc-macro2.workspace = true
+syn.workspace = true
+quote.workspace = true
+proc-macro-crate.workspace = true
+zvariant_utils.workspace = true
 
 [dev-dependencies]
-zvariant = { path = "../zvariant", features = ["enumflags2"] }
-enumflags2 = { version = "0.7.9", features = ["serde"] }
-serde = { version = "1.0.200", features = ["derive"] }
-serde_repr = "0.1.19"
+zvariant = { workspace = true, features = ["enumflags2"] }
+enumflags2.workspace = true
+serde.workspace = true
+serde_repr.workspace = true
 
 [lints]
 workspace = true
