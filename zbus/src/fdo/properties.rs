@@ -59,7 +59,7 @@ impl Properties {
         &self,
         interface_name: InterfaceName<'_>,
         property_name: &str,
-        value: Value<'_>,
+        value: &Value<'_>,
         #[zbus(object_server)] server: &ObjectServer,
         #[zbus(connection)] connection: &Connection,
         #[zbus(header)] header: Header<'_>,
@@ -76,7 +76,7 @@ impl Properties {
 
         match iface.instance.read().await.set(
             property_name,
-            &value,
+            value,
             server,
             connection,
             Some(&header),
