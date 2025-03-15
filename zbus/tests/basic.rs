@@ -3,8 +3,9 @@ use std::collections::HashMap;
 use enumflags2::BitFlags;
 use ntest::timeout;
 use test_log::test;
+use tokio::fs;
 use tracing::{debug, instrument};
-use zbus::block_on;
+use zbus::{block_on, fdo::DBusProxy};
 
 use zbus_names::UniqueName;
 use zvariant::{OwnedValue, Type};
@@ -319,6 +320,56 @@ async fn test_freedesktop_api() -> Result<()> {
         let uid: u32 = (&hashmap["UnixUserID"]).try_into().unwrap();
         debug!("DBus bus UID: {}", uid);
     }
+
+    Ok(())
+}
+
+#[cfg(unix)]
+#[tokio::test]
+#[timeout(15000)]
+#[instrument]
+async fn test_freedesktop_credentials() -> Result<()> {
+    use nix::unistd::{Gid, Uid};
+    use std::os::fd::AsRawFd;
+
+    let connection = Connection::session().await?;
+    let dbus = DBusProxy::new(&connection).await?;
+    let credentials = dbus
+        .get_connection_credentials(connection.unique_name().unwrap().into())
+        .await?;
+
+    #[cfg(target_os = "linux")]
+    {
+        if let Some(fd) = credentials.process_fd() {
+            let fd = fd.as_raw_fd();
+            let fdinfo = fs::read_to_string(&format!("/proc/self/fdinfo/{fd}")).await?;
+            let pidline = fdinfo
+                .split("\n")
+                .into_iter()
+                .find(|s| s.starts_with("Pid:"))
+                .unwrap();
+            let pid: u32 = pidline
+                .split("\t")
+                .into_iter()
+                .last()
+                .unwrap()
+                .parse()
+                .unwrap();
+            assert_eq!(std::process::id(), pid);
+        }
+    }
+
+    assert_eq!(std::process::id(), credentials.process_id().unwrap());
+    assert_eq!(
+        u32::from(Uid::effective()),
+        credentials.unix_user_id().unwrap()
+    );
+    credentials
+        .unix_group_ids()
+        .unwrap()
+        .iter()
+        .find(|group| **group == u32::from(Gid::effective()))
+        .unwrap();
 
     Ok(())
 }
