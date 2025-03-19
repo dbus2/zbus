@@ -10,6 +10,8 @@ use std::collections::HashMap;
 use zbus_names::{
     BusName, OwnedBusName, OwnedInterfaceName, OwnedUniqueName, UniqueName, WellKnownName,
 };
+#[cfg(unix)]
+use zvariant::OwnedFd;
 use zvariant::{DeserializeDict, Optional, SerializeDict, Type};
 
 use super::Result;
@@ -119,6 +121,10 @@ pub struct ConnectionCredentials {
     #[zvariant(rename = "UnixGroupIDs")]
     pub(crate) unix_group_ids: Option<Vec<u32>>,
 
+    #[cfg(unix)]
+    #[zvariant(rename = "ProcessFD")]
+    pub(crate) process_fd: Option<OwnedFd>,
+
     #[zvariant(rename = "ProcessID")]
     pub(crate) process_id: Option<u32>,
 
@@ -148,6 +154,16 @@ impl ConnectionCredentials {
     /// IDs Vec.
     pub fn into_unix_group_ids(self) -> Option<Vec<u32>> {
         self.unix_group_ids
+    }
+
+    /// A file descriptor pinning the process, on platforms that have this concept. On Linux, the
+    /// SO_PEERPIDFD socket option is a suitable implementation. This is safer to use to identify
+    /// a process than the ProcessID, as the latter is subject to re-use attacks, while the FD
+    /// cannot be recycled. If the original process no longer exists the FD will no longer be
+    /// resolvable.
+    #[cfg(unix)]
+    pub fn process_fd(&self) -> Option<&OwnedFd> {
+        self.process_fd.as_ref()
     }
 
     /// The numeric process ID, on platforms that have this concept. On Unix, this is the process ID
@@ -211,6 +227,14 @@ impl ConnectionCredentials {
         self.unix_group_ids
             .get_or_insert_with(Vec::new)
             .push(unix_group_id);
+
+        self
+    }
+
+    /// Set the process FD, on platforms that have this concept
+    #[cfg(unix)]
+    pub fn set_process_fd(mut self, process_fd: OwnedFd) -> Self {
+        self.process_fd = Some(process_fd);
 
         self
     }
