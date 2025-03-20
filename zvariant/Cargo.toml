@@ -37,6 +37,7 @@ url = { workspace = true, optional = true }
 time = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }
 heapless = { workspace = true, optional = true }
+smartstring = { workspace = true, optional = true }
 camino = { workspace = true, optional = true }
 
 

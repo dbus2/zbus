@@ -19,6 +19,7 @@ url = ["zvariant/url"]
 time = ["zvariant/time"]
 chrono = ["zvariant/chrono"]
 heapless = ["zvariant/heapless"]
+smartstring = ["zvariant/smartstring"]
 # Enables ser/de of `Option<T>` as an array of 0 or 1 elements.
 option-as-array = ["zvariant/option-as-array"]
 camino = ["zvariant/camino"]

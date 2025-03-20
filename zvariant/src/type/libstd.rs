@@ -61,6 +61,14 @@ where
     const SIGNATURE: &'static Signature = <[T]>::SIGNATURE;
 }
 
+#[cfg(feature = "smartstring")]
+impl<T> Type for smartstring::SmartString<T>
+where
+    T: smartstring::SmartStringMode,
+{
+    const SIGNATURE: &'static Signature = String::SIGNATURE;
+}
+
 #[cfg(feature = "arrayvec")]
 impl<T, const CAP: usize> Type for arrayvec::ArrayVec<T, CAP>
 where
