@@ -256,11 +256,11 @@ impl MethodInfo {
             let ret = quote!(r);
 
             quote!(match reply {
-                ::std::result::Result::Ok(r) => connection.reply(&hdr, &#ret).await,
-                ::std::result::Result::Err(e) => connection.reply_dbus_error(&hdr, e).await,
+                ::std::result::Result::Ok(r) => __zbus__connection.reply(&hdr, &#ret).await,
+                ::std::result::Result::Err(e) => __zbus__connection.reply_dbus_error(&hdr, e).await,
             })
         } else {
-            quote!(connection.reply(&hdr, &reply).await)
+            quote!(__zbus__connection.reply(&hdr, &reply).await)
         };
 
         let member_name = attrs.name.clone().unwrap_or_else(|| {
@@ -594,7 +594,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                         PropertyEmitsChangedSignal::True => {
                             quote!({
                                 self
-                                    .#prop_changed_method_name(&signal_emitter)
+                                    .#prop_changed_method_name(&__zbus__signal_emitter)
                                     .await
                                     .map(|_| set_result)
                                     .map_err(Into::into)
@@ -603,7 +603,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                         PropertyEmitsChangedSignal::Invalidates => {
                             quote!({
                                 self
-                                    .#prop_invalidate_method_name(&signal_emitter)
+                                    .#prop_invalidate_method_name(&__zbus__signal_emitter)
                                     .await
                                     .map(|_| set_result)
                                     .map_err(Into::into)
@@ -728,17 +728,17 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                         let prop_changed_method = quote!(
                             pub async fn #prop_changed_method_name(
                                 &self,
-                                signal_emitter: &#zbus::object_server::SignalEmitter<'_>,
+                                __zbus__signal_emitter: &#zbus::object_server::SignalEmitter<'_>,
                             ) -> #zbus::Result<()> {
-                                let header = ::std::option::Option::None::<&#zbus::message::Header<'_>>;
-                                let connection = signal_emitter.connection();
-                                let object_server = connection.object_server();
+                                let __zbus__header = ::std::option::Option::None::<&#zbus::message::Header<'_>>;
+                                let __zbus__connection = __zbus__signal_emitter.connection();
+                                let __zbus__object_server = __zbus__connection.object_server();
                                 #args_from_msg
                                 let mut changed = ::std::collections::HashMap::new();
                                 let value = <#zbus::zvariant::Value as ::std::convert::From<_>>::from(#prop_value_handled);
                                 changed.insert(#member_name, value);
                                 #zbus::fdo::Properties::properties_changed(
-                                    signal_emitter,
+                                    __zbus__signal_emitter,
                                     #zbus::names::InterfaceName::from_static_str_unchecked(#iface_name),
                                     changed,
                                     ::std::borrow::Cow::Borrowed(&[]),
@@ -753,10 +753,10 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                         let prop_invalidate_method = quote!(
                             pub async fn #prop_invalidate_method_name(
                                 &self,
-                                signal_emitter: &#zbus::object_server::SignalEmitter<'_>,
+                                __zbus__signal_emitter: &#zbus::object_server::SignalEmitter<'_>,
                             ) -> #zbus::Result<()> {
                                 #zbus::fdo::Properties::properties_changed(
-                                    signal_emitter,
+                                    __zbus__signal_emitter,
                                     #zbus::names::InterfaceName::from_static_str_unchecked(#iface_name),
                                     ::std::collections::HashMap::new(),
                                     ::std::borrow::Cow::Borrowed(&[#member_name]),
@@ -778,7 +778,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                         let future = async move {
                             #args_from_msg
                             let reply = self.#ident(#args_names)#method_await;
-                            let hdr = message.header();
+                            let hdr = __zbus__message.header();
                             if hdr.primary().flags().contains(zbus::message::Flags::NoReplyExpected) {
                                 Ok(())
                             } else {
@@ -876,13 +876,13 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
 
             async fn get(
                 &self,
-                property_name: &str,
-                object_server: &#zbus::ObjectServer,
-                connection: &#zbus::Connection,
-                header: Option<&#zbus::message::Header<'_>>,
-                signal_emitter: &#zbus::object_server::SignalEmitter<'_>,
+                __zbus__property_name: &str,
+                __zbus__object_server: &#zbus::ObjectServer,
+                __zbus__connection: &#zbus::Connection,
+                __zbus__header: Option<&#zbus::message::Header<'_>>,
+                __zbus__signal_emitter: &#zbus::object_server::SignalEmitter<'_>,
             ) -> ::std::option::Option<#zbus::fdo::Result<#zbus::zvariant::OwnedValue>> {
-                match property_name {
+                match __zbus__property_name {
                     #get_dispatch
                     _ => ::std::option::Option::None,
                 }
@@ -890,10 +890,10 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
 
             async fn get_all(
                 &self,
-                object_server: &#zbus::ObjectServer,
-                connection: &#zbus::Connection,
-                header: Option<&#zbus::message::Header<'_>>,
-                signal_emitter: &#zbus::object_server::SignalEmitter<'_>,
+                __zbus__object_server: &#zbus::ObjectServer,
+                __zbus__connection: &#zbus::Connection,
+                __zbus__header: Option<&#zbus::message::Header<'_>>,
+                __zbus__signal_emitter: &#zbus::object_server::SignalEmitter<'_>,
             ) -> #zbus::fdo::Result<::std::collections::HashMap<
                 ::std::string::String,
                 #zbus::zvariant::OwnedValue,
@@ -908,14 +908,14 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
 
             fn set<'call>(
                 &'call self,
-                property_name: &'call str,
+                __zbus__property_name: &'call str,
                 value: &'call #zbus::zvariant::Value<'_>,
-                object_server: &'call #zbus::ObjectServer,
-                connection: &'call #zbus::Connection,
-                header: Option<&'call #zbus::message::Header<'_>>,
-                signal_emitter: &'call #zbus::object_server::SignalEmitter<'_>,
+                __zbus__object_server: &'call #zbus::ObjectServer,
+                __zbus__connection: &'call #zbus::Connection,
+                __zbus__header: Option<&'call #zbus::message::Header<'_>>,
+                __zbus__signal_emitter: &'call #zbus::object_server::SignalEmitter<'_>,
             ) -> #zbus::object_server::DispatchResult<'call> {
-                match property_name {
+                match __zbus__property_name {
                     #set_dispatch
                     _ => #zbus::object_server::DispatchResult::NotFound,
                 }
@@ -923,14 +923,14 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
 
             async fn set_mut(
                 &mut self,
-                property_name: &str,
+                __zbus__property_name: &str,
                 value: &#zbus::zvariant::Value<'_>,
-                object_server: &#zbus::ObjectServer,
-                connection: &#zbus::Connection,
-                header: Option<&#zbus::message::Header<'_>>,
-                signal_emitter: &#zbus::object_server::SignalEmitter<'_>,
+                __zbus__object_server: &#zbus::ObjectServer,
+                __zbus__connection: &#zbus::Connection,
+                __zbus__header: Option<&#zbus::message::Header<'_>>,
+                __zbus__signal_emitter: &#zbus::object_server::SignalEmitter<'_>,
             ) -> ::std::option::Option<#zbus::fdo::Result<()>> {
-                match property_name {
+                match __zbus__property_name {
                     #set_mut_dispatch
                     _ => ::std::option::Option::None,
                 }
@@ -938,9 +938,9 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
 
             fn call<'call>(
                 &'call self,
-                object_server: &'call #zbus::ObjectServer,
-                connection: &'call #zbus::Connection,
-                message: &'call #zbus::message::Message,
+                __zbus__object_server: &'call #zbus::ObjectServer,
+                __zbus__connection: &'call #zbus::Connection,
+                __zbus__message: &'call #zbus::message::Message,
                 name: #zbus::names::MemberName<'call>,
             ) -> #zbus::object_server::DispatchResult<'call> {
                 match name.as_str() {
@@ -951,9 +951,9 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
 
             fn call_mut<'call>(
                 &'call mut self,
-                object_server: &'call #zbus::ObjectServer,
-                connection: &'call #zbus::Connection,
-                message: &'call #zbus::message::Message,
+                __zbus__object_server: &'call #zbus::ObjectServer,
+                __zbus__connection: &'call #zbus::Connection,
+                __zbus__message: &'call #zbus::message::Message,
                 name: #zbus::names::MemberName<'call>,
             ) -> #zbus::object_server::DispatchResult<'call> {
                 match name.as_str() {
@@ -1016,7 +1016,7 @@ fn get_args_from_inputs(
                 }
 
                 let server_arg = &input.pat;
-                server_arg_decl = Some(quote! { let #server_arg = &object_server; });
+                server_arg_decl = Some(quote! { let #server_arg = &__zbus__object_server; });
             } else if connection {
                 if conn_arg_decl.is_some() {
                     return Err(Error::new_spanned(
@@ -1026,7 +1026,7 @@ fn get_args_from_inputs(
                 }
 
                 let conn_arg = &input.pat;
-                conn_arg_decl = Some(quote! { let #conn_arg = &connection; });
+                conn_arg_decl = Some(quote! { let #conn_arg = &__zbus__connection; });
             } else if header {
                 if header_arg_decl.is_some() {
                     return Err(Error::new_spanned(
@@ -1039,9 +1039,12 @@ fn get_args_from_inputs(
 
                 header_arg_decl = match method_type {
                     MethodType::Property(_) => Some(quote! {
-                        let #header_arg = ::std::option::Option::<&#zbus::message::Header<'_>>::cloned(header);
+                        let #header_arg =
+                            ::std::option::Option::<&#zbus::message::Header<'_>>::cloned(
+                                __zbus__header,
+                            );
                     }),
-                    _ => Some(quote! { let #header_arg = message.header(); }),
+                    _ => Some(quote! { let #header_arg = __zbus__message.header(); }),
                 };
             } else if signal_context || signal_emitter {
                 if signal_emitter_arg_decl.is_some() {
@@ -1055,16 +1058,16 @@ fn get_args_from_inputs(
 
                 signal_emitter_arg_decl = match method_type {
                     MethodType::Property(_) => Some(
-                        quote! { let #signal_context_arg = ::std::clone::Clone::clone(signal_emitter); },
+                        quote! { let #signal_context_arg = ::std::clone::Clone::clone(__zbus__signal_emitter); },
                     ),
                     _ => Some(quote! {
                         let #signal_context_arg = match hdr.path() {
                             ::std::option::Option::Some(p) => {
-                                #zbus::object_server::SignalEmitter::new(connection, p).expect("Infallible conversion failed")
+                                #zbus::object_server::SignalEmitter::new(__zbus__connection, p).expect("Infallible conversion failed")
                             }
                             ::std::option::Option::None => {
                                 let err = #zbus::fdo::Error::UnknownObject("Path Required".into());
-                                return connection.reply_dbus_error(&hdr, err).await;
+                                return __zbus__connection.reply_dbus_error(&hdr, err).await;
                             }
                         };
                     }),
@@ -1078,20 +1081,20 @@ fn get_args_from_inputs(
         let (hdr_init, msg_init, args_decl) = match method_type {
             MethodType::Property(PropertyType::Getter) => (quote! {}, quote! {}, quote! {}),
             MethodType::Property(PropertyType::Setter) => (
-                quote! { let hdr = header.as_ref().unwrap(); },
+                quote! { let hdr = __zbus__header.as_ref().unwrap(); },
                 quote! {},
                 quote! {},
             ),
             _ => (
-                quote! { let hdr = message.header(); },
-                quote! { let msg_body = message.body(); },
+                quote! { let hdr = __zbus__message.header(); },
+                quote! { let msg_body = __zbus__message.body(); },
                 quote! {
                     let (#(#args_names),*): (#(#tys),*) =
                         match msg_body.deserialize() {
                             ::std::result::Result::Ok(r) => r,
                             ::std::result::Result::Err(e) => {
                                 let err = <#zbus::fdo::Error as ::std::convert::From<_>>::from(e);
-                                return connection.reply_dbus_error(&hdr, err).await;
+                                return __zbus__connection.reply_dbus_error(&hdr, err).await;
                             }
                         };
                 },
