@@ -807,7 +807,7 @@ impl<'a> Proxy<'a> {
         T: 't + Into<Value<'t>>,
     {
         self.properties_proxy()
-            .set(self.inner.interface.as_ref(), property_name, value.into())
+            .set(self.inner.interface.as_ref(), property_name, &value.into())
             .await
     }
 
