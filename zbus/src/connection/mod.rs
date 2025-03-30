@@ -1193,6 +1193,14 @@ impl Connection {
     }
 
     /// Create a `Connection` to the system-wide message bus.
+    ///
+    /// # Security
+    ///
+    /// <div class="warning">
+    ///
+    /// `zbus` does not validate the address used by this connection.
+    /// See [zbus::Address::system] for more details.
+    /// </div>
     pub async fn system() -> Result<Self> {
         Builder::system()?.build().await
     }

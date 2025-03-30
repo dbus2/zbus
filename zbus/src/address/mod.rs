@@ -87,6 +87,17 @@ impl Address {
     /// Get the address for the system bus respecting the `DBUS_SYSTEM_BUS_ADDRESS` environment
     /// variable. If we don't recognize the value (or it's not set) we fall back to
     /// `/var/run/dbus/system_bus_socket`.
+    ///
+    /// # Security
+    ///
+    /// <div class="warning">
+    ///
+    /// `zbus` does not perform any security checks or trust validation on the address (path)
+    /// returned by this method.
+    ///
+    /// Users in security-sensitive contexts (ex: authentication) are responsible for validating
+    /// if the address is truly controlled by the system and trustworthy for the intended purpose.
+    /// </div>
     pub fn system() -> Result<Self> {
         match env::var("DBUS_SYSTEM_BUS_ADDRESS") {
             Ok(val) => Self::from_str(&val),

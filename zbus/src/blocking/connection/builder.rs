@@ -30,6 +30,14 @@ impl<'a> Builder<'a> {
     }
 
     /// Create a builder for the system-wide message bus connection.
+    ///
+    /// # Security
+    ///
+    /// <div class="warning">
+    ///
+    /// `zbus` does not validate the address used by this builder's connection.
+    /// See [zbus::Address::system] for more details.
+    /// </div>
     pub fn system() -> Result<Self> {
         crate::connection::Builder::system().map(Self)
     }
