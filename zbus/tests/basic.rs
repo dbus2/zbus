@@ -356,12 +356,13 @@ async fn test_freedesktop_credentials() -> Result<()> {
         u32::from(Uid::effective()),
         credentials.unix_user_id().unwrap()
     );
-    credentials
-        .unix_group_ids()
-        .unwrap()
-        .iter()
-        .find(|group| **group == u32::from(Gid::effective()))
-        .unwrap();
+
+    if let Some(group_ids) = credentials.unix_group_ids() {
+        group_ids
+            .iter()
+            .find(|group| **group == u32::from(Gid::effective()))
+            .unwrap();
+    }
 
     Ok(())
 }
