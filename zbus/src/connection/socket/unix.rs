@@ -103,7 +103,7 @@ impl super::WriteHalf for Arc<Async<UnixStream>> {
     }
 
     async fn peer_credentials(&mut self) -> io::Result<crate::fdo::ConnectionCredentials> {
-        get_unix_peer_creds(self).await
+        super::ReadHalf::peer_credentials(self).await
     }
 }
 
