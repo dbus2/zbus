@@ -331,18 +331,41 @@ fn get_unix_peer_creds_blocking(fd: RawFd) -> io::Result<crate::fdo::ConnectionC
     // TODO: get this BorrowedFd directly from get_unix_peer_creds(), but this requires a
     // 'static lifetime due to the Task.
     let fd = unsafe { BorrowedFd::borrow_raw(fd) };
+    let mut creds = crate::fdo::ConnectionCredentials::default();
 
     #[cfg(any(target_os = "android", target_os = "linux"))]
     {
-        use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
+        use nix::{
+            sys::socket::{getsockopt, sockopt::PeerCredentials},
+            unistd::{getgrouplist, Gid, Uid, User},
+        };
+        use std::ffi::CString;
 
-        getsockopt(&fd, PeerCredentials)
-            .map(|creds| {
-                crate::fdo::ConnectionCredentials::default()
-                    .set_process_id(creds.pid() as _)
-                    .set_unix_user_id(creds.uid())
-            })
-            .map_err(|e| e.into())
+        let (uid, gid, pid) = {
+            let unix_creds = getsockopt(&fd, PeerCredentials)?;
+            (
+                Uid::from_raw(unix_creds.uid()),
+                Gid::from_raw(unix_creds.uid()),
+                unix_creds.pid() as u32,
+            )
+        };
+        creds = creds.set_unix_user_id(uid.as_raw()).set_process_id(pid);
+
+        // the dbus spec requires groups to be either absent or complete (primary + secondary
+        // groups)
+        let mut groups = User::from_uid(uid)?
+            .map(|user| CString::new(user.name))
+            .transpose()?
+            .map(|user| getgrouplist(&user, gid))
+            .transpose()
+            .ok()
+            .flatten()
+            .unwrap_or(Vec::new());
+        // it also requires the groups to be numerically sorted
+        groups.sort_by_key(|gid| gid.as_raw());
+        for group in groups.iter() {
+            creds = creds.add_unix_group_id(group.as_raw());
+        }
     }
 
     #[cfg(any(
@@ -354,10 +377,13 @@ fn get_unix_peer_creds_blocking(fd: RawFd) -> io::Result<crate::fdo::ConnectionC
         target_os = "netbsd"
     ))]
     {
-        let uid = nix::unistd::getpeereid(fd).map(|(uid, _)| uid.into())?;
-        // FIXME: Handle pid fetching too.
-        Ok(crate::fdo::ConnectionCredentials::default().set_unix_user_id(uid))
+        let (uid, _gid) = nix::unistd::getpeereid(fd)?;
+        creds = creds.set_unix_user_id(uid.as_raw())
+
+        // FIXME: Handle pid fetching too
     }
+
+    Ok(creds)
 }
 
 // Send 0 byte as a separate SCM_CREDS message.
