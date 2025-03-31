@@ -336,10 +336,15 @@ fn get_unix_peer_creds_blocking(fd: RawFd) -> io::Result<crate::fdo::ConnectionC
     #[cfg(any(target_os = "android", target_os = "linux"))]
     {
         use nix::{
-            sys::socket::{getsockopt, sockopt::PeerCredentials},
+            errno::Errno,
+            sys::socket::{
+                getsockopt,
+                sockopt::{PeerCredentials, PeerPidfd},
+            },
             unistd::{getgrouplist, Gid, Uid, User},
         };
         use std::ffi::CString;
+        use zvariant::OwnedFd;
 
         let (uid, gid, pid) = {
             let unix_creds = getsockopt(&fd, PeerCredentials)?;
@@ -366,6 +371,12 @@ fn get_unix_peer_creds_blocking(fd: RawFd) -> io::Result<crate::fdo::ConnectionC
         for group in groups.iter() {
             creds = creds.add_unix_group_id(group.as_raw());
         }
+
+        match getsockopt(&fd, PeerPidfd) {
+            Err(Errno::ENOPROTOOPT) => (),
+            Ok(pidfd) => creds = creds.set_process_fd(OwnedFd::from(pidfd)),
+            Err(e) => return Err(e.into()),
+        };
     }
 
     #[cfg(any(
