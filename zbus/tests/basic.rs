@@ -345,18 +345,8 @@ async fn test_freedesktop_credentials() -> Result<()> {
         if let Some(fd) = credentials.process_fd() {
             let fd = fd.as_raw_fd();
             let fdinfo = read_to_string(&format!("/proc/self/fdinfo/{fd}")).await?;
-            let pidline = fdinfo
-                .split("\n")
-                .into_iter()
-                .find(|s| s.starts_with("Pid:"))
-                .unwrap();
-            let pid: u32 = pidline
-                .split("\t")
-                .into_iter()
-                .last()
-                .unwrap()
-                .parse()
-                .unwrap();
+            let pidline = fdinfo.split('\n').find(|s| s.starts_with("Pid:")).unwrap();
+            let pid: u32 = pidline.split('\t').next_back().unwrap().parse().unwrap();
             assert_eq!(std::process::id(), pid);
         }
     }
