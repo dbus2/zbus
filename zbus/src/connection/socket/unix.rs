@@ -1,5 +1,6 @@
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
+use std::io;
 #[cfg(unix)]
 use std::os::unix::io::{AsRawFd, BorrowedFd, FromRawFd, RawFd};
 #[cfg(all(unix, not(feature = "tokio")))]
@@ -9,7 +10,7 @@ use std::sync::Arc;
 #[cfg(unix)]
 use std::{
     future::poll_fn,
-    io::{self, IoSlice, IoSliceMut},
+    io::{IoSlice, IoSliceMut},
     os::fd::OwnedFd,
     task::Poll,
 };
@@ -220,7 +221,7 @@ impl super::ReadHalf for Arc<Async<UnixStream>> {
         }
     }
 
-    async fn peer_credentials(&mut self) -> std::io::Result<crate::fdo::ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> io::Result<crate::fdo::ConnectionCredentials> {
         let stream = self.clone();
         crate::Task::spawn_blocking(
             move || {
@@ -246,11 +247,11 @@ impl super::WriteHalf for Arc<Async<UnixStream>> {
         &mut self,
         buf: &[u8],
         #[cfg(unix)] _fds: &[BorrowedFd<'_>],
-    ) -> std::io::Result<usize> {
+    ) -> io::Result<usize> {
         futures_lite::AsyncWriteExt::write(&mut self.as_ref(), buf).await
     }
 
-    async fn close(&mut self) -> std::io::Result<()> {
+    async fn close(&mut self) -> io::Result<()> {
         let stream = self.clone();
         crate::Task::spawn_blocking(
             move || stream.get_ref().shutdown(std::net::Shutdown::Both),
@@ -259,7 +260,7 @@ impl super::WriteHalf for Arc<Async<UnixStream>> {
         .await
     }
 
-    async fn peer_credentials(&mut self) -> std::io::Result<crate::fdo::ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> io::Result<crate::fdo::ConnectionCredentials> {
         super::ReadHalf::peer_credentials(self).await
     }
 }
