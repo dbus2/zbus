@@ -20,7 +20,7 @@ mod body;
 pub use body::Body;
 
 pub(crate) mod header;
-pub use header::{EndianSig, Flags, Header, PrimaryHeader, Type, NATIVE_ENDIAN_SIG};
+pub use header::{EndianSig, Flags, Header, PrimaryHeader, Type, NATIVE_ENDIAN_SIG, take_serial};
 use header::{MIN_MESSAGE_SIZE, PRIMARY_HEADER_SIZE};
 
 /// A position in the stream of [`Message`] objects received by a single [`zbus::Connection`].
