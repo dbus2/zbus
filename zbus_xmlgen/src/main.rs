@@ -98,7 +98,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             OutputTarget::MultipleFiles => {
                 let filename = interface_name
                     .split('.')
-                    .last()
+                    .next_back()
                     .expect("Failed to split name");
                 let filename = to_snakecase(filename);
                 std::fs::write(format!("{}.rs", &filename), output)?;
