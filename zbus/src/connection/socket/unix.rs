@@ -1,5 +1,6 @@
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
+use std::io;
 #[cfg(unix)]
 use std::os::unix::io::{AsRawFd, BorrowedFd, FromRawFd, RawFd};
 #[cfg(all(unix, not(feature = "tokio")))]
@@ -9,7 +10,7 @@ use std::sync::Arc;
 #[cfg(unix)]
 use std::{
     future::poll_fn,
-    io::{self, IoSlice, IoSliceMut},
+    io::{IoSlice, IoSliceMut},
     os::fd::OwnedFd,
     task::Poll,
 };
@@ -102,7 +103,7 @@ impl super::WriteHalf for Arc<Async<UnixStream>> {
     }
 
     async fn peer_credentials(&mut self) -> io::Result<crate::fdo::ConnectionCredentials> {
-        get_unix_peer_creds(self).await
+        super::ReadHalf::peer_credentials(self).await
     }
 }
 
@@ -220,7 +221,7 @@ impl super::ReadHalf for Arc<Async<UnixStream>> {
         }
     }
 
-    async fn peer_credentials(&mut self) -> std::io::Result<crate::fdo::ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> io::Result<crate::fdo::ConnectionCredentials> {
         let stream = self.clone();
         crate::Task::spawn_blocking(
             move || {
@@ -246,11 +247,11 @@ impl super::WriteHalf for Arc<Async<UnixStream>> {
         &mut self,
         buf: &[u8],
         #[cfg(unix)] _fds: &[BorrowedFd<'_>],
-    ) -> std::io::Result<usize> {
+    ) -> io::Result<usize> {
         futures_lite::AsyncWriteExt::write(&mut self.as_ref(), buf).await
     }
 
-    async fn close(&mut self) -> std::io::Result<()> {
+    async fn close(&mut self) -> io::Result<()> {
         let stream = self.clone();
         crate::Task::spawn_blocking(
             move || stream.get_ref().shutdown(std::net::Shutdown::Both),
@@ -259,7 +260,7 @@ impl super::WriteHalf for Arc<Async<UnixStream>> {
         .await
     }
 
-    async fn peer_credentials(&mut self) -> std::io::Result<crate::fdo::ConnectionCredentials> {
+    async fn peer_credentials(&mut self) -> io::Result<crate::fdo::ConnectionCredentials> {
         super::ReadHalf::peer_credentials(self).await
     }
 }
@@ -330,18 +331,52 @@ fn get_unix_peer_creds_blocking(fd: RawFd) -> io::Result<crate::fdo::ConnectionC
     // TODO: get this BorrowedFd directly from get_unix_peer_creds(), but this requires a
     // 'static lifetime due to the Task.
     let fd = unsafe { BorrowedFd::borrow_raw(fd) };
+    let mut creds = crate::fdo::ConnectionCredentials::default();
 
     #[cfg(any(target_os = "android", target_os = "linux"))]
     {
-        use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
+        use nix::{
+            errno::Errno,
+            sys::socket::{
+                getsockopt,
+                sockopt::{PeerCredentials, PeerPidfd},
+            },
+            unistd::{getgrouplist, Gid, Uid, User},
+        };
+        use std::ffi::CString;
+        use zvariant::OwnedFd;
 
-        getsockopt(&fd, PeerCredentials)
-            .map(|creds| {
-                crate::fdo::ConnectionCredentials::default()
-                    .set_process_id(creds.pid() as _)
-                    .set_unix_user_id(creds.uid())
-            })
-            .map_err(|e| e.into())
+        let (uid, gid, pid) = {
+            let unix_creds = getsockopt(&fd, PeerCredentials)?;
+            (
+                Uid::from_raw(unix_creds.uid()),
+                Gid::from_raw(unix_creds.uid()),
+                unix_creds.pid() as u32,
+            )
+        };
+        creds = creds.set_unix_user_id(uid.as_raw()).set_process_id(pid);
+
+        // the dbus spec requires groups to be either absent or complete (primary + secondary
+        // groups)
+        let mut groups = User::from_uid(uid)?
+            .map(|user| CString::new(user.name))
+            .transpose()?
+            .map(|user| getgrouplist(&user, gid))
+            .transpose()
+            .ok()
+            .flatten()
+            .unwrap_or(Vec::new());
+        // it also requires the groups to be numerically sorted
+        groups.sort_by_key(|gid| gid.as_raw());
+        for group in groups.iter() {
+            creds = creds.add_unix_group_id(group.as_raw());
+        }
+
+        match getsockopt(&fd, PeerPidfd) {
+            Err(Errno::ENOPROTOOPT) => (),
+            Ok(pidfd) => creds = creds.set_process_fd(OwnedFd::from(pidfd)),
+            Err(e) => return Err(e.into()),
+        };
     }
 
     #[cfg(any(
@@ -353,10 +388,13 @@ fn get_unix_peer_creds_blocking(fd: RawFd) -> io::Result<crate::fdo::ConnectionC
         target_os = "netbsd"
     ))]
     {
-        let uid = nix::unistd::getpeereid(fd).map(|(uid, _)| uid.into())?;
-        // FIXME: Handle pid fetching too.
-        Ok(crate::fdo::ConnectionCredentials::default().set_unix_user_id(uid))
+        let (uid, _gid) = nix::unistd::getpeereid(fd)?;
+        creds = creds.set_unix_user_id(uid.as_raw())
+
+        // FIXME: Handle pid fetching too
     }
+
+    Ok(creds)
 }
 
 // Send 0 byte as a separate SCM_CREDS message.
