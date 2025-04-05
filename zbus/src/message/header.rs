@@ -122,18 +122,13 @@ pub struct PrimaryHeader {
 impl PrimaryHeader {
     /// Create a new `PrimaryHeader` instance.
     pub fn new(msg_type: Type, body_len: u32) -> Self {
-        let mut serial_num = SERIAL_NUM.fetch_add(1, Relaxed);
-        if serial_num == 0 {
-            serial_num = SERIAL_NUM.fetch_add(1, Relaxed);
-        }
-
         Self {
             endian_sig: NATIVE_ENDIAN_SIG,
             msg_type,
             flags: BitFlags::empty(),
             protocol_version: 1,
             body_len,
-            serial_num: serial_num.try_into().unwrap(),
+            serial_num: take_serial(),
         }
     }
 
@@ -313,6 +308,15 @@ impl<'m> Header<'m> {
 }
 
 static SERIAL_NUM: AtomicU32 = AtomicU32::new(0);
+
+/// Get a new guaranteed-unique serial.
+pub fn take_serial() -> NonZeroU32 {
+    let mut serial_num = SERIAL_NUM.fetch_add(1, Relaxed);
+    if serial_num == 0 {
+        serial_num = SERIAL_NUM.fetch_add(1, Relaxed);
+    }
+    serial_num.try_into().unwrap()
+}
 
 #[cfg(test)]
 mod tests {
