@@ -1,6 +1,7 @@
 use std::{
     borrow::Cow,
     io::{Cursor, Write},
+    num::NonZeroU32,
     sync::Arc,
 };
 #[cfg(unix)]
@@ -118,6 +119,20 @@ impl<'a> Builder<'a> {
     {
         self.header.fields_mut().destination = Some(destination.try_into().map_err(Into::into)?);
         Ok(self)
+    }
+
+    /// Override the generated or inherited serial.  This is a low level modification,
+    /// generally you should not need to use this.
+    pub fn serial(mut self, serial: NonZeroU32) -> Self {
+        self.header.primary_mut().set_serial_num(serial);
+        self
+    }
+
+    /// Override the reply serial. This is a low level modification, generally you should use
+    /// `Message::method_return` instead.
+    pub fn reply_serial(mut self, serial: Option<NonZeroU32>) -> Self {
+        self.header.fields_mut().reply_serial = serial;
+        self
     }
 
     pub(super) fn reply_to(mut self, reply_to: &Header<'_>) -> Result<Self> {
