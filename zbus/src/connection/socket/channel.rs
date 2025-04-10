@@ -69,6 +69,11 @@ impl super::ReadHalf for Reader {
         })
     }
 
+    /// Supports passing file descriptors.
+    fn can_pass_unix_fd(&self) -> bool {
+        true
+    }
+
     async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {
         self_credentials().await
     }
@@ -103,6 +108,11 @@ impl super::WriteHalf for Writer {
         self.0.close();
 
         Ok(())
+    }
+
+    /// Supports passing file descriptors.
+    fn can_pass_unix_fd(&self) -> bool {
+        true
     }
 
     async fn peer_credentials(&mut self) -> io::Result<ConnectionCredentials> {

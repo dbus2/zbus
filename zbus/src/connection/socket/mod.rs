@@ -93,7 +93,7 @@ pub trait ReadHalf: std::fmt::Debug + Send + Sync + 'static {
         &mut self,
         seq: u64,
         already_received_bytes: &mut Vec<u8>,
-        #[cfg(unix)] already_received_fds: &mut Vec<std::os::fd::OwnedFd>,
+        #[cfg(unix)] already_received_fds: &mut Vec<OwnedFd>,
     ) -> crate::Result<Message> {
         #[cfg(unix)]
         let mut fds = vec![];
@@ -347,7 +347,7 @@ impl ReadHalf for Box<dyn ReadHalf> {
         &mut self,
         seq: u64,
         already_received_bytes: &mut Vec<u8>,
-        #[cfg(unix)] already_received_fds: &mut Vec<std::os::fd::OwnedFd>,
+        #[cfg(unix)] already_received_fds: &mut Vec<OwnedFd>,
     ) -> crate::Result<Message> {
         (**self)
             .receive_message(
