@@ -19,7 +19,11 @@ pub fn expand_derive(ast: DeriveInput, value_type: ValueType) -> Result<TokenStr
     match &ast.data {
         Data::Struct(ds) => match &ds.fields {
             Fields::Named(_) | Fields::Unnamed(_) => {
-                let StructAttributes { signature, .. } = StructAttributes::parse(&ast.attrs)?;
+                let StructAttributes {
+                    signature,
+                    rename_all,
+                    ..
+                } = StructAttributes::parse(&ast.attrs)?;
                 let signature = signature.map(|signature| match signature.as_str() {
                     "dict" => "a{sv}".to_string(),
                     _ => signature,
@@ -32,6 +36,7 @@ pub fn expand_derive(ast: DeriveInput, value_type: ValueType) -> Result<TokenStr
                     &ds.fields,
                     signature,
                     &zv,
+                    rename_all,
                 )
             }
             Fields::Unit => Err(Error::new(ast.span(), "Unit structures not supported")),
@@ -51,6 +56,7 @@ fn impl_struct(
     fields: &Fields,
     signature: Option<String>,
     zv: &TokenStream,
+    rename_all: Option<String>,
 ) -> Result<TokenStream, Error> {
     let statc_lifetime = LifetimeParam::new(Lifetime::new("'static", Span::call_site()));
     let (
@@ -130,7 +136,16 @@ fn impl_struct(
                     let (fields_init, entries_init): (TokenStream, TokenStream) = fields
                         .iter()
                         .map(|field| {
+                            let FieldAttributes { rename } =
+                                FieldAttributes::parse(&field.attrs).unwrap_or_default();
                             let field_name = field.ident.to_token_stream();
+                            let key_name = rename_identifier(
+                                field.ident.as_ref().unwrap().to_string(),
+                                field.span(),
+                                rename,
+                                rename_all.as_deref(),
+                            )
+                            .unwrap_or(field_name.to_string());
                             let convert = if macros::ty_is_option(&field.ty) {
                                 quote! {
                                     .map(#zv::Value::downcast)
@@ -145,14 +160,14 @@ fn impl_struct(
 
                             let fields_init = quote! {
                                 #field_name: fields
-                                    .remove(stringify!(#field_name))
+                                    .remove(#key_name)
                                     #convert,
                             };
                             let entries_init = if macros::ty_is_option(&field.ty) {
                                 quote! {
                                     if let Some(v) = s.#field_name {
                                         fields.insert(
-                                            stringify!(#field_name),
+                                            #key_name,
                                             #zv::Value::from(v),
                                         );
                                     }
@@ -160,7 +175,7 @@ fn impl_struct(
                             } else {
                                 quote! {
                                     fields.insert(
-                                        stringify!(#field_name),
+                                        #key_name,
                                         #zv::Value::from(s.#field_name),
                                     );
                                 }

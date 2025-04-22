@@ -424,6 +424,54 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// assert_eq!(e, StrEnum::Variant2);
 /// ```
 ///
+/// # Renaming fields
+///
+/// ## Auto Renaming
+///
+/// The macro supports specifying a Serde-like `#[zvariant(rename_all = "case")]` attribute on
+/// structures. The attribute allows to rename all the fields from snake case to another case
+/// automatically.
+///
+/// Currently the macro supports the following values for `case`:
+///
+/// * `"lowercase"`
+/// * `"UPPERCASE"`
+/// * `"PascalCase"`
+/// * `"camelCase"`
+/// * `"snake_case"`
+/// * `"kebab-case"`
+///
+/// ## Individual Fields
+///
+/// It's still possible to specify custom names for individual fields using the
+/// `#[zvariant(rename = "another-name")]` attribute even when the `rename_all` attribute is
+/// present.
+///
+/// Here is an example using both `rename` and `rename_all`:
+///
+/// ```
+/// # use zvariant::{OwnedValue, Value, Dict};
+/// # use std::collections::HashMap;
+/// #
+/// #[derive(Clone, Value, OwnedValue)]
+/// #[zvariant(signature = "dict", rename_all = "PascalCase")]
+/// struct RenamedStruct {
+///     #[zvariant(rename = "MyValue")]
+///     field1: String,
+///     field2: String,
+/// }
+///
+/// let s = RenamedStruct {
+///     field1: String::from("hello"),
+///     field2: String::from("world")
+/// };
+/// let v = Value::from(s);
+/// let d = Dict::try_from(v).unwrap();
+/// let hm: HashMap<String, String> = HashMap::try_from(d).unwrap();
+/// assert_eq!(hm.get("MyValue").unwrap().as_str(), "hello");
+/// assert_eq!(hm.get("Field2").unwrap().as_str(), "world");
+/// ```
+///
 /// # Dictionary encoding
 ///
 /// For treating your type as a dictionary, you can use the `signature = "dict"` attribute. See
