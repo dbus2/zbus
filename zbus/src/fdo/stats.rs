@@ -17,13 +17,13 @@ use crate::proxy;
     default_path = "/org/freedesktop/DBus"
 )]
 pub trait Stats {
-    /// GetStats (undocumented)
-    fn get_stats(&self) -> Result<Vec<HashMap<String, OwnedValue>>>;
+    /// GetStats (undocumented - tested with dbus-broker-36-4)
+    fn get_stats(&self) -> Result<HashMap<String, OwnedValue>>;
 
-    /// GetConnectionStats (undocumented)
+    /// GetConnectionStats (undocumented - unimplemented with dbus-broker-36-4)
     fn get_connection_stats(&self, name: BusName<'_>) -> Result<Vec<HashMap<String, OwnedValue>>>;
 
-    /// GetAllMatchRules (undocumented)
+    /// GetAllMatchRules (undocumented - unimplemented with dbus-broker-36-4)
     fn get_all_match_rules(
         &self,
     ) -> Result<Vec<HashMap<crate::names::OwnedUniqueName, Vec<crate::OwnedMatchRule>>>>;
