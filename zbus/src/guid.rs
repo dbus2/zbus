@@ -153,6 +153,12 @@ impl Deref for Guid<'_> {
     }
 }
 
+impl<'a> Borrow<Guid<'a>> for OwnedGuid {
+    fn borrow(&self) -> &Guid<'a> {
+        &self.0
+    }
+}
+
 impl AsRef<str> for Guid<'_> {
     fn as_ref(&self) -> &str {
         self.as_str()

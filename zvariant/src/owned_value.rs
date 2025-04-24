@@ -1,5 +1,5 @@
 use serde::{Deserialize, Deserializer, Serialize};
-use std::{collections::HashMap, hash::BuildHasher};
+use std::{borrow::Borrow, collections::HashMap, hash::BuildHasher};
 
 use crate::{
     Array, Dict, NoneValue, ObjectPath, Optional, OwnedObjectPath, Signature, Str, Structure, Type,
@@ -266,6 +266,12 @@ impl std::ops::Deref for OwnedValue {
     type Target = Value<'static>;
 
     fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<'a> Borrow<Value<'a>> for OwnedValue {
+    fn borrow(&self) -> &Value<'a> {
         &self.0
     }
 }

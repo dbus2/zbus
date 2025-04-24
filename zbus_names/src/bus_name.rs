@@ -397,6 +397,12 @@ impl Deref for OwnedBusName {
     }
 }
 
+impl<'a> Borrow<BusName<'a>> for OwnedBusName {
+    fn borrow(&self) -> &BusName<'a> {
+        &self.0
+    }
+}
+
 impl Borrow<str> for OwnedBusName {
     fn borrow(&self) -> &str {
         self.0.as_str()

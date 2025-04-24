@@ -1,6 +1,7 @@
 //! Bus match rule API.
 
 use std::{
+    borrow::Borrow,
     fmt::{Display, Write},
     ops::Deref,
 };
@@ -534,6 +535,12 @@ impl Deref for OwnedMatchRule {
     type Target = MatchRule<'static>;
 
     fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<'a> Borrow<MatchRule<'a>> for OwnedMatchRule {
+    fn borrow(&self) -> &MatchRule<'a> {
         &self.0
     }
 }

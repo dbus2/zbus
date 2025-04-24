@@ -217,6 +217,12 @@ impl Deref for OwnedErrorName {
     }
 }
 
+impl<'a> Borrow<ErrorName<'a>> for OwnedErrorName {
+    fn borrow(&self) -> &ErrorName<'a> {
+        &self.0
+    }
+}
+
 impl Borrow<str> for OwnedErrorName {
     fn borrow(&self) -> &str {
         self.0.as_str()
