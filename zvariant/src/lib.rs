@@ -122,7 +122,7 @@ mod tests {
 
     use serde::{Deserialize, Serialize};
 
-    use crate::{to_bytes, to_bytes_for_signature, MaxDepthExceeded};
+    use crate::{to_bytes, to_bytes_for_signature, DynamicType, MaxDepthExceeded};
 
     #[cfg(unix)]
     use crate::Fd;
@@ -1093,13 +1093,64 @@ mod tests {
             panic!();
         }
 
-        #[derive(SerializeDict, DeserializeDict, Type, PartialEq, Debug)]
+        #[derive(Serialize, Deserialize, Type, PartialEq, Debug)]
         #[zvariant(signature = "a{sv}")]
         struct Test {
+            #[serde(with = "optional", skip_serializing_if = "Option::is_none", default)]
             process_id: Option<u32>,
+            #[serde(with = "optional", skip_serializing_if = "Option::is_none", default)]
             group_id: Option<u32>,
+            #[serde(with = "value")]
             user: String,
         }
+
+        mod optional {
+            use super::*;
+
+            pub fn serialize<T, S>(
+                value: &Option<T>,
+                ser: S,
+            ) -> std::result::Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+                for<'a> &'a T: Into<Value<'a>> + DynamicType,
+            {
+                Value::new(value.as_ref().unwrap()).serialize(ser)
+            }
+
+            pub fn deserialize<'de, T, D>(
+                deserializer: D,
+            ) -> std::result::Result<Option<T>, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+                T: TryFrom<Value<'de>, Error = zvariant::Error>,
+            {
+                let v = Value::deserialize(deserializer)?;
+                v.try_into().map(Some).map_err(serde::de::Error::custom)
+            }
+        }
+
+        mod value {
+            use super::*;
+
+            pub fn serialize<T, S>(value: &T, ser: S) -> std::result::Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+                for<'a> &'a T: Into<Value<'a>> + DynamicType,
+            {
+                Value::new(value).serialize(ser)
+            }
+
+            pub fn deserialize<'de, T, D>(deserializer: D) -> std::result::Result<T, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+                T: TryFrom<Value<'de>, Error = zvariant::Error>,
+            {
+                let v = Value::deserialize(deserializer)?;
+                v.try_into().map_err(serde::de::Error::custom)
+            }
+        }
+
         let test = Test {
             process_id: Some(42),
             group_id: None,
