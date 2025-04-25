@@ -1,5 +1,5 @@
 use serde::{
-    ser::{self, SerializeSeq, SerializeTuple},
+    ser::{self, SerializeMap, SerializeSeq, SerializeTuple},
     Serialize,
 };
 use std::{
@@ -339,6 +339,7 @@ where
             Signature::Structure(_) => {
                 StructSerializer::structure(self).map(StructSeqSerializer::Struct)
             }
+            Signature::Dict { .. } => self.serialize_map(Some(len)).map(StructSeqSerializer::Map),
             _ => {
                 return Err(Error::SignatureMismatch(
                     self.0.signature.clone(),
@@ -622,6 +623,7 @@ where
 pub enum StructSeqSerializer<'ser, 'b, W> {
     Struct(StructSerializer<'ser, 'b, W>),
     Seq(SeqSerializer<'ser, 'b, W>),
+    Map(MapSerializer<'ser, 'b, W>),
 }
 
 macro_rules! serialize_struct_anon_fields {
@@ -659,6 +661,7 @@ macro_rules! serialize_struct_anon_fields {
                 match self {
                     StructSeqSerializer::Struct(ser) => ser.$method(value),
                     StructSeqSerializer::Seq(ser) => ser.serialize_element(value),
+                    StructSeqSerializer::Map(_) => unreachable!(),
                 }
             }
 
@@ -666,6 +669,7 @@ macro_rules! serialize_struct_anon_fields {
                 match self {
                     StructSeqSerializer::Struct(ser) => ser.end_struct(),
                     StructSeqSerializer::Seq(ser) => ser.end_seq(),
+                    StructSeqSerializer::Map(_) => unreachable!(),
                 }
             }
         }
@@ -675,7 +679,7 @@ serialize_struct_anon_fields!(SerializeTuple serialize_element);
 serialize_struct_anon_fields!(SerializeTupleStruct serialize_field);
 serialize_struct_anon_fields!(SerializeTupleVariant serialize_field);
 
-pub(crate) struct MapSerializer<'ser, 'b, W> {
+pub struct MapSerializer<'ser, 'b, W> {
     seq: SeqSerializer<'ser, 'b, W>,
     key_signature: &'ser Signature,
     value_signature: &'ser Signature,
@@ -683,7 +687,7 @@ pub(crate) struct MapSerializer<'ser, 'b, W> {
     key_start: Option<usize>,
 }
 
-impl<'ser, 'b, W> ser::SerializeMap for MapSerializer<'ser, 'b, W>
+impl<'ser, 'b, W> SerializeMap for MapSerializer<'ser, 'b, W>
 where
     W: Write + Seek,
 {
@@ -772,6 +776,10 @@ macro_rules! serialize_struct_named_fields {
                 match self {
                     StructSeqSerializer::Struct(ser) => ser.serialize_field(key, value),
                     StructSeqSerializer::Seq(ser) => ser.serialize_element(value),
+                    StructSeqSerializer::Map(ser) => {
+                        ser.serialize_key(key)?;
+                        ser.serialize_value(value)
+                    }
                 }
             }
 
@@ -779,6 +787,7 @@ macro_rules! serialize_struct_named_fields {
                 match self {
                     StructSeqSerializer::Struct(ser) => ser.end_struct(),
                     StructSeqSerializer::Seq(ser) => ser.end_seq(),
+                    StructSeqSerializer::Map(ser) => ser.end(),
                 }
             }
         }
