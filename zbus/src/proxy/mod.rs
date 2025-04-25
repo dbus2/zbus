@@ -3,8 +3,7 @@
 use enumflags2::{bitflags, BitFlags};
 use event_listener::{Event, EventListener};
 use futures_core::{ready, stream};
-use futures_lite::stream::Map;
-use ordered_stream::{join as join_streams, FromFuture, Join, OrderedStream, PollResult};
+use ordered_stream::{join as join_streams, FromFuture, Join, Map, OrderedStream, PollResult};
 use std::{
     collections::{HashMap, HashSet},
     fmt,
@@ -1001,7 +1000,7 @@ impl<'a> Proxy<'a> {
     /// Note that zbus doesn't queue the updates. If the listener is slower than the receiver, it
     /// will only receive the last update.
     pub async fn receive_owner_changed(&self) -> Result<OwnerChangedStream<'a>> {
-        use futures_lite::StreamExt;
+        use ordered_stream::OrderedStreamExt;
         let dbus_proxy = fdo::DBusProxy::builder(self.connection())
             .cache_properties(CacheProperties::No)
             .build()
@@ -1093,7 +1092,20 @@ impl stream::Stream for OwnerChangedStream<'_> {
     type Item = Option<UniqueName<'static>>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        Pin::new(&mut self.get_mut().stream).poll_next(cx)
+        OrderedStream::poll_next_before(self, cx, None).map(|res| res.into_data())
+    }
+}
+
+impl OrderedStream for OwnerChangedStream<'_> {
+    type Data = Option<UniqueName<'static>>;
+    type Ordering = Sequence;
+
+    fn poll_next_before(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        before: Option<&Self::Ordering>,
+    ) -> Poll<PollResult<Self::Ordering, Self::Data>> {
+        Pin::new(&mut self.get_mut().stream).poll_next_before(cx, before)
     }
 }
 
