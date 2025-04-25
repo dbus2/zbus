@@ -239,6 +239,12 @@ impl Deref for OwnedWellKnownName {
     }
 }
 
+impl<'a> Borrow<WellKnownName<'a>> for OwnedWellKnownName {
+    fn borrow(&self) -> &WellKnownName<'a> {
+        &self.0
+    }
+}
+
 impl Borrow<str> for OwnedWellKnownName {
     fn borrow(&self) -> &str {
         self.0.as_str()

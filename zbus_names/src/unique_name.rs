@@ -233,6 +233,12 @@ impl Deref for OwnedUniqueName {
     }
 }
 
+impl<'a> Borrow<UniqueName<'a>> for OwnedUniqueName {
+    fn borrow(&self) -> &UniqueName<'a> {
+        &self.0
+    }
+}
+
 impl Borrow<str> for OwnedUniqueName {
     fn borrow(&self) -> &str {
         self.0.as_str()

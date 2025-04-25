@@ -238,6 +238,12 @@ impl Deref for OwnedMemberName {
     }
 }
 
+impl<'a> Borrow<MemberName<'a>> for OwnedMemberName {
+    fn borrow(&self) -> &MemberName<'a> {
+        &self.0
+    }
+}
+
 impl Borrow<str> for OwnedMemberName {
     fn borrow(&self) -> &str {
         self.0.as_str()

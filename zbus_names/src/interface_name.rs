@@ -250,6 +250,12 @@ impl Deref for OwnedInterfaceName {
     }
 }
 
+impl<'a> Borrow<InterfaceName<'a>> for OwnedInterfaceName {
+    fn borrow(&self) -> &InterfaceName<'a> {
+        &self.0
+    }
+}
+
 impl Borrow<str> for OwnedInterfaceName {
     fn borrow(&self) -> &str {
         self.0.as_str()

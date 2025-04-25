@@ -3,7 +3,7 @@ use serde::{
     de::{self, Deserialize, Deserializer, Visitor},
     ser::{Serialize, Serializer},
 };
-use std::borrow::Cow;
+use std::borrow::{Borrow, Cow};
 
 use crate::{Basic, Error, Result, Str, Type};
 
@@ -279,6 +279,12 @@ impl std::ops::Deref for OwnedObjectPath {
     type Target = ObjectPath<'static>;
 
     fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<'a> Borrow<ObjectPath<'a>> for OwnedObjectPath {
+    fn borrow(&self) -> &ObjectPath<'a> {
         &self.0
     }
 }

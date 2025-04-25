@@ -212,6 +212,12 @@ impl Deref for OwnedPropertyName {
     }
 }
 
+impl<'a> Borrow<PropertyName<'a>> for OwnedPropertyName {
+    fn borrow(&self) -> &PropertyName<'a> {
+        &self.0
+    }
+}
+
 impl Borrow<str> for OwnedPropertyName {
     fn borrow(&self) -> &str {
         self.0.as_str()
