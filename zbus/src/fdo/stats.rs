@@ -4,7 +4,7 @@
 //! be useful across various D-Bus applications. This module provides their proxy.
 
 use std::collections::HashMap;
-use zbus_names::BusName;
+use zbus_names::{BusName, OwnedUniqueName};
 use zvariant::OwnedValue;
 
 use super::Result;
@@ -18,13 +18,11 @@ use crate::proxy;
 )]
 pub trait Stats {
     /// GetStats (undocumented)
-    fn get_stats(&self) -> Result<Vec<HashMap<String, OwnedValue>>>;
+    fn get_stats(&self) -> Result<HashMap<String, OwnedValue>>;
 
     /// GetConnectionStats (undocumented)
-    fn get_connection_stats(&self, name: BusName<'_>) -> Result<Vec<HashMap<String, OwnedValue>>>;
+    fn get_connection_stats(&self, name: BusName<'_>) -> Result<HashMap<String, OwnedValue>>;
 
     /// GetAllMatchRules (undocumented)
-    fn get_all_match_rules(
-        &self,
-    ) -> Result<Vec<HashMap<crate::names::OwnedUniqueName, Vec<crate::OwnedMatchRule>>>>;
+    fn get_all_match_rules(&self) -> Result<HashMap<OwnedUniqueName, Vec<crate::OwnedMatchRule>>>;
 }
