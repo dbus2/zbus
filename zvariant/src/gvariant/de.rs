@@ -1,6 +1,6 @@
 use serde::de::{self, DeserializeSeed, EnumAccess, MapAccess, SeqAccess, Visitor};
 
-use std::{ffi::CStr, marker::PhantomData, str};
+use std::{marker::PhantomData, str};
 
 #[cfg(unix)]
 use std::os::fd::AsFd;
@@ -142,7 +142,14 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
         let slice = subslice(self.0.bytes, self.0.pos..)?;
 
         let s = match self.0.signature {
-            Signature::Variant => {
+            Signature::Str | Signature::Signature | Signature::ObjectPath => {
+                self.0.pos += slice.len();
+                // Get rid of the trailing nul byte (if any)
+                let slice = if slice.len() > 0 && slice[slice.len() - 1] == 0 {
+                    &slice[..slice.len() - 1]
+                } else {
+                    &slice[..]
+                };
                 if slice.contains(&0) {
                     return Err(serde::de::Error::invalid_value(
                         serde::de::Unexpected::Char('\0'),
@@ -150,24 +157,7 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
                     ));
                 }
 
-                // GVariant decided to skip the trailing nul at the end of signature string
                 str::from_utf8(slice).map_err(Error::Utf8)?
-            }
-            Signature::Str | Signature::Signature | Signature::ObjectPath => {
-                let cstr = CStr::from_bytes_with_nul(slice).map_err(|_| -> Error {
-                    let unexpected = if self.0.bytes.is_empty() {
-                        de::Unexpected::Other("end of byte stream")
-                    } else {
-                        let c = self.0.bytes[self.0.bytes.len() - 1] as char;
-                        de::Unexpected::Char(c)
-                    };
-
-                    de::Error::invalid_value(unexpected, &"nul byte expected at the end of strings")
-                })?;
-                let s = cstr.to_str().map_err(Error::Utf8)?;
-                self.0.pos += s.len() + 1; // string and trailing null byte
-
-                s
             }
             _ => {
                 let expected = format!(
@@ -815,7 +805,7 @@ impl<'d, 'de, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de
                 let mut de = Deserializer::<F>(DeserializerCommon {
                     // No padding in signatures so just pass the same context
                     ctxt: self.de.0.ctxt,
-                    signature: &Signature::Variant,
+                    signature: &Signature::Signature,
                     bytes: subslice(self.de.0.bytes, self.sig_start..self.sig_end)?,
                     fds: self.de.0.fds,
                     pos: 0,
