@@ -95,6 +95,8 @@ mod framing_offsets;
 
 mod container_depths;
 
+pub mod dict_utils;
+
 pub use zvariant_derive::{DeserializeDict, OwnedValue, SerializeDict, Type, Value};
 
 // Required for the macros to function within this crate.
