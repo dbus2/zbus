@@ -109,7 +109,6 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
     deserialize_basic!(deserialize_u64);
     deserialize_basic!(deserialize_f32);
     deserialize_basic!(deserialize_f64);
-    deserialize_basic!(deserialize_identifier);
 
     fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value>
     where
@@ -326,6 +325,40 @@ impl<'de, 'd, 'sig, 'f, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> de::Deseriali
         })?;
 
         Ok(v)
+    }
+
+    fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        match self.0.signature {
+            Signature::Str => self.deserialize_str(visitor),
+            Signature::U32 => self.deserialize_u32(visitor),
+            Signature::Structure(fields) => {
+                let mut fields = fields.iter();
+                let index_signature = fields.next().ok_or_else(|| {
+                    Error::SignatureMismatch(
+                        self.0.signature.clone(),
+                        "a structure with 2 fields and u32 as its first field".to_string(),
+                    )
+                })?;
+                self.0.signature = index_signature;
+                let v = self.deserialize_u32(visitor);
+
+                self.0.signature = fields.next().ok_or_else(|| {
+                    Error::SignatureMismatch(
+                        self.0.signature.clone(),
+                        "a structure with 2 fields and u32 as its first field".to_string(),
+                    )
+                })?;
+
+                v
+            }
+            _ => Err(Error::SignatureMismatch(
+                self.0.signature.clone(),
+                "a string, object path or signature".to_string(),
+            )),
+        }
     }
 
     fn is_human_readable(&self) -> bool {
