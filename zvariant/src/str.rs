@@ -15,8 +15,9 @@ use crate::{Basic, Type};
 ///
 /// * is specialized for strings.
 /// * treats `&'static str` as a separate type. This allows you to avoid allocations and copying
-///   when turning an `Str` instance created  from a `&'static str` into an owned version in generic
+///   when turning an `Str` instance created from a `&'static str` into an owned version in generic
 ///   code that doesn't/can't assume the inner lifetime of the source `Str` instance.
+/// * `Clone` doesn't copy+allocate when the inner type is `&str`.
 ///
 /// This type is used for keeping strings in a [`Value`], among other things.
 ///
