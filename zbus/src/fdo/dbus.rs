@@ -12,7 +12,7 @@ use zbus_names::{
 };
 #[cfg(unix)]
 use zvariant::OwnedFd;
-use zvariant::{DeserializeDict, Optional, SerializeDict, Type};
+use zvariant::{dict_utils::opt_value, Optional, Type};
 
 use super::Result;
 use crate::{proxy, OwnedGuid};
@@ -112,26 +112,51 @@ pub enum ReleaseNameReply {
 ///
 /// **Note**: unknown keys, in particular those with "." that are not from the specification, will
 /// be ignored. Use your own implementation or contribute your keys here, or in the specification.
-#[derive(Debug, Default, DeserializeDict, PartialEq, Eq, SerializeDict, Type)]
+#[derive(Debug, Default, Deserialize, PartialEq, Eq, Serialize, Type)]
 #[zvariant(signature = "a{sv}")]
+#[serde(default)]
 pub struct ConnectionCredentials {
-    #[zvariant(rename = "UnixUserID")]
+    #[serde(
+        rename = "UnixUserID",
+        with = "opt_value",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub(crate) unix_user_id: Option<u32>,
 
-    #[zvariant(rename = "UnixGroupIDs")]
+    #[serde(
+        rename = "UnixGroupIDs",
+        with = "opt_value",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub(crate) unix_group_ids: Option<Vec<u32>>,
 
     #[cfg(unix)]
-    #[zvariant(rename = "ProcessFD")]
+    #[serde(
+        rename = "ProcessFD",
+        with = "opt_value",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub(crate) process_fd: Option<OwnedFd>,
 
-    #[zvariant(rename = "ProcessID")]
+    #[serde(
+        rename = "ProcessID",
+        with = "opt_value",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub(crate) process_id: Option<u32>,
 
-    #[zvariant(rename = "WindowsSID")]
+    #[serde(
+        rename = "WindowsSID",
+        with = "opt_value",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub(crate) windows_sid: Option<String>,
 
-    #[zvariant(rename = "LinuxSecurityLabel")]
+    #[serde(
+        rename = "LinuxSecurityLabel",
+        with = "opt_value",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub(crate) linux_security_label: Option<Vec<u8>>,
 }
 
