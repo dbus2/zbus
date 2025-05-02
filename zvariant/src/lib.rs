@@ -1170,6 +1170,47 @@ mod tests {
             decoded.unwrap_err(),
             Error::Message("unknown field `user`, expected `process_id` or `group_id`".to_string())
         );
+
+        #[derive(Serialize, Deserialize, Type, PartialEq, Debug, Default)]
+        #[serde(default)]
+        #[zvariant(signature = "a{sv}")]
+        struct TestParseUnknown<'s> {
+            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+            process_id: Option<u32>,
+            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+            group_id: Option<u32>,
+            #[serde(flatten, borrow)]
+            rest: HashMap<&'s str, Value<'s>>,
+        }
+        let decoded: TestParseUnknown<'_> = encoded.deserialize().unwrap().0;
+        assert_eq!(decoded.rest.len(), 1);
+        assert_eq!(decoded.rest["user"], Value::new("me").try_into().unwrap());
+
+        #[cfg(feature = "gvariant")]
+        {
+            let test = Test {
+                process_id: Some(42),
+                group_id: None,
+                user: "me".to_string(),
+            };
+
+            let ctxt = Context::new_gvariant(NATIVE_ENDIAN, 0);
+            let encoded = to_bytes(ctxt, &test).unwrap();
+            let _: Test = encoded.deserialize().unwrap().0;
+            let decoded: Result<(TestMissing, _)> = encoded.deserialize();
+            assert_eq!(
+                decoded.unwrap_err(),
+                Error::Message("missing field `quota`".to_string())
+            );
+            let _: TestSkipUnknown = encoded.deserialize().unwrap().0;
+            let decoded: Result<(TestDenyUnknown, _)> = encoded.deserialize();
+            assert_eq!(
+                decoded.unwrap_err(),
+                Error::Message(
+                    "unknown field `user`, expected `process_id` or `group_id`".to_string()
+                )
+            );
+        }
     }
 
     #[test]
