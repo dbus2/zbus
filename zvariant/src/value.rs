@@ -601,10 +601,6 @@ impl<'de: 'a, 'a> Deserialize<'de> for Value<'a> {
     }
 }
 
-// Note that the Visitor implementations don't check for validity of the
-// signature. That's left to the Deserialize implementation of Signature
-// itself.
-
 struct ValueVisitor;
 
 impl<'de> Visitor<'de> for ValueVisitor {

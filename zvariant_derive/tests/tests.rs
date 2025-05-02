@@ -1,9 +1,11 @@
 #![allow(dead_code)]
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use zvariant::{
+    dict_utils::{opt_value, value},
     serialized::{Context, Format},
-    DeserializeDict, OwnedValue, SerializeDict, Type, Value, LE,
+    OwnedValue, Type, Value, LE,
 };
 
 #[test]
@@ -41,12 +43,15 @@ fn derive_enum() {
 
 #[test]
 fn derive_dict() {
-    #[derive(SerializeDict, DeserializeDict, Type)]
-    #[zvariant(deny_unknown_fields, signature = "a{sv}", rename_all = "camelCase")]
+    #[derive(Serialize, Deserialize, Type, Default)]
+    #[zvariant(signature = "a{sv}")]
+    #[serde(deny_unknown_fields, rename_all = "camelCase", default)]
     struct Test {
+        #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
         field_a: Option<u32>,
-        #[zvariant(rename = "field-b")]
+        #[serde(with = "value", rename = "field-b")]
         field_b: String,
+        #[serde(with = "value")]
         field_c: Vec<u8>,
     }
 
@@ -90,12 +95,17 @@ fn issues_311() {
     //
     // org.freedesktop.ModemManager1.Modem.Signal props are a dict with optional values depending on
     // the property you read.
-    #[derive(Debug, Type, DeserializeDict, OwnedValue, Value)]
+    #[derive(Debug, Type, Deserialize, OwnedValue, Value, Default)]
     #[zbus(signature = "dict")]
+    #[serde(deny_unknown_fields, default)]
     pub struct SignalInfo {
+        #[serde(with = "opt_value")]
         pub rssi: Option<i32>,
+        #[serde(with = "opt_value")]
         pub ecio: Option<i32>,
+        #[serde(with = "opt_value")]
         pub io: Option<i32>,
+        #[serde(with = "opt_value")]
         pub sinr: Option<i32>,
     }
 }
@@ -105,10 +115,12 @@ fn issues_311() {
 fn issues_1252() {
     // Issue 1252: Naming a field `key` in a dict struct causes a conflict with variables created by
     // `DeserializeDict` macro, ending up with a strange error.
-    #[derive(DeserializeDict, Type)]
+    #[derive(Type, Deserialize)]
     #[zvariant(signature = "a{sv}")]
     pub struct OwnedProperties {
+        #[serde(with = "value")]
         key: String,
+        #[serde(with = "value")]
         val: OwnedValue,
     }
 }

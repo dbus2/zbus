@@ -110,14 +110,20 @@ mod value;
 /// an alias for `a{sv}`. Here is an example:
 ///
 /// ```
-/// use zvariant::{SerializeDict, DeserializeDict, serialized::Context, to_bytes, Type, LE};
+/// use zvariant::{
+///     serialized::Context, dict_utils::value, to_bytes, Type, LE,
+/// };
+/// use serde::{Deserialize, Serialize};
 ///
-/// #[derive(DeserializeDict, SerializeDict, Type, PartialEq, Debug)]
+/// #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
 /// // `#[zvariant(signature = "a{sv}")]` would be the same.
 /// #[zvariant(signature = "dict")]
 /// struct Struct {
+///     #[serde(with = "value")]
 ///     field1: u16,
+///     #[serde(with = "value")]
 ///     field2: i64,
+///     #[serde(with = "value")]
 ///     field3: String,
 /// }
 ///
@@ -174,60 +180,17 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
 /// [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-properties)
 /// and GVariant.
 ///
-/// # Examples
-///
-/// For structs it works just like serde's [`Serialize`] macros:
-///
-/// ```
-/// use zvariant::{SerializeDict, Type};
-///
-/// #[derive(SerializeDict, Type)]
-/// #[zvariant(signature = "a{sv}")]
-/// struct Struct {
-///     field1: u16,
-///     #[zvariant(rename = "another-name")]
-///     field2: i64,
-///     optional_field: Option<String>,
-/// }
-/// ```
-///
-/// The serialized D-Bus version of `Struct {42, 77, None}`
-/// will be `{"field1": Value::U16(42), "another-name": Value::I64(77)}`.
-///
-/// # Auto renaming fields
-///
-/// The macro supports specifying a Serde-like `#[zvariant(rename_all = "case")]` attribute on
-/// structures. The attribute allows to rename all the fields from snake case to another case
-/// automatically:
-///
-/// ```
-/// use zvariant::{SerializeDict, Type};
-///
-/// #[derive(SerializeDict, Type)]
-/// #[zvariant(signature = "a{sv}", rename_all = "PascalCase")]
-/// struct Struct {
-///     field1: u16,
-///     #[zvariant(rename = "another-name")]
-///     field2: i64,
-///     optional_field: Option<String>,
-/// }
-/// ```
-///
-/// It's still possible to specify custom names for individual fields using the
-/// `#[zvariant(rename = "another-name")]` attribute even when the `rename_all` attribute is
-/// present.
-///
-/// Currently the macro supports the following values for `case`:
-///
-/// * `"lowercase"`
-/// * `"UPPERCASE"`
-/// * `"PascalCase"`
-/// * `"camelCase"`
-/// * `"snake_case"`
-/// * `"kebab-case"`
+/// Starting from version `5.5.0`, this macro is deprecated in favor of using the `Serialize` derive
+/// with `zvariant::dict_utils`. See the relevant [FAQ entry] in our book for more details and
+/// examples.
 ///
 /// [`Serialize`]: https://docs.serde.rs/serde/trait.Serialize.html
+/// [FAQ entry]: https://dbus2.github.io/zbus/faq.html#how-to-use-a-struct-as-a-dictionary
 #[proc_macro_derive(SerializeDict, attributes(zbus, zvariant))]
+#[deprecated(
+    since = "5.5.0",
+    note = "See https://dbus2.github.io/zbus/faq.html#how-to-use-a-struct-as-a-dictionary"
+)]
 pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
     let input: DeriveInput = syn::parse(input).unwrap();
     dict::expand_serialize_derive(input)
@@ -242,61 +205,17 @@ pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-properties)
 /// and GVariant.
 ///
-/// # Examples
-///
-/// For structs it works just like serde's [`Deserialize`] macros:
-///
-/// ```
-/// use zvariant::{DeserializeDict, Type};
-///
-/// #[derive(DeserializeDict, Type)]
-/// #[zvariant(signature = "a{sv}")]
-/// ##[allow(unused)]
-/// struct Struct {
-///     field1: u16,
-///     #[zvariant(rename = "another-name")]
-///     field2: i64,
-///     optional_field: Option<String>,
-/// }
-/// ```
-///
-/// The deserialized D-Bus dictionary `{"field1": Value::U16(42), "another-name": Value::I64(77)}`
-/// will be `Struct {42, 77, None}`.
-///
-/// # Auto renaming fields
-///
-/// The macro supports specifying a Serde-like `#[zvariant(rename_all = "case")]` attribute on
-/// structures. The attribute allows to rename all the fields from snake case to another case
-/// automatically:
-///
-/// ```
-/// use zvariant::{SerializeDict, Type};
-///
-/// #[derive(SerializeDict, Type)]
-/// #[zvariant(signature = "a{sv}", rename_all = "PascalCase")]
-/// struct Struct {
-///     field1: u16,
-///     #[zvariant(rename = "another-name")]
-///     field2: i64,
-///     optional_field: Option<String>,
-/// }
-/// ```
-///
-/// It's still possible to specify custom names for individual fields using the
-/// `#[zvariant(rename = "another-name")]` attribute even when the `rename_all` attribute is
-/// present.
-///
-/// Currently the macro supports the following values for `case`:
-///
-/// * `"lowercase"`
-/// * `"UPPERCASE"`
-/// * `"PascalCase"`
-/// * `"camelCase"`
-/// * `"snake_case"`
-/// * `"kebab-case"`
+/// Starting from version `5.5.0`, this macro is deprecated in favor of using the `Deserialize`
+/// derive with `zvariant::dict_utils`. See the relevant [FAQ entry] in our book for more details
+/// and examples.
 ///
 /// [`Deserialize`]: https://docs.serde.rs/serde/de/trait.Deserialize.html
+/// [FAQ entry]: https://dbus2.github.io/zbus/faq.html#how-to-use-a-struct-as-a-dictionary
 #[proc_macro_derive(DeserializeDict, attributes(zbus, zvariant))]
+#[deprecated(
+    since = "5.5.0",
+    note = "See https://dbus2.github.io/zbus/faq.html#how-to-use-a-struct-as-a-dictionary"
+)]
 pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
     let input: DeriveInput = syn::parse(input).unwrap();
     dict::expand_deserialize_derive(input)

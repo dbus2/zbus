@@ -660,7 +660,12 @@ impl<'de, #[cfg(unix)] F: AsFd, #[cfg(not(unix))] F> SeqAccess<'de>
             ValueParseStage::Signature => {
                 self.stage = ValueParseStage::Value;
 
-                seed.deserialize(&mut *self.de).map(Some)
+                let signature = self.de.0.signature;
+                self.de.0.signature = &Signature::Signature;
+                let ret = seed.deserialize(&mut *self.de).map(Some);
+                self.de.0.signature = signature;
+
+                ret
             }
             ValueParseStage::Value => {
                 self.stage = ValueParseStage::Done;

@@ -95,6 +95,8 @@ mod framing_offsets;
 
 mod container_depths;
 
+pub mod dict_utils;
+
 pub use zvariant_derive::{DeserializeDict, OwnedValue, SerializeDict, Type, Value};
 
 // Required for the macros to function within this crate.
@@ -122,14 +124,17 @@ mod tests {
 
     use serde::{Deserialize, Serialize};
 
-    use crate::{to_bytes, to_bytes_for_signature, MaxDepthExceeded};
+    use crate::{
+        dict_utils::{opt_value, value},
+        to_bytes, to_bytes_for_signature, MaxDepthExceeded,
+    };
 
     #[cfg(unix)]
     use crate::Fd;
     use crate::{
         serialized::{Context, Format},
-        Array, Basic, DeserializeDict, DeserializeValue, Dict, Error, ObjectPath, OwnedValue,
-        Result, SerializeDict, SerializeValue, Str, Structure, Type, Value, BE, LE, NATIVE_ENDIAN,
+        Array, Basic, DeserializeValue, Dict, Error, ObjectPath, OwnedValue, Result,
+        SerializeValue, Str, Structure, Type, Value, BE, LE, NATIVE_ENDIAN,
     };
 
     // Test through both generic and specific API (wrt byte order)
@@ -1093,13 +1098,18 @@ mod tests {
             panic!();
         }
 
-        #[derive(SerializeDict, DeserializeDict, Type, PartialEq, Debug)]
+        #[derive(Serialize, Deserialize, Type, PartialEq, Debug, Default)]
         #[zvariant(signature = "a{sv}")]
+        #[serde(default)]
         struct Test {
+            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
             process_id: Option<u32>,
+            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
             group_id: Option<u32>,
+            #[serde(with = "value")]
             user: String,
         }
+
         let test = Test {
             process_id: Some(42),
             group_id: None,
@@ -1117,12 +1127,16 @@ mod tests {
         let decoded: Test = encoded.deserialize().unwrap().0;
         assert_eq!(decoded, test);
 
-        #[derive(SerializeDict, DeserializeDict, Type, PartialEq, Debug)]
+        #[derive(Serialize, Deserialize, Type, PartialEq, Debug)]
         #[zvariant(signature = "a{sv}")]
         struct TestMissing {
+            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none", default)]
             process_id: Option<u32>,
+            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none", default)]
             group_id: Option<u32>,
+            #[serde(with = "value")]
             user: String,
+            #[serde(with = "value")]
             quota: u8,
         }
         let decoded: Result<(TestMissing, _)> = encoded.deserialize();
@@ -1131,25 +1145,72 @@ mod tests {
             Error::Message("missing field `quota`".to_string())
         );
 
-        #[derive(SerializeDict, DeserializeDict, Type, PartialEq, Debug)]
+        #[derive(Serialize, Deserialize, Type, PartialEq, Debug, Default)]
         #[zvariant(signature = "a{sv}")]
+        #[serde(default)]
         struct TestSkipUnknown {
+            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
             process_id: Option<u32>,
+            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
             group_id: Option<u32>,
         }
         let _: TestSkipUnknown = encoded.deserialize().unwrap().0;
 
-        #[derive(SerializeDict, DeserializeDict, Type, PartialEq, Debug)]
-        #[zvariant(deny_unknown_fields, signature = "a{sv}")]
-        struct TestUnknown {
+        #[derive(Serialize, Deserialize, Type, PartialEq, Debug, Default)]
+        #[serde(deny_unknown_fields, default)]
+        #[zvariant(signature = "a{sv}")]
+        struct TestDenyUnknown {
+            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
             process_id: Option<u32>,
+            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
             group_id: Option<u32>,
         }
-        let decoded: Result<(TestUnknown, _)> = encoded.deserialize();
+        let decoded: Result<(TestDenyUnknown, _)> = encoded.deserialize();
         assert_eq!(
             decoded.unwrap_err(),
             Error::Message("unknown field `user`, expected `process_id` or `group_id`".to_string())
         );
+
+        #[derive(Serialize, Deserialize, Type, PartialEq, Debug, Default)]
+        #[serde(default)]
+        #[zvariant(signature = "a{sv}")]
+        struct TestParseUnknown<'s> {
+            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+            process_id: Option<u32>,
+            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+            group_id: Option<u32>,
+            #[serde(flatten, borrow)]
+            rest: HashMap<&'s str, Value<'s>>,
+        }
+        let decoded: TestParseUnknown<'_> = encoded.deserialize().unwrap().0;
+        assert_eq!(decoded.rest.len(), 1);
+        assert_eq!(decoded.rest["user"], Value::new("me").try_into().unwrap());
+
+        #[cfg(feature = "gvariant")]
+        {
+            let test = Test {
+                process_id: Some(42),
+                group_id: None,
+                user: "me".to_string(),
+            };
+
+            let ctxt = Context::new_gvariant(NATIVE_ENDIAN, 0);
+            let encoded = to_bytes(ctxt, &test).unwrap();
+            let _: Test = encoded.deserialize().unwrap().0;
+            let decoded: Result<(TestMissing, _)> = encoded.deserialize();
+            assert_eq!(
+                decoded.unwrap_err(),
+                Error::Message("missing field `quota`".to_string())
+            );
+            let _: TestSkipUnknown = encoded.deserialize().unwrap().0;
+            let decoded: Result<(TestDenyUnknown, _)> = encoded.deserialize();
+            assert_eq!(
+                decoded.unwrap_err(),
+                Error::Message(
+                    "unknown field `user`, expected `process_id` or `group_id`".to_string()
+                )
+            );
+        }
     }
 
     #[test]
