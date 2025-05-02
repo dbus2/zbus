@@ -8,23 +8,34 @@ Since the use of a dictionary, specifically one with strings as keys and variant
 `a{sv}`) is very common in the D-Bus world and use of HashMaps isn't as convenient and type-safe as
 a struct, you might find yourself wanting to use a struct as a dictionary.
 
-`zvariant` provides convenient macros for making this possible: [`SerializeDict`] and
-[`DeserializeDict`]. You'll also need to tell [`Type`] macro to treat the type as a dictionary using
-the `signature` attribute. Here is a simple example:
+It's possible to do so using the `Serialize` and `Deserialize` derive macros from the `serde` crate,
+combined with `zvariant::Type` derive and some utility functions from `zvariant`.
+
+Here is a simple example:
 
 ```rust,noplayground
 use zbus::{
     proxy, interface, fdo::Result,
-    zvariant::{DeserializeDict, SerializeDict, Type},
+    zvariant::{
+        Type,
+        dict_utils::{opt_value, value},
+    },
 };
+use serde::{Deserialize, Serialize};
 
-#[derive(DeserializeDict, SerializeDict, Type)]
+#[derive(Deserialize, Serialize, Type)]
 // `Type` treats `dict` is an alias for `a{sv}`.
 #[zvariant(signature = "dict")]
 pub struct Dictionary {
+    #[serde(with = "value")]
     field1: u16,
-    #[zvariant(rename = "another-name")]
+    #[serde(rename = "another-name", with = "value")]
     field2: i64,
+    #[serde(
+        with = "opt_value",
+        skip_serializing_if = "Option::is_none",
+        default,
+    )]
     optional_field: Option<String>,
 }
 
@@ -48,6 +59,53 @@ impl DictionaryGiverInterface {
             optional_field: Some(String::from("blah")),
         })
     }
+}
+```
+
+Since the fields have to be transformed from/into `zvariant::Value`, make sure to use the `with`
+attribute with the appropriate helper module from `zvariant::dict_utils` module.
+
+Moroever, since D-Bus does not have a concept of nullable types, it's important to ensure that
+`skip_serializing_if` and `default` attributes are used for optional fields. Fortunately, you can
+make use of the `default` container attribute if your struct can implemented `Default` trait:
+
+```rust,noplayground
+use zbus::zvariant::{Type, dict_utils::{opt_value, value}};
+# use serde::{Deserialize, Serialize};
+
+#[derive(Default, Deserialize, Serialize, Type)]
+// `Type` treats `dict` is an alias for `a{sv}`.
+#[zvariant(signature = "dict")]
+#[serde(default)]
+pub struct Dictionary {
+    #[serde(with = "value")]
+    field1: u16,
+    #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+    optional_field1: Option<i64>,
+    #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+    optional_field2: Option<String>,
+}
+```
+
+It is also very much possible to grab all the extra entries that are not explicitly defined in the
+struct:
+
+```rust,noplayground
+use std::collections::HashMap;
+use zbus::zvariant::{Type, OwnedValue, dict_utils::{value}};
+# use serde::{Deserialize, Serialize};
+
+#[derive(Default, Deserialize, Serialize, Type)]
+// `Type` treats `dict` is an alias for `a{sv}`.
+#[zvariant(signature = "dict")]
+#[serde(default)]
+pub struct Dictionary {
+    #[serde(with = "value")]
+    field1: u16,
+    #[serde(with = "value")]
+    field2: i64,
+    #[serde(flatten)]
+    the_rest: HashMap<String, OwnedValue>,
 }
 ```
 
@@ -226,8 +284,6 @@ assert_eq!(s, "Variant2");
 [`proxy`]: https://docs.rs/zbus/5/zbus/attr.proxy.html
 [tctiog]: https://github.com/tokio-rs/tokio/issues/2201
 [`Type`]: https://docs.rs/zvariant/5/zvariant/derive.Type.html
-[`SerializeDict`]: https://docs.rs/zvariant/5/zvariant/derive.SerializeDict.html
-[`DeserializeDict`]: https://docs.rs/zvariant/5/zvariant/derive.DeserializeDict.html
 [`MessageStream`]: https://docs.rs/zbus/5/zbus/struct.MessageStream.html
 [nonull]: https://gitlab.freedesktop.org/dbus/dbus/-/issues/25
 [dsi]: http://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces
