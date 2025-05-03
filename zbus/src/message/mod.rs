@@ -362,7 +362,7 @@ mod tests {
             &Signature::static_structure(&[&Signature::Fd, &Signature::Str]),
         );
         #[cfg(not(unix))]
-        assert_eq!(m.body().signature().unwrap(), &Signature::Str,);
+        assert_eq!(m.body().signature(), &Signature::Str,);
         #[cfg(unix)]
         {
             let fds = m.data().fds();
