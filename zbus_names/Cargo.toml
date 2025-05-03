@@ -13,7 +13,9 @@ categories = ["os::unix-apis"]
 readme = "README.md"
 
 [dependencies]
-zvariant = { workspace = true, features = ["enumflags2"] }
+zvariant = { path = "../zvariant", features = [
+    "enumflags2",
+], version = "5.5.0" }
 
 serde.workspace = true
 winnow.workspace = true
