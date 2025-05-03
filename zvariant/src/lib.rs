@@ -95,7 +95,7 @@ mod framing_offsets;
 
 mod container_depths;
 
-pub mod dict_utils;
+pub mod as_value;
 
 pub use zvariant_derive::{DeserializeDict, OwnedValue, SerializeDict, Type, Value};
 
@@ -125,7 +125,7 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use crate::{
-        dict_utils::{opt_value, value},
+        as_value::{opt_value, value},
         to_bytes, to_bytes_for_signature, MaxDepthExceeded,
     };
 

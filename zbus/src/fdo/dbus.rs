@@ -12,7 +12,7 @@ use zbus_names::{
 };
 #[cfg(unix)]
 use zvariant::OwnedFd;
-use zvariant::{dict_utils::opt_value, Optional, Type};
+use zvariant::{as_value::opt_value, Optional, Type};
 
 use super::Result;
 use crate::{proxy, OwnedGuid};

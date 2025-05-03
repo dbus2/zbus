@@ -111,7 +111,7 @@ mod value;
 ///
 /// ```
 /// use zvariant::{
-///     serialized::Context, dict_utils::value, to_bytes, Type, LE,
+///     serialized::Context, as_value::value, to_bytes, Type, LE,
 /// };
 /// use serde::{Deserialize, Serialize};
 ///
@@ -181,7 +181,7 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
 /// and GVariant.
 ///
 /// Starting from version `5.5.0`, this macro is deprecated in favor of using the `Serialize` derive
-/// with `zvariant::dict_utils`. See the relevant [FAQ entry] in our book for more details and
+/// with `zvariant::as_value`. See the relevant [FAQ entry] in our book for more details and
 /// examples.
 ///
 /// [`Serialize`]: https://docs.serde.rs/serde/trait.Serialize.html
@@ -206,7 +206,7 @@ pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// and GVariant.
 ///
 /// Starting from version `5.5.0`, this macro is deprecated in favor of using the `Deserialize`
-/// derive with `zvariant::dict_utils`. See the relevant [FAQ entry] in our book for more details
+/// derive with `zvariant::as_value`. See the relevant [FAQ entry] in our book for more details
 /// and examples.
 ///
 /// [`Deserialize`]: https://docs.serde.rs/serde/de/trait.Deserialize.html

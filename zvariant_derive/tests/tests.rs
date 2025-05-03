@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use zvariant::{
-    dict_utils::{opt_value, value},
+    as_value::{opt_value, value},
     serialized::{Context, Format},
     OwnedValue, Type, Value, LE,
 };

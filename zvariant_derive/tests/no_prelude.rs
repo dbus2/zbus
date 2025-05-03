@@ -4,7 +4,7 @@
 use ::serde::{Deserialize, Serialize};
 use ::zvariant_derive::Type;
 
-use ::zvariant::dict_utils::*;
+use ::zvariant::as_value::*;
 
 #[derive(Type)]
 struct FooF(f64);

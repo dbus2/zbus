@@ -40,9 +40,9 @@ pub struct ArgStructTest {
 #[derive(Deserialize, Serialize, Type, Debug, Value, OwnedValue, PartialEq, Eq)]
 #[zvariant(signature = "dict")]
 pub struct IP4Adress {
-    #[serde(with = "zvariant::dict_utils::value")]
+    #[serde(with = "zvariant::as_value::value")]
     prefix: u32,
-    #[serde(with = "zvariant::dict_utils::value")]
+    #[serde(with = "zvariant::as_value::value")]
     address: String,
 }
 
