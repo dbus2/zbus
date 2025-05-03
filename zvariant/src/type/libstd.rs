@@ -180,7 +180,13 @@ impl<T, const N: usize> Type for [T; N]
 where
     T: Type,
 {
-    const SIGNATURE: &'static Signature = &Signature::static_structure(&[T::SIGNATURE; N]);
+    const SIGNATURE: &'static Signature = &{
+        if N == 0 {
+            Signature::U8
+        } else {
+            Signature::static_structure(&[T::SIGNATURE; N])
+        }
+    };
 }
 
 ////////////////////////////////////////////////////////////////////////////////
