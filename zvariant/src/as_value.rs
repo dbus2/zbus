@@ -10,7 +10,7 @@ use crate::{DeserializeValue, SerializeValue, Type};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// Utilities to (de)serialize an optional value as a [`enum@zvariant::Value`].
-pub mod opt_value {
+pub mod optional {
     use super::*;
 
     /// Serialize an optional value as a [`enum@zvariant::Value`].

@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use zvariant::{
-    as_value::{self, opt_value},
+    as_value::{self, optional},
     serialized::{Context, Format},
     OwnedValue, Type, Value, LE,
 };
@@ -47,7 +47,7 @@ fn derive_dict() {
     #[zvariant(signature = "a{sv}")]
     #[serde(deny_unknown_fields, rename_all = "camelCase", default)]
     struct Test {
-        #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+        #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
         field_a: Option<u32>,
         #[serde(with = "as_value", rename = "field-b")]
         field_b: String,
@@ -99,13 +99,13 @@ fn issues_311() {
     #[zbus(signature = "dict")]
     #[serde(deny_unknown_fields, default)]
     pub struct SignalInfo {
-        #[serde(with = "opt_value")]
+        #[serde(with = "optional")]
         pub rssi: Option<i32>,
-        #[serde(with = "opt_value")]
+        #[serde(with = "optional")]
         pub ecio: Option<i32>,
-        #[serde(with = "opt_value")]
+        #[serde(with = "optional")]
         pub io: Option<i32>,
-        #[serde(with = "opt_value")]
+        #[serde(with = "optional")]
         pub sinr: Option<i32>,
     }
 }

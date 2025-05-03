@@ -4,7 +4,7 @@
 use ::serde::{Deserialize, Serialize};
 use ::zvariant_derive::Type;
 
-use ::zvariant::as_value::{self, opt_value};
+use ::zvariant::as_value::{self, optional};
 
 #[derive(Type)]
 struct FooF(f64);
@@ -29,7 +29,7 @@ enum RequestNameFlags {
 #[serde(deny_unknown_fields)]
 struct Test {
     #[serde(
-        with = "opt_value",
+        with = "optional",
         skip_serializing_if = "::std::option::Option::is_none",
         default
     )]

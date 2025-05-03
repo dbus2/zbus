@@ -18,7 +18,7 @@ use zbus::{
     proxy, interface, fdo::Result,
     zvariant::{
         Type,
-        as_value::{self, opt_value},
+        as_value::{self, optional},
     },
 };
 use serde::{Deserialize, Serialize};
@@ -32,7 +32,7 @@ pub struct Dictionary {
     #[serde(rename = "another-name", with = "as_value")]
     field2: i64,
     #[serde(
-        with = "opt_value",
+        with = "optional",
         skip_serializing_if = "Option::is_none",
         default,
     )]
@@ -70,7 +70,7 @@ Moroever, since D-Bus does not have a concept of nullable types, it's important 
 make use of the `default` container attribute if your struct can implemented `Default` trait:
 
 ```rust,noplayground
-use zbus::zvariant::{Type, as_value::{self, opt_value}};
+use zbus::zvariant::{Type, as_value::{self, optional}};
 # use serde::{Deserialize, Serialize};
 
 #[derive(Default, Deserialize, Serialize, Type)]
@@ -80,9 +80,9 @@ use zbus::zvariant::{Type, as_value::{self, opt_value}};
 pub struct Dictionary {
     #[serde(with = "as_value")]
     field1: u16,
-    #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+    #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
     optional_field1: Option<i64>,
-    #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+    #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
     optional_field2: Option<String>,
 }
 ```

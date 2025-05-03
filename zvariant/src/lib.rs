@@ -125,7 +125,7 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use crate::{
-        as_value::{self, opt_value},
+        as_value::{self, optional},
         to_bytes, to_bytes_for_signature, MaxDepthExceeded,
     };
 
@@ -1102,9 +1102,9 @@ mod tests {
         #[zvariant(signature = "a{sv}")]
         #[serde(default)]
         struct Test {
-            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+            #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
             process_id: Option<u32>,
-            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+            #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
             group_id: Option<u32>,
             #[serde(with = "as_value")]
             user: String,
@@ -1130,9 +1130,9 @@ mod tests {
         #[derive(Serialize, Deserialize, Type, PartialEq, Debug)]
         #[zvariant(signature = "a{sv}")]
         struct TestMissing {
-            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none", default)]
+            #[serde(with = "optional", skip_serializing_if = "Option::is_none", default)]
             process_id: Option<u32>,
-            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none", default)]
+            #[serde(with = "optional", skip_serializing_if = "Option::is_none", default)]
             group_id: Option<u32>,
             #[serde(with = "as_value")]
             user: String,
@@ -1149,9 +1149,9 @@ mod tests {
         #[zvariant(signature = "a{sv}")]
         #[serde(default)]
         struct TestSkipUnknown {
-            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+            #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
             process_id: Option<u32>,
-            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+            #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
             group_id: Option<u32>,
         }
         let _: TestSkipUnknown = encoded.deserialize().unwrap().0;
@@ -1160,9 +1160,9 @@ mod tests {
         #[serde(deny_unknown_fields, default)]
         #[zvariant(signature = "a{sv}")]
         struct TestDenyUnknown {
-            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+            #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
             process_id: Option<u32>,
-            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+            #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
             group_id: Option<u32>,
         }
         let decoded: Result<(TestDenyUnknown, _)> = encoded.deserialize();
@@ -1175,9 +1175,9 @@ mod tests {
         #[serde(default)]
         #[zvariant(signature = "a{sv}")]
         struct TestParseUnknown<'s> {
-            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+            #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
             process_id: Option<u32>,
-            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+            #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
             group_id: Option<u32>,
             #[serde(flatten, borrow)]
             rest: HashMap<&'s str, Value<'s>>,
