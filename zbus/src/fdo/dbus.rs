@@ -12,7 +12,7 @@ use zbus_names::{
 };
 #[cfg(unix)]
 use zvariant::OwnedFd;
-use zvariant::{dict_utils::opt_value, Optional, Type};
+use zvariant::{as_value::optional, Optional, Type};
 
 use super::Result;
 use crate::{proxy, OwnedGuid};
@@ -118,14 +118,14 @@ pub enum ReleaseNameReply {
 pub struct ConnectionCredentials {
     #[serde(
         rename = "UnixUserID",
-        with = "opt_value",
+        with = "optional",
         skip_serializing_if = "Option::is_none"
     )]
     pub(crate) unix_user_id: Option<u32>,
 
     #[serde(
         rename = "UnixGroupIDs",
-        with = "opt_value",
+        with = "optional",
         skip_serializing_if = "Option::is_none"
     )]
     pub(crate) unix_group_ids: Option<Vec<u32>>,
@@ -133,28 +133,28 @@ pub struct ConnectionCredentials {
     #[cfg(unix)]
     #[serde(
         rename = "ProcessFD",
-        with = "opt_value",
+        with = "optional",
         skip_serializing_if = "Option::is_none"
     )]
     pub(crate) process_fd: Option<OwnedFd>,
 
     #[serde(
         rename = "ProcessID",
-        with = "opt_value",
+        with = "optional",
         skip_serializing_if = "Option::is_none"
     )]
     pub(crate) process_id: Option<u32>,
 
     #[serde(
         rename = "WindowsSID",
-        with = "opt_value",
+        with = "optional",
         skip_serializing_if = "Option::is_none"
     )]
     pub(crate) windows_sid: Option<String>,
 
     #[serde(
         rename = "LinuxSecurityLabel",
-        with = "opt_value",
+        with = "optional",
         skip_serializing_if = "Option::is_none"
     )]
     pub(crate) linux_security_label: Option<Vec<u8>>,

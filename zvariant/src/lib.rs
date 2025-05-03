@@ -65,12 +65,6 @@ pub use crate::optional::*;
 mod value;
 pub use value::*;
 
-mod serialize_value;
-pub use serialize_value::*;
-
-mod deserialize_value;
-pub use deserialize_value::*;
-
 mod error;
 pub use error::*;
 
@@ -95,7 +89,12 @@ mod framing_offsets;
 
 mod container_depths;
 
-pub mod dict_utils;
+pub mod as_value;
+pub use as_value::{Deserialize, Serialize};
+#[deprecated(since = "5.5.0", note = "Use `as_value::Serialize` instead.")]
+pub type SerializeValue<'a, T> = as_value::Serialize<'a, T>;
+#[deprecated(since = "5.5.0", note = "Use `as_value::Deserialize` instead.")]
+pub type DeserializeValue<'de, T> = as_value::Deserialize<'de, T>;
 
 pub use zvariant_derive::{DeserializeDict, OwnedValue, SerializeDict, Type, Value};
 
@@ -125,7 +124,7 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use crate::{
-        dict_utils::{opt_value, value},
+        as_value::{self, optional},
         to_bytes, to_bytes_for_signature, MaxDepthExceeded,
     };
 
@@ -133,8 +132,8 @@ mod tests {
     use crate::Fd;
     use crate::{
         serialized::{Context, Format},
-        Array, Basic, DeserializeValue, Dict, Error, ObjectPath, OwnedValue, Result,
-        SerializeValue, Str, Structure, Type, Value, BE, LE, NATIVE_ENDIAN,
+        Array, Basic, Dict, Error, ObjectPath, OwnedValue, Result, Str, Structure, Type, Value, BE,
+        LE, NATIVE_ENDIAN,
     };
 
     // Test through both generic and specific API (wrt byte order)
@@ -923,9 +922,9 @@ mod tests {
         }
 
         let foo = Foo { val: 99 };
-        let v = SerializeValue(&foo);
+        let v = as_value::Serialize(&foo);
         let encoded = to_bytes(ctxt, &v).unwrap();
-        let decoded: DeserializeValue<'_, Foo> = encoded.deserialize().unwrap().0;
+        let decoded: as_value::Deserialize<'_, Foo> = encoded.deserialize().unwrap().0;
         assert_eq!(decoded.0, foo);
 
         // Unit struct should be treated as a 0-sized tuple (the same as unit type)
@@ -1053,7 +1052,7 @@ mod tests {
             let mut map = std::collections::HashMap::<&str, &str>::new();
             map.insert("k", "v");
             let gv_ser_value_encoded =
-                zvariant::to_bytes(ctxt, &zvariant::SerializeValue(&map)).unwrap();
+                zvariant::to_bytes(ctxt, &zvariant::Serialize(&map)).unwrap();
             let gv_value_encoded = to_bytes(ctxt, &zvariant::Value::new(map)).unwrap();
             assert_eq!(*gv_value_encoded, *gv_ser_value_encoded);
 
@@ -1102,11 +1101,11 @@ mod tests {
         #[zvariant(signature = "a{sv}")]
         #[serde(default)]
         struct Test {
-            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+            #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
             process_id: Option<u32>,
-            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+            #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
             group_id: Option<u32>,
-            #[serde(with = "value")]
+            #[serde(with = "as_value")]
             user: String,
         }
 
@@ -1130,13 +1129,13 @@ mod tests {
         #[derive(Serialize, Deserialize, Type, PartialEq, Debug)]
         #[zvariant(signature = "a{sv}")]
         struct TestMissing {
-            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none", default)]
+            #[serde(with = "optional", skip_serializing_if = "Option::is_none", default)]
             process_id: Option<u32>,
-            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none", default)]
+            #[serde(with = "optional", skip_serializing_if = "Option::is_none", default)]
             group_id: Option<u32>,
-            #[serde(with = "value")]
+            #[serde(with = "as_value")]
             user: String,
-            #[serde(with = "value")]
+            #[serde(with = "as_value")]
             quota: u8,
         }
         let decoded: Result<(TestMissing, _)> = encoded.deserialize();
@@ -1149,9 +1148,9 @@ mod tests {
         #[zvariant(signature = "a{sv}")]
         #[serde(default)]
         struct TestSkipUnknown {
-            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+            #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
             process_id: Option<u32>,
-            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+            #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
             group_id: Option<u32>,
         }
         let _: TestSkipUnknown = encoded.deserialize().unwrap().0;
@@ -1160,9 +1159,9 @@ mod tests {
         #[serde(deny_unknown_fields, default)]
         #[zvariant(signature = "a{sv}")]
         struct TestDenyUnknown {
-            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+            #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
             process_id: Option<u32>,
-            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+            #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
             group_id: Option<u32>,
         }
         let decoded: Result<(TestDenyUnknown, _)> = encoded.deserialize();
@@ -1175,9 +1174,9 @@ mod tests {
         #[serde(default)]
         #[zvariant(signature = "a{sv}")]
         struct TestParseUnknown<'s> {
-            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+            #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
             process_id: Option<u32>,
-            #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+            #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
             group_id: Option<u32>,
             #[serde(flatten, borrow)]
             rest: HashMap<&'s str, Value<'s>>,

@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use zvariant::{
-    dict_utils::{opt_value, value},
+    as_value::{self, optional},
     serialized::{Context, Format},
     OwnedValue, Type, Value, LE,
 };
@@ -47,11 +47,11 @@ fn derive_dict() {
     #[zvariant(signature = "a{sv}")]
     #[serde(deny_unknown_fields, rename_all = "camelCase", default)]
     struct Test {
-        #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
+        #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
         field_a: Option<u32>,
-        #[serde(with = "value", rename = "field-b")]
+        #[serde(with = "as_value", rename = "field-b")]
         field_b: String,
-        #[serde(with = "value")]
+        #[serde(with = "as_value")]
         field_c: Vec<u8>,
     }
 
@@ -99,13 +99,13 @@ fn issues_311() {
     #[zbus(signature = "dict")]
     #[serde(deny_unknown_fields, default)]
     pub struct SignalInfo {
-        #[serde(with = "opt_value")]
+        #[serde(with = "optional")]
         pub rssi: Option<i32>,
-        #[serde(with = "opt_value")]
+        #[serde(with = "optional")]
         pub ecio: Option<i32>,
-        #[serde(with = "opt_value")]
+        #[serde(with = "optional")]
         pub io: Option<i32>,
-        #[serde(with = "opt_value")]
+        #[serde(with = "optional")]
         pub sinr: Option<i32>,
     }
 }
@@ -118,9 +118,9 @@ fn issues_1252() {
     #[derive(Type, Deserialize)]
     #[zvariant(signature = "a{sv}")]
     pub struct OwnedProperties {
-        #[serde(with = "value")]
+        #[serde(with = "as_value")]
         key: String,
-        #[serde(with = "value")]
+        #[serde(with = "as_value")]
         val: OwnedValue,
     }
 }

@@ -4,7 +4,7 @@
 use ::serde::{Deserialize, Serialize};
 use ::zvariant_derive::Type;
 
-use ::zvariant::dict_utils::*;
+use ::zvariant::as_value::{self, optional};
 
 #[derive(Type)]
 struct FooF(f64);
@@ -29,14 +29,14 @@ enum RequestNameFlags {
 #[serde(deny_unknown_fields)]
 struct Test {
     #[serde(
-        with = "opt_value",
+        with = "optional",
         skip_serializing_if = "::std::option::Option::is_none",
         default
     )]
     field_a: ::std::option::Option<u32>,
     #[serde(rename = "field-b")]
-    #[serde(with = "value")]
+    #[serde(with = "as_value")]
     field_b: ::std::string::String,
-    #[serde(with = "value")]
+    #[serde(with = "as_value")]
     field_c: ::std::vec::Vec<u8>,
 }
