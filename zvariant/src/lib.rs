@@ -125,7 +125,7 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use crate::{
-        as_value::{opt_value, value},
+        as_value::{self, opt_value},
         to_bytes, to_bytes_for_signature, MaxDepthExceeded,
     };
 
@@ -1106,7 +1106,7 @@ mod tests {
             process_id: Option<u32>,
             #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
             group_id: Option<u32>,
-            #[serde(with = "value")]
+            #[serde(with = "as_value")]
             user: String,
         }
 
@@ -1134,9 +1134,9 @@ mod tests {
             process_id: Option<u32>,
             #[serde(with = "opt_value", skip_serializing_if = "Option::is_none", default)]
             group_id: Option<u32>,
-            #[serde(with = "value")]
+            #[serde(with = "as_value")]
             user: String,
-            #[serde(with = "value")]
+            #[serde(with = "as_value")]
             quota: u8,
         }
         let decoded: Result<(TestMissing, _)> = encoded.deserialize();

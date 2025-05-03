@@ -111,7 +111,7 @@ mod value;
 ///
 /// ```
 /// use zvariant::{
-///     serialized::Context, as_value::value, to_bytes, Type, LE,
+///     serialized::Context, as_value, to_bytes, Type, LE,
 /// };
 /// use serde::{Deserialize, Serialize};
 ///
@@ -119,11 +119,11 @@ mod value;
 /// // `#[zvariant(signature = "a{sv}")]` would be the same.
 /// #[zvariant(signature = "dict")]
 /// struct Struct {
-///     #[serde(with = "value")]
+///     #[serde(with = "as_value")]
 ///     field1: u16,
-///     #[serde(with = "value")]
+///     #[serde(with = "as_value")]
 ///     field2: i64,
-///     #[serde(with = "value")]
+///     #[serde(with = "as_value")]
 ///     field3: String,
 /// }
 ///

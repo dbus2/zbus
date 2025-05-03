@@ -19,7 +19,7 @@ pub mod opt_value {
         S: Serializer,
         T: Type + Serialize,
     {
-        super::value::serialize(value.as_ref().unwrap(), ser)
+        super::serialize(value.as_ref().unwrap(), ser)
     }
 
     /// Deserialize an optional value as a [`enum@zvariant::Value`].
@@ -28,29 +28,24 @@ pub mod opt_value {
         D: Deserializer<'de>,
         T: Deserialize<'de> + Type + 'de,
     {
-        super::value::deserialize(deserializer).map(Some)
+        super::deserialize(deserializer).map(Some)
     }
 }
 
-/// Utilities to (de)serialize a value as a [`enum@zvariant::Value`].
-pub mod value {
-    use super::*;
+/// Serialize a value as a [`enum@zvariant::Value`].
+pub fn serialize<T, S>(value: &T, ser: S) -> std::result::Result<S::Ok, S::Error>
+where
+    S: Serializer,
+    T: Type + Serialize,
+{
+    SerializeValue(value).serialize(ser)
+}
 
-    /// Serialize a value as a [`enum@zvariant::Value`].
-    pub fn serialize<T, S>(value: &T, ser: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-        T: Type + Serialize,
-    {
-        SerializeValue(value).serialize(ser)
-    }
-
-    /// Deserialize a value as a [`enum@zvariant::Value`].
-    pub fn deserialize<'de, T, D>(deserializer: D) -> std::result::Result<T, D::Error>
-    where
-        D: Deserializer<'de>,
-        T: Deserialize<'de> + Type + 'de,
-    {
-        DeserializeValue::deserialize(deserializer).map(|v| v.0)
-    }
+/// Deserialize a value as a [`enum@zvariant::Value`].
+pub fn deserialize<'de, T, D>(deserializer: D) -> std::result::Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de> + Type + 'de,
+{
+    DeserializeValue::deserialize(deserializer).map(|v| v.0)
 }

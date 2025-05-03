@@ -18,7 +18,7 @@ use zbus::{
     proxy, interface, fdo::Result,
     zvariant::{
         Type,
-        as_value::{opt_value, value},
+        as_value::{self, opt_value},
     },
 };
 use serde::{Deserialize, Serialize};
@@ -27,9 +27,9 @@ use serde::{Deserialize, Serialize};
 // `Type` treats `dict` is an alias for `a{sv}`.
 #[zvariant(signature = "dict")]
 pub struct Dictionary {
-    #[serde(with = "value")]
+    #[serde(with = "as_value")]
     field1: u16,
-    #[serde(rename = "another-name", with = "value")]
+    #[serde(rename = "another-name", with = "as_value")]
     field2: i64,
     #[serde(
         with = "opt_value",
@@ -70,7 +70,7 @@ Moroever, since D-Bus does not have a concept of nullable types, it's important 
 make use of the `default` container attribute if your struct can implemented `Default` trait:
 
 ```rust,noplayground
-use zbus::zvariant::{Type, as_value::{opt_value, value}};
+use zbus::zvariant::{Type, as_value::{self, opt_value}};
 # use serde::{Deserialize, Serialize};
 
 #[derive(Default, Deserialize, Serialize, Type)]
@@ -78,7 +78,7 @@ use zbus::zvariant::{Type, as_value::{opt_value, value}};
 #[zvariant(signature = "dict")]
 #[serde(default)]
 pub struct Dictionary {
-    #[serde(with = "value")]
+    #[serde(with = "as_value")]
     field1: u16,
     #[serde(with = "opt_value", skip_serializing_if = "Option::is_none")]
     optional_field1: Option<i64>,
@@ -92,7 +92,7 @@ struct:
 
 ```rust,noplayground
 use std::collections::HashMap;
-use zbus::zvariant::{Type, OwnedValue, as_value::{value}};
+use zbus::zvariant::{Type, OwnedValue, as_value};
 # use serde::{Deserialize, Serialize};
 
 #[derive(Default, Deserialize, Serialize, Type)]
@@ -100,9 +100,9 @@ use zbus::zvariant::{Type, OwnedValue, as_value::{value}};
 #[zvariant(signature = "dict")]
 #[serde(default)]
 pub struct Dictionary {
-    #[serde(with = "value")]
+    #[serde(with = "as_value")]
     field1: u16,
-    #[serde(with = "value")]
+    #[serde(with = "as_value")]
     field2: i64,
     #[serde(flatten)]
     the_rest: HashMap<String, OwnedValue>,
