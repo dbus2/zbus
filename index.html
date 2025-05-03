@@ -24,17 +24,18 @@
         <link rel="stylesheet" href="fonts/fonts.css">
 
         <!-- Highlight.js Stylesheets -->
-        <link rel="stylesheet" href="highlight.css">
-        <link rel="stylesheet" href="tomorrow-night.css">
-        <link rel="stylesheet" href="ayu-highlight.css">
+        <link rel="stylesheet" id="highlight-css" href="highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
 
         <!-- Custom theme stylesheets -->
 
 
-        <!-- Provide site root to javascript -->
+        <!-- Provide site root and default themes to javascript -->
         <script>
-            var path_to_root = "";
-            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "rust";
+            const path_to_root = "";
+            const default_light_theme = "rust";
+            const default_dark_theme = "navy";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc.js"></script>
@@ -44,8 +45,8 @@
         <!-- Work around some values being stored in localStorage wrapped in quotes -->
         <script>
             try {
-                var theme = localStorage.getItem('mdbook-theme');
-                var sidebar = localStorage.getItem('mdbook-sidebar');
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
 
                 if (theme.startsWith('"') && theme.endsWith('"')) {
                     localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
@@ -59,7 +60,8 @@
 
         <!-- Set the theme before any content is loaded, prevents flash -->
         <script>
-            var theme;
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
             try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
             if (theme === null || theme === undefined) { theme = default_theme; }
             const html = document.documentElement;
@@ -72,8 +74,8 @@
 
         <!-- Hide / unhide sidebar before it is displayed -->
         <script>
-            var sidebar = null;
-            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
             if (document.body.clientWidth >= 1080) {
                 try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
                 sidebar = sidebar || 'visible';
@@ -109,6 +111,7 @@
                             <i class="fa fa-paint-brush"></i>
                         </button>
                         <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
@@ -161,7 +164,7 @@
                         <img src="zbus-pixels.gif" alt="zbus illustration" style="width: 100%;">
 <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
 <p><strong><a href="https://github.com/dbus2/zbus">zbus</a></strong> is a <strong><a href="https://www.rust-lang.org/">Rust</a></strong> crate for <strong><a href="https://dbus.freedesktop.org/">D-Bus</a></strong>. If you are not familiar with D-Bus, you should
-read <a href="https://www.freedesktop.org/wiki/Software/dbus/#index1h1">what is D-Bus?</a> first<sup class="footnote-reference"><a href="#outdated">1</a></sup>. In short, zbus allows you to communicate from one program
+read <a href="https://www.freedesktop.org/wiki/Software/dbus/#index1h1">what is D-Bus?</a> first<sup class="footnote-reference" id="fr-outdated-1"><a href="#footnote-outdated">1</a></sup>. In short, zbus allows you to communicate from one program
 to another, using the D-Bus protocol. In other words, it’s an <em>inter-process</em> communication (IPC)
 solution. It is a very popular IPC solution on Linux and many Linux services (e.g systemd,
 NetworkManager) and desktop environments (e.g GNOME and KDE), rely on D-Bus for their IPC needs.
@@ -169,7 +172,7 @@ There are many tools and implementations available, making it easy to interact w
 from different languages and environments.</p>
 <p>zbus is a 100% Rust-native implementation of the D-Bus protocol. It provides both an API to send
 and receive messages over a connection, as well as API to interact with peers through high-level
-concepts like method calls, signals and properties<sup class="footnote-reference"><a href="#high-level-api">2</a></sup>. Thanks to the power of Rust
+concepts like method calls, signals and properties<sup class="footnote-reference" id="fr-high-level-api-1"><a href="#footnote-high-level-api">2</a></sup>. Thanks to the power of Rust
 macros, zbus is able to make interacting with D-Bus very easy.</p>
 <p>zbus project provides two crates:</p>
 <h2 id="zvariant"><a class="header" href="#zvariant">zvariant</a></h2>
@@ -181,18 +184,19 @@ is very commonly used for efficient storage of arbitrary data and is also suppor
 <p>The <a href="https://crates.io/crates/zbus">zbus crate</a> provides the main API you will use to interact with D-Bus from Rust. It takes care
 of the establishment of a connection, the creation, sending and receiving of different kind of D-Bus
 messages (method calls, signals etc) for you.</p>
-<div class="footnote-definition" id="outdated"><sup class="footnote-definition-label">1</sup>
-<p>D-Bus is ~15y old, unfortunately many documents out there are
-sometime aging or misleading.</p>
-</div>
-<div class="footnote-definition" id="high-level-api"><sup class="footnote-definition-label">2</sup>
-<p>These concepts are explained in the
-<a href="concepts.html#interfaces">following chapter</a>.</p>
-</div>
 <p align="center">
   <img src="https://www.freedesktop.org/png/freedesktop-logo.png" height="32"/>
 </p>
-
+<hr>
+<ol class="footnote-definition"><li id="footnote-outdated">
+<p>D-Bus is ~15y old, unfortunately many documents out there are
+sometime aging or misleading. <a href="#fr-outdated-1">↩</a></p>
+</li>
+<li id="footnote-high-level-api">
+<p>These concepts are explained in the
+<a href="concepts.html#interfaces">following chapter</a>. <a href="#fr-high-level-api-1">↩</a></p>
+</li>
+</ol>
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
