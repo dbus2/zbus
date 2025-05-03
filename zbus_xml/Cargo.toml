@@ -14,8 +14,8 @@ readme = "README.md"
 
 [dependencies]
 serde.workspace = true
-zvariant.workspace = true
-zbus_names.workspace = true
+zvariant = { path = "../zvariant", version = "5.5.0" }
+zbus_names = { path = "../zbus_names", version = "4.2.0" }
 quick-xml.workspace = true
 
 [dev-dependencies]

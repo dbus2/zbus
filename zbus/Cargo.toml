@@ -48,9 +48,11 @@ serde_bytes = ["zvariant/serde_bytes"]
 async-fs = []
 
 [dependencies]
-zbus_macros.workspace = true
-zvariant = { workspace = true, features = ["enumflags2"] }
-zbus_names.workspace = true
+zbus_macros = { path = "../zbus_macros", version = "5.5.0" }
+zvariant = { path = "../zvariant", features = [
+    "enumflags2",
+], version = "5.5.0" }
+zbus_names = { path = "../zbus_names", version = "4.2.0" }
 
 serde.workspace = true
 serde_repr.workspace = true

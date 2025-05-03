@@ -25,8 +25,8 @@ name = "zbus-xmlgen"
 path = "src/main.rs"
 
 [dependencies]
-zbus = { workspace = true, features = ["blocking-api"] }
-zbus_xml.workspace = true
+zbus = { path = "../zbus", features = ["blocking-api"], version = "5.5.0" }
+zbus_xml = { path = "../zbus_xml", version = "5.0.2" }
 
 snakecase.workspace = true
 clap.workspace = true
