@@ -7,54 +7,14 @@
 //! [FAQ entry]: https://dbus2.github.io/zbus/faq.html#how-to-use-a-struct-as-a-dictionary
 
 mod deserialize;
-pub use deserialize::Deserialize;
+pub use deserialize::{deserialize, Deserialize};
 mod serialize;
-pub use serialize::Serialize;
-
-use crate::Type;
-use serde::{Deserializer, Serializer};
+pub use serialize::{serialize, Serialize};
 
 /// Utilities to (de)serialize an optional value as a [`enum@zvariant::Value`].
 pub mod optional {
     use super::*;
 
-    /// Serialize an optional value as a [`enum@zvariant::Value`].
-    pub fn serialize<T, S>(value: &Option<T>, ser: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-        T: Type + serde::Serialize,
-    {
-        super::serialize(value.as_ref().unwrap(), ser)
-    }
-
-    /// Deserialize an optional value as a [`enum@zvariant::Value`].
-    pub fn deserialize<'de, T, D>(deserializer: D) -> std::result::Result<Option<T>, D::Error>
-    where
-        D: Deserializer<'de>,
-        T: serde::Deserialize<'de> + Type + 'de,
-    {
-        super::deserialize(deserializer).map(Some)
-    }
-}
-
-/// Serialize a value as a [`enum@zvariant::Value`].
-pub fn serialize<T, S>(value: &T, ser: S) -> std::result::Result<S::Ok, S::Error>
-where
-    S: Serializer,
-    T: Type + serde::Serialize,
-{
-    use serde::Serialize as _;
-
-    Serialize(value).serialize(ser)
-}
-
-/// Deserialize a value as a [`enum@zvariant::Value`].
-pub fn deserialize<'de, T, D>(deserializer: D) -> std::result::Result<T, D::Error>
-where
-    D: Deserializer<'de>,
-    T: serde::Deserialize<'de> + Type + 'de,
-{
-    use serde::Deserialize as _;
-
-    Deserialize::deserialize(deserializer).map(|v| v.0)
+    pub use deserialize::deserialize_optional as deserialize;
+    pub use serialize::serialize_optional as serialize;
 }

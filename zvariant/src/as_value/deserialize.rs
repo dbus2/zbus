@@ -75,3 +75,23 @@ impl<'de, T: Type + serde::Deserialize<'de>> Visitor<'de> for DeserializeValueVi
 impl<'de, T: Type + serde::Deserialize<'de>> Type for Deserialize<'de, T> {
     const SIGNATURE: &'static Signature = &Signature::Variant;
 }
+
+/// Deserialize a value as a [`enum@zvariant::Value`].
+pub fn deserialize<'de, T, D>(deserializer: D) -> std::result::Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: serde::Deserialize<'de> + Type + 'de,
+{
+    use serde::Deserialize as _;
+
+    Deserialize::deserialize(deserializer).map(|v| v.0)
+}
+
+/// Deserialize an optional value as a [`enum@zvariant::Value`].
+pub fn deserialize_optional<'de, T, D>(deserializer: D) -> std::result::Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: serde::Deserialize<'de> + Type + 'de,
+{
+    deserialize(deserializer).map(Some)
+}

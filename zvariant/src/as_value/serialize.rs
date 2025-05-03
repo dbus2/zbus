@@ -35,3 +35,23 @@ impl<T: Type + serde::Serialize> serde::Serialize for Serialize<'_, T> {
 impl<T: Type + serde::Serialize> Type for Serialize<'_, T> {
     const SIGNATURE: &'static crate::Signature = &crate::Signature::Variant;
 }
+
+/// Serialize a value as a [`enum@zvariant::Value`].
+pub fn serialize<T, S>(value: &T, ser: S) -> std::result::Result<S::Ok, S::Error>
+where
+    S: Serializer,
+    T: Type + serde::Serialize,
+{
+    use serde::Serialize as _;
+
+    Serialize(value).serialize(ser)
+}
+
+/// Serialize an optional value as a [`enum@zvariant::Value`].
+pub fn serialize_optional<T, S>(value: &Option<T>, ser: S) -> std::result::Result<S::Ok, S::Error>
+where
+    S: Serializer,
+    T: Type + serde::Serialize,
+{
+    super::serialize(value.as_ref().unwrap(), ser)
+}
