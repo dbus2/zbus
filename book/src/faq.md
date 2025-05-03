@@ -65,9 +65,9 @@ impl DictionaryGiverInterface {
 Since the fields have to be transformed from/into `zvariant::Value`, make sure to use the `with`
 attribute with the appropriate helper module from `zvariant::as_value` module.
 
-Moroever, since D-Bus does not have a concept of nullable types, it's important to ensure that
+Moreover, since D-Bus does not have a concept of nullable types, it's important to ensure that
 `skip_serializing_if` and `default` attributes are used for optional fields. Fortunately, you can
-make use of the `default` container attribute if your struct can implemented `Default` trait:
+make use of the `default` container attribute if your struct can implemented the `Default` trait:
 
 ```rust,noplayground
 use zbus::zvariant::{Type, as_value::{self, optional}};
