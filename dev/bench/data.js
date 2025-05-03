@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1746288748123,
+  "lastUpdate": 1746302560734,
   "repoUrl": "https://github.com/dbus2/zbus",
   "entries": {
     "Benchmark": [
@@ -12323,6 +12323,162 @@ window.BENCHMARK_DATA = {
             "name": "object_path_parse",
             "value": 101,
             "range": "± 2",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "zeenix@gmail.com",
+            "name": "Zeeshan Ali Khan",
+            "username": "zeenix"
+          },
+          "committer": {
+            "email": "zeenix@gmail.com",
+            "name": "Zeeshan Ali Khan",
+            "username": "zeenix"
+          },
+          "distinct": true,
+          "id": "4ba49632f68e39eb3e15c7e580cf9e69c6daf9c2",
+          "message": "📝 CONTRIBUTING: Explicitly state how to c&p emojis\n\nIt's super annoying that this has to be explained to people, as they\njust have to click on the emoji but oh well. 🤷",
+          "timestamp": "2025-05-03T21:49:40+02:00",
+          "tree_id": "1d036c46bf21a6932c5a5093e2f1c9a07bd26210",
+          "url": "https://github.com/dbus2/zbus/commit/4ba49632f68e39eb3e15c7e580cf9e69c6daf9c2"
+        },
+        "date": 1746302559680,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "message-ser/small",
+            "value": 2355,
+            "range": "± 47",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "message-ser/big",
+            "value": 3492942,
+            "range": "± 25579",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "message-de/header",
+            "value": 272,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "message-de/body",
+            "value": 3813633,
+            "range": "± 22017",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_dbus_address/unix",
+            "value": 399,
+            "range": "± 6",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_dbus_address/tcp",
+            "value": 496,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/well_known",
+            "value": 151,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/unique",
+            "value": 156,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/bus",
+            "value": 162,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/interface",
+            "value": 135,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/error",
+            "value": 135,
+            "range": "± 5",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/member",
+            "value": 101,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_ser",
+            "value": 384599,
+            "range": "± 6748",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_de",
+            "value": 418032,
+            "range": "± 608",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_and_ass_dict_ser",
+            "value": 1030902,
+            "range": "± 1581",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_and_ass_dict_de",
+            "value": 2078279,
+            "range": "± 3928",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_and_asv_dict_ser",
+            "value": 2113104,
+            "range": "± 22162",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_and_asv_dict_de",
+            "value": 4003490,
+            "range": "± 9310",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/fixed_size_array_ser",
+            "value": 692441,
+            "range": "± 13328",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/fixed_size_array_de",
+            "value": 1151020,
+            "range": "± 17088",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "signature_parse",
+            "value": 11207,
+            "range": "± 31",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "object_path_parse",
+            "value": 101,
+            "range": "± 1",
             "unit": "ns/iter"
           }
         ]
