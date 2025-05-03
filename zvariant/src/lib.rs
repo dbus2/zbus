@@ -90,11 +90,10 @@ mod framing_offsets;
 mod container_depths;
 
 pub mod as_value;
-pub use as_value::{Deserialize, Serialize};
-#[deprecated(since = "5.5.0", note = "Use `as_value::Serialize` instead.")]
-pub type SerializeValue<'a, T> = as_value::Serialize<'a, T>;
 #[deprecated(since = "5.5.0", note = "Use `as_value::Deserialize` instead.")]
-pub type DeserializeValue<'de, T> = as_value::Deserialize<'de, T>;
+pub use as_value::Deserialize as DeserializeValue;
+#[deprecated(since = "5.5.0", note = "Use `as_value::Serialize` instead.")]
+pub use as_value::Serialize as SerializeValue;
 
 pub use zvariant_derive::{DeserializeDict, OwnedValue, SerializeDict, Type, Value};
 
@@ -1061,7 +1060,7 @@ mod tests {
             let mut map = std::collections::HashMap::<&str, &str>::new();
             map.insert("k", "v");
             let gv_ser_value_encoded =
-                zvariant::to_bytes(ctxt, &zvariant::Serialize(&map)).unwrap();
+                zvariant::to_bytes(ctxt, &as_value::Serialize(&map)).unwrap();
             let gv_value_encoded = to_bytes(ctxt, &zvariant::Value::new(map)).unwrap();
             assert_eq!(*gv_value_encoded, *gv_ser_value_encoded);
 

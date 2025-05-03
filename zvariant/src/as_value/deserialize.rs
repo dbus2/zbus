@@ -11,7 +11,7 @@ use crate::{Signature, Type};
 /// generic [`Value`] and instead use this wrapper.
 ///
 /// ```
-/// # use zvariant::{to_bytes, serialized::Context, Deserialize, Serialize, LE};
+/// # use zvariant::{to_bytes, serialized::Context, as_value::{Deserialize, Serialize}, LE};
 /// #
 /// # let ctxt = Context::new_dbus(LE, 0);
 /// # let array = [0, 1, 2];
