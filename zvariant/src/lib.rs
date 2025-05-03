@@ -120,6 +120,7 @@ mod tests {
     use serde_json::json;
     #[cfg(feature = "arrayvec")]
     use std::str::FromStr;
+    use zvariant_utils::signature::Signature;
 
     use serde::{Deserialize, Serialize};
 
@@ -876,6 +877,14 @@ mod tests {
             let val = Value::new(&vec);
             assert_eq!(TryInto::<Vec<i32>>::try_into(val).unwrap(), vec);
         }
+
+        // Empty array should be treated as a unit type, which is encoded as a u8.
+        assert_eq!(<[u64; 0]>::SIGNATURE, &Signature::U8);
+        let array: [u64; 0] = [];
+        let encoded = to_bytes(ctxt, &array).unwrap();
+        assert_eq!(encoded.len(), 1);
+        assert_eq!(encoded[0], 0);
+        let _decoded: [u64; 0] = encoded.deserialize().unwrap().0;
     }
 
     #[test]
