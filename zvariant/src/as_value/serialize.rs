@@ -8,7 +8,7 @@ use crate::Type;
 /// generic [`Value`] and instead use this wrapper.
 ///
 /// ```
-/// # use zvariant::{to_bytes, serialized::Context, Serialize, LE};
+/// # use zvariant::{to_bytes, serialized::Context, as_value::Serialize, LE};
 /// #
 /// # let ctxt = Context::new_dbus(LE, 0);
 /// let _ = to_bytes(ctxt, &Serialize(&[0, 1, 2])).unwrap();
