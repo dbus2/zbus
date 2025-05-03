@@ -31,7 +31,8 @@ Same rules apply here as for bug reports and feature requests. Plus:
 * We also prefer adding [emoji prefixes to commit messages](https://gitmoji.carloscuesta.me/). Since
   the `gitmoji` CLI tool can be very [slow](https://github.com/zeenix/gimoji#rationale), we
   recommend using [`gimoji`](https://github.com/zeenix/gimoji) instead. You can also pick an emoji
-  direcitly from [here](https://gitmoji.dev/).
+  direcitly from [here](https://gitmoji.dev/) (please remember to copy the emoji itself and not the
+  `:emoji-code:` string, by just clicking on it).
 * Add a prefix indicating the packages being changed. Use either the package name or an abbreviation
   (for example, `zb` for `zbus`, `zv` for `zvariant` etc). If a commit touches multiple packages,
   separate with a comma. For example, for a commit changing the packages `zbus` and `zvariant`,
