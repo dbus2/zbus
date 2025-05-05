@@ -119,6 +119,8 @@ jobs:
       RUST_LOG: trace
       PKG_CONFIG: C:\bin\pkg-config.exe
       PKG_CONFIG_PATH: C:\lib\pkgconfig
+      ErrorActionPreference: Stop
+      WarningPreference: Stop
     steps:
       - uses: actions/checkout@v4
 
