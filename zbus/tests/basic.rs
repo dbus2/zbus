@@ -4,7 +4,7 @@ use enumflags2::BitFlags;
 use ntest::timeout;
 use test_log::test;
 use tracing::{debug, instrument};
-use zbus::{block_on, fdo::DBusProxy};
+use zbus::block_on;
 
 use zbus_names::UniqueName;
 use zvariant::{OwnedValue, Type};
@@ -333,7 +333,7 @@ async fn test_freedesktop_credentials() -> Result<()> {
     use std::os::fd::AsRawFd;
 
     let connection = Connection::session().await?;
-    let dbus = DBusProxy::new(&connection).await?;
+    let dbus = zbus::fdo::DBusProxy::new(&connection).await?;
     let credentials = dbus
         .get_connection_credentials(connection.unique_name().unwrap().into())
         .await?;
