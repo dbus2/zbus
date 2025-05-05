@@ -3,9 +3,8 @@ use std::collections::HashMap;
 use enumflags2::BitFlags;
 use ntest::timeout;
 use test_log::test;
-use tokio::fs;
 use tracing::{debug, instrument};
-use zbus::{block_on, fdo::DBusProxy};
+use zbus::block_on;
 
 use zbus_names::UniqueName;
 use zvariant::{OwnedValue, Type};
@@ -95,6 +94,7 @@ fn fdpass_systemd() {
     zbus::block_on(fdpass_systemd_async());
 }
 
+#[cfg(all(unix, not(target_os = "macos")))]
 async fn fdpass_systemd_async() {
     use std::{fs::File, os::unix::io::AsRawFd};
     use zvariant::OwnedFd;
@@ -333,7 +333,7 @@ async fn test_freedesktop_credentials() -> Result<()> {
     use std::os::fd::AsRawFd;
 
     let connection = Connection::session().await?;
-    let dbus = DBusProxy::new(&connection).await?;
+    let dbus = zbus::fdo::DBusProxy::new(&connection).await?;
     let credentials = dbus
         .get_connection_credentials(connection.unique_name().unwrap().into())
         .await?;
@@ -342,7 +342,7 @@ async fn test_freedesktop_credentials() -> Result<()> {
     {
         if let Some(fd) = credentials.process_fd() {
             let fd = fd.as_raw_fd();
-            let fdinfo = fs::read_to_string(&format!("/proc/self/fdinfo/{fd}")).await?;
+            let fdinfo = tokio::fs::read_to_string(&format!("/proc/self/fdinfo/{fd}")).await?;
             let pidline = fdinfo
                 .split("\n")
                 .into_iter()
