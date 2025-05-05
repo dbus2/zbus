@@ -95,6 +95,7 @@ fn fdpass_systemd() {
     zbus::block_on(fdpass_systemd_async());
 }
 
+#[cfg(all(unix, not(target_os = "macos")))]
 async fn fdpass_systemd_async() {
     use std::{fs::File, os::unix::io::AsRawFd};
     use zvariant::OwnedFd;
