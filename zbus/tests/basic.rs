@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use enumflags2::BitFlags;
 use ntest::timeout;
 use test_log::test;
-use tokio::fs;
 use tracing::{debug, instrument};
 use zbus::{block_on, fdo::DBusProxy};
 
@@ -343,7 +342,7 @@ async fn test_freedesktop_credentials() -> Result<()> {
     {
         if let Some(fd) = credentials.process_fd() {
             let fd = fd.as_raw_fd();
-            let fdinfo = fs::read_to_string(&format!("/proc/self/fdinfo/{fd}")).await?;
+            let fdinfo = tokio::fs::read_to_string(&format!("/proc/self/fdinfo/{fd}")).await?;
             let pidline = fdinfo
                 .split("\n")
                 .into_iter()
