@@ -330,7 +330,6 @@ async fn test_freedesktop_api() -> Result<()> {
 #[instrument]
 async fn test_freedesktop_credentials() -> Result<()> {
     use nix::unistd::{Gid, Uid};
-    use std::os::fd::AsRawFd;
 
     let connection = Connection::session().await?;
     let dbus = zbus::fdo::DBusProxy::new(&connection).await?;
@@ -340,21 +339,14 @@ async fn test_freedesktop_credentials() -> Result<()> {
 
     #[cfg(target_os = "linux")]
     {
+        use std::os::fd::AsRawFd;
+        use tokio::fs::read_to_string;
+
         if let Some(fd) = credentials.process_fd() {
             let fd = fd.as_raw_fd();
-            let fdinfo = tokio::fs::read_to_string(&format!("/proc/self/fdinfo/{fd}")).await?;
-            let pidline = fdinfo
-                .split("\n")
-                .into_iter()
-                .find(|s| s.starts_with("Pid:"))
-                .unwrap();
-            let pid: u32 = pidline
-                .split("\t")
-                .into_iter()
-                .last()
-                .unwrap()
-                .parse()
-                .unwrap();
+            let fdinfo = read_to_string(&format!("/proc/self/fdinfo/{fd}")).await?;
+            let pidline = fdinfo.split('\n').find(|s| s.starts_with("Pid:")).unwrap();
+            let pid: u32 = pidline.split('\t').next_back().unwrap().parse().unwrap();
             assert_eq!(std::process::id(), pid);
         }
     }
@@ -364,12 +356,13 @@ async fn test_freedesktop_credentials() -> Result<()> {
         u32::from(Uid::effective()),
         credentials.unix_user_id().unwrap()
     );
-    credentials
-        .unix_group_ids()
-        .unwrap()
-        .iter()
-        .find(|group| **group == u32::from(Gid::effective()))
-        .unwrap();
+
+    if let Some(group_ids) = credentials.unix_group_ids() {
+        group_ids
+            .iter()
+            .find(|group| **group == u32::from(Gid::effective()))
+            .unwrap();
+    }
 
     Ok(())
 }
