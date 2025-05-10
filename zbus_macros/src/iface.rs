@@ -725,7 +725,12 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                     };
 
                     if p.emits_changed_signal == PropertyEmitsChangedSignal::True {
+                        let changed_doc = format!(
+                            "Emit the “PropertiesChanged” signal with the new value for the `{member_name}` property.\n\n\
+                             This method should be called if a property value changes outside its setter method."
+                        );
                         let prop_changed_method = quote!(
+                            #[doc = #changed_doc]
                             pub async fn #prop_changed_method_name(
                                 &self,
                                 __zbus__signal_emitter: &#zbus::object_server::SignalEmitter<'_>,
@@ -750,7 +755,13 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                     }
 
                     if p.emits_changed_signal == PropertyEmitsChangedSignal::Invalidates {
+                        let invalidate_doc = format!(
+                            "Emit the “PropertiesChanged” signal for the `{member_name}` property without including the new value.\n\n\
+                             It is usually better to call `{prop_changed_method_name}` instead so that interested peers do not need to \
+                             fetch the new value separately (causing excess traffic on the bus)."
+                        );
                         let prop_invalidate_method = quote!(
+                            #[doc = #invalidate_doc]
                             pub async fn #prop_invalidate_method_name(
                                 &self,
                                 __zbus__signal_emitter: &#zbus::object_server::SignalEmitter<'_>,
