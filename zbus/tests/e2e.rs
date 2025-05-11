@@ -19,7 +19,7 @@ use zbus::{
     object_server::ResponseDispatchNotifier,
     DBusError, Error, Message, MessageStream,
 };
-use zvariant::{Optional, OwnedValue, Str, Type, Value};
+use zvariant::{DeserializeDict, Optional, OwnedValue, SerializeDict, Str, Type, Value};
 
 use zbus::{
     connection, interface,
@@ -37,12 +37,10 @@ pub struct ArgStructTest {
 
 // Mimic a NetworkManager interface property that's a dict. This tests ability to use a custom
 // dict type using the `Type` And `*Dict` macros (issue #241).
-#[derive(Deserialize, Serialize, Type, Debug, Value, OwnedValue, PartialEq, Eq)]
+#[derive(DeserializeDict, SerializeDict, Type, Debug, Value, OwnedValue, PartialEq, Eq)]
 #[zvariant(signature = "dict")]
 pub struct IP4Adress {
-    #[serde(with = "zvariant::as_value")]
     prefix: u32,
-    #[serde(with = "zvariant::as_value")]
     address: String,
 }
 
