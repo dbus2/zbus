@@ -8,34 +8,29 @@ Since the use of a dictionary, specifically one with strings as keys and variant
 `a{sv}`) is very common in the D-Bus world and use of HashMaps isn't as convenient and type-safe as
 a struct, you might find yourself wanting to use a struct as a dictionary.
 
-It's possible to do so using the `Serialize` and `Deserialize` derive macros from the `serde` crate,
-combined with `zvariant::Type` derive and some utility functions from `zvariant`.
+It's possible to do so, using either of the following methods:
 
-Here is a simple example:
+1. Using the `SerializeDict` and `DeserializeDict` derive macros from `zvariant`. This is the best
+  option for simple cases.
+2. Using the `Serialize` and `Deserialize` derive macros from the `serde` crate. This is the best
+  option for more complex cases, where you need more fine-grained control over the serialization
+  and/or deserialization process.
+
+Here is a simple example using `SerializeDict` and `DeserializeDict`:
 
 ```rust,noplayground
 use zbus::{
     proxy, interface, fdo::Result,
-    zvariant::{
-        Type,
-        as_value::{self, optional},
-    },
+    zvariant::{Type, SerializeDict, DeserializeDict},
 };
-use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize, Type)]
+#[derive(DeserializeDict, SerializeDict, Type)]
 // `Type` treats `dict` is an alias for `a{sv}`.
 #[zvariant(signature = "dict")]
 pub struct Dictionary {
-    #[serde(with = "as_value")]
     field1: u16,
-    #[serde(rename = "another-name", with = "as_value")]
+    #[zvariant(rename = "another-name")]
     field2: i64,
-    #[serde(
-        with = "optional",
-        skip_serializing_if = "Option::is_none",
-        default,
-    )]
     optional_field: Option<String>,
 }
 
@@ -62,6 +57,33 @@ impl DictionaryGiverInterface {
 }
 ```
 
+Now let's say you want to grab all the extra entries that are not explicitly defined in the
+struct. You can not do that with `DeserializeDict` but you can with `serde::Deserialize`:
+
+```rust,noplayground
+use std::collections::HashMap;
+use zbus::zvariant::{Type, OwnedValue, as_value::{self, optional}};
+use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize, Serialize, Type)]
+// `Type` treats `dict` is an alias for `a{sv}`.
+#[zvariant(signature = "dict")]
+pub struct Dictionary {
+    #[serde(with = "as_value")]
+    field1: u16,
+    #[serde(rename = "another-name", with = "as_value")]
+    field2: i64,
+    #[serde(
+        with = "optional",
+        skip_serializing_if = "Option::is_none",
+        default,
+    )]
+    optional_field: Option<String>,
+    #[serde(flatten)]
+    the_rest: HashMap<String, OwnedValue>,
+}
+```
+
 Since the fields have to be transformed from/into `zvariant::Value`, make sure to use the `with`
 attribute with the appropriate helper module from `zvariant::as_value` module.
 
@@ -70,9 +92,9 @@ Moreover, since D-Bus does not have a concept of nullable types, it's important 
 make use of the `default` container attribute if your struct can implemented the `Default` trait:
 
 ```rust,noplayground
-use zbus::zvariant::{Type, as_value::{self, optional}};
+# use zbus::zvariant::{Type, as_value::{self, optional}};
 # use serde::{Deserialize, Serialize};
-
+#
 #[derive(Default, Deserialize, Serialize, Type)]
 // `Type` treats `dict` is an alias for `a{sv}`.
 #[zvariant(signature = "dict")]
@@ -84,28 +106,6 @@ pub struct Dictionary {
     optional_field1: Option<i64>,
     #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
     optional_field2: Option<String>,
-}
-```
-
-It is also very much possible to grab all the extra entries that are not explicitly defined in the
-struct:
-
-```rust,noplayground
-use std::collections::HashMap;
-use zbus::zvariant::{Type, OwnedValue, as_value};
-# use serde::{Deserialize, Serialize};
-
-#[derive(Default, Deserialize, Serialize, Type)]
-// `Type` treats `dict` is an alias for `a{sv}`.
-#[zvariant(signature = "dict")]
-#[serde(default)]
-pub struct Dictionary {
-    #[serde(with = "as_value")]
-    field1: u16,
-    #[serde(with = "as_value")]
-    field2: i64,
-    #[serde(flatten)]
-    the_rest: HashMap<String, OwnedValue>,
 }
 ```
 
@@ -150,7 +150,7 @@ Please consult [`MessageStream`] documentation for details.
 
 ## Why aren't property values updating for my service that doesn't notify changes?
 
-A common issue might arise when using a zbus proxy is that your proxy's property values aren't 
+A common issue might arise when using a zbus proxy is that your proxy's property values aren't
 updating. This is due to zbus' default caching policy, which updates the value of a property only
 when a change is signaled, primarily to minimize latency and optimize client request performance.
 By default, if your service does not emit change notifications, the property values will not
