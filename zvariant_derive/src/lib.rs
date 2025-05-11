@@ -180,17 +180,51 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
 /// [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-properties)
 /// and GVariant.
 ///
-/// Starting from version `5.5.0`, this macro is deprecated in favor of using the `Serialize` derive
-/// with `zvariant::as_value`. See the relevant [FAQ entry] in our book for more details and
-/// examples.
+/// # Alternative Approaches
+///
+/// There are two approaches to serializing structs as dictionaries:
+///
+/// 1. Using this macro (simpler, but less control).
+/// 2. Using the `Serialize` derive with `zvariant::as_value` (more verbose, but more control).
+///
+/// See the example below and the relevant [FAQ entry] in our book for more details on the
+/// alternative approach.
+///
+/// # Example
+///
+/// ## Approach #1
+///
+/// ```
+/// use zvariant::{SerializeDict, Type};
+///
+/// #[derive(Debug, Default, SerializeDict, Type)]
+/// #[zvariant(signature = "a{sv}", rename_all = "PascalCase")]
+/// pub struct MyStruct {
+///     field1: Option<u32>,
+///     field2: String,
+/// }
+/// ```
+///
+/// ## Approach #2
+///
+/// ```
+/// use serde::Serialize;
+/// use zvariant::{Type, as_value};
+///
+/// #[derive(Debug, Default, Serialize, Type)]
+/// #[zvariant(signature = "a{sv}")]
+/// #[serde(default, rename_all = "PascalCase")]
+/// pub struct MyStruct {
+///     #[serde(with = "as_value::optional", skip_serializing_if = "Option::is_none")]
+///     field1: Option<u32>,
+///     #[serde(with = "as_value")]
+///     field2: String,
+/// }
+/// ```
 ///
 /// [`Serialize`]: https://docs.serde.rs/serde/trait.Serialize.html
 /// [FAQ entry]: https://dbus2.github.io/zbus/faq.html#how-to-use-a-struct-as-a-dictionary
 #[proc_macro_derive(SerializeDict, attributes(zbus, zvariant))]
-#[deprecated(
-    since = "5.5.0",
-    note = "See https://dbus2.github.io/zbus/faq.html#how-to-use-a-struct-as-a-dictionary"
-)]
 pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
     let input: DeriveInput = syn::parse(input).unwrap();
     dict::expand_serialize_derive(input)
@@ -205,17 +239,51 @@ pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-properties)
 /// and GVariant.
 ///
-/// Starting from version `5.5.0`, this macro is deprecated in favor of using the `Deserialize`
-/// derive with `zvariant::as_value`. See the relevant [FAQ entry] in our book for more details
-/// and examples.
+/// # Alternative Approaches
+///
+/// There are two approaches to deserializing dictionaries as structs:
+///
+/// 1. Using this macro (simpler, but less control).
+/// 2. Using the `Deserialize` derive with `zvariant::as_value` (more verbose, but more control).
+///
+/// See the example below and the relevant [FAQ entry] in our book for more details on the
+/// alternative approach.
+///
+/// # Example
+///
+/// ## Approach #1
+///
+/// ```
+/// use zvariant::{DeserializeDict, Type};
+///
+/// #[derive(Debug, Default, DeserializeDict, Type)]
+/// #[zvariant(signature = "a{sv}", rename_all = "PascalCase")]
+/// pub struct MyStruct {
+///     field1: Option<u32>,
+///     field2: String,
+/// }
+/// ```
+///
+/// ## Approach #2
+///
+/// ```
+/// use serde::Deserialize;
+/// use zvariant::{Type, as_value};
+///
+/// #[derive(Debug, Default, Deserialize, Type)]
+/// #[zvariant(signature = "a{sv}")]
+/// #[serde(default, rename_all = "PascalCase")]
+/// pub struct MyStruct {
+///     #[serde(with = "as_value::optional")]
+///     field1: Option<u32>,
+///     #[serde(with = "as_value")]
+///     field2: String,
+/// }
+/// ```
 ///
 /// [`Deserialize`]: https://docs.serde.rs/serde/de/trait.Deserialize.html
 /// [FAQ entry]: https://dbus2.github.io/zbus/faq.html#how-to-use-a-struct-as-a-dictionary
 #[proc_macro_derive(DeserializeDict, attributes(zbus, zvariant))]
-#[deprecated(
-    since = "5.5.0",
-    note = "See https://dbus2.github.io/zbus/faq.html#how-to-use-a-struct-as-a-dictionary"
-)]
 pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
     let input: DeriveInput = syn::parse(input).unwrap();
     dict::expand_deserialize_derive(input)
