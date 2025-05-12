@@ -66,7 +66,6 @@ use zbus::zvariant::{Type, OwnedValue, as_value::{self, optional}};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Type)]
-// `Type` treats `dict` is an alias for `a{sv}`.
 #[zvariant(signature = "dict")]
 pub struct Dictionary {
     #[serde(with = "as_value")]
@@ -96,7 +95,6 @@ make use of the `default` container attribute if your struct can implemented the
 # use serde::{Deserialize, Serialize};
 #
 #[derive(Default, Deserialize, Serialize, Type)]
-// `Type` treats `dict` is an alias for `a{sv}`.
 #[zvariant(signature = "dict")]
 #[serde(default)]
 pub struct Dictionary {
