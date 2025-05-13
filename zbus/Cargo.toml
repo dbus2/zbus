@@ -51,7 +51,7 @@ async-fs = []
 zbus_macros = { path = "../zbus_macros", version = "5.6.0" }
 zvariant = { path = "../zvariant", features = [
     "enumflags2",
-], version = "5.5.1" }
+], version = "5.5.2" }
 zbus_names = { path = "../zbus_names", version = "4.2.0" }
 
 serde.workspace = true
