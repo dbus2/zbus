@@ -231,4 +231,8 @@ fn dict_value() {
         let decoded = encoded.deserialize::<TestDenyUnknown>();
         assert!(decoded.is_err());
     }
+
+    #[derive(Default, Debug, SerializeDict, DeserializeDict, Type)]
+    #[zvariant(signature = "dict")]
+    struct TestEmpty {}
 }
