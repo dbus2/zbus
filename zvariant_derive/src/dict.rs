@@ -69,10 +69,13 @@ pub fn expand_serialize_derive(input: DeriveInput) -> Result<TokenStream, Error>
                 #[derive(Serialize)]
                 #[serde(rename_all = #rename_all_str)]
                 struct #helper<'a> {
+                    #[serde(skip)]
+                    phantom: ::std::marker::PhantomData<&'a ()>,
                     #(#field_defs,)*
                 }
 
                 let helper = #helper {
+                    phantom: ::std::marker::PhantomData,
                     #(#field_inits,)*
                 };
 
