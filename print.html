@@ -1481,31 +1481,27 @@ fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
 <p>Since the use of a dictionary, specifically one with strings as keys and variants as value (i-e
 <code>a{sv}</code>) is very common in the D-Bus world and use of HashMaps isn’t as convenient and type-safe as
 a struct, you might find yourself wanting to use a struct as a dictionary.</p>
-<p>It’s possible to do so using the <code>Serialize</code> and <code>Deserialize</code> derive macros from the <code>serde</code> crate,
-combined with <code>zvariant::Type</code> derive and some utility functions from <code>zvariant</code>.</p>
-<p>Here is a simple example:</p>
+<p>It’s possible to do so, using either of the following methods:</p>
+<ol>
+<li>Using the <code>SerializeDict</code> and <code>DeserializeDict</code> derive macros from <code>zvariant</code>. This is the best
+option for simple cases.</li>
+<li>Using the <code>Serialize</code> and <code>Deserialize</code> derive macros from the <code>serde</code> crate. This is the best
+option for more complex cases, where you need more fine-grained control over the serialization
+and/or deserialization process.</li>
+</ol>
+<p>Here is a simple example using <code>SerializeDict</code> and <code>DeserializeDict</code>:</p>
 <pre><code class="language-rust noplayground">use zbus::{
     proxy, interface, fdo::Result,
-    zvariant::{
-        Type,
-        as_value::{self, optional},
-    },
+    zvariant::{Type, SerializeDict, DeserializeDict},
 };
-use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize, Type)]
+#[derive(DeserializeDict, SerializeDict, Type)]
 // `Type` treats `dict` is an alias for `a{sv}`.
 #[zvariant(signature = "dict")]
 pub struct Dictionary {
-    #[serde(with = "as_value")]
     field1: u16,
-    #[serde(rename = "another-name", with = "as_value")]
+    #[zvariant(rename = "another-name")]
     field2: i64,
-    #[serde(
-        with = "optional",
-        skip_serializing_if = "Option::is_none",
-        default,
-    )]
     optional_field: Option&lt;String&gt;,
 }
 
@@ -1530,16 +1526,37 @@ impl DictionaryGiverInterface {
         })
     }
 }</code></pre>
+<p>Now let’s say you want to grab all the extra entries that are not explicitly defined in the
+struct. You can not do that with <code>DeserializeDict</code> but you can with <code>serde::Deserialize</code>:</p>
+<pre><code class="language-rust noplayground">use std::collections::HashMap;
+use zbus::zvariant::{Type, OwnedValue, as_value::{self, optional}};
+use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize, Serialize, Type)]
+#[zvariant(signature = "dict")]
+pub struct Dictionary {
+    #[serde(with = "as_value")]
+    field1: u16,
+    #[serde(rename = "another-name", with = "as_value")]
+    field2: i64,
+    #[serde(
+        with = "optional",
+        skip_serializing_if = "Option::is_none",
+        default,
+    )]
+    optional_field: Option&lt;String&gt;,
+    #[serde(flatten)]
+    the_rest: HashMap&lt;String, OwnedValue&gt;,
+}</code></pre>
 <p>Since the fields have to be transformed from/into <code>zvariant::Value</code>, make sure to use the <code>with</code>
 attribute with the appropriate helper module from <code>zvariant::as_value</code> module.</p>
-<p>Moroever, since D-Bus does not have a concept of nullable types, it’s important to ensure that
+<p>Moreover, since D-Bus does not have a concept of nullable types, it’s important to ensure that
 <code>skip_serializing_if</code> and <code>default</code> attributes are used for optional fields. Fortunately, you can
-make use of the <code>default</code> container attribute if your struct can implemented <code>Default</code> trait:</p>
-<pre><code class="language-rust noplayground">use zbus::zvariant::{Type, as_value::{self, optional}};
-<span class="boring">use serde::{Deserialize, Serialize};
-</span>
-#[derive(Default, Deserialize, Serialize, Type)]
-// `Type` treats `dict` is an alias for `a{sv}`.
+make use of the <code>default</code> container attribute if your struct can implemented the <code>Default</code> trait:</p>
+<pre><code class="language-rust noplayground"><span class="boring">use zbus::zvariant::{Type, as_value::{self, optional}};
+</span><span class="boring">use serde::{Deserialize, Serialize};
+</span><span class="boring">
+</span>#[derive(Default, Deserialize, Serialize, Type)]
 #[zvariant(signature = "dict")]
 #[serde(default)]
 pub struct Dictionary {
@@ -1549,24 +1566,6 @@ pub struct Dictionary {
     optional_field1: Option&lt;i64&gt;,
     #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
     optional_field2: Option&lt;String&gt;,
-}</code></pre>
-<p>It is also very much possible to grab all the extra entries that are not explicitly defined in the
-struct:</p>
-<pre><code class="language-rust noplayground">use std::collections::HashMap;
-use zbus::zvariant::{Type, OwnedValue, as_value};
-<span class="boring">use serde::{Deserialize, Serialize};
-</span>
-#[derive(Default, Deserialize, Serialize, Type)]
-// `Type` treats `dict` is an alias for `a{sv}`.
-#[zvariant(signature = "dict")]
-#[serde(default)]
-pub struct Dictionary {
-    #[serde(with = "as_value")]
-    field1: u16,
-    #[serde(with = "as_value")]
-    field2: i64,
-    #[serde(flatten)]
-    the_rest: HashMap&lt;String, OwnedValue&gt;,
 }</code></pre>
 <h2 id="why-do-async-tokio-api-calls-from-interface-methods-not-work"><a class="header" href="#why-do-async-tokio-api-calls-from-interface-methods-not-work">Why do async tokio API calls from interface methods not work?</a></h2>
 <p>Many of the tokio (and tokio-based) APIs assume the tokio runtime to be driving the async machinery
