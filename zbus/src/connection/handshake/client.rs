@@ -245,6 +245,6 @@ async fn receive_hello_response(
     match reply.message_type() {
         Type::MethodReturn => reply.body().deserialize(),
         Type::Error => Err(Error::from(reply)),
-        m => Err(Error::Handshake(format!("Unexpected messgage `{m:?}`"))),
+        m => Err(Error::Handshake(format!("Unexpected message `{m:?}`"))),
     }
 }
