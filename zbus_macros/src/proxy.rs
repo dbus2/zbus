@@ -717,12 +717,13 @@ fn gen_proxy_property(
         let receive_method = match emits_changed_signal {
             PropertyEmitsChangedSignal::True | PropertyEmitsChangedSignal::Invalidates => {
                 let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
-                let receive = format_ident!("receive_{}_changed", method_name);
+                let receive = format_ident!("receive_{method_name}_changed");
                 let gen_doc = format!(
                     "Create a stream for the `{property_name}` property changes. \
-                This is a convenient wrapper around [`{proxy_name}::receive_property_changed`]."
+                     This is a convenient wrapper around [`{proxy_name}::receive_property_changed`]."
                 );
                 quote! {
+                    #(#other_attrs)*
                     #[doc = #gen_doc]
                     pub #usage fn #receive #ty_generics(
                         &self
@@ -742,11 +743,12 @@ fn gen_proxy_property(
             PropertyEmitsChangedSignal::True
             | PropertyEmitsChangedSignal::Invalidates
             | PropertyEmitsChangedSignal::Const => {
-                let cached_getter = format_ident!("cached_{}", method_name);
+                let cached_getter = format_ident!("cached_{method_name}");
                 let cached_doc = format!(
-                    " Get the cached value of the `{property_name}` property, or `None` if the property is not cached.",
+                    "Get the cached value of the `{property_name}` property, or `None` if the property is not cached.",
                 );
                 quote! {
+                    #(#other_attrs)*
                     #[doc = #cached_doc]
                     pub fn #cached_getter(&self) -> ::std::result::Result<
                         ::std::option::Option<<#ret_type as #zbus::ResultAdapter>::Ok>,
