@@ -20,7 +20,7 @@ fn f64_type_test(
     // Lie that we're starting at byte 1 in the overall message to test padding
     let ctxt = Context::new(format, NATIVE_ENDIAN, 1);
     let encoded = to_bytes(ctxt, &value).unwrap();
-    let padding = if 1 % 8 == 0 { 0 } else { 8 - (1 % 8) };
+    let padding = zvariant::padding_for_n_bytes(1, 8);
     assert_eq!(
         encoded.len(),
         expected_len + padding,
