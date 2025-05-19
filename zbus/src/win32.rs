@@ -1,6 +1,6 @@
 use std::{
     ffi::{CStr, OsStr},
-    io::{Error, ErrorKind},
+    io::Error,
     net::SocketAddr,
     os::windows::{
         io::{AsRawHandle, FromRawHandle, OwnedHandle, RawHandle},
@@ -156,7 +156,7 @@ impl ProcessToken {
         let sid = unsafe { (*token_info.as_ptr().cast::<TOKEN_USER>()).User.Sid };
 
         if unsafe { IsValidSid(sid.cast()) == FALSE } {
-            return Err(Error::new(ErrorKind::Other, "Invalid SID"));
+            return Err(Error::other("Invalid SID"));
         }
 
         let mut pstr = ptr::null_mut();
@@ -167,7 +167,7 @@ impl ProcessToken {
         let sid = unsafe { CStr::from_ptr(pstr.cast()) };
         let ret = sid
             .to_str()
-            .map_err(|_| Error::new(ErrorKind::Other, "Invalid SID"))?
+            .map_err(|_| Error::other("Invalid SID"))?
             .to_owned();
         unsafe {
             LocalFree(pstr.cast());
@@ -219,7 +219,7 @@ pub fn socket_addr_get_pid(addr: &SocketAddr) -> Result<u32, Error> {
         }
     }
 
-    Err(Error::new(ErrorKind::Other, "PID of TCP address not found"))
+    Err(Error::other("PID of TCP address not found"))
 }
 
 /// Get the process ID of the connected peer.

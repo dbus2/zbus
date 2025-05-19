@@ -1,5 +1,5 @@
 #[macro_use]
-pub(self) mod common {
+mod common {
     include!("../common.rs");
 }
 
