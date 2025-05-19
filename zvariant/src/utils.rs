@@ -44,7 +44,9 @@ pub const MAYBE_SIGNATURE_CHAR: char = 'm';
 #[cfg(feature = "gvariant")]
 pub const MAYBE_SIGNATURE_STR: &str = "m";
 
-pub(crate) fn padding_for_n_bytes(value: usize, align: usize) -> usize {
+// Public only for tests.
+#[doc(hidden)]
+pub fn padding_for_n_bytes(value: usize, align: usize) -> usize {
     let len_rounded_up = value.wrapping_add(align).wrapping_sub(1) & !align.wrapping_sub(1);
 
     len_rounded_up.wrapping_sub(value)
