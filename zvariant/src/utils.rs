@@ -44,9 +44,21 @@ pub const MAYBE_SIGNATURE_CHAR: char = 'm';
 #[cfg(feature = "gvariant")]
 pub const MAYBE_SIGNATURE_STR: &str = "m";
 
+/// Calculates the padding needed to align `value` to the next multiple of `align`.
+///
+/// # Parameters
+/// - `value`: The value to align.
+/// - `align`: The alignment boundary. Must be a positive power of two.
+///
+/// # Panics
+/// Panics if `align` is not a positive power of two.
 // Public only for tests.
 #[doc(hidden)]
 pub fn padding_for_n_bytes(value: usize, align: usize) -> usize {
+    assert!(
+        align > 0 && align.is_power_of_two(),
+        "`align` must be a positive power of two"
+    );
     let len_rounded_up = value.wrapping_add(align).wrapping_sub(1) & !align.wrapping_sub(1);
 
     len_rounded_up.wrapping_sub(value)
