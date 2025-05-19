@@ -6,11 +6,8 @@ macro_rules! basic_type_test {
         let ctxt =
             zvariant::serialized::Context::new(zvariant::serialized::Format::$format, $endian, 1);
         let encoded = zvariant::to_bytes(ctxt, &$test_value).unwrap();
-        let padding = if 1 % $align == 0 {
-            0
-        } else {
-            $align - (1 % $align)
-        };
+        let padding = zvariant::padding_for_n_bytes(1, $align);
+
         assert_eq!(
             encoded.len(),
             $expected_len + padding,
@@ -87,11 +84,7 @@ macro_rules! fd_value_test {
         let ctxt =
             zvariant::serialized::Context::new(zvariant::serialized::Format::$format, $endian, 1);
         let encoded = zvariant::to_bytes(ctxt, &$test_value).unwrap();
-        let padding = if 1 % $align == 0 {
-            0
-        } else {
-            $align - (1 % $align)
-        };
+        let padding = zvariant::padding_for_n_bytes(1, $align);
         assert_eq!(
             encoded.len(),
             $expected_len + padding,
