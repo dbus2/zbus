@@ -17,7 +17,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.MSRV }}
-          targets: x86_64-pc-windows-gnu, x86_64-apple-darwin, x86_64-unknown-freebsd, x86_64-unknown-netbsd
+          targets: x86_64-pc-windows-gnu, x86_64-apple-darwin, x86_64-unknown-freebsd, x86_64-unknown-netbsd, aarch64-linux-android
           components: rustfmt
       - uses: Swatinem/rust-cache@v2
       - name: Check build with MSRV
@@ -27,6 +27,7 @@ jobs:
           cargo --locked check --target x86_64-apple-darwin
           cargo --locked check --target x86_64-unknown-freebsd
           cargo --locked check --target x86_64-unknown-netbsd
+          cargo --locked check --target aarch64-linux-android
         # This would be nice but some optional deps (e.g `time`) move very fast wrt to MSRV.
         # cargo --locked check --all-features
 
@@ -43,7 +44,7 @@ jobs:
           # We use some nightly fmt options.
           toolchain: nightly
           components: rustfmt
-          targets: x86_64-apple-darwin, x86_64-unknown-freebsd, x86_64-unknown-netbsd x86_64-pc-windows-gnu
+          targets: x86_64-apple-darwin, x86_64-unknown-freebsd, x86_64-unknown-netbsd, x86_64-pc-windows-gnu, aarch64-linux-android
       - uses: Swatinem/rust-cache@v2
       - name: Check formatting
         run: |
@@ -52,6 +53,7 @@ jobs:
           cargo --locked check --target x86_64-unknown-freebsd
           cargo --locked check --target x86_64-unknown-netbsd
           cargo --locked check --target x86_64-pc-windows-gnu
+          cargo --locked check --target aarch64-linux-android
 
   clippy:
     runs-on: ubuntu-latest
@@ -65,7 +67,7 @@ jobs:
         with:
           toolchain: stable
           components: clippy
-          targets: x86_64-apple-darwin, x86_64-unknown-freebsd, x86_64-unknown-netbsd x86_64-pc-windows-gnu
+          targets: x86_64-apple-darwin, x86_64-unknown-freebsd, x86_64-unknown-netbsd, x86_64-pc-windows-gnu, aarch64-linux-android
       - uses: Swatinem/rust-cache@v2
       - name: Catch common mistakes and unwrap calls
         run: |
@@ -74,6 +76,7 @@ jobs:
           cargo --locked clippy --target x86_64-unknown-freebsd
           cargo --locked clippy --target x86_64-unknown-netbsd
           cargo --locked clippy --target x86_64-pc-windows-gnu
+          cargo --locked clippy --target aarch64-linux-android
 
   linux_test:
     runs-on: ubuntu-latest
