@@ -723,6 +723,7 @@ fn gen_proxy_property(
                 This is a convenient wrapper around [`{proxy_name}::receive_property_changed`]."
                 );
                 quote! {
+                    #(#other_attrs)*
                     #[doc = #gen_doc]
                     pub #usage fn #receive #ty_generics(
                         &self
@@ -747,6 +748,7 @@ fn gen_proxy_property(
                     " Get the cached value of the `{property_name}` property, or `None` if the property is not cached.",
                 );
                 quote! {
+                    #(#other_attrs)*
                     #[doc = #cached_doc]
                     pub fn #cached_getter(&self) -> ::std::result::Result<
                         ::std::option::Option<<#ret_type as #zbus::ResultAdapter>::Ok>,
