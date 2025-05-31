@@ -358,6 +358,12 @@ impl PropertiesCache {
                 Some(Either::Left(_update)) => {
                     // discard updates prior to the initial population
                 }
+                Some(Either::Right(Err(zbus::Error::MethodError(name, _, _))))
+                    if name == "org.freedesktop.DBus.Error.ServiceUnknown" =>
+                {
+                    // DBus service doesn't exist. But may appear later on the bus.
+                    break;
+                }
                 Some(Either::Right(populate)) => {
                     populate?.body().deserialize().map(|values| {
                         self.update_cache(&uncached_properties, &values, &[], &interface);
