@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "serde_bytes")]
 use serde_bytes::ByteBuf;
-use std::{collections::HashMap, vec};
+use std::{collections::HashMap, hint::black_box, vec};
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 
 use zvariant::{serialized::Context, to_bytes, Type, Value, LE};
 

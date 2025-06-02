@@ -1,4 +1,5 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
 
 fn name_parse(c: &mut Criterion) {
     const WELL_KNOWN_NAME: &str = "a.very.loooooooooooooooooo-ooooooo_0000o0ng.Name.\
