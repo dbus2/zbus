@@ -8,13 +8,16 @@ use std::{
     rc::{Rc, Weak as RcWeak},
     sync::{
         atomic::{
-            AtomicBool, AtomicI16, AtomicI32, AtomicI64, AtomicI8, AtomicIsize, AtomicU16,
-            AtomicU32, AtomicU64, AtomicU8, AtomicUsize,
+            AtomicBool, AtomicI16, AtomicI32, AtomicI8, AtomicIsize, AtomicU16, AtomicU32,
+            AtomicU8, AtomicUsize,
         },
         Arc, Mutex, RwLock, Weak as ArcWeak,
     },
     time::Duration,
 };
+
+#[cfg(target_has_atomic = "64")]
+use std::sync::atomic::{AtomicI64, AtomicU64};
 
 impl<T> Type for PhantomData<T>
 where
@@ -282,12 +285,16 @@ atomic_impl! {
     AtomicI16 "16" => i16
     AtomicI32 "32" => i32
     AtomicIsize "ptr" => isize
-    AtomicI64 "64" => i64
     AtomicU8 "8" => u8
     AtomicU16 "16" => u16
     AtomicU32 "32" => u32
-    AtomicU64 "64" => u64
     AtomicUsize "ptr" => usize
+}
+
+#[cfg(target_has_atomic = "64")]
+atomic_impl! {
+    AtomicI64 "64" => i64
+    AtomicU64 "64" => u64
 }
 
 ////////////////////////////////////////////////////////////////////////////////
