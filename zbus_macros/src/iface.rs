@@ -689,7 +689,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                     get_dispatch.extend(q);
 
                     let q = if is_fallible_property {
-                        quote!({
+                        quote!(#(#cfg_attrs)* {
                             #args_from_msg
                             if let Ok(prop) = self.#ident(#args_names)#method_await {
                             props.insert(
@@ -703,7 +703,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                             );
                         }})
                     } else {
-                        quote!({
+                        quote!(#(#cfg_attrs)* {
                             #args_from_msg
                             props.insert(
                         ::std::string::ToString::to_string(#member_name),
@@ -732,6 +732,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                              its setter method."
                         );
                         let prop_changed_method = quote!(
+                            #(#cfg_attrs)*
                             #[doc = #changed_doc]
                             pub async fn #prop_changed_method_name(
                                 &self,
