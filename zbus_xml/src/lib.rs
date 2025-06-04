@@ -266,6 +266,13 @@ impl<'a> Node<'a> {
         Ok(Node::deserialize(&mut deserializer)?)
     }
 
+    /// Parse the introspection XML document from trusted reader without limiting the number of
+    /// events.
+    pub fn from_trusted_reader<R: Read>(reader: R) -> Result<Node<'a>> {
+        let mut deserializer = Deserializer::from_reader(BufReader::new(reader));
+        Ok(Node::deserialize(&mut deserializer)?)
+    }
+
     /// Write the XML document to writer.
     pub fn to_writer<W: Write>(&self, writer: W) -> Result<()> {
         // Need this wrapper until this is resolved: https://github.com/tafia/quick-xml/issues/499
