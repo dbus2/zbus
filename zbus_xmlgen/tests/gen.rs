@@ -10,7 +10,7 @@ macro_rules! gen_diff {
         let expected = include_str!(concat!("data/", $outfile));
         #[cfg(windows)]
         let expected = expected.replace("\r\n", "\n");
-        let node = Node::from_reader(input.as_bytes())?;
+        let node = Node::from_reader(input.as_bytes(), 1024)?;
         let gen = GenTrait {
             interface: &node.interfaces()[0],
             path: None,

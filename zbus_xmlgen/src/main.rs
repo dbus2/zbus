@@ -49,7 +49,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         cli::Command::File { path } => {
             let input_src = path.file_name().unwrap().to_string_lossy().to_string();
             let f = File::open(path)?;
-            DBusInfo(Node::from_reader(f)?, None, None, input_src)
+            DBusInfo(Node::from_reader(f, 1024)?, None, None, input_src)
         }
     };
 
@@ -141,7 +141,7 @@ impl DBusInfo<'_> {
             .introspect()?;
 
         Ok(DBusInfo(
-            Node::from_reader(xml.as_bytes())?,
+            Node::from_reader(xml.as_bytes(), 1024)?,
             Some(service),
             Some(path),
             input_src,
