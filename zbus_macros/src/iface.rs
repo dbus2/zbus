@@ -74,11 +74,11 @@ def_attrs! {
 }
 
 #[derive(Debug, Default)]
-struct Property<'a> {
+struct Property {
     read: bool,
     write: bool,
     emits_changed_signal: PropertyEmitsChangedSignal,
-    ty: Option<&'a Type>,
+    ty: Option<Type>,
     doc_comments: TokenStream,
 }
 
@@ -393,20 +393,25 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
         )?;
         let attr_property = method_attrs.property;
         if let Some(prop_attrs) = &attr_property {
+            let property: &mut Property = properties
+                .entry(method_info.member_name.to_string())
+                .or_default();
             if method_info.method_type == MethodType::Property(PropertyType::Getter) {
                 let emits_changed_signal = if let Some(s) = &prop_attrs.emits_changed_signal {
                     PropertyEmitsChangedSignal::parse(s, method.span())?
                 } else {
                     PropertyEmitsChangedSignal::True
                 };
-                let mut property = Property::default();
+                property.read = true;
                 property.emits_changed_signal = emits_changed_signal;
-                properties.insert(method_info.member_name.to_string(), property);
-            } else if prop_attrs.emits_changed_signal.is_some() {
-                return Err(syn::Error::new(
-                    method.span(),
-                    "`emits_changed_signal` cannot be specified on setters",
-                ));
+            } else {
+                property.write = true;
+                if prop_attrs.emits_changed_signal.is_some() {
+                    return Err(Error::new_spanned(
+                        method,
+                        "`emits_changed_signal` cannot be specified on setters",
+                    ));
+                }
             }
         }
         methods.push((method, method_info));
@@ -490,10 +495,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                 });
             }
             MethodType::Property(_) => {
-                let p = properties.get_mut(&member_name).ok_or(Error::new_spanned(
-                    &member_name,
-                    "Write-only properties aren't supported yet",
-                ))?;
+                let p = properties.get_mut(&member_name).unwrap();
 
                 let sk_member_name = case::snake_or_kebab_case(&member_name, true);
                 let prop_changed_method_name = format_ident!("{sk_member_name}_changed");
@@ -501,8 +503,6 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
 
                 p.doc_comments.extend(doc_comments);
                 if has_inputs {
-                    p.write = true;
-
                     let set_call = if is_result_output {
                         quote!(self.#ident(#args_names)#method_await)
                     } else if is_async {
@@ -545,6 +545,13 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                                 && !a.signal_emitter
                         })
                         .ok_or_else(|| Error::new_spanned(inputs, "Expected a value argument"))?;
+
+                    // Use setter argument type as the property type if the getter is not
+                    // explicitly defined.
+                    if !p.read {
+                        p.ty = Some((*value_param.ty).clone());
+                        p.emits_changed_signal = PropertyEmitsChangedSignal::False;
+                    }
 
                     let value_arg = match &*value_param.ty {
                         Type::Reference(_) => quote!(value),
@@ -643,8 +650,8 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                 } else {
                     let is_fallible_property = is_result_output;
 
-                    p.ty = Some(get_return_type(output)?);
-                    p.read = true;
+                    p.ty = Some(get_return_type(output)?.clone());
+
                     let value_convert = quote!(
                         <#zbus::zvariant::OwnedValue as ::std::convert::TryFrom<_>>::try_from(
                             <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
@@ -1323,7 +1330,7 @@ fn get_return_type(output: &ReturnType) -> syn::Result<&Type> {
 
 fn introspect_properties(
     introspection: &mut TokenStream,
-    properties: BTreeMap<String, Property<'_>>,
+    properties: BTreeMap<String, Property>,
 ) -> syn::Result<()> {
     for (name, prop) in properties {
         let access = if prop.read && prop.write {
@@ -1333,14 +1340,9 @@ fn introspect_properties(
         } else if prop.write {
             "write"
         } else {
-            return Err(Error::new_spanned(
-                name,
-                "property is neither readable nor writable",
-            ));
+            unreachable!("Properties should have at least one access type");
         };
-        let ty = prop.ty.ok_or_else(|| {
-            Error::new_spanned(&name, "Write-only properties aren't supported yet")
-        })?;
+        let ty = prop.ty.unwrap();
 
         let doc_comments = prop.doc_comments;
         if prop.emits_changed_signal == PropertyEmitsChangedSignal::True {
@@ -1455,7 +1457,7 @@ impl Proxy {
     fn add_method(
         &mut self,
         method_info: MethodInfo,
-        properties: &BTreeMap<String, Property<'_>>,
+        properties: &BTreeMap<String, Property>,
     ) -> syn::Result<()> {
         let inputs: Punctuated<PatType, Comma> = method_info
             .typed_inputs
