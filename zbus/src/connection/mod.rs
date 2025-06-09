@@ -526,12 +526,10 @@ impl Connection {
         W: TryInto<WellKnownName<'w>>,
         W::Error: Into<Error>,
     {
-        self.request_name_with_flags(
-            well_known_name,
-            RequestNameFlags::ReplaceExisting | RequestNameFlags::DoNotQueue,
-        )
-        .await
-        .map(|_| ())
+        let flags = RequestNameFlags::internal_default();
+        self.request_name_with_flags(well_known_name, flags)
+            .await
+            .map(|_| ())
     }
 
     /// Register a well-known name for this connection.

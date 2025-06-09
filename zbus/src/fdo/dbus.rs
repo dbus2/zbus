@@ -52,6 +52,12 @@ pub enum RequestNameFlags {
     DoNotQueue = 0x04,
 }
 
+impl RequestNameFlags {
+    pub(crate) fn internal_default() -> BitFlags<Self> {
+        BitFlags::from(Self::ReplaceExisting) | Self::DoNotQueue
+    }
+}
+
 /// The return code of the [`request_name`] method.
 ///
 /// [`request_name`]: struct.DBusProxy.html#method.request_name
