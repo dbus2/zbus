@@ -260,9 +260,9 @@ pub struct Node<'a> {
 
 impl<'a> Node<'a> {
     /// Parse the introspection XML document from reader.
-    pub fn from_reader<R: Read>(reader: R, limit: usize) -> Result<Node<'a>> {
+    pub fn from_reader<R: Read>(reader: R) -> Result<Node<'a>> {
         let mut deserializer = Deserializer::from_reader(BufReader::new(reader));
-        deserializer.event_buffer_size(Some(limit.try_into().unwrap()));
+        deserializer.event_buffer_size(Some(4096_usize.try_into().unwrap()));
         Ok(Node::deserialize(&mut deserializer)?)
     }
 
@@ -301,13 +301,13 @@ impl<'a> Node<'a> {
     }
 }
 
-impl<'a> TryFrom<(&'a str, usize)> for Node<'a> {
+impl<'a> TryFrom<&'a str> for Node<'a> {
     type Error = Error;
 
-    /// Parse the introspection XML document from tuple with slice and limit.
-    fn try_from(value: (&'a str, usize)) -> std::result::Result<Self, Self::Error> {
-        let mut deserializer = Deserializer::from_str(value.0);
-        deserializer.event_buffer_size(Some(value.1.try_into().unwrap()));
+    /// Parse the introspection XML document from `s`.
+    fn try_from(s: &'a str) -> Result<Node<'a>> {
+        let mut deserializer = Deserializer::from_str(s);
+        deserializer.event_buffer_size(Some(4096_usize.try_into().unwrap()));
         Ok(Node::deserialize(&mut deserializer)?)
     }
 }
