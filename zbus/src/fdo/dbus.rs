@@ -20,7 +20,7 @@ use crate::{proxy, OwnedGuid};
 /// The flags used by the bus [`request_name`] method.
 ///
 /// [`request_name`]: struct.DBusProxy.html#method.request_name
-#[bitflags]
+#[bitflags(default = ReplaceExisting | DoNotQueue)]
 #[repr(u32)]
 #[derive(Type, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum RequestNameFlags {
