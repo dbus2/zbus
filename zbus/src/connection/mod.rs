@@ -526,7 +526,7 @@ impl Connection {
         W: TryInto<WellKnownName<'w>>,
         W::Error: Into<Error>,
     {
-        let flags = RequestNameFlags::internal_default();
+        let flags = BitFlags::default();
         self.request_name_with_flags(well_known_name, flags)
             .await
             .map(|_| ())
