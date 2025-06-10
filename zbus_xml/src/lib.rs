@@ -260,6 +260,7 @@ pub struct Node<'a> {
 
 impl<'a> Node<'a> {
     /// Parse the introspection XML document from reader.
+    #[deprecated]
     pub fn from_reader<R: Read>(reader: R) -> Result<Node<'a>> {
         let mut deserializer = Deserializer::from_reader(BufReader::new(reader));
         deserializer.event_buffer_size(Some(4096_usize.try_into().unwrap()));
@@ -308,6 +309,33 @@ impl<'a> TryFrom<&'a str> for Node<'a> {
     fn try_from(s: &'a str) -> Result<Node<'a>> {
         let mut deserializer = Deserializer::from_str(s);
         deserializer.event_buffer_size(Some(4096_usize.try_into().unwrap()));
+        Ok(Node::deserialize(&mut deserializer)?)
+    }
+}
+
+/// A parser that can control introspection data.
+pub struct NodeEventLimit {
+    limit: usize,
+}
+
+impl<'a> NodeEventLimit {
+    pub fn new(limit: usize) -> Self {
+        NodeEventLimit {
+            limit: if limit == 0 { 1 } else { limit },
+        }
+    }
+
+    /// Parse the introspection XML document from reader.
+    pub fn read<R: Read>(&self, reader: R) -> Result<Node<'a>> {
+        let mut deserializer = Deserializer::from_reader(BufReader::new(reader));
+        deserializer.event_buffer_size(Some(self.limit.try_into().unwrap()));
+        Ok(Node::deserialize(&mut deserializer)?)
+    }
+
+    /// Parse the introspection XML document from `s`.
+    pub fn parse(&self, s: &'a str) -> Result<Node<'a>> {
+        let mut deserializer = Deserializer::from_str(s);
+        deserializer.event_buffer_size(Some(self.limit.try_into().unwrap()));
         Ok(Node::deserialize(&mut deserializer)?)
     }
 }

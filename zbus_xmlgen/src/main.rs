@@ -13,7 +13,7 @@ use zbus::{
     names::BusName,
     zvariant::ObjectPath,
 };
-use zbus_xml::{Interface, Node};
+use zbus_xml::{Interface, Node, NodeEventLimit};
 
 use zbus_xmlgen::write_interfaces;
 
@@ -49,7 +49,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         cli::Command::File { path } => {
             let input_src = path.file_name().unwrap().to_string_lossy().to_string();
             let f = File::open(path)?;
-            DBusInfo(Node::from_reader(f)?, None, None, input_src)
+            let limit = NodeEventLimit::new(4096);
+            DBusInfo(limit.read(f)?, None, None, input_src)
         }
     };
 
@@ -140,8 +141,9 @@ impl DBusInfo<'_> {
             .unwrap()
             .introspect()?;
 
+        let limit = NodeEventLimit::new(4096);
         Ok(DBusInfo(
-            Node::from_reader(xml.as_bytes())?,
+            limit.read(xml.as_bytes())?,
             Some(service),
             Some(path),
             input_src,

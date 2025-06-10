@@ -545,7 +545,9 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
     debug!("Created: {:?}", root_introspect_proxy);
 
     let root_xml = root_introspect_proxy.introspect().await?;
-    let root_node = zbus_xml::Node::from_reader(root_xml.as_bytes())
+    let limit = zbus_xml::NodeEventLimit::new(4096);
+    let root_node = limit
+        .read(root_xml.as_bytes())
         .map_err(|e| Error::Failure(e.to_string()))?;
     let mut node = &root_node;
     for name in ["org", "freedesktop", "MyService"] {
@@ -649,8 +651,10 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
 
     let xml = proxy.inner().introspect().await?;
     debug!("Introspection: {}", xml);
-    let node =
-        zbus_xml::Node::from_reader(xml.as_bytes()).map_err(|e| Error::Failure(e.to_string()))?;
+    let limit = zbus_xml::NodeEventLimit::new(4096);
+    let node = limit
+        .read(xml.as_bytes())
+        .map_err(|e| Error::Failure(e.to_string()))?;
     let ifaces = node.interfaces();
     let iface = ifaces
         .iter()

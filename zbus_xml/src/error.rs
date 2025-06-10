@@ -2,7 +2,7 @@ use quick_xml::de::DeError;
 use std::{convert::Infallible, error, fmt};
 use zvariant::Error as VariantError;
 
-/// The error type for `zbus_names`.
+/// The error type for `zbus_xml`.
 ///
 /// The various errors that can be reported by this crate.
 #[derive(Clone, Debug)]

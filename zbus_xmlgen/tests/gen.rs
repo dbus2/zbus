@@ -1,7 +1,7 @@
 use pretty_assertions::assert_eq;
 use std::{env, error::Error, io::Write, path::Path};
 
-use zbus_xml::Node;
+use zbus_xml::NodeEventLimit;
 use zbus_xmlgen::GenTrait;
 
 macro_rules! gen_diff {
@@ -10,7 +10,8 @@ macro_rules! gen_diff {
         let expected = include_str!(concat!("data/", $outfile));
         #[cfg(windows)]
         let expected = expected.replace("\r\n", "\n");
-        let node = Node::from_reader(input.as_bytes())?;
+        let limit = NodeEventLimit::new(4096);
+        let node = limit.read(input.as_bytes())?;
         let gen = GenTrait {
             interface: &node.interfaces()[0],
             path: None,
