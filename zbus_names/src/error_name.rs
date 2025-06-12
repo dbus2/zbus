@@ -13,7 +13,7 @@ use zvariant::{NoneValue, OwnedValue, Str, Type, Value};
 
 /// String that identifies an [error name][en] on the bus.
 ///
-/// Error names have same constraints as error names.
+/// Error names have same constraints as interface names.
 ///
 /// # Examples
 ///
