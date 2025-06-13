@@ -73,25 +73,13 @@ def_attrs! {
     };
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct Property<'a> {
     read: bool,
     write: bool,
     emits_changed_signal: PropertyEmitsChangedSignal,
     ty: Option<&'a Type>,
     doc_comments: TokenStream,
-}
-
-impl Property<'_> {
-    fn new() -> Self {
-        Self {
-            read: false,
-            write: false,
-            emits_changed_signal: PropertyEmitsChangedSignal::True,
-            ty: None,
-            doc_comments: quote!(),
-        }
-    }
 }
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -411,7 +399,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                 } else {
                     PropertyEmitsChangedSignal::True
                 };
-                let mut property = Property::new();
+                let mut property = Property::default();
                 property.emits_changed_signal = emits_changed_signal;
                 properties.insert(method_info.member_name.to_string(), property);
             } else if prop_attrs.emits_changed_signal.is_some() {
