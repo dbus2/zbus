@@ -133,6 +133,27 @@ fn test_interface() {
         zvariant::{Type, Value},
     };
 
+    // Test write-only property
+    struct TestWriteOnlyProperty;
+
+    #[interface(proxy)]
+    impl TestWriteOnlyProperty {
+        #[zbus(property)]
+        fn set_my_property(&self, _val: u32) {}
+    }
+
+    let mut writer = String::new();
+    TestWriteOnlyProperty.introspect_to_writer(&mut writer, 0);
+    assert_eq!(
+        writer,
+        r#"<interface name="org.freedesktop.TestWriteOnlyProperty">
+  <property name="MyProperty" type="u" access="write">
+    <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="false"/>
+  </property>
+</interface>
+"#
+    );
+
     struct Test<T> {
         something: String,
         generic: T,
