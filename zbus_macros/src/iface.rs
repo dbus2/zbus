@@ -420,7 +420,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                     "`emits_changed_signal` cannot be specified on setters",
                 ));
             }
-        };
+        }
         methods.push((method, method_info));
     }
 
