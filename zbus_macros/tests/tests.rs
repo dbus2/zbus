@@ -133,6 +133,122 @@ fn test_interface() {
         zvariant::{Type, Value},
     };
 
+    // Assert that the trait methods should be called
+    // If wrong code generated, they will panic
+    trait ShouldNotHaveGetter {
+        fn my_property(&self) -> u32 {
+            0
+        }
+    }
+    trait ShouldNotHaveSetter {
+        fn set_my_property(&self, _val: u32) {}
+    }
+    #[allow(unused)]
+    trait ShouldHaveGetter {
+        fn my_property(&self) -> u32 {
+            unimplemented!("Should not be called")
+        }
+    }
+    #[allow(unused)]
+    trait ShouldHaveSetter {
+        fn set_my_property(&self, _val: u32) {
+            unimplemented!("Should not be called")
+        }
+    }
+
+    struct TestNoSetter;
+
+    #[interface]
+    impl TestNoSetter {
+        #[cfg(test)]
+        #[zbus(property)]
+        fn my_property(&self) -> u32 {
+            0
+        }
+
+        #[cfg(any())]
+        #[zbus(property)]
+        fn set_my_property(&self, _val: u32) {
+            unimplemented!("should not be called")
+        }
+    }
+
+    // Assert that the setter is not generated
+    impl ShouldHaveGetter for TestNoSetter {}
+    impl ShouldNotHaveSetter for TestNoSetter {}
+    TestNoSetter.my_property();
+    TestNoSetter.set_my_property(0);
+
+    let mut writer = String::new();
+    TestNoSetter.introspect_to_writer(&mut writer, 0);
+    assert_eq!(
+        writer,
+        r#"<interface name="org.freedesktop.TestNoSetter">
+  <property name="MyProperty" type="u" access="read"/>
+</interface>
+"#
+    );
+
+    struct TestWriteOnlyProperty;
+
+    #[interface(proxy)]
+    impl TestWriteOnlyProperty {
+        #[zbus(property)]
+        fn set_my_property(&self, _val: u32) {}
+    }
+
+    // Assert that the getter is not generated
+    impl ShouldNotHaveGetter for TestWriteOnlyProperty {}
+    impl ShouldHaveSetter for TestWriteOnlyProperty {}
+    TestWriteOnlyProperty.my_property();
+    TestWriteOnlyProperty.set_my_property(0);
+
+    let mut writer = String::new();
+    TestWriteOnlyProperty.introspect_to_writer(&mut writer, 0);
+    assert_eq!(
+        writer,
+        r#"<interface name="org.freedesktop.TestWriteOnlyProperty">
+  <property name="MyProperty" type="u" access="write">
+    <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="false"/>
+  </property>
+</interface>
+"#
+    );
+
+    // This case is also a write-only property
+    struct TestNoGetterNoChangeSignal;
+
+    #[interface(proxy)]
+    impl TestNoGetterNoChangeSignal {
+        #[cfg(any())]
+        #[zbus(property(emits_changed_signal = "const"))]
+        fn my_property(&self) -> u32 {
+            unimplemented!("should not be called")
+        }
+
+        #[cfg(test)]
+        #[zbus(property)]
+        fn set_my_property(&self, _val: u32) {}
+    }
+
+    // Assert that the getter is not generated
+    impl ShouldNotHaveGetter for TestNoGetterNoChangeSignal {}
+    impl ShouldHaveSetter for TestNoGetterNoChangeSignal {}
+    TestNoGetterNoChangeSignal.my_property();
+    TestNoGetterNoChangeSignal.set_my_property(0);
+
+    let mut writer = String::new();
+    TestNoGetterNoChangeSignal.introspect_to_writer(&mut writer, 0);
+    assert_eq!(
+        writer,
+        r#"<interface name="org.freedesktop.TestNoGetterNoChangeSignal">
+  <property name="MyProperty" type="u" access="write">
+    <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="false"/>
+  </property>
+</interface>
+"#
+    );
+
     struct Test<T> {
         something: String,
         generic: T,

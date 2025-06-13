@@ -73,25 +73,22 @@ def_attrs! {
     };
 }
 
-#[derive(Debug)]
-struct Property<'a> {
-    read: bool,
-    write: bool,
+#[derive(Debug, Default)]
+struct Property {
+    read: PropertyState,
+    write: PropertyState,
+    final_state: Option<Attribute>, // whether the property should be generated
     emits_changed_signal: PropertyEmitsChangedSignal,
-    ty: Option<&'a Type>,
+    ty: Option<Type>,
     doc_comments: TokenStream,
 }
 
-impl Property<'_> {
-    fn new() -> Self {
-        Self {
-            read: false,
-            write: false,
-            emits_changed_signal: PropertyEmitsChangedSignal::True,
-            ty: None,
-            doc_comments: quote!(),
-        }
-    }
+#[derive(Debug, Default)]
+enum PropertyState {
+    #[default]
+    Undefined,
+    Defined,
+    Conditional(Box<Attribute>),
 }
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -405,32 +402,37 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
         )?;
         let attr_property = method_attrs.property;
         if let Some(prop_attrs) = &attr_property {
+            let property: &mut Property = properties
+                .entry(method_info.member_name.to_string())
+                .or_default();
+            let property_state = if cfg_attrs.is_empty() {
+                PropertyState::Defined
+            } else {
+                let cfg_attr = merge_cfg_attrs(cfg_attrs, "all")?;
+                PropertyState::Conditional(Box::new(cfg_attr))
+            };
             if method_info.method_type == MethodType::Property(PropertyType::Getter) {
                 let emits_changed_signal = if let Some(s) = &prop_attrs.emits_changed_signal {
                     PropertyEmitsChangedSignal::parse(s, method.span())?
                 } else {
                     PropertyEmitsChangedSignal::True
                 };
-                let mut property = Property::new();
                 property.emits_changed_signal = emits_changed_signal;
-                properties.insert(method_info.member_name.to_string(), property);
-            } else if prop_attrs.emits_changed_signal.is_some() {
-                return Err(syn::Error::new(
-                    method.span(),
-                    "`emits_changed_signal` cannot be specified on setters",
-                ));
+                property.read = property_state;
+            } else {
+                property.write = property_state;
+                if prop_attrs.emits_changed_signal.is_some() {
+                    return Err(Error::new_spanned(
+                        method,
+                        "Should not specify `emits_changed_signal` on setters",
+                    ));
+                }
             }
-        };
+        }
         methods.push((method, method_info));
     }
 
     for (method, method_info) in methods {
-        let cfg_attrs: Vec<_> = method
-            .attrs
-            .iter()
-            .filter(|a| a.path().is_ident("cfg"))
-            .collect();
-
         let info = method_info.clone();
         let MethodInfo {
             method_type,
@@ -447,6 +449,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
             args_names,
             reply,
             member_name,
+            cfg_attrs,
             ..
         } = method_info;
 
@@ -507,19 +510,28 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                 });
             }
             MethodType::Property(_) => {
-                let p = properties.get_mut(&member_name).ok_or(Error::new_spanned(
-                    &member_name,
-                    "Write-only properties aren't supported yet",
-                ))?;
+                let p = properties.get_mut(&member_name).unwrap();
 
                 let sk_member_name = case::snake_or_kebab_case(&member_name, true);
                 let prop_changed_method_name = format_ident!("{sk_member_name}_changed");
                 let prop_invalidate_method_name = format_ident!("{sk_member_name}_invalidate");
 
+                if p.final_state.is_none() {
+                    use PropertyState::*;
+                    p.final_state = match (&p.read, &p.write) {
+                        (Undefined, Undefined) => unreachable!(),
+                        (Defined, _) | (_, Defined) => None,
+                        (Conditional(a), Conditional(b)) => {
+                            Some(merge_cfg_attrs([&**a, b], "any")?)
+                        }
+                        (Conditional(a), Undefined) | (Undefined, Conditional(a)) => {
+                            Some((**a).clone())
+                        }
+                    };
+                }
+
                 p.doc_comments.extend(doc_comments);
                 if has_inputs {
-                    p.write = true;
-
                     let set_call = if is_result_output {
                         quote!(self.#ident(#args_names)#method_await)
                     } else if is_async {
@@ -551,45 +563,50 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                         }
                     };
 
-                    let value_param = typed_inputs.iter().find(|input| {
-                        let a = ArgAttributes::parse(&input.attrs).unwrap();
-                        !a.object_server
-                            && !a.connection
-                            && !a.header
-                            && !a.signal_context
-                            && !a.signal_emitter
-                    });
-
-                    let value_arg = match &*value_param
-                    .ok_or_else(|| Error::new_spanned(inputs, "Expected a value argument"))?
-                    .ty
-                {
-                    Type::Reference(_) => quote!(value),
-                    Type::Path(path) => path
-                        .path
-                        .segments
-                        .first()
-                        .map(|segment| match &segment.arguments {
-                            PathArguments::AngleBracketed(angled) => angled
-                                .args
-                                .first()
-                                .filter(|arg| matches!(arg, GenericArgument::Lifetime(_)))
-                                .map(|_| quote!(match ::zbus::zvariant::Value::try_clone(value) {
-                                    ::std::result::Result::Ok(val) => val,
-                                    ::std::result::Result::Err(e) => {
-                                        return ::std::result::Result::Err(
-                                            ::std::convert::Into::into(#zbus::Error::Variant(::std::convert::Into::into(e)))
-                                        );
-                                    }
-                                }))
-                                .unwrap_or_else(|| value_to_owned.clone()),
-                            _ => value_to_owned.clone(),
+                    let value_param = typed_inputs
+                        .iter()
+                        .find(|input| {
+                            let a = ArgAttributes::parse(&input.attrs).unwrap();
+                            !a.object_server
+                                && !a.connection
+                                && !a.header
+                                && !a.signal_context
+                                && !a.signal_emitter
                         })
-                        .unwrap_or_else(|| value_to_owned.clone()),
-                    _ => value_to_owned,
-                };
+                        .ok_or_else(|| Error::new_spanned(inputs, "Expected a value argument"))?;
 
-                    let value_param_name = &value_param.unwrap().pat;
+                    if matches!(p.read, PropertyState::Undefined) {
+                        p.ty = Some((*value_param.ty).clone());
+                        p.emits_changed_signal = PropertyEmitsChangedSignal::False;
+                    }
+
+                    let value_arg = match &*value_param.ty {
+                        Type::Reference(_) => quote!(value),
+                        Type::Path(path) => path
+                            .path
+                            .segments
+                            .first()
+                            .map(|segment| match &segment.arguments {
+                                PathArguments::AngleBracketed(angled) => angled
+                                    .args
+                                    .first()
+                                    .filter(|arg| matches!(arg, GenericArgument::Lifetime(_)))
+                                    .map(|_| quote!(match ::zbus::zvariant::Value::try_clone(value) {
+                                        ::std::result::Result::Ok(val) => val,
+                                        ::std::result::Result::Err(e) => {
+                                            return ::std::result::Result::Err(
+                                                ::std::convert::Into::into(#zbus::Error::Variant(::std::convert::Into::into(e)))
+                                            );
+                                        }
+                                    }))
+                                    .unwrap_or_else(|| value_to_owned.clone()),
+                                _ => value_to_owned.clone(),
+                            })
+                            .unwrap_or_else(|| value_to_owned.clone()),
+                        _ => value_to_owned,
+                    };
+
+                    let value_param_name = &value_param.pat;
                     let prop_changed_method = match p.emits_changed_signal {
                         PropertyEmitsChangedSignal::True => {
                             quote!({
@@ -659,9 +676,10 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                     }
                 } else {
                     let is_fallible_property = is_result_output;
+                    let cfg_attr = &p.final_state;
 
-                    p.ty = Some(get_return_type(output)?);
-                    p.read = true;
+                    p.ty = Some(get_return_type(output)?.clone());
+
                     let value_convert = quote!(
                         <#zbus::zvariant::OwnedValue as ::std::convert::TryFrom<_>>::try_from(
                             <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
@@ -680,7 +698,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                     };
 
                     let q = quote!(
-                        #(#cfg_attrs)*
+                        #cfg_attr
                         #member_name => {
                             #args_from_msg
                             ::std::option::Option::Some(#inner)
@@ -689,7 +707,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                     get_dispatch.extend(q);
 
                     let q = if is_fallible_property {
-                        quote!({
+                        quote!(#cfg_attr {
                             #args_from_msg
                             if let Ok(prop) = self.#ident(#args_names)#method_await {
                             props.insert(
@@ -703,17 +721,18 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                             );
                         }})
                     } else {
-                        quote!({
+                        quote!(#cfg_attr {
                             #args_from_msg
                             props.insert(
-                        ::std::string::ToString::to_string(#member_name),
-                        <#zbus::zvariant::OwnedValue as ::std::convert::TryFrom<_>>::try_from(
-                            <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
-                                self.#ident(#args_names)#method_await,
-                            ),
-                        )
-                        .map_err(|e| #zbus::fdo::Error::Failed(e.to_string()))?,
-                    );})
+                                ::std::string::ToString::to_string(#member_name),
+                                <#zbus::zvariant::OwnedValue as ::std::convert::TryFrom<_>>::try_from(
+                                    <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
+                                        self.#ident(#args_names)#method_await,
+                                    ),
+                                )
+                                .map_err(|e| #zbus::fdo::Error::Failed(e.to_string()))?,
+                            );
+                        })
                     };
 
                     get_all.extend(q);
@@ -732,6 +751,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                              its setter method."
                         );
                         let prop_changed_method = quote!(
+                            #cfg_attr
                             #[doc = #changed_doc]
                             pub async fn #prop_changed_method_name(
                                 &self,
@@ -765,6 +785,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                              (causing excess traffic on the bus)."
                         );
                         let prop_invalidate_method = quote!(
+                            #cfg_attr
                             #[doc = #invalidate_doc]
                             pub async fn #prop_invalidate_method_name(
                                 &self,
@@ -1148,6 +1169,32 @@ fn clear_input_arg_attrs(inputs: &mut Punctuated<FnArg, Token![,]>) {
     }
 }
 
+// Merge multiple cfg attributes into a `cfg(any(..))` or `cfg(all(..))` attribute.
+fn merge_cfg_attrs<'a>(
+    cfgs: impl IntoIterator<Item = &'a Attribute>,
+    op: &'static str,
+) -> Result<Attribute, Error> {
+    let mut metas = Vec::<Meta>::new();
+    for cfg in cfgs {
+        let tt = &cfg.meta.require_list()?.tokens;
+        metas.push(parse_quote!(#tt));
+    }
+    if let [meta] = &metas[..] {
+        Ok(parse_quote!(#[cfg(#meta)]))
+    } else if op == "any" && metas.iter().any(|meta| *meta == parse_quote!(all())) {
+        Ok(parse_quote!(#[cfg(all())]))
+    } else {
+        let op = format_ident!("{op}");
+        Ok(parse_quote!(#[cfg(#op(#(#metas),*))]))
+    }
+}
+
+// Infallible conversion from `#[cfg(..)]` to `cfg!(..)`
+fn cfg_attr_to_func_like(attr: Attribute) -> Expr {
+    let tt = &attr.meta.require_list().unwrap().tokens;
+    parse_quote!(::std::cfg!(#tt))
+}
+
 fn introspect_signal(name: &str, args: &TokenStream) -> TokenStream {
     let format_str = format!("{}<signal name=\"{name}\">", "{:indent$}");
     quote!(
@@ -1339,53 +1386,63 @@ fn get_return_type(output: &ReturnType) -> syn::Result<&Type> {
 
 fn introspect_properties(
     introspection: &mut TokenStream,
-    properties: BTreeMap<String, Property<'_>>,
+    properties: BTreeMap<String, Property>,
 ) -> syn::Result<()> {
     for (name, prop) in properties {
-        let access = if prop.read && prop.write {
-            "readwrite"
-        } else if prop.read {
-            "read"
-        } else if prop.write {
-            "write"
-        } else {
-            return Err(Error::new_spanned(
-                name,
-                "property is neither readable nor writable",
-            ));
+        let ch_sig_str = prop.emits_changed_signal.to_string();
+        let (access_read, annotation_value) = match prop.read {
+            PropertyState::Undefined => (quote!(""), quote!("false")),
+            PropertyState::Defined => (quote!("read"), quote!(#ch_sig_str)),
+            PropertyState::Conditional(c) => {
+                let c = cfg_attr_to_func_like(*c);
+                (
+                    quote!(if #c { "read" } else { "" }),
+                    // Handle write-only `emits_changed_signal` option
+                    quote!(if #c { #ch_sig_str } else { "false" }),
+                )
+            }
         };
-        let ty = prop.ty.ok_or_else(|| {
-            Error::new_spanned(&name, "Write-only properties aren't supported yet")
-        })?;
-
+        let access_write = match prop.write {
+            PropertyState::Undefined => quote!(""),
+            PropertyState::Defined => quote!("write"),
+            PropertyState::Conditional(c) => {
+                let c = cfg_attr_to_func_like(*c);
+                quote!(if #c { "write" } else { "" })
+            }
+        };
+        let ty = prop.ty.unwrap();
+        let cfg_attr = &prop.final_state;
         let doc_comments = prop.doc_comments;
-        if prop.emits_changed_signal == PropertyEmitsChangedSignal::True {
-            let format_str = format!(
-                "{}<property name=\"{name}\" type=\"{}\" access=\"{access}\"/>",
-                "{:indent$}", "{}",
-            );
-            introspection.extend(quote!(
-                #doc_comments
-                ::std::writeln!(writer, #format_str, "", <#ty>::SIGNATURE, indent = level).unwrap();
-            ));
-        } else {
-            let emits_changed_signal = prop.emits_changed_signal.to_string();
-            let annot_name = "org.freedesktop.DBus.Property.EmitsChangedSignal";
-            let format_str = format!(
-                "{}<property name=\"{name}\" type=\"{}\" access=\"{access}\">\n\
-                    {}<annotation name=\"{annot_name}\" value=\"{emits_changed_signal}\"/>\n\
-                {}</property>",
-                "{:indent$}", "{}", "{:annot_indent$}", "{:indent$}",
-            );
-            introspection.extend(quote!(
-                #doc_comments
+        let default_annotation = format!(
+            "{}<property name=\"{name}\" type=\"{}\" access=\"{}\"/>",
+            "{:indent$}", "{}", "{}{}"
+        );
+        let annot_name = "org.freedesktop.DBus.Property.EmitsChangedSignal";
+        let specified_annotation = format!(
+            "{}<property name=\"{name}\" type=\"{}\" access=\"{}\">\n\
+                {}<annotation name=\"{annot_name}\" value=\"{}\"/>\n\
+            {}</property>",
+            "{:indent$}", "{}", "{}{}", "{:annot_indent$}", "{}", "{:indent$}",
+        );
+        introspection.extend(quote!(#cfg_attr {
+            #doc_comments
+            let annotation_value = #annotation_value;
+            if annotation_value == "true" {
                 ::std::writeln!(
                     writer,
-                    #format_str,
-                    "", <#ty>::SIGNATURE, "", "", indent = level, annot_indent = level + 2,
+                    #default_annotation,
+                    "",
+                    <#ty>::SIGNATURE, #access_read, #access_write, indent = level).unwrap();
+            } else {
+                ::std::writeln!(
+                    writer,
+                    #specified_annotation,
+                    "",
+                    <#ty>::SIGNATURE, #access_read, #access_write, "", annotation_value, "",
+                    indent = level, annot_indent = level + 2
                 ).unwrap();
-            ));
-        }
+            }
+        }));
     }
 
     Ok(())
@@ -1471,7 +1528,7 @@ impl Proxy {
     fn add_method(
         &mut self,
         method_info: MethodInfo,
-        properties: &BTreeMap<String, Property<'_>>,
+        properties: &BTreeMap<String, Property>,
     ) -> syn::Result<()> {
         let inputs: Punctuated<PatType, Comma> = method_info
             .typed_inputs

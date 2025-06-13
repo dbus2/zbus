@@ -107,6 +107,11 @@ mod utils;
 /// access to the signal arguments. It also implements `Deref<Target = Message>` to allow easy
 /// access to the underlying [`zbus::message::Message`].
 ///
+/// # Property Attributes
+///
+/// The `cfg` attributes on properties will determine their accessibility. (read/write/not exist)
+/// For more detials, see the [`macro@interface`] macro.
+///
 /// # Example
 ///
 /// ```no_run
@@ -301,6 +306,18 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///   external property access.
 /// * `signal_emitter` - This marks the method argument to receive a [`SignalEmitter`] instance,
 ///   which is needed for emitting signals the easy way.
+///
+/// # Property Attributes
+///
+/// * `cfg` attributes on properties will determine their accessibility. (read/write/not exist)
+/// * Property changed signals are emitted only when the property is readable.
+/// * The `emits_changed_signal` option must be specified only on the getter method. If no getter is
+///   defined (i.e., the property is write-only), this option will be set to `false`.
+/// * When the getter is conditionally generated, the `emits_changed_signal` behavior will still
+///   respect the write-only fallback.
+/// * `doc` attributes will improve the introspection data and the generated documentation.
+/// * `cfg_attr` attributes are not worked on `zbus` attributes.
+/// * Other attributes are just worked on the corresponding methods.
 ///
 /// # Example
 ///
