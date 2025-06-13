@@ -561,33 +561,33 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                     });
 
                     let value_arg = match &*value_param
-                    .ok_or_else(|| Error::new_spanned(inputs, "Expected a value argument"))?
-                    .ty
-                {
-                    Type::Reference(_) => quote!(value),
-                    Type::Path(path) => path
-                        .path
-                        .segments
-                        .first()
-                        .map(|segment| match &segment.arguments {
-                            PathArguments::AngleBracketed(angled) => angled
-                                .args
-                                .first()
-                                .filter(|arg| matches!(arg, GenericArgument::Lifetime(_)))
-                                .map(|_| quote!(match ::zbus::zvariant::Value::try_clone(value) {
-                                    ::std::result::Result::Ok(val) => val,
-                                    ::std::result::Result::Err(e) => {
-                                        return ::std::result::Result::Err(
-                                            ::std::convert::Into::into(#zbus::Error::Variant(::std::convert::Into::into(e)))
-                                        );
-                                    }
-                                }))
-                                .unwrap_or_else(|| value_to_owned.clone()),
-                            _ => value_to_owned.clone(),
-                        })
-                        .unwrap_or_else(|| value_to_owned.clone()),
-                    _ => value_to_owned,
-                };
+                        .ok_or_else(|| Error::new_spanned(inputs, "Expected a value argument"))?
+                        .ty
+                    {
+                        Type::Reference(_) => quote!(value),
+                        Type::Path(path) => path
+                            .path
+                            .segments
+                            .first()
+                            .map(|segment| match &segment.arguments {
+                                PathArguments::AngleBracketed(angled) => angled
+                                    .args
+                                    .first()
+                                    .filter(|arg| matches!(arg, GenericArgument::Lifetime(_)))
+                                    .map(|_| quote!(match ::zbus::zvariant::Value::try_clone(value) {
+                                        ::std::result::Result::Ok(val) => val,
+                                        ::std::result::Result::Err(e) => {
+                                            return ::std::result::Result::Err(
+                                                ::std::convert::Into::into(#zbus::Error::Variant(::std::convert::Into::into(e)))
+                                            );
+                                        }
+                                    }))
+                                    .unwrap_or_else(|| value_to_owned.clone()),
+                                _ => value_to_owned.clone(),
+                            })
+                            .unwrap_or_else(|| value_to_owned.clone()),
+                        _ => value_to_owned,
+                    };
 
                     let value_param_name = &value_param.unwrap().pat;
                     let prop_changed_method = match p.emits_changed_signal {
@@ -706,14 +706,15 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                         quote!({
                             #args_from_msg
                             props.insert(
-                        ::std::string::ToString::to_string(#member_name),
-                        <#zbus::zvariant::OwnedValue as ::std::convert::TryFrom<_>>::try_from(
-                            <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
-                                self.#ident(#args_names)#method_await,
-                            ),
-                        )
-                        .map_err(|e| #zbus::fdo::Error::Failed(e.to_string()))?,
-                    );})
+                                ::std::string::ToString::to_string(#member_name),
+                                <#zbus::zvariant::OwnedValue as ::std::convert::TryFrom<_>>::try_from(
+                                    <#zbus::zvariant::Value as ::std::convert::From<_>>::from(
+                                        self.#ident(#args_names)#method_await,
+                                    ),
+                                )
+                                .map_err(|e| #zbus::fdo::Error::Failed(e.to_string()))?,
+                            );
+                        })
                     };
 
                     get_all.extend(q);
