@@ -428,7 +428,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                     ));
                 }
             }
-        };
+        }
         methods.push((method, method_info));
     }
 
