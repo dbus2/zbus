@@ -546,19 +546,19 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                         }
                     };
 
-                    let value_param = typed_inputs.iter().find(|input| {
-                        let a = ArgAttributes::parse(&input.attrs).unwrap();
-                        !a.object_server
-                            && !a.connection
-                            && !a.header
-                            && !a.signal_context
-                            && !a.signal_emitter
-                    });
+                    let value_param = typed_inputs
+                        .iter()
+                        .find(|input| {
+                            let a = ArgAttributes::parse(&input.attrs).unwrap();
+                            !a.object_server
+                                && !a.connection
+                                && !a.header
+                                && !a.signal_context
+                                && !a.signal_emitter
+                        })
+                        .ok_or_else(|| Error::new_spanned(inputs, "Expected a value argument"))?;
 
-                    let value_arg = match &*value_param
-                        .ok_or_else(|| Error::new_spanned(inputs, "Expected a value argument"))?
-                        .ty
-                    {
+                    let value_arg = match &*value_param.ty {
                         Type::Reference(_) => quote!(value),
                         Type::Path(path) => path
                             .path
@@ -584,7 +584,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                         _ => value_to_owned,
                     };
 
-                    let value_param_name = &value_param.unwrap().pat;
+                    let value_param_name = &value_param.pat;
                     let prop_changed_method = match p.emits_changed_signal {
                         PropertyEmitsChangedSignal::True => {
                             quote!({
