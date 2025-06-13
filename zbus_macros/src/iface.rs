@@ -425,12 +425,6 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
     }
 
     for (method, method_info) in methods {
-        let cfg_attrs: Vec<_> = method
-            .attrs
-            .iter()
-            .filter(|a| a.path().is_ident("cfg"))
-            .collect();
-
         let info = method_info.clone();
         let MethodInfo {
             method_type,
@@ -447,6 +441,7 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
             args_names,
             reply,
             member_name,
+            cfg_attrs,
             ..
         } = method_info;
 
