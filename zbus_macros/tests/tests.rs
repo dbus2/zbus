@@ -312,6 +312,68 @@ fn test_interface() {
     }
 }
 
+#[test]
+fn test_multi_interface_sync() {
+    const PATH: &str = "/org/freedesktop/zbus_macros/test_iface_sync";
+    const WELL_KNOWN_NAME: &str = "org.freedesktop.zbus_macros_iface_sync";
+
+    struct ClientA;
+    struct ClientB {
+        foo: u32,
+    }
+
+    #[interface(proxy, name = "org.freedesktop.zbus.ClientA")]
+    impl ClientA {
+        #[zbus(property)]
+        async fn set_foo(&self, val: u32, #[zbus(object_server)] server: &zbus::ObjectServer) {
+            let iface_ref = server.interface::<_, ClientB>(PATH).await.unwrap();
+            let mut iface = iface_ref.get_mut().await;
+            iface.foo = val;
+            iface.foo_changed(iface_ref.signal_emitter()).await.unwrap();
+        }
+    }
+
+    #[interface(name = "org.freedesktop.zbus.ClientB")]
+    impl ClientB {
+        #[zbus(property)]
+        fn foo(&self) -> u32 {
+            self.foo
+        }
+    }
+
+    block_on(async {
+        let server = zbus::connection::Builder::session()
+            .unwrap()
+            .name(WELL_KNOWN_NAME)
+            .unwrap()
+            .serve_at(PATH, ClientA)
+            .unwrap()
+            .serve_at(PATH, ClientB { foo: 0 })
+            .unwrap()
+            .build()
+            .await
+            .unwrap();
+
+        let connection = zbus::Connection::session().await.unwrap();
+        let proxy = ClientAProxy::builder(&connection)
+            .destination(WELL_KNOWN_NAME)
+            .unwrap()
+            .path(PATH)
+            .unwrap()
+            .build()
+            .await
+            .unwrap();
+        proxy.set_foo(42).await.unwrap();
+
+        let client_b = server
+            .object_server()
+            .interface::<_, ClientB>(PATH)
+            .await
+            .unwrap();
+        assert_eq!(client_b.get().await.foo, 42);
+    });
+}
+
 mod signal_from_message {
     use super::*;
     use zbus::message::Message;
