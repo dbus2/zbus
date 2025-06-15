@@ -74,7 +74,8 @@ mod utils;
 ///       change signal.
 ///     * `"false"` - change signal is not (guaranteed to be) emitted if the property changes. This
 ///       disables property value caching, and does not generate a listener method for the change
-///       signal.
+///       signal. If a property is write-only, (e.g. the getter might exposed in another interface)
+///       the change signal will not be emitted in this interface.
 ///
 /// * `signal` - declare a signal just like a D-Bus method. Read the [Signals](#signals) section
 ///   below for details.
