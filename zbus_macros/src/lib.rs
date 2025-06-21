@@ -250,7 +250,8 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     * `"invalidates"` - the change signal is emitted, but the value is not included in the
 ///       signal.
 ///     * `"const"` - the property never changes, thus no signal is ever emitted for it.
-///     * `"false"` - the change signal is not emitted if the property changes.
+///     * `"false"` - the change signal is not emitted if the property changes. If a property is
+///       write-only, the change signal will not be emitted in this interface.
 ///
 /// * `signal` - the method is a "signal". It must be a method declaration (without body). Its code
 ///   block will be expanded to emit the signal from the object path associated with the interface
@@ -361,6 +362,83 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// }
 ///
 /// # Ok::<_, Box<dyn Error + Send + Sync>>(())
+/// ```
+///
+/// # Synchronous between multiple interfaces
+///
+/// If a server hosts multiple interfaces, it is possible to synchronize values between them.
+///
+/// ```
+/// use zbus_macros::interface;
+/// use zbus::object_server::SignalEmitter;
+///
+/// struct InterfaceA;
+/// struct InterfaceB {
+///     foo: u32,
+/// }
+///
+/// #[interface(proxy, name = "org.freedesktop.zbus.InterfaceA")]
+/// impl InterfaceA {
+///     async fn send_foo(
+///         &self,
+///         val: u32,
+///         #[zbus(object_server)]
+///         server: &zbus::ObjectServer
+///     ) -> zbus::fdo::Result<()> {
+///         let iface_ref = server.interface::<_, InterfaceB>(PATH).await?;
+///         (iface_ref.get_mut().await)
+///             .set_foo(val, iface_ref.signal_emitter())
+///             .await?;
+///         Ok(())
+///     }
+/// }
+///
+/// #[interface(name = "org.freedesktop.zbus.InterfaceB")]
+/// impl InterfaceB {
+///     #[zbus(property)]
+///     fn foo(&self) -> u32 {
+///         self.foo
+///     }
+/// }
+///
+/// impl InterfaceB {
+///     // A private setter that emits the `PropertiesChanged` signal.
+///     // This is useful when you want to modify a property in the server internally.
+///     async fn set_foo(
+///         &mut self,
+///         val: u32,
+///         signal_emitter: &SignalEmitter<'_>,
+///     ) -> zbus::Result<()> {
+///         self.foo = val;
+///         self.foo_changed(signal_emitter).await
+///     }
+/// }
+///
+/// # const PATH: &str = "/org/freedesktop/zbus_macros/test_iface_sync";
+/// # const WELL_KNOWN_NAME: &str = "org.freedesktop.zbus_macros_iface_sync";
+/// # fn main() -> zbus::Result<()> { zbus::block_on(async {
+/// let server = zbus::connection::Builder::session()?
+///     .name(WELL_KNOWN_NAME)?
+///     .serve_at(PATH, InterfaceA)?
+///     .serve_at(PATH, InterfaceB { foo: 0 })?
+///     .build()
+///     .await?;
+///
+/// let connection = zbus::Connection::session().await?;
+/// let proxy = InterfaceAProxy::builder(&connection)
+///     .destination(WELL_KNOWN_NAME)?
+///     .path(PATH)?
+///     .build()
+///     .await?;
+/// proxy.send_foo(42).await?;
+///
+/// // Inspect the value in the server.
+/// let iface_b = server
+///     .object_server()
+///     .interface::<_, InterfaceB>(PATH)
+///     .await?;
+/// assert_eq!(iface_b.get().await.foo, 42);
+/// # Ok(()) }) }
 /// ```
 ///
 /// See also [`ObjectServer`] documentation to learn how to export an interface over a `Connection`.

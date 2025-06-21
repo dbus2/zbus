@@ -262,6 +262,15 @@ impl MyIface {
         self.count
     }
 
+    // This is a write-only property.
+    // It actually is equivalent to `set_count` above.
+    #[instrument]
+    #[zbus(property)]
+    fn set_count2(&mut self, val: u32) -> zbus::fdo::Result<()> {
+        debug!("`Count` setter called from a write-only property.");
+        self.set_count(val)
+    }
+
     #[instrument]
     #[zbus(property)]
     fn test_header_prop(
