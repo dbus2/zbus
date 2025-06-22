@@ -262,6 +262,15 @@ impl MyIface {
         self.count
     }
 
+    // This is a write-only property.
+    // It actually is equivalent to `set_count` above.
+    #[instrument]
+    #[zbus(property)]
+    fn set_count2(&mut self, val: u32) -> zbus::fdo::Result<()> {
+        debug!("`Count` setter called from a write-only property.");
+        self.set_count(val)
+    }
+
     #[instrument]
     #[zbus(property)]
     fn test_header_prop(
@@ -606,6 +615,12 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
     assert!(proxy.test_header_prop().await?);
     assert_eq!(proxy.count().await?, 1);
     assert_eq!(proxy.cached_count()?, None);
+
+    // Test that properties can be set.
+    proxy.set_count(8888).await?;
+    assert_eq!(proxy.count().await?, 8888);
+    proxy.set_count2(1).await?;
+    assert_eq!(proxy.count().await?, 1);
 
     proxy.test_header().await?;
     proxy

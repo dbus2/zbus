@@ -250,7 +250,8 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     * `"invalidates"` - the change signal is emitted, but the value is not included in the
 ///       signal.
 ///     * `"const"` - the property never changes, thus no signal is ever emitted for it.
-///     * `"false"` - the change signal is not emitted if the property changes.
+///     * `"false"` - the change signal is not emitted if the property changes. If a property is
+///       write-only, the change signal will not be emitted in this interface.
 ///
 /// * `signal` - the method is a "signal". It must be a method declaration (without body). Its code
 ///   block will be expanded to emit the signal from the object path associated with the interface
