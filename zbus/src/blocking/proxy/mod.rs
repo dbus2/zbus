@@ -325,14 +325,7 @@ impl<'a> Proxy<'a> {
             .map(SignalIterator)
     }
 
-    /// Get an iterator to receive owner changed events.
-    ///
-    /// If the proxy destination is a unique name, the stream will be notified of the peer
-    /// disconnection from the bus (with a `None` value).
-    ///
-    /// If the proxy destination is a well-known name, the stream will be notified whenever the name
-    /// owner is changed, either by a new peer being granted ownership (`Some` value) or when the
-    /// name is released (with a `None` value).
+    /// Get an iterator to receive property changed events.
     ///
     /// Note that zbus doesn't queue the updates. If the listener is slower than the receiver, it
     /// will only receive the last update.
@@ -343,7 +336,14 @@ impl<'a> Proxy<'a> {
         PropertyIterator(block_on(self.inner().receive_property_changed(name)))
     }
 
-    /// Get an iterator to receive property changed events.
+    /// Get an iterator to receive owner changed events.
+    ///
+    /// If the proxy destination is a unique name, the stream will be notified of the peer
+    /// disconnection from the bus (with a `None` value).
+    ///
+    /// If the proxy destination is a well-known name, the stream will be notified whenever the name
+    /// owner is changed, either by a new peer being granted ownership (`Some` value) or when the
+    /// name is released (with a `None` value).
     ///
     /// Note that zbus doesn't queue the updates. If the listener is slower than the receiver, it
     /// will only receive the last update.
