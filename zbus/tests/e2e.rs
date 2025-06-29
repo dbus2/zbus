@@ -578,6 +578,13 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
         .await?;
     debug!("Created: {:?}", proxy);
 
+    // Test waiting for properties with no cache
+    assert_await_property(&proxy, "EmitsChangedDefault", 42).await?;
+    assert_await_static_property(&proxy, 64).await?;
+    assert_await_property(&proxy, "EmitsChangedTrue", 42).await?;
+    assert_await_property(&proxy, "EmitsChangedInvalidates", 42).await?;
+    assert_await_property(&proxy, "EmitsChangedConst", 42).await?;
+
     // First let's call a non-existent method. It should immediately fail.
     // There was a regression where object server would just not reply in this case:
     // https://github.com/dbus2/zbus/issues/905
@@ -746,6 +753,14 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
         .build()
         .await?;
     debug!("Created: {:?}", my_obj_proxy);
+
+    // Test waiting for properties
+    assert_await_property(&proxy, "EmitsChangedDefault", 42).await?;
+    assert_await_static_property(&proxy, 64).await?;
+    assert_await_property(&proxy, "EmitsChangedTrue", 64).await?;
+    assert_await_property(&proxy, "EmitsChangedInvalidates", 64).await?;
+    assert_await_property(&proxy, "EmitsChangedConst", 64).await?;
+
     my_obj_proxy.receive_count_changed().await;
     // Calling this after creating the stream was panicking if the property doesn't get cached
     // before the call (MR !460).
@@ -886,6 +901,43 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
 
     proxy.quit().await?;
     Ok(val)
+}
+
+async fn assert_await_property(
+    proxy: impl AsRef<zbus::Proxy<'_>>,
+    name: &str,
+    target: u32,
+) -> zbus::Result<()> {
+    let proxy = proxy.as_ref();
+    debug!("Test waiting {name}={target}");
+    assert_ne!(proxy.get_property::<u32>(name).await?, target);
+    let set_val_after = async {
+        async_io::Timer::after(std::time::Duration::from_millis(10)).await;
+        proxy.set_property(name, target).await?;
+        Ok(())
+    };
+    let (val, ()) = futures_util::try_join!(
+        proxy.wait_property_for::<u32>(name, |val| *val == target),
+        set_val_after,
+    )?;
+    assert_eq!(val, target);
+    Ok(())
+}
+
+async fn assert_await_static_property(proxy: &MyIfaceProxy<'_>, target: u32) -> zbus::Result<()> {
+    debug!("Test waiting EmitsChangedDefault={target}");
+    assert_ne!(proxy.emits_changed_default().await?, target);
+    let set_val_after = async {
+        async_io::Timer::after(std::time::Duration::from_millis(10)).await;
+        proxy.set_emits_changed_default(target).await?;
+        Ok(())
+    };
+    let (val, ()) = futures_util::try_join!(
+        proxy.wait_emits_changed_default_for(|val| *val == target),
+        set_val_after,
+    )?;
+    assert_eq!(val, target);
+    Ok(())
 }
 
 #[test]

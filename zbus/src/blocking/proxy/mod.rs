@@ -325,6 +325,17 @@ impl<'a> Proxy<'a> {
             .map(SignalIterator)
     }
 
+    /// Get an iterator to receive property changed events.
+    ///
+    /// Note that zbus doesn't queue the updates. If the listener is slower than the receiver, it
+    /// will only receive the last update.
+    pub fn receive_property_changed<'name: 'a, T>(
+        &self,
+        name: &'name str,
+    ) -> PropertyIterator<'a, T> {
+        PropertyIterator(block_on(self.inner().receive_property_changed(name)))
+    }
+
     /// Get an iterator to receive owner changed events.
     ///
     /// If the proxy destination is a unique name, the stream will be notified of the peer
@@ -336,19 +347,23 @@ impl<'a> Proxy<'a> {
     ///
     /// Note that zbus doesn't queue the updates. If the listener is slower than the receiver, it
     /// will only receive the last update.
-    pub fn receive_property_changed<'name: 'a, T>(
-        &self,
-        name: &'name str,
-    ) -> PropertyIterator<'a, T> {
-        PropertyIterator(block_on(self.inner().receive_property_changed(name)))
+    pub fn receive_owner_changed(&self) -> Result<OwnerChangedIterator<'a>> {
+        block_on(self.inner().receive_owner_changed()).map(OwnerChangedIterator)
     }
 
-    /// Get an iterator to receive property changed events.
+    /// Wait for the property `name` to meet the predicate `predicate`.
+    ///
+    /// Since this is a blocking API, this function will block the current thread until the
+    /// predicate is met.
     ///
     /// Note that zbus doesn't queue the updates. If the listener is slower than the receiver, it
     /// will only receive the last update.
-    pub fn receive_owner_changed(&self) -> Result<OwnerChangedIterator<'a>> {
-        block_on(self.inner().receive_owner_changed()).map(OwnerChangedIterator)
+    pub fn wait_property_for<T>(&self, name: &str, predicate: impl FnMut(&T) -> bool) -> Result<T>
+    where
+        T: TryFrom<OwnedValue> + Unpin,
+        T::Error: Into<Error>,
+    {
+        block_on(self.inner().wait_property_for(name, predicate))
     }
 
     /// Get a reference to the underlying async Proxy.
