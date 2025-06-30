@@ -107,6 +107,11 @@ mod utils;
 /// access to the signal arguments. It also implements `Deref<Target = Message>` to allow easy
 /// access to the underlying [`zbus::message::Message`].
 ///
+/// For the property changed signals, named `receive_<property_name>_changed`, this macro will also
+/// provide a convenience method to wait for the property to meet the predicate, called
+/// `wait_<property_name>_for`. Those methods are the static version of the
+/// [`zbus::Proxy::receive_property_changed`] and [`zbus::Proxy::wait_property_for`].
+///
 /// # Example
 ///
 /// ```no_run
@@ -187,6 +192,8 @@ mod utils;
 ///
 /// [`zbus_polkit`]: https://docs.rs/zbus_polkit/1.0.0/zbus_polkit/policykit1/index.html
 /// [`zbus::Proxy`]: https://docs.rs/zbus/latest/zbus/proxy/struct.Proxy.html
+/// [`zbus::Proxy::receive_property_changed`]: https://docs.rs/zbus/latest/zbus/proxy/struct.Proxy.html#method.receive_property_changed
+/// [`zbus::Proxy::wait_property_for`]: https://docs.rs/zbus/latest/zbus/proxy/struct.Proxy.html#method.wait_property_for
 /// [`zbus::message::Message`]: https://docs.rs/zbus/latest/zbus/message/struct.Message.html
 /// [`zbus::blocking::Proxy`]: https://docs.rs/zbus/latest/zbus/blocking/proxy/struct.Proxy.html
 /// [`zbus::SignalStream`]: https://docs.rs/zbus/latest/zbus/proxy/struct.SignalStream.html

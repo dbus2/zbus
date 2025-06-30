@@ -1018,6 +1018,49 @@ impl<'a> Proxy<'a> {
             name: self.destination().clone(),
         })
     }
+
+    /// Wait for the property `name` to meet the `predicate`.
+    ///
+    /// If the property already meets the predicate, this function will return immediately.
+    ///
+    /// If the property is cachable, this function will poll the property stream until the predicate
+    /// is met. If the property is uncacheable, this function will busy await until the predicate is
+    /// met. (not recommended)
+    ///
+    /// Note that zbus doesn't queue the updates. If the listener is slower than the receiver, it
+    /// will only receive the last update.
+    pub async fn wait_property_for<T>(
+        &self,
+        name: &str,
+        mut predicate: impl FnMut(&T) -> bool,
+    ) -> Result<T>
+    where
+        T: TryFrom<OwnedValue> + Unpin,
+        T::Error: Into<Error>,
+    {
+        use futures_lite::StreamExt;
+
+        let mut stream = std::pin::pin!(self.receive_property_changed(name).await);
+        let mut value = self.get_property::<T>(name).await?;
+
+        if !predicate(&value) {
+            if let Some(ev) = StreamExt::next(&mut stream).await {
+                // If the cache is available, we can just poll the stream
+                value = ev.get().await?;
+                drop(ev);
+                while !predicate(&value) {
+                    value = StreamExt::next(&mut stream).await.unwrap().get().await?;
+                }
+            } else {
+                // Busy await until the property meets the predicate
+                value = self.get_property(name).await?;
+                while !predicate(&value) {
+                    value = self.get_property(name).await?;
+                }
+            }
+        }
+        Ok(value)
+    }
 }
 
 #[derive(Debug, Default)]

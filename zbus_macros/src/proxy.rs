@@ -739,6 +739,35 @@ fn gen_proxy_property(
             }
         };
 
+        let wait_property_for_method = match emits_changed_signal {
+            PropertyEmitsChangedSignal::True
+            | PropertyEmitsChangedSignal::Invalidates
+            | PropertyEmitsChangedSignal::Const => {
+                let (_, ty_generics, where_clause) = m.sig.generics.split_for_impl();
+                let wait_for = format_ident!("wait_{method_name}_for");
+                let gen_doc = format!(
+                    "Wait for the `{property_name}` property changes to meet the predicate. \
+                     This is a convenient wrapper around [`{proxy_name}::wait_property_for`]."
+                );
+                quote! {
+                    #(#other_attrs)*
+                    #[doc = #gen_doc]
+                    pub #usage fn #wait_for #ty_generics(
+                        &self,
+                        predicate: impl FnMut(&<#ret_type as #zbus::ResultAdapter>::Ok) -> bool,
+                    ) -> ::std::result::Result<
+                        <#ret_type as #zbus::ResultAdapter>::Ok,
+                        <#ret_type as #zbus::ResultAdapter>::Err>
+                    #where_clause
+                    {
+                        self.0.wait_property_for(#property_name, predicate)#wait
+                            .map_err(::std::convert::Into::into)
+                    }
+                }
+            }
+            PropertyEmitsChangedSignal::False => quote! {},
+        };
+
         let cached_getter_method = match emits_changed_signal {
             PropertyEmitsChangedSignal::True
             | PropertyEmitsChangedSignal::Invalidates
@@ -771,6 +800,8 @@ fn gen_proxy_property(
             #cached_getter_method
 
             #receive_method
+
+            #wait_property_for_method
         }
     }
 }
