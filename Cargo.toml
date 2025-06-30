@@ -102,7 +102,7 @@ nix = { version = "0.30", default-features = false, features = [
     "uio",
     "user",
 ] }
-windows-sys = { version = "0.59", features = [
+windows-sys = { version = "0.60", features = [
     "Win32_Foundation",
     "Win32_Security_Authorization",
     "Win32_System_Memory",
