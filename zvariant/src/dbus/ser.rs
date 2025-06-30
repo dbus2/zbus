@@ -326,22 +326,19 @@ where
     }
 
     fn serialize_struct(self, _name: &'static str, len: usize) -> Result<Self::SerializeStruct> {
-        if len == 0 {
-            return StructSerializer::unit(self).map(StructSeqSerializer::Struct);
-        }
-
         self.0
             .add_padding(self.0.signature.alignment(self.0.ctxt.format()))?;
         match &self.0.signature {
             Signature::Variant => StructSerializer::variant(self).map(StructSeqSerializer::Struct),
             Signature::Array(_) => self.serialize_seq(Some(len)).map(StructSeqSerializer::Seq),
+            Signature::U8 => StructSerializer::unit(self).map(StructSeqSerializer::Struct),
             Signature::Structure(_) => {
                 StructSerializer::structure(self).map(StructSeqSerializer::Struct)
             }
             Signature::Dict { .. } => self.serialize_map(Some(len)).map(StructSeqSerializer::Map),
             _ => Err(Error::SignatureMismatch(
                 self.0.signature.clone(),
-                "a struct, array or variant".to_string(),
+                "a struct, array, u8 or variant".to_string(),
             )),
         }
     }

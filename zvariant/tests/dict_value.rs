@@ -235,4 +235,10 @@ fn dict_value() {
     #[derive(Default, Debug, SerializeDict, DeserializeDict, Type)]
     #[zvariant(signature = "dict")]
     struct TestEmpty {}
+
+    // Empty dict should be serialized to contain 4 bytes for the ARRAY length and 4 bytes for the
+    // DICT_ENTRY alignment to 8 bytes boundary.
+    let data = to_bytes(ctxt, &TestEmpty::default()).unwrap();
+
+    assert_eq!(data.bytes(), &[0, 0, 0, 0, 0, 0, 0, 0]);
 }
