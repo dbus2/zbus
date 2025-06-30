@@ -54,7 +54,7 @@ impl Mutex {
     pub fn lock(&self) -> MutexGuard<'_> {
         match unsafe { WaitForSingleObject(self.0.as_raw_handle(), INFINITE) } {
             WAIT_ABANDONED | WAIT_OBJECT_0 => MutexGuard(self),
-            err => panic!("WaitForSingleObject() failed: return code {}", err),
+            err => panic!("WaitForSingleObject() failed: return code {err}"),
         }
     }
 }
@@ -311,7 +311,7 @@ pub fn autolaunch_bus_address() -> Result<Address, crate::Error> {
 
     let addr = read_shm("DBusDaemonAddressInfo")?;
     let addr = String::from_utf8(addr)
-        .map_err(|e| crate::Error::Address(format!("Unable to parse address as UTF-8: {}", e)))?;
+        .map_err(|e| crate::Error::Address(format!("Unable to parse address as UTF-8: {e}")))?;
 
     addr.parse()
 }

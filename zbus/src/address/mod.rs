@@ -114,7 +114,7 @@ impl Display for Address {
         self.transport.fmt(f)?;
 
         if let Some(guid) = &self.guid {
-            write!(f, ",guid={}", guid)?;
+            write!(f, ",guid={guid}")?;
         }
 
         Ok(())

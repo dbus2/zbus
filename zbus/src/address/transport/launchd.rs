@@ -36,7 +36,7 @@ impl Launchd {
         }
 
         let addr = String::from_utf8(output.stdout).map_err(|e| {
-            crate::Error::Address(format!("Unable to parse launchctl output as UTF-8: {}", e))
+            crate::Error::Address(format!("Unable to parse launchctl output as UTF-8: {e}"))
         })?;
 
         Ok(Transport::Unix(Unix::new(UnixSocket::File(

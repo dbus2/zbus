@@ -16,7 +16,7 @@ fn main() {
             } else if s == "-" {
                 "StepDown"
             } else {
-                panic!("Expected either '+' or '-' argument. Got: {}", s);
+                panic!("Expected either '+' or '-' argument. Got: {s}");
             }
         }
         None => "StepUp",

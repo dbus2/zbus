@@ -357,7 +357,7 @@ impl Signature {
                     write!(w, "(")?;
                 }
                 for field in fields.iter() {
-                    write!(w, "{}", field)?;
+                    write!(w, "{field}")?;
                 }
                 if outer_parens {
                     write!(w, ")")?;

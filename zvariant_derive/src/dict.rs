@@ -34,7 +34,7 @@ pub fn expand_serialize_derive(input: DeriveInput) -> Result<TokenStream, Error>
             let is_opt = macros::ty_is_option(ty);
             if is_opt {
                 let as_value_opt_path = quote! { #zv::as_value::optional };
-                let as_value_opt_str = format!("{}", as_value_opt_path);
+                let as_value_opt_str = format!("{as_value_opt_path}");
                 field_defs.push(quote! {
                     #[serde(
                         rename = #dict_name,
@@ -45,7 +45,7 @@ pub fn expand_serialize_derive(input: DeriveInput) -> Result<TokenStream, Error>
                 });
             } else {
                 let as_value_path = quote! { #zv::as_value };
-                let as_value_str = format!("{}", as_value_path);
+                let as_value_str = format!("{as_value_path}");
                 field_defs.push(quote! {
                     #[serde(rename = #dict_name, with = #as_value_str)]
                     #ident: &'a #ty
@@ -125,7 +125,7 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> Result<TokenStream, Erro
 
             if is_opt {
                 let as_value_opt_path = quote! { #zv::as_value::optional };
-                let as_value_opt_str = format!("{}", as_value_opt_path);
+                let as_value_opt_str = format!("{as_value_opt_path}");
                 field_defs.push(quote! {
                     #[serde(rename = #dict_name, with = #as_value_opt_str, default)]
                     #ident: #ty
@@ -134,7 +134,7 @@ pub fn expand_deserialize_derive(input: DeriveInput) -> Result<TokenStream, Erro
             } else {
                 // For non-optional fields, use Option<T> in helper for default support
                 let as_value_opt_path = quote! { #zv::as_value::optional };
-                let as_value_opt_str = format!("{}", as_value_opt_path);
+                let as_value_opt_str = format!("{as_value_opt_path}");
                 field_defs.push(quote! {
                     #[serde(rename = #dict_name, with = #as_value_opt_str, default)]
                     #ident: Option<#ty>
