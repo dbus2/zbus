@@ -58,7 +58,7 @@ impl Client {
         let write = self.common.socket_mut().write_mut();
 
         let written = match write.send_zero_byte().await.map_err(|e| {
-            Error::Handshake(format!("Could not send zero byte with credentials: {}", e))
+            Error::Handshake(format!("Could not send zero byte with credentials: {e}"))
         })? {
             // This likely means that the socket type is unable to send SCM_CREDS.
             // Let's try to send the 0 byte as a regular message.

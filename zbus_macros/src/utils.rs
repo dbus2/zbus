@@ -74,7 +74,7 @@ impl Display for PropertyEmitsChangedSignal {
             PropertyEmitsChangedSignal::False => "false",
             PropertyEmitsChangedSignal::Invalidates => "invalidates",
         };
-        write!(f, "{}", emits_changed_signal)
+        write!(f, "{emits_changed_signal}")
     }
 }
 

@@ -486,51 +486,51 @@ pub(crate) fn value_display_fmt(
             if type_annotate {
                 f.write_str("byte ")?;
             }
-            write!(f, "0x{:02x}", num)
+            write!(f, "0x{num:02x}")
         }
         Value::Bool(boolean) => {
-            write!(f, "{}", boolean)
+            write!(f, "{boolean}")
         }
         Value::I16(num) => {
             if type_annotate {
                 f.write_str("int16 ")?;
             }
-            write!(f, "{}", num)
+            write!(f, "{num}")
         }
         Value::U16(num) => {
             if type_annotate {
                 f.write_str("uint16 ")?;
             }
-            write!(f, "{}", num)
+            write!(f, "{num}")
         }
         Value::I32(num) => {
             // Never annotate this type because it is the default for numbers
-            write!(f, "{}", num)
+            write!(f, "{num}")
         }
         Value::U32(num) => {
             if type_annotate {
                 f.write_str("uint32 ")?;
             }
-            write!(f, "{}", num)
+            write!(f, "{num}")
         }
         Value::I64(num) => {
             if type_annotate {
                 f.write_str("int64 ")?;
             }
-            write!(f, "{}", num)
+            write!(f, "{num}")
         }
         Value::U64(num) => {
             if type_annotate {
                 f.write_str("uint64 ")?;
             }
-            write!(f, "{}", num)
+            write!(f, "{num}")
         }
         Value::F64(num) => {
             if num.fract() == 0. {
                 // Add a dot to make it clear that this is a float
-                write!(f, "{}.", num)
+                write!(f, "{num}.")
             } else {
-                write!(f, "{}", num)
+                write!(f, "{num}")
             }
         }
         Value::Str(string) => {
@@ -568,7 +568,7 @@ pub(crate) fn value_display_fmt(
             if type_annotate {
                 f.write_str("handle ")?;
             }
-            write!(f, "{}", handle)
+            write!(f, "{handle}")
         }
     }
 }

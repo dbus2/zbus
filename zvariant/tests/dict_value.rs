@@ -212,7 +212,7 @@ fn dict_value() {
     }
     let decoded: TestParseUnknown<'_> = encoded.deserialize().unwrap().0;
     assert_eq!(decoded.rest.len(), 1);
-    assert_eq!(decoded.rest["user"], Value::new("me").try_into().unwrap());
+    assert_eq!(decoded.rest["user"], Value::new("me"));
 
     #[cfg(feature = "gvariant")]
     {

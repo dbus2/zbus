@@ -145,7 +145,7 @@ impl fmt::Display for Error {
             Error::InvalidMatchRule => write!(f, "Invalid match rule string"),
             Error::Failure(e) => write!(f, "{e}"),
             Error::MissingParameter(p) => {
-                write!(f, "Parameter `{}` was not specified but it is required", p)
+                write!(f, "Parameter `{p}` was not specified but it is required")
             }
             Error::InvalidSerial => write!(f, "Serial number in the message header is 0"),
             Error::InterfaceExists(i, p) => write!(f, "Interface `{i}` already exists at `{p}`"),

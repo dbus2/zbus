@@ -11,7 +11,7 @@ impl std::fmt::Display for Autolaunch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "autolaunch:")?;
         if let Some(scope) = &self.scope {
-            write!(f, "scope={}", scope)?;
+            write!(f, "scope={scope}")?;
         }
 
         Ok(())

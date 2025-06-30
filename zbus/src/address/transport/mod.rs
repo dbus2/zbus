@@ -351,19 +351,19 @@ pub(super) fn encode_percents(f: &mut Formatter<'_>, mut value: &[u8]) -> std::f
 impl Display for Transport {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Tcp(tcp) => write!(f, "{}", tcp)?,
-            Self::Unix(unix) => write!(f, "{}", unix)?,
+            Self::Tcp(tcp) => write!(f, "{tcp}")?,
+            Self::Unix(unix) => write!(f, "{unix}")?,
             #[cfg(unix)]
-            Self::Unixexec(unixexec) => write!(f, "{}", unixexec)?,
+            Self::Unixexec(unixexec) => write!(f, "{unixexec}")?,
             #[cfg(any(
                 all(feature = "vsock", not(feature = "tokio")),
                 feature = "tokio-vsock"
             ))]
             Self::Vsock(vsock) => write!(f, "{}", vsock)?,
             #[cfg(windows)]
-            Self::Autolaunch(autolaunch) => write!(f, "{}", autolaunch)?,
+            Self::Autolaunch(autolaunch) => write!(f, "{autolaunch}")?,
             #[cfg(target_os = "macos")]
-            Self::Launchd(launchd) => write!(f, "{}", launchd)?,
+            Self::Launchd(launchd) => write!(f, "{launchd}")?,
         }
 
         Ok(())

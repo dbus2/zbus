@@ -90,10 +90,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let interface_name = interface.name();
         match output_target {
-            OutputTarget::Stdout => println!("{}", output),
+            OutputTarget::Stdout => println!("{output}"),
             OutputTarget::SingleFile(ref mut file) => {
                 file.write_all(output.as_bytes())?;
-                println!("Generated code for `{}`", interface_name);
+                println!("Generated code for `{interface_name}`");
             }
             OutputTarget::MultipleFiles => {
                 let filename = interface_name
@@ -102,7 +102,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .expect("Failed to split name");
                 let filename = to_snakecase(filename);
                 std::fs::write(format!("{}.rs", &filename), output)?;
-                println!("Generated code for `{}` in {}.rs", interface_name, filename);
+                println!("Generated code for `{interface_name}` in {filename}.rs");
             }
         };
     }
@@ -126,10 +126,7 @@ impl DBusInfo<'_> {
         let service: BusName<'_> = service.try_into()?;
         let path: ObjectPath<'_> = object_path.try_into()?;
 
-        let input_src = format!(
-            "Interface '{}' from service '{}' on system bus",
-            path, service,
-        );
+        let input_src = format!("Interface '{path}' from service '{service}' on system bus",);
 
         let xml = IntrospectableProxy::builder(&connection)
             .destination(service.clone())
