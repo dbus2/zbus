@@ -216,7 +216,29 @@ pub struct PropertyStream<'a, T> {
     name: &'a str,
     proxy: Proxy<'a>,
     changed_listener: EventListener,
+    peek_current: bool,
     phantom: std::marker::PhantomData<T>,
+}
+
+impl<T> PropertyStream<'_, T> {
+    /// Yield the current property value once without waiting for the next update.
+    ///
+    /// This is useful if you want to check the current value of a property without waiting for the
+    /// next update. This option works independently of the [`CacheProperties`] option.
+    ///
+    /// Note that zbus doesn’t queue the updates. If the listener is slower than the receiver, it
+    /// will only receive the last update.
+    pub fn with_current(mut self) -> Self {
+        self.peek_current_once();
+        self
+    }
+
+    /// Inplace version of [`PropertyStream::with_current()`].
+    ///
+    /// This stream will yield the current property value on the next item without waiting changes.
+    pub fn peek_current_once(&mut self) {
+        self.peek_current = true;
+    }
 }
 
 impl<'a, T> stream::Stream for PropertyStream<'a, T>
@@ -232,7 +254,12 @@ where
             // With no cache, we will get no updates; return immediately
             None => return Poll::Ready(None),
         };
-        ready!(Pin::new(&mut m.changed_listener).poll(cx));
+
+        if m.peek_current {
+            m.peek_current = false;
+        } else {
+            ready!(Pin::new(&mut m.changed_listener).poll(cx));
+        }
 
         m.changed_listener = properties
             .values
@@ -984,6 +1011,7 @@ impl<'a> Proxy<'a> {
             name,
             proxy: self.clone(),
             changed_listener,
+            peek_current: false,
             phantom: std::marker::PhantomData,
         }
     }

@@ -758,6 +758,12 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
     );
     my_obj_proxy.ping().await?;
 
+    {
+        // Test peek_current option. If this option is not set, the stream will blocked forever.
+        let mut stream = my_obj_proxy.receive_count_changed().await.with_current();
+        assert_eq!(stream.next().await.unwrap().get().await.unwrap(), 0);
+    }
+
     let mut ifaces_removed_stream = obj_manager_proxy.receive_interfaces_removed().await?;
     debug!("Created: {:?}", ifaces_removed_stream);
     // Must process in parallel, so the stream listener does not block receiving
