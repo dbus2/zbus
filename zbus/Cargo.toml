@@ -1,6 +1,6 @@
 [package]
 name = "zbus"
-version = "5.7.1"
+version = "5.8.0"
 authors = ["Zeeshan Ali Khan <zeeshanak@gnome.org>"]
 edition = { workspace = true }
 rust-version = { workspace = true }
@@ -48,7 +48,7 @@ serde_bytes = ["zvariant/serde_bytes"]
 async-fs = []
 
 [dependencies]
-zbus_macros = { path = "../zbus_macros", version = "5.7.1" }
+zbus_macros = { path = "../zbus_macros", version = "5.8.0" }
 zvariant = { path = "../zvariant", features = [
     "enumflags2",
 ], version = "5.5.2" }
