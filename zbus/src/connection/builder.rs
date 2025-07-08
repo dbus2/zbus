@@ -1,5 +1,6 @@
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
+use enumflags2::BitFlags;
 use event_listener::Event;
 #[cfg(not(feature = "tokio"))]
 use std::net::TcpStream;
@@ -24,6 +25,7 @@ use zvariant::ObjectPath;
 
 use crate::{
     address::{self, Address},
+    fdo::RequestNameFlags,
     names::{InterfaceName, WellKnownName},
     object_server::{ArcInterface, Interface},
     Connection, Error, Executor, Guid, OwnedGuid, Result,
@@ -54,6 +56,17 @@ enum Target {
 type Interfaces<'a> = HashMap<ObjectPath<'a>, HashMap<InterfaceName<'static>, ArcInterface>>;
 
 /// A builder for [`zbus::Connection`].
+///
+/// The builder allows setting the flags [`RequestNameFlags::AllowReplacement`] and
+/// [`RequestNameFlags::ReplaceExisting`] when requesting names, but the flag
+/// [`RequestNameFlags::DoNotQueue`] will always be enabled. The reasons are:
+///
+/// 1. There is no indication given to the caller of [`Self::build`] that the name(s) request was
+///    enqueued and that the requested name might not be available right after building.
+///
+/// 2. The name may be acquired in between the time the name is requested and the
+///    [`crate::fdo::NameAcquiredStream`] is constructed. As a result the service can miss the
+///    [`crate::fdo::NameAcquired`] signal.
 #[derive(Debug)]
 #[must_use]
 pub struct Builder<'a> {
@@ -69,6 +82,7 @@ pub struct Builder<'a> {
     auth_mechanism: Option<AuthMechanism>,
     #[cfg(feature = "bus-impl")]
     unique_name: Option<crate::names::UniqueName<'a>>,
+    request_name_flags: BitFlags<RequestNameFlags>,
 }
 
 impl<'a> Builder<'a> {
@@ -288,6 +302,9 @@ impl<'a> Builder<'a> {
     /// of the connection setup ([`Builder::build`]), immediately after interfaces
     /// registered (through [`Builder::serve_at`]) are advertised. Typically this is
     /// exactly what you want.
+    ///
+    /// The methods [`Builder::allow_name_replacements`] and [`Builder::replace_existing_names`]
+    /// allow to set the [`zbus::fdo::RequestNameFlags`] used to request the name.
     pub fn name<W>(mut self, well_known_name: W) -> Result<Self>
     where
         W: TryInto<WellKnownName<'a>>,
@@ -297,6 +314,22 @@ impl<'a> Builder<'a> {
         self.names.insert(well_known_name);
 
         Ok(self)
+    }
+
+    /// Whether the [`zbus::fdo::RequestNameFlags::AllowReplacement`] flag will be set when
+    /// requesting names.
+    pub fn allow_name_replacements(mut self, allow_replacement: bool) -> Self {
+        self.request_name_flags
+            .set(RequestNameFlags::AllowReplacement, allow_replacement);
+        self
+    }
+
+    /// Whether the [`zbus::fdo::RequestNameFlags::ReplaceExisting`] flag will be set when
+    /// requesting names.
+    pub fn replace_existing_names(mut self, replace_existing: bool) -> Self {
+        self.request_name_flags
+            .set(RequestNameFlags::ReplaceExisting, replace_existing);
+        self
     }
 
     /// Set the unique name of the connection.
@@ -388,7 +421,8 @@ impl<'a> Builder<'a> {
         );
 
         for name in self.names {
-            conn.request_name(name).await?;
+            conn.request_name_with_flags(name, self.request_name_flags)
+                .await?;
         }
 
         Ok(conn)
@@ -407,6 +441,7 @@ impl<'a> Builder<'a> {
             auth_mechanism: None,
             #[cfg(feature = "bus-impl")]
             unique_name: None,
+            request_name_flags: BitFlags::default(),
         }
     }
 

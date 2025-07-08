@@ -171,6 +171,18 @@ impl<'a> Builder<'a> {
         self.0.name(well_known_name).map(Self)
     }
 
+    /// Whether the [`zbus::fdo::RequestNameFlags::AllowReplacement`] flag will be set when
+    /// requesting names.
+    pub fn allow_name_replacements(self, allow_replacement: bool) -> Self {
+        Self(self.0.allow_name_replacements(allow_replacement))
+    }
+
+    /// Whether the [`zbus::fdo::RequestNameFlags::ReplaceExisting`] flag will be set when
+    /// requesting names.
+    pub fn replace_existing_names(self, replace_existing: bool) -> Self {
+        Self(self.0.replace_existing_names(replace_existing))
+    }
+
     /// Set the unique name of the connection.
     ///
     /// This method is only available when the `bus-impl` feature is enabled.
