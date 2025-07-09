@@ -964,7 +964,8 @@ impl<'a> Proxy<'a> {
     /// Note that zbus doesn't queue the updates. If the listener is slower than the receiver, it
     /// will only receive the last update.
     ///
-    /// If caching is not enabled on this proxy, the resulting stream will not return any events.
+    /// The stream will yield the current value first, then wait for the value changes. If caching
+    /// is not enabled on this proxy, the resulting stream will not return any events.
     pub async fn receive_property_changed<'name: 'a, T>(
         &self,
         name: &'name str,
@@ -975,7 +976,11 @@ impl<'a> Proxy<'a> {
             let entry = values
                 .entry(name.to_string())
                 .or_insert_with(PropertyValue::default);
-            entry.event.listen()
+            let listener = entry.event.listen();
+            if entry.value.is_some() {
+                entry.event.notify(1);
+            }
+            listener
         } else {
             Event::new().listen()
         };
