@@ -758,6 +758,23 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
     );
     my_obj_proxy.ping().await?;
 
+    // Test cached property-changed stream
+    {
+        let mut stream = my_obj_proxy.receive_count_changed().await;
+        // The first time will be the current value
+        let current = my_obj_proxy.count().await?;
+        assert_eq!(current, stream.next().await.unwrap().get().await?);
+        // The second time will be the new value after changes
+        for test_case in [55, 66, 77, 88] {
+            let (value, ret) = futures_util::join!(
+                async { stream.next().await.unwrap().get().await.unwrap() },
+                my_obj_proxy.set_count(test_case)
+            );
+            ret.unwrap();
+            assert_eq!(test_case, value);
+        }
+    }
+
     let mut ifaces_removed_stream = obj_manager_proxy.receive_interfaces_removed().await?;
     debug!("Created: {:?}", ifaces_removed_stream);
     // Must process in parallel, so the stream listener does not block receiving
