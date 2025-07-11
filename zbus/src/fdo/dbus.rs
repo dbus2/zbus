@@ -105,6 +105,31 @@ pub enum ReleaseNameReply {
     NotOwner = 0x03,
 }
 
+/// The return code of the [`start_service_by_name`] method.
+///
+/// [`start_service_by_name`]: struct.DBusProxy.html#method.start_service_by_name
+#[repr(u32)]
+#[derive(Deserialize_repr, Serialize_repr, Type, Debug, PartialEq, Eq)]
+pub enum StartServiceReply {
+    /// The service was successfully started.
+    Success = 0x01,
+    /// The service was already running.
+    AlreadyRunning = 0x02,
+}
+
+// The response type is kept as u32 until the next ABI break, so provide this for now.
+impl TryFrom<u32> for StartServiceReply {
+    type Error = super::Error;
+
+    fn try_from(value: u32) -> Result<Self> {
+        match value {
+            0x01 => Ok(StartServiceReply::Success),
+            0x02 => Ok(StartServiceReply::AlreadyRunning),
+            _ => Err(super::Error::ZBus(crate::Error::InvalidReply)),
+        }
+    }
+}
+
 /// Credentials of a process connected to a bus server.
 ///
 /// If unable to determine certain credentials (for instance, because the process is not on the same
