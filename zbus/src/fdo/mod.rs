@@ -5,7 +5,7 @@ pub(crate) mod dbus;
 pub use dbus::{
     ConnectionCredentials, DBusProxy, NameAcquired, NameAcquiredArgs, NameAcquiredStream, NameLost,
     NameLostArgs, NameLostStream, NameOwnerChanged, NameOwnerChangedArgs, NameOwnerChangedStream,
-    ReleaseNameReply, RequestNameFlags, RequestNameReply,
+    ReleaseNameReply, RequestNameFlags, RequestNameReply, StartServiceReply,
 };
 
 pub(crate) mod introspectable;
