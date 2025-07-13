@@ -556,7 +556,7 @@ impl Connection {
     /// let name = "org.freedesktop.zbus.QueuedNameTest";
     /// let conn1 = Connection::session().await?;
     /// // This should just work right away.
-    /// conn1.request_name(name).await?;
+    /// conn1.request_name_with_flags(name, RequestNameFlags::DoNotQueue.into()).await?;
     ///
     /// let conn2 = Connection::session().await?;
     /// // A second request from the another connection will fail with `DoNotQueue` flag, which is

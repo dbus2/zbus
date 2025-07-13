@@ -18,9 +18,10 @@ use super::Result;
 use crate::{proxy, OwnedGuid};
 
 /// The flags used by the [`DBusProxy::request_name`] method.
-// TODO: Revisit this choice of defaults. See
-// https://github.com/dbus2/zbus/issues/1413
-#[bitflags(default = ReplaceExisting | DoNotQueue)]
+///
+/// The default flags (returned by [`BitFlags::default`]) are `AllowReplacement`, `ReplaceExisting`,
+/// and `DoNotQueue`.
+#[bitflags(default = AllowReplacement | ReplaceExisting | DoNotQueue)]
 #[repr(u32)]
 #[derive(Type, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum RequestNameFlags {
@@ -382,4 +383,17 @@ pub trait DBus {
     /// property either, because they do not indicate features of the message bus implementation.
     #[zbus(property)]
     fn interfaces(&self) -> Result<Vec<OwnedInterfaceName>>;
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn request_name_flags_default() {
+        let flags = BitFlags::<RequestNameFlags>::default();
+        assert!(flags.contains(RequestNameFlags::AllowReplacement));
+        assert!(flags.contains(RequestNameFlags::ReplaceExisting));
+        assert!(flags.contains(RequestNameFlags::DoNotQueue));
+    }
 }
