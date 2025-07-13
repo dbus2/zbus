@@ -556,7 +556,7 @@ impl Connection {
     /// let name = "org.freedesktop.zbus.QueuedNameTest";
     /// let conn1 = Connection::session().await?;
     /// // This should just work right away.
-    /// conn1.request_name(name).await?;
+    /// conn1.request_name_with_flags(name, RequestNameFlags::DoNotQueue.into()).await?;
     ///
     /// let conn2 = Connection::session().await?;
     /// // A second request from the another connection will fail with `DoNotQueue` flag, which is
@@ -634,13 +634,12 @@ impl Connection {
             .arg(0, well_known_name.as_ref())
             .unwrap()
             .build();
-        let mut acquired_stream =
-            MessageStream::for_match_rule(acquired_match_rule, self, None).await?;
+        let mut acquired_stream = self.add_match(acquired_match_rule.into(), None).await?;
         let lost_match_rule = MatchRule::fdo_signal_builder("NameLost")
             .arg(0, well_known_name.as_ref())
             .unwrap()
             .build();
-        let mut lost_stream = MessageStream::for_match_rule(lost_match_rule, self, None).await?;
+        let mut lost_stream = self.add_match(lost_match_rule.into(), None).await?;
         let reply = self
             .call_method(
                 Some("org.freedesktop.DBus"),

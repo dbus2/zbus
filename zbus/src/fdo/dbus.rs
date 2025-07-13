@@ -17,32 +17,25 @@ use zvariant::{DeserializeDict, Optional, SerializeDict, Type};
 use super::Result;
 use crate::{proxy, OwnedGuid};
 
-/// The flags used by the bus [`request_name`] method.
+/// The flags used by the [`DBusProxy::request_name`] method.
 ///
-/// [`request_name`]: struct.DBusProxy.html#method.request_name
-// TODO: Revisit this choice of defaults. See
-// https://github.com/dbus2/zbus/issues/1413
-#[bitflags(default = ReplaceExisting | DoNotQueue)]
+/// The default flags (returned by [`BitFlags::default`]) are `AllowReplacement`, `ReplaceExisting`,
+/// and `DoNotQueue`.
+#[bitflags(default = AllowReplacement | ReplaceExisting | DoNotQueue)]
 #[repr(u32)]
 #[derive(Type, Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum RequestNameFlags {
     /// If an application A specifies this flag and succeeds in becoming the owner of the name, and
-    /// another application B later calls [`request_name`] with the [`ReplaceExisting`] flag, then
-    /// application A will lose ownership and receive a `org.freedesktop.DBus.NameLost` signal, and
-    /// application B will become the new owner. If [`AllowReplacement`] is not specified by
-    /// application A, or [`ReplaceExisting`] is not specified by application B, then application B
-    /// will not replace application A as the owner.
-    ///
-    /// [`ReplaceExisting`]: enum.RequestNameFlags.html#variant.ReplaceExisting
-    /// [`AllowReplacement`]: enum.RequestNameFlags.html#variant.AllowReplacement
-    /// [`request_name`]: struct.DBusProxy.html#method.request_name
+    /// another application B later calls [`DBusProxy::request_name`] with the `ReplaceExisting`
+    /// flag, then application A will lose ownership and receive a `org.freedesktop.DBus.NameLost`
+    /// signal, and application B will become the new owner. If `AllowReplacement` is not specified
+    /// by application A, or `ReplaceExisting` is not specified by application B, then application
+    /// B will not replace application A as the owner.
     AllowReplacement = 0x01,
     /// Try to replace the current owner if there is one. If this flag is not set the application
     /// will only become the owner of the name if there is no current owner. If this flag is set,
     /// the application will replace the current owner if the current owner specified
-    /// [`AllowReplacement`].
-    ///
-    /// [`AllowReplacement`]: enum.RequestNameFlags.html#variant.AllowReplacement
+    /// `AllowReplacement`.
     ReplaceExisting = 0x02,
     /// Without this flag, if an application requests a name that is already owned, the
     /// application will be placed in a queue to own the name when the current owner gives it
@@ -54,42 +47,27 @@ pub enum RequestNameFlags {
     DoNotQueue = 0x04,
 }
 
-/// The return code of the [`request_name`] method.
-///
-/// [`request_name`]: struct.DBusProxy.html#method.request_name
+/// The return code of the [`DBusProxy::request_name`] method.
 #[repr(u32)]
 #[derive(Deserialize_repr, Serialize_repr, Type, Debug, PartialEq, Eq)]
 pub enum RequestNameReply {
     /// The caller is now the primary owner of the name, replacing any previous owner. Either the
-    /// name had no owner before, or the caller specified [`ReplaceExisting`] and the current owner
-    /// specified [`AllowReplacement`].
-    ///
-    /// [`ReplaceExisting`]: enum.RequestNameFlags.html#variant.ReplaceExisting
-    /// [`AllowReplacement`]: enum.RequestNameFlags.html#variant.AllowReplacement
+    /// name had no owner before, or the caller specified [`RequestNameFlags::ReplaceExisting`] and
+    /// the current owner specified [`RequestNameFlags::AllowReplacement`].
     PrimaryOwner = 0x01,
-    /// The name already had an owner, [`DoNotQueue`] was not specified, and either the current
-    /// owner did not specify [`AllowReplacement`] or the requesting application did not specify
-    /// [`ReplaceExisting`].
-    ///
-    /// [`DoNotQueue`]: enum.RequestNameFlags.html#variant.DoNotQueue
-    /// [`ReplaceExisting`]: enum.RequestNameFlags.html#variant.ReplaceExisting
-    /// [`AllowReplacement`]: enum.RequestNameFlags.html#variant.AllowReplacement
+    /// The name already had an owner, [`RequestNameFlags::DoNotQueue`] was not specified, and
+    /// either the current owner did not specify [`RequestNameFlags::AllowReplacement`] or the
+    /// requesting application did not specify [`RequestNameFlags::ReplaceExisting`].
     InQueue = 0x02,
-    /// The name already had an owner, [`DoNotQueue`] was specified, and either
-    /// [`AllowReplacement`] was not specified by the current owner, or [`ReplaceExisting`] was
-    /// not specified by the requesting application.
-    ///
-    /// [`DoNotQueue`]: enum.RequestNameFlags.html#variant.DoNotQueue
-    /// [`ReplaceExisting`]: enum.RequestNameFlags.html#variant.ReplaceExisting
-    /// [`AllowReplacement`]: enum.RequestNameFlags.html#variant.AllowReplacement
+    /// The name already had an owner, [`RequestNameFlags::DoNotQueue`] was specified, and either
+    /// [`RequestNameFlags::AllowReplacement`] was not specified by the current owner, or
+    /// [`RequestNameFlags::ReplaceExisting`] was not specified by the requesting application.
     Exists = 0x03,
     /// The application trying to request ownership of a name is already the owner of it.
     AlreadyOwner = 0x04,
 }
 
-/// The return code of the [`release_name`] method.
-///
-/// [`release_name`]: struct.DBusProxy.html#method.release_name
+/// The return code of the [`DBusProxy::release_name`] method.
 #[repr(u32)]
 #[derive(Deserialize_repr, Serialize_repr, Type, Debug, PartialEq, Eq)]
 pub enum ReleaseNameReply {
@@ -405,4 +383,17 @@ pub trait DBus {
     /// property either, because they do not indicate features of the message bus implementation.
     #[zbus(property)]
     fn interfaces(&self) -> Result<Vec<OwnedInterfaceName>>;
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn request_name_flags_default() {
+        let flags = BitFlags::<RequestNameFlags>::default();
+        assert!(flags.contains(RequestNameFlags::AllowReplacement));
+        assert!(flags.contains(RequestNameFlags::ReplaceExisting));
+        assert!(flags.contains(RequestNameFlags::DoNotQueue));
+    }
 }
