@@ -634,13 +634,12 @@ impl Connection {
             .arg(0, well_known_name.as_ref())
             .unwrap()
             .build();
-        let mut acquired_stream =
-            MessageStream::for_match_rule(acquired_match_rule, self, None).await?;
+        let mut acquired_stream = self.add_match(acquired_match_rule.into(), None).await?;
         let lost_match_rule = MatchRule::fdo_signal_builder("NameLost")
             .arg(0, well_known_name.as_ref())
             .unwrap()
             .build();
-        let mut lost_stream = MessageStream::for_match_rule(lost_match_rule, self, None).await?;
+        let mut lost_stream = self.add_match(lost_match_rule.into(), None).await?;
         let reply = self
             .call_method(
                 Some("org.freedesktop.DBus"),
