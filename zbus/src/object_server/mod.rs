@@ -272,7 +272,7 @@ impl ObjectServer {
             .instance
             .clone();
 
-        // Ensure what we return can later be dowcasted safely.
+        // Ensure what we return can later be downcasted safely.
         lock.read()
             .await
             .downcast_ref::<I>()
@@ -280,7 +280,94 @@ impl ObjectServer {
 
         let conn = self.connection();
         // SAFETY: We know that there is a valid path on the node as we already converted w/o error.
-        let emitter = SignalEmitter::new(&conn, path).unwrap().into_owned();
+        let emitter = SignalEmitter::new(&conn, path)?.into_owned();
+
+        Ok(InterfaceRef {
+            emitter,
+            lock,
+            phantom: PhantomData,
+        })
+    }
+
+    /// Get the interface at the given path, but without checking if it can later be downcasted
+    /// this can cause the `InterfaceRef` to be invalid if the interface at the path is not of
+    /// the expected type.
+    ///
+    /// # Errors
+    ///
+    /// If the interface is not registered at the given path, an `Error::InterfaceNotFound` error is
+    /// returned.
+    ///
+    /// # Examples
+    ///
+    /// The typical use of this is property changes inside a dispatched handler where you don't
+    /// want to annotate the function with a signal handler:
+    ///
+    /// ```no_run
+    /// # use std::error::Error;
+    /// # use zbus::{Connection, interface};
+    /// # use async_io::block_on;
+    /// #
+    /// struct MyIface {
+    ///     count: u32,
+    ///     connection: Connection,
+    /// }
+    ///
+    /// #[interface(name = "org.myiface.MyIface")]
+    /// impl MyIface {
+    ///      #[zbus(property)]
+    ///      async fn count(&self) -> u32 {
+    ///          self.count
+    ///      }
+    ///
+    ///     async fn update_count(&mut self) -> zbus::Result<()> {
+    ///         // gets a reference to its own interface without having to annotate the function with signal handler
+    ///         // using `interface_unchecked` instead of `interface` allows you to avoid the deadlock
+    ///         let iface_ref = self.connection
+    ///             .object_server()
+    ///             .interface_unchecked::<_, MyIface>("/my/path").await?;
+    ///          self.count = 42;
+    ///         // emits a signal to notify the change
+    ///         self.count_changed(iface_ref.signal_emitter()).await
+    ///     }
+    /// }
+    ///
+    /// # block_on(async {
+    /// # let connection = Connection::session().await?;
+    /// #
+    /// # let path = "/org/zbus/path";
+    /// # connection.object_server().at(path, MyIface {
+    /// #    count: 0,
+    /// #    connection: connection.clone(),
+    /// # }).await?;
+    /// let iface_ref = connection
+    ///     .object_server()
+    ///     .interface::<_, MyIface>(path).await?;
+    /// let mut iface = iface_ref.get_mut().await;
+    /// iface.update_count().await?; // will send a property changed signal as well now
+    /// # Ok::<_, Box<dyn Error + Send + Sync>>(())
+    /// # })?;
+    /// #
+    /// # Ok::<_, Box<dyn Error + Send + Sync>>(())
+    /// ```
+    pub async fn interface_unchecked<'p, P, I>(&self, path: P) -> Result<InterfaceRef<I>>
+    where
+        I: Interface,
+        P: TryInto<ObjectPath<'p>>,
+        P::Error: Into<Error>,
+    {
+        let path = path.try_into().map_err(Into::into)?;
+        let root = self.root().read().await;
+        let node = root.get_child(&path).ok_or(Error::InterfaceNotFound)?;
+
+        let lock = node
+            .interface_lock(I::name())
+            .ok_or(Error::InterfaceNotFound)?
+            .instance
+            .clone();
+
+        let conn = self.connection();
+        let emitter = SignalEmitter::new(&conn, path)?.into_owned();
 
         Ok(InterfaceRef {
             emitter,
