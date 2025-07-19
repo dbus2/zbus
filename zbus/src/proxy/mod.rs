@@ -964,21 +964,24 @@ impl<'a> Proxy<'a> {
     /// Note that zbus doesn't queue the updates. If the listener is slower than the receiver, it
     /// will only receive the last update.
     ///
-    /// If caching is not enabled on this proxy, the resulting stream will not return any events.
+    /// The stream will yield the current value on the first element. If caching is not enabled on
+    /// this proxy, the resulting stream will not return any events.
     pub async fn receive_property_changed<'name: 'a, T>(
         &self,
         name: &'name str,
     ) -> PropertyStream<'a, T> {
-        let properties = self.get_property_cache();
-        let changed_listener = if let Some(properties) = &properties {
-            let mut values = properties.values.write().expect("lock poisoned");
-            let entry = values
+        // Create a cache entry if the property is not yet cached
+        if let Some(properties) = self.get_property_cache() {
+            (properties.values.write().expect("lock poisoned"))
                 .entry(name.to_string())
-                .or_insert_with(PropertyValue::default);
-            entry.event.listen()
-        } else {
-            Event::new().listen()
-        };
+                .or_default();
+        }
+
+        // Set a dummy event to start the stream.
+        // The stream will yield the current value immediately when the cache is available.
+        let event = Event::new();
+        let changed_listener = event.listen();
+        event.notify(1);
 
         PropertyStream {
             name,
