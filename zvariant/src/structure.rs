@@ -201,6 +201,17 @@ impl<'a> Structure<'a> {
         })
     }
 
+    pub(crate) fn try_into_owned(self) -> crate::Result<Structure<'static>> {
+        Ok(Structure {
+            fields: self
+                .fields
+                .into_iter()
+                .map(|v| v.try_into_owned().map(Into::into))
+                .collect::<crate::Result<_>>()?,
+            signature: self.signature,
+        })
+    }
+
     /// Attempt to clone `self`.
     pub fn try_clone(&self) -> Result<Self, crate::Error> {
         let fields = self

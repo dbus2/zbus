@@ -92,6 +92,17 @@ impl<'a> Maybe<'a> {
         })
     }
 
+    pub(crate) fn try_into_owned(self) -> crate::Result<Maybe<'static>> {
+        Ok(Maybe {
+            value: Box::new(
+                self.value
+                    .map(|v| v.try_into_owned().map(Into::into))
+                    .transpose()?,
+            ),
+            signature: self.signature,
+        })
+    }
+
     /// Attempt to clone `self`.
     pub fn try_clone(&self) -> Result<Self, crate::Error> {
         Ok(Maybe {

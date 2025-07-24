@@ -115,6 +115,22 @@ impl<'k, 'v> Dict<'k, 'v> {
         })
     }
 
+    pub(crate) fn try_into_owned(self) -> crate::Result<Dict<'static, 'static>> {
+        Ok(Dict {
+            signature: self.signature,
+            map: self
+                .map
+                .into_iter()
+                .map(|(k, v)| {
+                    Ok((
+                        k.try_into_owned().map(Into::into)?,
+                        v.try_into_owned().map(Into::into)?,
+                    ))
+                })
+                .collect::<crate::Result<_>>()?,
+        })
+    }
+
     /// Try to clone the `Dict`.
     pub fn try_clone(&self) -> Result<Self, Error> {
         let entries = self

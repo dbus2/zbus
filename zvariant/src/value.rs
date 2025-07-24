@@ -246,6 +246,38 @@ impl<'a> Value<'a> {
         }))
     }
 
+    /// Creates an owned value from `self`.
+    ///
+    /// This method can currently only fail on Unix platforms for [`Value::Fd`] variant containing
+    /// an [`Fd::Owned`] variant. This happens when the current process exceeds the maximum number
+    /// of open file descriptors.
+    ///
+    /// Results in an extra allocation if the value contains borrowed data.
+    pub fn try_into_owned(self) -> crate::Result<OwnedValue> {
+        Ok(OwnedValue(match self {
+            Value::U8(v) => Value::U8(v),
+            Value::Bool(v) => Value::Bool(v),
+            Value::I16(v) => Value::I16(v),
+            Value::U16(v) => Value::U16(v),
+            Value::I32(v) => Value::I32(v),
+            Value::U32(v) => Value::U32(v),
+            Value::I64(v) => Value::I64(v),
+            Value::U64(v) => Value::U64(v),
+            Value::F64(v) => Value::F64(v),
+            Value::Str(v) => Value::Str(v.into_owned()),
+            Value::Signature(v) => Value::Signature(v),
+            Value::ObjectPath(v) => Value::ObjectPath(v.into_owned()),
+            Value::Value(v) => Value::Value(Box::new(v.try_into_owned()?.into())),
+            Value::Array(v) => Value::Array(v.try_into_owned()?),
+            Value::Dict(v) => Value::Dict(v.try_into_owned()?),
+            Value::Structure(v) => Value::Structure(v.try_into_owned()?),
+            #[cfg(feature = "gvariant")]
+            Value::Maybe(v) => Value::Maybe(v.try_into_owned()?),
+            #[cfg(unix)]
+            Value::Fd(v) => Value::Fd(v.try_to_owned()?),
+        }))
+    }
+
     /// Get the signature of the enclosed value.
     pub fn value_signature(&self) -> &Signature {
         match self {
