@@ -187,8 +187,7 @@ impl<'a> TryFrom<Value<'a>> for OwnedValue {
     type Error = crate::Error;
 
     fn try_from(v: Value<'a>) -> crate::Result<Self> {
-        // TODO: add into_owned, avoiding copy if already owned..
-        v.try_to_owned()
+        v.try_into_owned()
     }
 }
 
