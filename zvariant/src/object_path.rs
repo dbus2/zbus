@@ -106,6 +106,8 @@ impl<'a> ObjectPath<'a> {
     }
 
     /// Creates an owned clone of `self`.
+    ///
+    /// Results in an extra allocation only if the lifetime of `self` is not static.
     pub fn into_owned(self) -> ObjectPath<'static> {
         ObjectPath(self.0.into_owned())
     }
