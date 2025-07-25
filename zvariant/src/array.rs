@@ -114,6 +114,17 @@ impl<'a> Array<'a> {
         })
     }
 
+    pub(crate) fn try_into_owned(self) -> Result<Array<'static>> {
+        Ok(Array {
+            elements: self
+                .elements
+                .into_iter()
+                .map(|v| v.try_into_owned().map(Into::into))
+                .collect::<Result<_>>()?,
+            signature: self.signature.clone(),
+        })
+    }
+
     /// Tries to clone the `Array`.
     pub fn try_clone(&self) -> crate::Result<Self> {
         let elements = self
