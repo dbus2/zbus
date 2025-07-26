@@ -746,7 +746,7 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
         .build()
         .await?;
     debug!("Created: {:?}", my_obj_proxy);
-    my_obj_proxy.receive_count_changed().await;
+    let mut stream = my_obj_proxy.receive_count_changed().await;
     // Calling this after creating the stream was panicking if the property doesn't get cached
     // before the call (MR !460).
     my_obj_proxy.cached_count()?;
@@ -757,6 +757,17 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
         Some(&Value::from(0u32))
     );
     my_obj_proxy.ping().await?;
+
+    // Test the property-changed stream values
+    assert_eq!(stream.next().await.unwrap().get().await?, 0);
+    for test_case in [55, 66, 77, 88] {
+        let (value, ret) = futures_util::join!(
+            async { stream.next().await.unwrap().get().await.unwrap() },
+            my_obj_proxy.set_count(test_case)
+        );
+        ret.unwrap();
+        assert_eq!(test_case, value);
+    }
 
     let mut ifaces_removed_stream = obj_manager_proxy.receive_interfaces_removed().await?;
     debug!("Created: {:?}", ifaces_removed_stream);
