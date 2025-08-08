@@ -79,7 +79,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     for interface in needed_ifaces {
         let output = write_interfaces(
-            &[interface.clone()],
+            std::slice::from_ref(&interface),
             &fdo_standard_ifaces,
             service.clone(),
             path.clone(),
