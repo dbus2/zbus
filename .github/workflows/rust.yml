@@ -120,8 +120,6 @@ jobs:
       RUSTFLAGS: -D warnings
       RUST_BACKTRACE: full
       RUST_LOG: trace
-      PKG_CONFIG: C:\bin\pkg-config.exe
-      PKG_CONFIG_PATH: C:\lib\pkgconfig
       ErrorActionPreference: Stop
       WarningPreference: Stop
     steps:
@@ -132,85 +130,24 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            c:/share/*dbus*
-            c:/lib/libexpat.lib
-            c:/bin/libexpat.dll
-            c:/bin/xmlwf.exe
-            c:/bin/*dbus*
-            c:/lib/*dbus*
-            c:/bin/*pkg-config*
-            c:/var/lib/*dbus*
-            c:/lib/*glib*
-            c:/lib/*gio*
-            c:/lib/*gobject*
-            c:/lib/*gmodule*
-            c:/lib/*gthread*
-            c:/lib/*gspawn*
-            c:/lib/*gresource*
-            c:/lib/*pcre*
-            c:/lib/*z*
-            c:/lib/*ffi*
-            c:/lib/*intl*
-            c:/lib/*pkgconfig*
-            c:/bin/*glib*
-            c:/bin/*gio*
-            c:/bin/*gobject*
-            c:/bin/*gmodule*
-            c:/bin/*gthread*
-            c:/bin/*gspawn*
-            c:/bin/*gresource*
-            c:/bin/*pcre*
-            c:/bin/*z*
-            c:/bin/*ffi*
-            c:/bin/*intl*
+            C:\vcpkg\installed
+            C:\vcpkg\buildtrees
+            C:\vcpkg\downloads
           key: ${{ runner.os }}-cache
 
-      - name: Install Meson and Ninja
-        if: steps.cache-deps.outputs.cache-hit != 'true'
-        run: pip3 install meson ninja
-
-      - name: Install pkg-config
-        if: steps.cache-deps.outputs.cache-hit != 'true'
+      - name: Install vcpkg
         run: |
-          git clone --branch meson-glib-subproject --depth 1 https://gitlab.freedesktop.org/tpm/pkg-config.git
-          cd pkg-config
-          meson build -Dprefix=C:\ --buildtype release
-          ninja -C build
-          ninja -C build install
+          git clone https://github.com/microsoft/vcpkg C:\vcpkg
+          cd C:\vcpkg
+          .\bootstrap-vcpkg.bat
 
-      - name: Setup MSVC Environment
-        if: steps.cache-deps.outputs.cache-hit != 'true'
-        uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Build & Install GLib
-        if: steps.cache-deps.outputs.cache-hit != 'true'
+      - name: Install dependencies via vcpkg
+        shell: cmd
         run: |
-          (New-Object System.Net.WebClient).DownloadString('https://wrapdb.mesonbuild.com/v2/pcre_8.37-2/get_patch') >$null
-          (New-Object System.Net.WebClient).DownloadString('https://zlib.net/fossils/') >$null
-          git clone --depth 1 --branch 2.74.1 https://gitlab.gnome.org/GNOME/glib.git \glib
-          cd -Path \glib
-          meson setup builddir
-          meson compile -C builddir
-          meson install --no-rebuild -C builddir
-
-      - name: Build & Install libexpat
-        if: steps.cache-deps.outputs.cache-hit != 'true'
-        run: |
-          # Upstream expat doesn't ship devel? let's build it then...
-          git clone --depth 1 --branch R_2_4_2 https://github.com/libexpat/libexpat \libexpat
-          cd -Path \libexpat\expat
-          cmake --install-prefix c:/ -G "Visual Studio 17 2022" -A x64 .
-          cmake --build . --config Release
-          cmake --install . --config Release
-
-      - name: Build & Install dbus daemon
-        if: steps.cache-deps.outputs.cache-hit != 'true'
-        run: |
-          git clone --depth 1 https://gitlab.freedesktop.org/dbus/dbus.git \dbus
-          cd -Path \dbus
-          cmake --install-prefix c:/ -DCMAKE_PREFIX_PATH=C:/ -DDBUS_ENABLE_XML_DOCS=OFF -DDBUS_ENABLE_DOXYGEN_DOCS=OFF -G "NMake Makefiles" .
-          nmake
-          nmake install
+          C:\vcpkg\vcpkg.exe install ^
+            dbus:x64-windows
+          C:\vcpkg\vcpkg.exe integrate install
+          echo C:\vcpkg\installed\x64-windows\tools\dbus>> %GITHUB_PATH%
 
       - uses: dtolnay/rust-toolchain@master
         with:
@@ -218,8 +155,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Test
         run: |
-          $env:PATH += ";C:\bin"
-          Start-Process dbus-daemon.exe '--config-file=CI/win32-session.conf --address=autolaunch:'
+          Start-Process C:\vcpkg\installed\x64-windows\tools\dbus\dbus-daemon.exe '--config-file=CI/win32-session.conf --address=autolaunch:'
           cargo --locked test
           # tokio feature
           cargo --locked test --no-default-features --features tokio
