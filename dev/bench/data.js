@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1755707667915,
+  "lastUpdate": 1755793000903,
   "repoUrl": "https://github.com/dbus2/zbus",
   "entries": {
     "Benchmark": [
@@ -5302,6 +5302,162 @@ window.BENCHMARK_DATA = {
           {
             "name": "object_path_parse",
             "value": 133,
+            "range": "± 0",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "29139614+renovate[bot]@users.noreply.github.com",
+            "name": "renovate[bot]",
+            "username": "renovate[bot]"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "54ec4ba569b11104d01005af51adde0a588fa105",
+          "message": "⬆️ micro: Update url to v2.5.6 (#1471)\n\nThis PR contains the following updates:\n\n| Package | Type | Update | Change |\n|---|---|---|---|\n| [url](https://redirect.github.com/servo/rust-url) |\nworkspace.dependencies | patch | `2.5.4` -> `2.5.6` |\n\n---\n\n### Release Notes\n\n<details>\n<summary>servo/rust-url (url)</summary>\n\n###\n[`v2.5.5`](https://redirect.github.com/servo/rust-url/releases/tag/v2.5.5)\n\n[Compare\nSource](https://redirect.github.com/servo/rust-url/compare/v2.5.4...v2.5.5)\n\n#### What's Changed\n\n- ci: downgrade crates when building for Rust 1.67.0 by\n[@&#8203;mxinden](https://redirect.github.com/mxinden) in\n[https://github.com/servo/rust-url/pull/1003](https://redirect.github.com/servo/rust-url/pull/1003)\n- ci: run unit tests with sanitizers by\n[@&#8203;mxinden](https://redirect.github.com/mxinden) in\n[https://github.com/servo/rust-url/pull/1002](https://redirect.github.com/servo/rust-url/pull/1002)\n- fix small typo by [@&#8203;hkBst](https://redirect.github.com/hkBst)\nin\n[https://github.com/servo/rust-url/pull/1011](https://redirect.github.com/servo/rust-url/pull/1011)\n- chore: fix clippy errors on main by\n[@&#8203;dsherret](https://redirect.github.com/dsherret) in\n[https://github.com/servo/rust-url/pull/1019](https://redirect.github.com/servo/rust-url/pull/1019)\n- perf: remove heap allocation in parse\\_query by\n[@&#8203;dsherret](https://redirect.github.com/dsherret) in\n[https://github.com/servo/rust-url/pull/1020](https://redirect.github.com/servo/rust-url/pull/1020)\n- perf: slightly improve parsing a port by\n[@&#8203;dsherret](https://redirect.github.com/dsherret) in\n[https://github.com/servo/rust-url/pull/1022](https://redirect.github.com/servo/rust-url/pull/1022)\n- perf: improve to\\_file\\_path() by\n[@&#8203;dsherret](https://redirect.github.com/dsherret) in\n[https://github.com/servo/rust-url/pull/1018](https://redirect.github.com/servo/rust-url/pull/1018)\n- perf: make parse\\_scheme slightly faster by\n[@&#8203;dsherret](https://redirect.github.com/dsherret) in\n[https://github.com/servo/rust-url/pull/1025](https://redirect.github.com/servo/rust-url/pull/1025)\n- update LICENSE-MIT by\n[@&#8203;wmjae](https://redirect.github.com/wmjae) in\n[https://github.com/servo/rust-url/pull/1029](https://redirect.github.com/servo/rust-url/pull/1029)\n- perf: url encode path segments in longer string slices by\n[@&#8203;dsherret](https://redirect.github.com/dsherret) in\n[https://github.com/servo/rust-url/pull/1026](https://redirect.github.com/servo/rust-url/pull/1026)\n- Disable the default features on serde by\n[@&#8203;rilipco](https://redirect.github.com/rilipco) in\n[https://github.com/servo/rust-url/pull/1033](https://redirect.github.com/servo/rust-url/pull/1033)\n- docs: base url relative join by\n[@&#8203;tisonkun](https://redirect.github.com/tisonkun) in\n[https://github.com/servo/rust-url/pull/1013](https://redirect.github.com/servo/rust-url/pull/1013)\n- perf: remove heap allocation in parse\\_host by\n[@&#8203;dsherret](https://redirect.github.com/dsherret) in\n[https://github.com/servo/rust-url/pull/1021](https://redirect.github.com/servo/rust-url/pull/1021)\n- Update tests to Unicode 16.0 by\n[@&#8203;hsivonen](https://redirect.github.com/hsivonen) in\n[https://github.com/servo/rust-url/pull/1045](https://redirect.github.com/servo/rust-url/pull/1045)\n- Add some some basic functions to `Mime` by\n[@&#8203;mrobinson](https://redirect.github.com/mrobinson) in\n[https://github.com/servo/rust-url/pull/1047](https://redirect.github.com/servo/rust-url/pull/1047)\n- ran `cargo clippy --fix -- -Wclippy::use_self` by\n[@&#8203;mrobinson](https://redirect.github.com/mrobinson) in\n[https://github.com/servo/rust-url/pull/1048](https://redirect.github.com/servo/rust-url/pull/1048)\n- Fix MSRV and clippy CI by\n[@&#8203;Manishearth](https://redirect.github.com/Manishearth) in\n[https://github.com/servo/rust-url/pull/1058](https://redirect.github.com/servo/rust-url/pull/1058)\n- Update `Url::domain` docs to show that it includes subdomain by\n[@&#8203;supercoolspy](https://redirect.github.com/supercoolspy) in\n[https://github.com/servo/rust-url/pull/1057](https://redirect.github.com/servo/rust-url/pull/1057)\n- set\\_hostname should error when encountering colon ':' by\n[@&#8203;edgul](https://redirect.github.com/edgul) in\n[https://github.com/servo/rust-url/pull/1060](https://redirect.github.com/servo/rust-url/pull/1060)\n- version bump to 2.5.5 by\n[@&#8203;edgul](https://redirect.github.com/edgul) in\n[https://github.com/servo/rust-url/pull/1061](https://redirect.github.com/servo/rust-url/pull/1061)\n\n#### New Contributors\n\n- [@&#8203;mxinden](https://redirect.github.com/mxinden) made their\nfirst contribution in\n[https://github.com/servo/rust-url/pull/1003](https://redirect.github.com/servo/rust-url/pull/1003)\n- [@&#8203;hkBst](https://redirect.github.com/hkBst) made their first\ncontribution in\n[https://github.com/servo/rust-url/pull/1011](https://redirect.github.com/servo/rust-url/pull/1011)\n- [@&#8203;wmjae](https://redirect.github.com/wmjae) made their first\ncontribution in\n[https://github.com/servo/rust-url/pull/1029](https://redirect.github.com/servo/rust-url/pull/1029)\n- [@&#8203;rilipco](https://redirect.github.com/rilipco) made their\nfirst contribution in\n[https://github.com/servo/rust-url/pull/1033](https://redirect.github.com/servo/rust-url/pull/1033)\n- [@&#8203;tisonkun](https://redirect.github.com/tisonkun) made their\nfirst contribution in\n[https://github.com/servo/rust-url/pull/1013](https://redirect.github.com/servo/rust-url/pull/1013)\n- [@&#8203;supercoolspy](https://redirect.github.com/supercoolspy) made\ntheir first contribution in\n[https://github.com/servo/rust-url/pull/1057](https://redirect.github.com/servo/rust-url/pull/1057)\n\n**Full Changelog**:\nhttps://github.com/servo/rust-url/compare/v2.5.4...v2.5.5\n\n</details>\n\n---\n\n### Configuration\n\n📅 **Schedule**: Branch creation - At any time (no schedule defined),\nAutomerge - At any time (no schedule defined).\n\n🚦 **Automerge**: Enabled.\n\n♻ **Rebasing**: Whenever PR becomes conflicted, or you tick the\nrebase/retry checkbox.\n\n🔕 **Ignore**: Close this PR and you won't be reminded about this update\nagain.\n\n---\n\n- [ ] <!-- rebase-check -->If you want to rebase/retry this PR, check\nthis box\n\n---\n\nThis PR was generated by [Mend Renovate](https://mend.io/renovate/).\nView the [repository job\nlog](https://developer.mend.io/github/dbus2/zbus).\n\n<!--renovate-debug:eyJjcmVhdGVkSW5WZXIiOiI0MS44MS4yIiwidXBkYXRlZEluVmVyIjoiNDEuODEuMiIsInRhcmdldEJyYW5jaCI6Im1haW4iLCJsYWJlbHMiOltdfQ==-->\n\nCo-authored-by: renovate[bot] <29139614+renovate[bot]@users.noreply.github.com>",
+          "timestamp": "2025-08-21T16:05:21Z",
+          "tree_id": "969e91a9318323fb7fc6bc5aa903421d17a4477d",
+          "url": "https://github.com/dbus2/zbus/commit/54ec4ba569b11104d01005af51adde0a588fa105"
+        },
+        "date": 1755792999814,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "message-ser/small",
+            "value": 2148,
+            "range": "± 14",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "message-ser/big",
+            "value": 3221218,
+            "range": "± 16880",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "message-de/header",
+            "value": 235,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "message-de/body",
+            "value": 4282787,
+            "range": "± 72781",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_dbus_address/unix",
+            "value": 399,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_dbus_address/tcp",
+            "value": 495,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/well_known",
+            "value": 154,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/unique",
+            "value": 155,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/bus",
+            "value": 166,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/interface",
+            "value": 135,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/error",
+            "value": 134,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/member",
+            "value": 76,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_ser",
+            "value": 248427,
+            "range": "± 1770",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_de",
+            "value": 454508,
+            "range": "± 859",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_and_ass_dict_ser",
+            "value": 701726,
+            "range": "± 2967",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_and_ass_dict_de",
+            "value": 2159085,
+            "range": "± 6539",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_and_asv_dict_ser",
+            "value": 1809816,
+            "range": "± 3963",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_and_asv_dict_de",
+            "value": 3997917,
+            "range": "± 5341",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/fixed_size_array_ser",
+            "value": 533388,
+            "range": "± 2027",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/fixed_size_array_de",
+            "value": 1343287,
+            "range": "± 1805",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "signature_parse",
+            "value": 10990,
+            "range": "± 39",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "object_path_parse",
+            "value": 131,
             "range": "± 0",
             "unit": "ns/iter"
           }
