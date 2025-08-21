@@ -340,6 +340,7 @@ fn get_unix_peer_creds_blocking(fd: RawFd) -> io::Result<crate::fdo::ConnectionC
             unistd::{getgrouplist, Gid, Uid, User},
         };
         use std::ffi::CString;
+        use tracing::debug;
 
         let (uid, gid, pid) = {
             let unix_creds = getsockopt(&fd, PeerCredentials)?;
@@ -353,11 +354,15 @@ fn get_unix_peer_creds_blocking(fd: RawFd) -> io::Result<crate::fdo::ConnectionC
 
         // the dbus spec requires groups to be either absent or complete (primary + secondary
         // groups)
-        let mut groups = User::from_uid(uid)?
+        let mut groups = User::from_uid(uid)
+            .map_err(|e| debug!("User lookup failed: {}", e))
+            .ok()
+            .flatten()
             .map(|user| CString::new(user.name))
             .transpose()?
             .map(|user| getgrouplist(&user, gid))
             .transpose()
+            .map_err(|e| debug!("Group lookup failed: {}", e))
             .ok()
             .flatten()
             .unwrap_or(Vec::new());
