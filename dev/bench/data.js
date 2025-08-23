@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1755889376522,
+  "lastUpdate": 1755954220070,
   "repoUrl": "https://github.com/dbus2/zbus",
   "entries": {
     "Benchmark": [
@@ -5615,6 +5615,162 @@ window.BENCHMARK_DATA = {
             "name": "object_path_parse",
             "value": 96,
             "range": "± 0",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "zeenix@gmail.com",
+            "name": "Zeeshan Ali Khan",
+            "username": "zeenix"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "6550f22a90a434f2aefed045c047fb4b345fadf6",
+          "message": "Merge pull request #1472 from swick/wip/fix-creds-group-lookup\n\n🐛 zb: Fall back to no groups rather than erroring out for peer creds",
+          "timestamp": "2025-08-23T14:52:26+02:00",
+          "tree_id": "28c21dbdf76b8b290ac83d3595a8fd136ca33086",
+          "url": "https://github.com/dbus2/zbus/commit/6550f22a90a434f2aefed045c047fb4b345fadf6"
+        },
+        "date": 1755954218988,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "message-ser/small",
+            "value": 2114,
+            "range": "± 11",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "message-ser/big",
+            "value": 3180554,
+            "range": "± 28480",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "message-de/header",
+            "value": 236,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "message-de/body",
+            "value": 3984560,
+            "range": "± 10564",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_dbus_address/unix",
+            "value": 372,
+            "range": "± 6",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_dbus_address/tcp",
+            "value": 493,
+            "range": "± 4",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/well_known",
+            "value": 152,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/unique",
+            "value": 99,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/bus",
+            "value": 164,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/interface",
+            "value": 130,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/error",
+            "value": 129,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/member",
+            "value": 76,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_ser",
+            "value": 248603,
+            "range": "± 2671",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_de",
+            "value": 455935,
+            "range": "± 1066",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_and_ass_dict_ser",
+            "value": 711534,
+            "range": "± 2658",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_and_ass_dict_de",
+            "value": 2149921,
+            "range": "± 11022",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_and_asv_dict_ser",
+            "value": 2241328,
+            "range": "± 12209",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_and_asv_dict_de",
+            "value": 4115470,
+            "range": "± 11106",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/fixed_size_array_ser",
+            "value": 569072,
+            "range": "± 729",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/fixed_size_array_de",
+            "value": 1315734,
+            "range": "± 4937",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "signature_parse",
+            "value": 11027,
+            "range": "± 28",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "object_path_parse",
+            "value": 95,
+            "range": "± 1",
             "unit": "ns/iter"
           }
         ]
