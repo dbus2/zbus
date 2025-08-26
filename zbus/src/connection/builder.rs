@@ -525,7 +525,15 @@ impl<'a> Builder<'a> {
             Target::VsockStream(stream) => stream.into(),
             Target::Address(address) => {
                 guid = address.guid().map(|g| g.to_owned().into());
-                match address.connect().await? {
+
+                match address
+                    .clone()
+                    .connect()
+                    .await
+                    .map_err(|error| match error {
+                        Error::InputOutput(error) => Error::InputOutputAddress(error, address),
+                        _ => error,
+                    })? {
                     #[cfg(any(unix, not(feature = "tokio")))]
                     address::transport::Stream::Unix(stream) => stream.into(),
                     #[cfg(unix)]
