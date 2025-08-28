@@ -276,6 +276,11 @@ impl Connection {
     pub fn graceful_shutdown(self) {
         block_on(self.inner.graceful_shutdown())
     }
+
+    /// The method_timeout (if any). See [Builder::method_timeout] for details.
+    pub fn method_timeout(&self) -> Option<std::time::Duration> {
+        self.inner.method_timeout()
+    }
 }
 
 impl From<crate::Connection> for Connection {

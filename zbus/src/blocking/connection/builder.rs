@@ -202,6 +202,15 @@ impl<'a> Builder<'a> {
         self.0.unique_name(unique_name).map(Self)
     }
 
+    /// Set a timeout for method calls.
+    ///
+    /// Method calls will return
+    /// `zbus::Error::InputOutput(std::io::Error(kind: ErrorKind::TimedOut))` if a client does not
+    /// receive an answer from a service in time.
+    pub fn method_timeout(self, timeout: std::time::Duration) -> Self {
+        Self(self.0.method_timeout(timeout))
+    }
+
     /// Build the connection, consuming the builder.
     ///
     /// # Errors

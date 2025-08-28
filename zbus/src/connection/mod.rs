@@ -10,6 +10,7 @@ use std::{
     pin::Pin,
     sync::{Arc, OnceLock, Weak},
     task::{Context, Poll},
+    time::Duration,
 };
 use tracing::{debug, info_span, instrument, trace, trace_span, warn, Instrument};
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
@@ -23,6 +24,7 @@ use crate::{
     fdo::{ConnectionCredentials, ReleaseNameReply, RequestNameFlags, RequestNameReply},
     is_flatpak,
     message::{Flags, Message, Type},
+    timeout::timeout,
     DBusError, Error, Executor, MatchRule, MessageStream, ObjectServer, OwnedGuid, OwnedMatchRule,
     Result, Task,
 };
@@ -74,6 +76,8 @@ pub(crate) struct ConnectionInner {
     object_server_dispatch_task: OnceLock<Task<()>>,
 
     drop_event: Event,
+
+    method_timeout: Option<Duration>,
 }
 
 impl Drop for ConnectionInner {
@@ -322,17 +326,23 @@ impl Connection {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        self.call_method_raw(
-            destination,
-            path,
-            interface,
-            method_name,
-            BitFlags::empty(),
-            body,
-        )
-        .await?
-        .expect("no reply")
-        .await
+        let method = self
+            .call_method_raw(
+                destination,
+                path,
+                interface,
+                method_name,
+                BitFlags::empty(),
+                body,
+            )
+            .await?
+            .expect("no reply");
+
+        if let Some(tout) = self.method_timeout() {
+            timeout(method, tout).await
+        } else {
+            method.await
+        }
     }
 
     /// Send a method call.
@@ -1118,10 +1128,16 @@ impl Connection {
         self.inner.executor.spawn(remove_match, &task_name).detach()
     }
 
+    /// The method_timeout (if any). See [Builder::method_timeout] for details.
+    pub fn method_timeout(&self) -> Option<Duration> {
+        self.inner.method_timeout
+    }
+
     pub(crate) async fn new(
         auth: Authenticated,
         #[allow(unused)] bus_connection: bool,
         executor: Executor<'static>,
+        method_timeout: Option<Duration>,
     ) -> Result<Self> {
         #[cfg(unix)]
         let cap_unix_fd = auth.cap_unix_fd;
@@ -1173,6 +1189,7 @@ impl Connection {
                 method_return_receiver,
                 registered_names: Mutex::new(HashMap::new()),
                 drop_event: Event::new(),
+                method_timeout,
             }),
         };
 

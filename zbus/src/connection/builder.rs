@@ -83,6 +83,7 @@ pub struct Builder<'a> {
     #[cfg(feature = "bus-impl")]
     unique_name: Option<crate::names::UniqueName<'a>>,
     request_name_flags: BitFlags<RequestNameFlags>,
+    method_timeout: Option<std::time::Duration>,
 }
 
 impl<'a> Builder<'a> {
@@ -356,6 +357,17 @@ impl<'a> Builder<'a> {
         Ok(self)
     }
 
+    /// Set a timeout for method calls.
+    ///
+    /// Method calls will return
+    /// `zbus::Error::InputOutput(std::io::Error(kind: ErrorKind::TimedOut))` if a client does not
+    /// receive an answer from a service in time.
+    pub fn method_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.method_timeout = Some(timeout);
+
+        self
+    }
+
     /// Build the connection, consuming the builder.
     ///
     /// # Errors
@@ -389,7 +401,7 @@ impl<'a> Builder<'a> {
         #[cfg(unix)]
         let already_received_fds = auth.already_received_fds.drain(..).collect();
 
-        let mut conn = Connection::new(auth, is_bus_conn, executor).await?;
+        let mut conn = Connection::new(auth, is_bus_conn, executor, self.method_timeout).await?;
         conn.set_max_queued(self.max_queued.unwrap_or(DEFAULT_MAX_QUEUED));
 
         if !self.interfaces.is_empty() {
@@ -442,6 +454,7 @@ impl<'a> Builder<'a> {
             #[cfg(feature = "bus-impl")]
             unique_name: None,
             request_name_flags: BitFlags::default(),
+            method_timeout: None,
         }
     }
 
