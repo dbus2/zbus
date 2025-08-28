@@ -7,6 +7,7 @@ pub use executor::*;
 mod async_drop;
 pub(crate) mod async_lock;
 pub use async_drop::*;
+pub(crate) mod timeout;
 
 // Not unix-specific itself but only used on unix.
 #[cfg(target_family = "unix")]
