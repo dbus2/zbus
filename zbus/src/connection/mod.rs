@@ -10,6 +10,7 @@ use std::{
     pin::Pin,
     sync::{Arc, OnceLock, Weak},
     task::{Context, Poll},
+    time::Duration,
 };
 use tracing::{debug, info_span, instrument, trace, trace_span, warn, Instrument};
 use zbus_names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName};
@@ -23,6 +24,7 @@ use crate::{
     fdo::{ConnectionCredentials, ReleaseNameReply, RequestNameFlags, RequestNameReply},
     is_flatpak,
     message::{Flags, Message, Type},
+    timeout::timeout,
     DBusError, Error, Executor, MatchRule, MessageStream, ObjectServer, OwnedGuid, OwnedMatchRule,
     Result, Task,
 };
@@ -74,6 +76,8 @@ pub(crate) struct ConnectionInner {
     object_server_dispatch_task: OnceLock<Task<()>>,
 
     drop_event: Event,
+
+    method_timeout: Option<Duration>,
 }
 
 impl Drop for ConnectionInner {
@@ -322,17 +326,23 @@ impl Connection {
         M::Error: Into<Error>,
         B: serde::ser::Serialize + zvariant::DynamicType,
     {
-        self.call_method_raw(
-            destination,
-            path,
-            interface,
-            method_name,
-            BitFlags::empty(),
-            body,
-        )
-        .await?
-        .expect("no reply")
-        .await
+        let method = self
+            .call_method_raw(
+                destination,
+                path,
+                interface,
+                method_name,
+                BitFlags::empty(),
+                body,
+            )
+            .await?
+            .expect("no reply");
+
+        if let Some(tout) = self.method_timeout() {
+            timeout(method, tout).await
+        } else {
+            method.await
+        }
     }
 
     /// Send a method call.
@@ -1118,10 +1128,16 @@ impl Connection {
         self.inner.executor.spawn(remove_match, &task_name).detach()
     }
 
+    /// Set `method_timeout`. See [`Builder::method_timeout`] for details.
+    pub fn method_timeout(&self) -> Option<Duration> {
+        self.inner.method_timeout
+    }
+
     pub(crate) async fn new(
         auth: Authenticated,
         #[allow(unused)] bus_connection: bool,
         executor: Executor<'static>,
+        method_timeout: Option<Duration>,
     ) -> Result<Self> {
         #[cfg(unix)]
         let cap_unix_fd = auth.cap_unix_fd;
@@ -1173,6 +1189,7 @@ impl Connection {
                 method_return_receiver,
                 registered_names: Mutex::new(HashMap::new()),
                 drop_event: Event::new(),
+                method_timeout,
             }),
         };
 
@@ -1534,9 +1551,11 @@ mod tests {
 #[cfg(feature = "p2p")]
 #[cfg(test)]
 mod p2p_tests {
+    use super::Error;
     use event_listener::Event;
     use futures_util::TryStreamExt;
     use ntest::timeout;
+    use std::{io::ErrorKind, time::Duration};
     use test_log::test;
     use zvariant::{Endian, NATIVE_ENDIAN};
 
@@ -1862,5 +1881,42 @@ mod p2p_tests {
             .unwrap();
 
         (conn1, conn2)
+    }
+
+    #[test]
+    #[timeout(15000)]
+    fn test_method_timeout() {
+        crate::utils::block_on(test_method_timeout_()).unwrap();
+    }
+
+    #[cfg(unix)]
+    async fn test_method_timeout_() -> Result<()> {
+        #[cfg(not(feature = "tokio"))]
+        use std::os::unix::net::UnixStream;
+        #[cfg(feature = "tokio")]
+        use tokio::net::UnixStream;
+        #[cfg(all(windows, not(feature = "tokio")))]
+        use uds_windows::UnixStream;
+
+        let guid = Guid::generate();
+
+        let (p0, p1) = UnixStream::pair().unwrap();
+
+        #[allow(unused)]
+        let (client, server) = futures_util::try_join!(
+            Builder::unix_stream(p1)
+                .method_timeout(Duration::from_secs(2))
+                .p2p()
+                .build(),
+            Builder::unix_stream(p0).server(guid).unwrap().p2p().build(),
+        )?;
+
+        match client
+            .call_method(Some("org.zbus"), "/", Some("org.zbus"), "Test", &())
+            .await
+        {
+            Err(Error::InputOutput(e)) if e.kind() == ErrorKind::TimedOut => Ok(()),
+            _ => panic!("Should produce InputOutput(TimedOut) error"),
+        }
     }
 }
