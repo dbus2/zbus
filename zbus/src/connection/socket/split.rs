@@ -8,6 +8,11 @@ pub struct Split<R: ReadHalf, W: WriteHalf> {
 }
 
 impl<R: ReadHalf, W: WriteHalf> Split<R, W> {
+    /// Create split from read and write halves.
+    pub fn new(read: R, write: W) -> Self {
+        Self { read, write }
+    }
+
     /// Reference to the read half.
     pub fn read(&self) -> &R {
         &self.read
