@@ -107,6 +107,10 @@ mod utils;
 /// access to the signal arguments. It also implements `Deref<Target = Message>` to allow easy
 /// access to the underlying [`zbus::message::Message`].
 ///
+/// For each property with `emits_changed_signal` set to `"true"` (default) or `"invalidates"`,
+/// this macro will provide a method named `receive_<property_name>_changed` that creates a
+/// [`zbus::proxy::PropertyStream`] for the property.
+///
 /// # Example
 ///
 /// ```no_run
@@ -188,6 +192,7 @@ mod utils;
 /// [`zbus_polkit`]: https://docs.rs/zbus_polkit/1.0.0/zbus_polkit/policykit1/index.html
 /// [`zbus::Proxy`]: https://docs.rs/zbus/latest/zbus/proxy/struct.Proxy.html
 /// [`zbus::message::Message`]: https://docs.rs/zbus/latest/zbus/message/struct.Message.html
+/// [`zbus::proxy::PropertyStream`]: https://docs.rs/zbus/latest/zbus/proxy/struct.PropertyStream.html
 /// [`zbus::blocking::Proxy`]: https://docs.rs/zbus/latest/zbus/blocking/proxy/struct.Proxy.html
 /// [`zbus::SignalStream`]: https://docs.rs/zbus/latest/zbus/proxy/struct.SignalStream.html
 /// [`zbus::blocking::SignalIterator`]: https://docs.rs/zbus/latest/zbus/blocking/proxy/struct.SignalIterator.html
