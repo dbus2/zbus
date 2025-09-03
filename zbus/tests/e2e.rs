@@ -1,7 +1,7 @@
 #![allow(clippy::disallowed_names)]
-use std::collections::HashMap;
 #[cfg(all(unix, not(feature = "tokio"), feature = "p2p"))]
 use std::os::unix::net::UnixStream;
+use std::{collections::HashMap, time::Duration};
 #[cfg(all(unix, feature = "tokio", feature = "p2p"))]
 use tokio::net::UnixStream;
 
@@ -493,6 +493,12 @@ impl MyIface {
         self.emits_changed_false = val;
         Ok(())
     }
+
+    async fn never_return(&self) {
+        debug!("`NeverReturn` called.");
+
+        std::future::pending::<()>().await;
+    }
 }
 
 fn check_hash_map(map: HashMap<String, String>) {
@@ -894,7 +900,21 @@ async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> {
     assert!(!args.changed_properties().is_empty());
     assert!(args.invalidated_properties().is_empty());
 
+    // Test method timeout
+    assert!(
+        conn.method_timeout().is_some(),
+        "method timeout should be set"
+    );
+    match proxy.never_return().await {
+        Err(Error::InputOutput(e)) if e.kind() == std::io::ErrorKind::TimedOut => {}
+        r => panic!(
+            "Should produce InputOutput(TimedOut) error. Got {:?} instead",
+            r
+        ),
+    };
+
     proxy.quit().await?;
+
     Ok(val)
 }
 
@@ -1005,9 +1025,13 @@ async fn iface_and_proxy_(#[allow(unused)] p2p: bool) {
         .unwrap();
     debug!("ObjectServer set-up.");
 
-    let (service_conn, client_conn) =
-        futures_util::try_join!(service_conn_builder.build(), client_conn_builder.build(),)
-            .unwrap();
+    let (service_conn, client_conn) = futures_util::try_join!(
+        service_conn_builder.build(),
+        client_conn_builder
+            .method_timeout(Duration::from_secs(2))
+            .build(),
+    )
+    .unwrap();
     debug!("Client connection created: {:?}", client_conn);
     debug!("Service connection created: {:?}", service_conn);
 
