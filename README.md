@@ -112,6 +112,11 @@ with the cool kids, please come chat with us in the
 [`#zbus:matrix.org`](https://matrix.to/#/#zbus:matrix.org) Matrix room. If something doesn't seem
 right, please [file an issue](https://github.com/dbus2/zbus/issues/new).
 
+## Security
+
+If you discover a security vulnerability, please report it privately following our
+[Security Policy](SECURITY.md). We take security seriously and will respond promptly to reports.
+
 ## Portability
 
 Supported targets include Unix, Windows and macOS with Linux as the main target. Integration tests
