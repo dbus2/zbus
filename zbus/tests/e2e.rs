@@ -1028,7 +1028,7 @@ async fn iface_and_proxy_(#[allow(unused)] p2p: bool) {
     let (service_conn, client_conn) = futures_util::try_join!(
         service_conn_builder.build(),
         client_conn_builder
-            .method_timeout(Duration::from_secs(2))
+            .method_timeout(Duration::from_millis(100))
             .build(),
     )
     .unwrap();
