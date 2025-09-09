@@ -2153,7 +2153,7 @@ dependencies = [
 
 [[package]]
 name = "zbus"
-version = "5.10.0"
+version = "5.11.0"
 dependencies = [
  "async-broadcast",
  "async-executor",
@@ -2196,7 +2196,7 @@ dependencies = [
 
 [[package]]
 name = "zbus_macros"
-version = "5.10.0"
+version = "5.11.0"
 dependencies = [
  "async-io",
  "futures-util",
