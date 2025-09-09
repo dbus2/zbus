@@ -23,10 +23,9 @@ where
 {
     use futures_lite::FutureExt;
 
-    let after = async_io::Timer::after(timeout);
-
     fut.or(async {
-        after.await;
+        async_io::Timer::after(timeout).await;
+
         Err(Error::from(std::io::Error::new(
             ErrorKind::TimedOut,
             "timed out",
