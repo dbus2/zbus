@@ -664,6 +664,7 @@ impl Connection {
         let lost_task_name = format!("monitor name {well_known_name} lost");
         let name_lost_fut = if flags.contains(RequestNameFlags::AllowReplacement) {
             let weak_conn = WeakConnection::from(self);
+            let well_known_name_info_span = well_known_name.as_str();
             let well_known_name = well_known_name.to_owned();
             Some(
                 async move {
@@ -705,7 +706,7 @@ impl Connection {
                         }
                     }
                 }
-                .instrument(info_span!("{}", lost_task_name)),
+                .instrument(info_span!("monitor_name_lost", name = %well_known_name_info_span)),
             )
         } else {
             None
@@ -713,6 +714,7 @@ impl Connection {
         let status = match reply {
             RequestNameReply::InQueue => {
                 let weak_conn = WeakConnection::from(self);
+                let well_known_name_info_span = well_known_name.as_str();
                 let well_known_name = well_known_name.to_owned();
                 let task_name = format!("monitor name {well_known_name} acquired");
                 let task = self.executor().spawn(
@@ -748,7 +750,7 @@ impl Connection {
                             }
                         }
                     }
-                    .instrument(info_span!("{}", task_name)),
+                    .instrument(info_span!("monitor_name_acquired", name = %well_known_name_info_span)),
                     &task_name,
                 );
 
@@ -1025,7 +1027,7 @@ impl Connection {
                         }
                     }
                 }
-                .instrument(info_span!("{}", obj_server_task_name)),
+                .instrument(info_span!("obj_server_task")),
                 obj_server_task_name,
             )
         });

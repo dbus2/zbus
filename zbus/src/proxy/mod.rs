@@ -280,6 +280,7 @@ impl PropertiesCache {
         });
 
         let cache_clone = cache.clone();
+        let interface_info_span = interface.to_string();
         let task_name = format!("{interface} proxy caching");
         let proxy_caching = async move {
             let result = cache_clone
@@ -316,7 +317,7 @@ impl PropertiesCache {
                 debug!("Error keeping properties cache updated: {e}");
             }
         }
-        .instrument(info_span!("{}", task_name));
+        .instrument(info_span!("monitor_proxy_caching", name = %interface_info_span));
         let task = executor.spawn(proxy_caching, &task_name);
 
         (cache, task)
