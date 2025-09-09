@@ -661,7 +661,8 @@ impl Connection {
             .await?
             .body()
             .deserialize::<RequestNameReply>()?;
-        let lost_task_name = format!("monitor name {well_known_name} lost");
+        let lost_task_name = format!("monitor_name_lost{{name={well_known_name}}}");
+        let lost_task_name_span = info_span!("monitor_name_lost", name = %well_known_name);
         let name_lost_fut = if flags.contains(RequestNameFlags::AllowReplacement) {
             let weak_conn = WeakConnection::from(self);
             let well_known_name = well_known_name.to_owned();
@@ -705,7 +706,7 @@ impl Connection {
                         }
                     }
                 }
-                .instrument(info_span!("{}", lost_task_name)),
+                .instrument(lost_task_name_span),
             )
         } else {
             None
@@ -714,7 +715,8 @@ impl Connection {
             RequestNameReply::InQueue => {
                 let weak_conn = WeakConnection::from(self);
                 let well_known_name = well_known_name.to_owned();
-                let task_name = format!("monitor name {well_known_name} acquired");
+                let task_name = format!("monitor_name_acquired{{name={well_known_name}}}");
+                let task_name_span = info_span!("monitor_name_acquired", name = %well_known_name);
                 let task = self.executor().spawn(
                     async move {
                         loop {
@@ -748,7 +750,7 @@ impl Connection {
                             }
                         }
                     }
-                    .instrument(info_span!("{}", task_name)),
+                    .instrument(task_name_span),
                     &task_name,
                 );
 
@@ -949,7 +951,6 @@ impl Connection {
             trace!("starting ObjectServer task");
             let weak_conn = WeakConnection::from(self);
 
-            let obj_server_task_name = "ObjectServer task";
             self.inner.executor.spawn(
                 async move {
                     let mut stream = match weak_conn.upgrade() {
@@ -1025,8 +1026,8 @@ impl Connection {
                         }
                     }
                 }
-                .instrument(info_span!("{}", obj_server_task_name)),
-                obj_server_task_name,
+                .instrument(info_span!("obj_server_task")),
+                "obj_server_task",
             )
         });
     }
