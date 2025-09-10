@@ -13,6 +13,7 @@ categories = ["os::unix-apis"]
 readme = "README.md"
 
 [features]
+gvariant = ["zvariant/gvariant", "zbus_macros/gvariant"]
 default = ["async-io", "blocking-api"]
 uuid = ["zvariant/uuid"]
 url = ["zvariant/url"]
