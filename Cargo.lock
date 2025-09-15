@@ -1410,11 +1410,12 @@ dependencies = [
 
 [[package]]
 name = "serde_bytes"
-version = "0.11.17"
+version = "0.11.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8437fd221bde2d4ca316d61b90e337e9e702b3820b87d63caa9ba6c02bd06d96"
+checksum = "fe07b5d88710e3b807c16a06ccbc9dfecd5fff6a4d2745c59e3e26774f10de6a"
 dependencies = [
  "serde",
+ "serde_core",
 ]
 
 [[package]]
