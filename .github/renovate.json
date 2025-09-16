@@ -11,10 +11,7 @@
         "cargo"
       ],
       "commitMessageAction": "⬆️  Update",
-      "commitMessageTopic": "{{depName}}",
-      "lockFileMaintenance": {
-        "enabled": true
-      }
+      "commitMessageTopic": "{{depName}}"
     },
     {
       "matchUpdateTypes": [
