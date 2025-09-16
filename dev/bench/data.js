@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1757958094937,
+  "lastUpdate": 1758025285530,
   "repoUrl": "https://github.com/dbus2/zbus",
   "entries": {
     "Benchmark": [
@@ -1865,6 +1865,162 @@ window.BENCHMARK_DATA = {
             "name": "signature_parse",
             "value": 11227,
             "range": "± 47",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "object_path_parse",
+            "value": 93,
+            "range": "± 1",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "zeenix@gmail.com",
+            "name": "Zeeshan Ali Khan",
+            "username": "zeenix"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e1c880f86be072da5107c012a8e04e6095f3ba67",
+          "message": "Merge pull request #1509 from zeenix/renovate-dont-maintain-lockfile\n\n🤖 renovate: Don't maintain the lock file",
+          "timestamp": "2025-09-16T14:10:02+02:00",
+          "tree_id": "fb3d0e4fd7d6818eb448fdc58d7501deab6e97db",
+          "url": "https://github.com/dbus2/zbus/commit/e1c880f86be072da5107c012a8e04e6095f3ba67"
+        },
+        "date": 1758025283774,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "message-ser/small",
+            "value": 2130,
+            "range": "± 10",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "message-ser/big",
+            "value": 3139924,
+            "range": "± 25420",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "message-de/header",
+            "value": 245,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "message-de/body",
+            "value": 4512866,
+            "range": "± 24354",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_dbus_address/unix",
+            "value": 403,
+            "range": "± 6",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_dbus_address/tcp",
+            "value": 489,
+            "range": "± 4",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/well_known",
+            "value": 150,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/unique",
+            "value": 109,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/bus",
+            "value": 161,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/interface",
+            "value": 130,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/error",
+            "value": 131,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "parse_name/member",
+            "value": 75,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_ser",
+            "value": 246326,
+            "range": "± 8861",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_de",
+            "value": 454732,
+            "range": "± 468",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_and_ass_dict_ser",
+            "value": 708503,
+            "range": "± 2583",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_and_ass_dict_de",
+            "value": 2126690,
+            "range": "± 20210",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_and_asv_dict_ser",
+            "value": 1806301,
+            "range": "± 20055",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/big_array_and_asv_dict_de",
+            "value": 4015810,
+            "range": "± 9109",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/fixed_size_array_ser",
+            "value": 535902,
+            "range": "± 1667",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dbus/fixed_size_array_de",
+            "value": 1343259,
+            "range": "± 1623",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "signature_parse",
+            "value": 11021,
+            "range": "± 23",
             "unit": "ns/iter"
           },
           {
