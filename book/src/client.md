@@ -312,8 +312,8 @@ Interfaces can have associated properties, which can be read or set with the
 rescue to help you. You can annotate a trait method to be a getter:
 
 ```rust,noplayground
-# use zbus::{proxy, Result};
-#
+use zbus::{proxy, Result};
+
 #[proxy]
 trait MyInterface {
     #[zbus(property)]
@@ -328,8 +328,8 @@ To set the property, prefix the name of the property with `set_`.
 For a more real world example, let's try and read two properties from systemd's main service:
 
 ```rust,no_run
-# use zbus::{Connection, proxy, Result};
-#
+use zbus::{Connection, proxy, Result};
+
 #[proxy(
     interface = "org.freedesktop.systemd1.Manager",
     default_service = "org.freedesktop.systemd1",
@@ -396,8 +396,8 @@ methods are named after the properties' names: `receive_<prop_name>_changed()`.
 Here is an example:
 
 ```rust,no_run
-# use zbus::{Connection, proxy, Result};
-# use futures_util::stream::StreamExt;
+use zbus::{Connection, proxy, Result};
+use futures_util::stream::StreamExt;
 #
 # #[tokio::main]
 # async fn main() -> Result<()> {
@@ -526,8 +526,8 @@ This will give back effortlessly the corresponding Rust traits boilerplate
 code:
 
 ```rust,noplayground
-# use zbus::proxy;
-#
+use zbus::proxy;
+
 #[proxy(
     interface = "org.freedesktop.Notifications",
     default_service = "org.freedesktop.Notifications",
@@ -573,9 +573,9 @@ functions to make the binding more pleasing to use from Rust.
 For example, the generated `GetServerInformation` method can be improved to a nicer version:
 
 ```rust,noplayground
-# use serde::{Serialize, Deserialize};
-# use zbus::{zvariant::Type, proxy};
-#
+use serde::{Serialize, Deserialize};
+use zbus::{zvariant::Type, proxy};
+
 #[derive(Debug, Type, Serialize, Deserialize)]
 pub struct ServerInformation {
     /// The product name of the server.
