@@ -103,8 +103,8 @@ implement [`std::iter::Iterator`] trait instead of [`futures::stream::Stream`].
 That's almost the same as receiving signals:
 
 ```rust,no_run
-# use zbus::{blocking::Connection, proxy, Result};
-#
+use zbus::{blocking::Connection, proxy, Result};
+
 #[proxy(
     interface = "org.freedesktop.systemd1.Manager",
     default_service = "org.freedesktop.systemd1",
@@ -137,9 +137,7 @@ context. Therefore, you can not use blocking API in the method implementation di
 the beginning of this chapter for details on why and a possible workaround.
 
 ```rust,no_run
-# use std::error::Error;
-# use zbus::{blocking::connection, interface, fdo, object_server::SignalEmitter};
-#
+use zbus::{blocking::connection, interface, fdo, object_server::SignalEmitter};
 use event_listener::{Event, Listener};
 
 struct Greeter {
@@ -186,7 +184,7 @@ impl Greeter {
     async fn greeted_everyone(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let greeter = Greeter {
         name: "GreeterName".to_string(),
         done: event_listener::Event::new(),

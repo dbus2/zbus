@@ -111,8 +111,7 @@ respective handlers, as well as replying to introspection requests.
 Let see how to use it for `MyGreeter` interface:
 
 ```rust,no_run
-# use zbus::{Connection, interface, Result};
-#
+use zbus::{Connection, interface, Result};
 
 struct Greeter;
 
@@ -210,8 +209,7 @@ synchronize with the interface handlers from outside, thanks to the `event_liste
 (this is just one of the many ways).
 
 ```rust,no_run
-# use zbus::{object_server::SignalEmitter, connection::Builder, interface, fdo, Result};
-#
+use zbus::{object_server::SignalEmitter, connection::Builder, interface, fdo, Result};
 use event_listener::{Event, Listener};
 
 struct Greeter {
