@@ -141,7 +141,7 @@ impl FromStr for Address {
             // SAFETY: We got the bytes off a `&str` so they're guaranteed to be UTF-8 only.
             unsafe { (from_utf8_unchecked(k), from_utf8_unchecked(v)) }
         });
-        let options_parse = separated(1.., kv, b',');
+        let options_parse = separated(0.., kv, b',');
 
         let transport_parse = take_until(1.., b':').map(|bytes| {
             // SAFETY: We got the bytes off a `&str` so they're guaranteed to be UTF-8 only.
