@@ -122,7 +122,7 @@ integration with it without you having to worry about any of the above: Enabling
 # Sample Cargo.toml snippet.
 [dependencies]
 # Also disable the default `async-io` feature to avoid unused dependencies.
-zbus = { version = "3", default-features = false, features = ["tokio"] }
+zbus = { version = "5", default-features = false, features = ["tokio"] }
 ```
 
 That's it! No threads launched behind your back by zbus (directly or indirectly) now and no need to
