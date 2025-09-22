@@ -77,6 +77,7 @@ async-task = { workspace = true, optional = true }
 async-process = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = [
     "rt",
+    "rt-multi-thread",
     "net",
     "time",
     "fs",

@@ -43,7 +43,7 @@ pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
 
     TOKIO_RT
         .get_or_init(|| {
-            tokio::runtime::Builder::new_current_thread()
+            tokio::runtime::Builder::new_multi_thread()
                 .enable_io()
                 .enable_time()
                 .build()
