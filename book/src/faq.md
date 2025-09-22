@@ -121,7 +121,7 @@ feature:
 # Sample Cargo.toml snippet.
 [dependencies]
 # Also disable the default `async-io` feature to avoid unused dependencies.
-zbus = { version = "3", default-features = false, features = ["tokio"] }
+zbus = { version = "5", default-features = false, features = ["tokio"] }
 ```
 
 **Note**: On Windows, the `async-io` feature is currently required for UNIX domain socket support,
