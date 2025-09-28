@@ -7,7 +7,7 @@ use syn::{
 };
 use zvariant_utils::signature::Signature;
 
-use crate::utils::*;
+use crate::{signature::signature_to_tokens, utils::*};
 
 pub fn expand_derive(ast: DeriveInput) -> Result<TokenStream, Error> {
     let StructAttributes { signature, .. } = StructAttributes::parse(&ast.attrs)?;
@@ -20,7 +20,7 @@ pub fn expand_derive(ast: DeriveInput) -> Result<TokenStream, Error> {
             "dict" => Signature::dict(Signature::Str, Signature::Variant),
             s => Signature::from_str(s).map_err(|e| Error::new(ast.span(), e))?,
         };
-        let signature_tokens = signature_to_tokens(&signature, &zv);
+        let signature_tokens = signature_to_tokens(&signature);
 
         let name = ast.ident;
         let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
@@ -189,65 +189,5 @@ fn signature_for_variant(
         }
         Fields::Named(_) => Ok(signature_for_struct(&variant.fields, zv, true)),
         Fields::Unnamed(_) => Ok(signature_for_struct(&variant.fields, zv, true)),
-    }
-}
-
-fn signature_to_tokens(signature: &Signature, zv: &TokenStream) -> TokenStream {
-    match signature {
-        Signature::Unit => quote! { #zv::Signature::Unit },
-        Signature::Bool => quote! { #zv::Signature::Bool },
-        Signature::U8 => quote! { #zv::Signature::U8 },
-        Signature::I16 => quote! { #zv::Signature::I16 },
-        Signature::U16 => quote! { #zv::Signature::U16 },
-        Signature::I32 => quote! { #zv::Signature::I32 },
-        Signature::U32 => quote! { #zv::Signature::U32 },
-        Signature::I64 => quote! { #zv::Signature::I64 },
-        Signature::U64 => quote! { #zv::Signature::U64 },
-        Signature::F64 => quote! { #zv::Signature::F64 },
-        Signature::Str => quote! { #zv::Signature::Str },
-        Signature::Signature => quote! { #zv::Signature::Signature },
-        Signature::ObjectPath => quote! { #zv::Signature::ObjectPath },
-        Signature::Variant => quote! { #zv::Signature::Variant },
-        #[cfg(unix)]
-        Signature::Fd => quote! { #zv::Signature::Fd },
-        Signature::Array(child) => {
-            let signature = signature_to_tokens(child.signature(), zv);
-            quote! {
-                #zv::Signature::Array(#zv::signature::Child::Static {
-                    child: &#signature,
-                })
-            }
-        }
-        Signature::Dict { key, value } => {
-            let key_sig = signature_to_tokens(key.signature(), zv);
-            let value_sig = signature_to_tokens(value.signature(), zv);
-            quote! {
-                #zv::Signature::Dict {
-                    key: #zv::signature::Child::Static {
-                        child: &#key_sig,
-                    },
-                    value: #zv::signature::Child::Static {
-                        child: &#value_sig,
-                    },
-                }
-            }
-        }
-        Signature::Structure(fields) => {
-            let fields = fields.iter().map(|f| signature_to_tokens(f, zv));
-            quote! {
-                #zv::Signature::Structure(#zv::signature::Fields::Static {
-                    fields: &[#(&#fields),*],
-                })
-            }
-        }
-        #[cfg(feature = "gvariant")]
-        Signature::Maybe(child) => {
-            let signature = signature_to_tokens(child.signature(), zv);
-            quote! {
-                #zv::Signature::Maybe(#zv::signature::Child::Static {
-                    child: &#signature,
-                })
-            }
-        }
     }
 }
