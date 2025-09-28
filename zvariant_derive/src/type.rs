@@ -192,7 +192,7 @@ fn signature_for_variant(
     }
 }
 
-fn signature_to_tokens(signature: &Signature, zv: &TokenStream) -> TokenStream {
+pub fn signature_to_tokens(signature: &Signature, zv: &TokenStream) -> TokenStream {
     match signature {
         Signature::Unit => quote! { #zv::Signature::Unit },
         Signature::Bool => quote! { #zv::Signature::Bool },

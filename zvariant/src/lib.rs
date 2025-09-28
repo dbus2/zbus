@@ -98,7 +98,7 @@ pub use as_value::Deserialize as DeserializeValue;
 #[deprecated(since = "5.5.0", note = "Use `as_value::Serialize` instead.")]
 pub use as_value::Serialize as SerializeValue;
 
-pub use zvariant_derive::{DeserializeDict, OwnedValue, SerializeDict, Type, Value};
+pub use zvariant_derive::{signature, DeserializeDict, OwnedValue, SerializeDict, Type, Value};
 
 // Required for the macros to function within this crate.
 extern crate self as zvariant;
