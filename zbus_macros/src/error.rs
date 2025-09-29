@@ -85,8 +85,7 @@ pub fn expand_derive(input: DeriveInput) -> Result<TokenStream, Error> {
             Fields::Unnamed(_) => {
                 if error {
                     quote! {
-                        Self::#ident(#zbus::Error::MethodError(_, desc, _)) => desc.as_deref(),
-                        Self::#ident(_) => None,
+                        Self::#ident(e) => e.description(),
                     }
                 } else {
                     quote! {
