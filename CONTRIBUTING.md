@@ -26,13 +26,16 @@ Same rules apply here as for bug reports and feature requests. Plus:
   [this excellent blog post](https://www.aleksandrhovhannisyan.com/blog/atomic-git-commits/) for
   more information, including the rationale. For larger changes addressing several packages
   consider splitting your pull request, using a single commit for each package changed.
-* Please try your best to follow [these guidelines](https://handbook.gnome.org/development/commit-messages.html) for
-  commit messages.
+* Please try your best to follow
+  [these guidelines](https://handbook.gnome.org/development/commit-messages.html) for commit
+  messages.
 * We also prefer adding [emoji prefixes to commit messages](https://gitmoji.carloscuesta.me/). Since
   the `gitmoji` CLI tool can be very [slow](https://github.com/zeenix/gimoji#rationale), we
   recommend using [`gimoji`](https://github.com/zeenix/gimoji) instead. You can also pick an emoji
-  direcitly from [here](https://zeenix.github.io/gimoji/) (please remember to copy the emoji itself and not the
-  `:emoji-code:` string, by just clicking on it).
+  direcitly from [here](https://zeenix.github.io/gimoji/) (please remember to copy the emoji itself
+  and not the `:emoji-code:` string, by just clicking on it). **NOTE:** This is a curated list of
+  emojis that have specific meanings. Please use one of the methods recommended here to select/fetch
+  the most appropriate one. 🙏
 * Add a prefix indicating the packages being changed. Use either the package name or an abbreviation
   (for example, `zb` for `zbus`, `zv` for `zvariant` etc). If a commit touches multiple packages,
   separate with a comma. For example, for a commit changing the packages `zbus` and `zvariant`,
