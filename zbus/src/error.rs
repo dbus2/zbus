@@ -245,7 +245,11 @@ impl From<Message> for Error {
         if let Some(name) = header.error_name() {
             let name = name.to_owned().into();
             match message.body().deserialize_unchecked::<&str>() {
-                Ok(detail) => Error::MethodError(name, Some(String::from(detail)), message),
+                Ok(detail) => {
+                    let err = Error::MethodError(name, Some(String::from(detail)), message);
+                    // Convert to `Error::FDO` if method error is an FDO error
+                    Error::from(fdo::Error::from(err))
+                }
                 Err(_) => Error::MethodError(name, None, message),
             }
         } else {
