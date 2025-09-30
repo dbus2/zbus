@@ -1,3 +1,5 @@
+#![cfg(not(target_os = "windows"))]
+
 use ntest::timeout;
 use test_log::test;
 
