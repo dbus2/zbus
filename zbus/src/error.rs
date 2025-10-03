@@ -153,6 +153,39 @@ impl fmt::Display for Error {
     }
 }
 
+impl Error {
+    /// A description of the error.
+    ///
+    /// This is a generic description of the error (if any). For a more detailed description
+    /// make use of the [`std::fmt::Display`] implementation, for example, through
+    /// [`std::string::ToString`].
+    pub fn description(&self) -> Option<&str> {
+        match self {
+            Error::InterfaceNotFound => Some("interface not found"),
+            Error::Address(e) => Some(e),
+            Error::ExcessData => Some("excess data"),
+            Error::InputOutput(_) => Some("i/o error"),
+            Error::Handshake(e) => Some(e),
+            Error::IncorrectEndian => Some("incorrect endian"),
+            Error::InvalidField => Some("invalid field"),
+            Error::Variant(_) => Some("variant error"),
+            Error::Names(_) => Some("names error"),
+            Error::InvalidReply => Some("invalid reply"),
+            Error::MissingField => Some("a required field is missing from message headers"),
+            Error::MethodError(_, desc, _) => desc.as_deref(),
+            Error::InvalidGUID => Some("invalid GUID"),
+            Error::Unsupported => Some("connection support is lacking"),
+            Error::FDO(_) => Some("FDO error"),
+            Error::NameTaken => Some("name already taken on the bus"),
+            Error::InvalidMatchRule => Some("invalid match rule string"),
+            Error::Failure(e) => Some(e),
+            Error::MissingParameter(_) => Some("A required parameter is missing"),
+            Error::InvalidSerial => Some("serial number in the message header is 0"),
+            Error::InterfaceExists(_, _) => Some("interface already exists"),
+        }
+    }
+}
+
 impl Clone for Error {
     fn clone(&self) -> Self {
         match self {
