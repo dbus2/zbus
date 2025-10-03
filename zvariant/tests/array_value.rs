@@ -271,8 +271,6 @@ fn array_value() {
     // GVariant format now
     #[cfg(feature = "gvariant")]
     {
-        use rand::{distr::Alphanumeric, rng, Rng};
-
         let ctxt = Context::new_gvariant(LE, 0);
         let gv_encoded = to_bytes(ctxt, &v).unwrap();
         assert_eq!(gv_encoded.len(), 68);
@@ -308,18 +306,14 @@ fn array_value() {
             panic!();
         }
 
-        let mut rng = rng();
+        let mut rng = fastrand::Rng::new();
         // Let's test GVariant ser/de of a 254 byte array with variable-width elements as to
         // ensure no problems with non-normal BS of GVariant.
         let as_ = vec![
-            (&mut rng)
-                .sample_iter(Alphanumeric)
-                .map(char::from)
+            std::iter::repeat_with(|| rng.alphanumeric())
                 .take(126)
                 .collect::<String>(),
-            (&mut rng)
-                .sample_iter(Alphanumeric)
-                .map(char::from)
+            std::iter::repeat_with(|| rng.alphanumeric())
                 .take(126)
                 .collect::<String>(),
         ];
