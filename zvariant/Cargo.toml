@@ -43,7 +43,7 @@ camino = { workspace = true, optional = true }
 [dev-dependencies]
 serde_json.workspace = true
 serde_repr.workspace = true
-rand.workspace = true
+fastrand.workspace = true
 criterion.workspace = true
 chrono = { workspace = true, features = [
     "serde",
