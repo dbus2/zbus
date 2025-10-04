@@ -25,7 +25,7 @@ camino = ["zvariant/camino"]
 # Enables API that is only needed for bus implementations (enables `p2p`).
 bus-impl = ["p2p"]
 # Enables API that is only needed for peer-to-peer (p2p) connections.
-p2p = ["dep:rand"]
+p2p = ["uuid/v4"]
 async-io = [
     "dep:async-io",
     "async-executor",
@@ -62,7 +62,7 @@ futures-lite.workspace = true
 async-broadcast.workspace = true
 hex.workspace = true
 ordered-stream.workspace = true
-rand = { workspace = true, optional = true }
+uuid.workspace = true
 event-listener.workspace = true
 async-trait.workspace = true
 tracing.workspace = true
