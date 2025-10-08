@@ -26,15 +26,7 @@ impl Guid<'_> {
     /// This method is only available when the `p2p` feature is enabled (disabled by default).
     #[cfg(feature = "p2p")]
     pub fn generate() -> Guid<'static> {
-        let r: Vec<u32> = std::iter::repeat_with(rand::random::<u32>)
-            .take(3)
-            .collect();
-        let r3 = match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
-            Ok(n) => n.as_secs() as u32,
-            Err(_) => rand::random::<u32>(),
-        };
-
-        let s = format!("{:08x}{:08x}{:08x}{:08x}", r[0], r[1], r[2], r3);
+        let s = uuid::Uuid::new_v4().as_simple().to_string();
         Guid(s.into())
     }
 
@@ -130,13 +122,11 @@ impl<'de> Deserialize<'de> for Guid<'de> {
     }
 }
 
-fn validate_guid(value: &str) -> crate::Result<()> {
-    use winnow::{stream::AsChar, token::take_while, Parser};
-
-    take_while::<_, _, ()>(32, AsChar::is_hex_digit)
-        .map(|_| ())
-        .parse(value.as_bytes())
-        .map_err(|_| crate::Error::InvalidGUID)
+const fn validate_guid(value: &str) -> crate::Result<()> {
+    match uuid::Uuid::try_parse(value) {
+        Ok(_) => Ok(()),
+        Err(_) => Err(crate::Error::InvalidGUID),
+    }
 }
 
 impl From<Guid<'_>> for String {
