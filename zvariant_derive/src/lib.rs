@@ -12,7 +12,10 @@
 )))]
 
 use proc_macro::TokenStream;
+use proc_macro2::Literal;
+use std::str::FromStr;
 use syn::DeriveInput;
+use zvariant_utils::signature::Signature;
 
 mod dict;
 mod r#type;
@@ -488,4 +491,34 @@ pub fn owned_value_macro_derive(input: TokenStream) -> TokenStream {
     value::expand_derive(ast, value::ValueType::OwnedValue)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
+}
+
+/// Constructs a const [`Signature`] with compile-time validation.
+///
+/// Allows to create a `Signature` from a string literal at compile time,
+/// with validation to ensure the signature string is valid.
+///
+/// The macro validates the signature string at compile time:
+///
+/// [`Signature`]: https://docs.rs/zvariant/latest/zvariant/enum.Signature.html
+#[proc_macro]
+pub fn signature(input: TokenStream) -> TokenStream {
+    let result = || -> Result<proc_macro2::TokenStream, syn::Error> {
+        let signature_str = syn::parse::<Literal>(input)?;
+
+        let signature_string = signature_str.to_string();
+        let signature_string = signature_string.trim_matches('"');
+
+        let signature = match signature_string {
+            "dict" => Signature::dict(Signature::Str, Signature::Variant),
+            s => Signature::from_str(s).map_err(|e| syn::Error::new(signature_str.span(), e))?,
+        };
+
+        let zv = utils::zvariant_path();
+        let signature_tokens = r#type::signature_to_tokens(&signature, &zv);
+
+        Ok(signature_tokens)
+    };
+
+    result().unwrap_or_else(|err| err.to_compile_error()).into()
 }
