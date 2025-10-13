@@ -121,7 +121,7 @@ impl Transport {
                     },
                     "unix stream connection",
                 )
-                .await?;
+                .await??;
                 #[cfg(not(feature = "tokio"))]
                 {
                     Async::new(stream)

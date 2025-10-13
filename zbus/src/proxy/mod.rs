@@ -1553,7 +1553,7 @@ mod tests {
 
         futures_util::future::select(signal_fut, prop_fut).await;
 
-        handle.await;
+        handle.await?;
 
         Ok(())
     }

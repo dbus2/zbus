@@ -44,7 +44,7 @@ impl ReadHalf for Arc<Async<TcpStream>> {
             },
             "peer credentials",
         )
-        .await
+        .await?
     }
 
     #[cfg(not(windows))]
@@ -78,7 +78,7 @@ impl WriteHalf for Arc<Async<TcpStream>> {
             move || stream.get_ref().shutdown(std::net::Shutdown::Both),
             "close socket",
         )
-        .await
+        .await?
     }
 
     async fn peer_credentials(&mut self) -> io::Result<crate::fdo::ConnectionCredentials> {

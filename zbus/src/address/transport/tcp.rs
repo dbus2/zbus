@@ -147,7 +147,7 @@ impl Tcp {
             "connect tcp",
         )
         .await
-        .map_err(|e| Error::Address(format!("Failed to receive TCP addresses: {e}")))?;
+        .map_err(|e| Error::Address(format!("Failed to receive TCP addresses: {e}")))??;
 
         // we could attempt connections in parallel?
         let mut last_err = Error::Address("Failed to connect".into());
