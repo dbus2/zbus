@@ -605,7 +605,7 @@ trait Notifications {
 ```
 
 You can learn more from the zbus-ify [binding of
-PolicyKit](https://github.com/dbus2/zbus_polkit), for example, which was
+PolicyKit](https://github.com/z-galaxy/zbus_polkit), for example, which was
 implemented starting from the *xmlgen* output.
 
 There you have it, a Rust-friendly binding for your D-Bus service!

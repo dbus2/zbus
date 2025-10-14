@@ -8,7 +8,7 @@ mod common {
 #[test]
 fn dict_compare() {
     // the order in which a dict has been constructed must not play a role
-    // https://github.com/dbus2/zbus/issues/484
+    // https://github.com/z-galaxy/zbus/issues/484
     let mut dict1 = Dict::new(<&str>::SIGNATURE, Value::SIGNATURE);
     dict1.add("first", Value::new("value")).unwrap();
     dict1.add("second", Value::new("value")).unwrap();

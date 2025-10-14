@@ -10,7 +10,7 @@ kind of D-Bus messages (method calls, signals etc) for you.
 
 ## Getting Started
 
-The best way to get started with zbus is the [book](https://dbus2.github.io/zbus/), where we start
+The best way to get started with zbus is the [book](https://z-galaxy.github.io/zbus/), where we start
 with basic D-Bus concepts and explain with code samples, how zbus makes D-Bus easy.
 
 ## Example code
@@ -131,7 +131,7 @@ tick any executors etc. 😼
 **Note**: On Windows, the `async-io` feature is currently required for UNIX domain socket support,
 see [the corresponding tokio issue on GitHub][tctiog].
 
-[zbus]: https://github.com/dbus2/zbus\#readme
+[zbus]: https://github.com/z-galaxy/zbus\#readme
 [bw]: https://docs.rs/zbus/latest/zbus/blocking/index.html
 [iektc]: https://docs.rs/zbus/latest/zbus/connection/struct.Connection.html#examples-1
 [tctiog]: https://github.com/tokio-rs/tokio/issues/2201

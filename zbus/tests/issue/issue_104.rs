@@ -12,7 +12,7 @@ use zbus::{
 #[test]
 #[timeout(15000)]
 fn issue104() {
-    // Tests the fix for https://github.com/dbus2/zbus/issues/104
+    // Tests the fix for https://github.com/z-galaxy/zbus/issues/104
     //
     // The issue is caused by `proxy` macro adding `()` around the return value of methods
     // with multiple out arguments, ending up with double parenthesis around the signature of

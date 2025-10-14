@@ -81,7 +81,7 @@ pub async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> 
 
     // First let's call a non-existent method. It should immediately fail.
     // There was a regression where object server would just not reply in this case:
-    // https://github.com/dbus2/zbus/issues/905
+    // https://github.com/z-galaxy/zbus/issues/905
     assert!(proxy
         .inner()
         .call::<_, _, ()>("NonExistantMethod", &())

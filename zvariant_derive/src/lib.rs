@@ -1,6 +1,6 @@
 #![deny(rust_2018_idioms)]
 #![doc(
-    html_logo_url = "https://raw.githubusercontent.com/dbus2/zbus/9f7a90d2b594ddc48b7a5f39fda5e00cd56a7dfb/logo.png"
+    html_logo_url = "https://raw.githubusercontent.com/z-galaxy/zbus/9f7a90d2b594ddc48b7a5f39fda5e00cd56a7dfb/logo.png"
 )]
 #![doc = include_str!("../README.md")]
 #![doc(test(attr(
@@ -223,7 +223,7 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
 /// ```
 ///
 /// [`Serialize`]: https://docs.serde.rs/serde/trait.Serialize.html
-/// [FAQ entry]: https://dbus2.github.io/zbus/faq.html#how-to-use-a-struct-as-a-dictionary
+/// [FAQ entry]: https://z-galaxy.github.io/zbus/faq.html#how-to-use-a-struct-as-a-dictionary
 #[proc_macro_derive(SerializeDict, attributes(zbus, zvariant))]
 pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
     let input: DeriveInput = syn::parse(input).unwrap();
@@ -282,7 +282,7 @@ pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// ```
 ///
 /// [`Deserialize`]: https://docs.serde.rs/serde/de/trait.Deserialize.html
-/// [FAQ entry]: https://dbus2.github.io/zbus/faq.html#how-to-use-a-struct-as-a-dictionary
+/// [FAQ entry]: https://z-galaxy.github.io/zbus/faq.html#how-to-use-a-struct-as-a-dictionary
 #[proc_macro_derive(DeserializeDict, attributes(zbus, zvariant))]
 pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
     let input: DeriveInput = syn::parse(input).unwrap();

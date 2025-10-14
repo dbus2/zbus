@@ -360,7 +360,7 @@ impl ObjectServer {
         // Check that the message has a member before spawning.
         // Note that an unknown member will still spawn a task. We should instead gather
         // all the details for the call before spawning.
-        // See also https://github.com/dbus2/zbus/issues/674 for future of Interface.
+        // See also https://github.com/z-galaxy/zbus/issues/674 for future of Interface.
         let _ = hdr
             .member()
             .ok_or_else(|| fdo::Error::Failed("Missing member".into()))?;

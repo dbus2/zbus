@@ -4,7 +4,7 @@ use zvariant::OwnedObjectPath;
 
 // This one we just want to see if it builds, no need to run it. For details see:
 //
-// https://github.com/dbus2/zbus/issues/121
+// https://github.com/z-galaxy/zbus/issues/121
 #[test]
 #[ignore]
 fn issue_121() {

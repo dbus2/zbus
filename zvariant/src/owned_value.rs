@@ -13,7 +13,7 @@ use crate::Fd;
 use crate::Maybe;
 
 // FIXME: Replace with a generic impl<T: TryFrom<Value>> TryFrom<OwnedValue> for T?
-// https://github.com/dbus2/zbus/issues/138
+// https://github.com/z-galaxy/zbus/issues/138
 
 /// Owned [`Value`](enum.Value.html)
 #[derive(Debug, PartialEq, Serialize, Type)]
