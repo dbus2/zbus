@@ -1413,7 +1413,7 @@ mod tests {
     #[test]
     #[timeout(15000)]
     fn disconnect_on_drop() {
-        // Reproducer for https://github.com/dbus2/zbus/issues/308 where setting up the
+        // Reproducer for https://github.com/z-galaxy/zbus/issues/308 where setting up the
         // objectserver would cause the connection to not disconnect on drop.
         crate::utils::block_on(test_disconnect_on_drop());
     }

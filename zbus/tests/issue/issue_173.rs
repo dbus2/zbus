@@ -10,7 +10,7 @@ use zbus::object_server::SignalEmitter;
 #[test]
 #[timeout(15000)]
 fn issue_173() {
-    // Tests the fix for https://github.com/dbus2/zbus/issues/173
+    // Tests the fix for https://github.com/z-galaxy/zbus/issues/173
     //
     // The issue is caused by proxy not keeping track of its destination's owner changes
     // (service restart) and failing to receive signals as a result.

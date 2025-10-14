@@ -13,8 +13,8 @@ edition = "2021"
 rust-version = { workspace = true }
 
 description = "D-Bus XML interface code generator"
-repository = "https://github.com/dbus2/zbus/"
-documentation = "https://dbus2.github.io/zbus/"
+repository = "https://github.com/z-galaxy/zbus/"
+documentation = "https://z-galaxy.github.io/zbus/"
 keywords = ["D-Bus", "DBus", "IPC"]
 license = "MIT"
 categories = ["os::unix-apis", "development-tools"]

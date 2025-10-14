@@ -2,7 +2,7 @@
 
 # zbus
 
-[![CI Pipeline Status](https://github.com/dbus2/zbus/actions/workflows/rust.yml/badge.svg)](https://github.com/dbus2/zbus/actions/workflows/rust.yml)
+[![CI Pipeline Status](https://github.com/z-galaxy/zbus/actions/workflows/rust.yml/badge.svg)](https://github.com/z-galaxy/zbus/actions/workflows/rust.yml)
 
 A Rust API for [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html) communication. The
 goal is to provide a safe and simple high- and low-level API akin to
@@ -20,7 +20,7 @@ The project is divided into the following subcrates:
 
 ## Getting Started
 
-The best way to get started with zbus is the [book](https://dbus2.github.io/zbus/), where we start
+The best way to get started with zbus is the [book](https://z-galaxy.github.io/zbus/), where we start
 with basic D-Bus concepts and explain with code samples, how zbus makes D-Bus easy.
 
 ## Example code
@@ -110,7 +110,7 @@ async fn main() -> Result<()> {
 If you need help in using these crates, are looking for ways to contribute, or just want to hang out
 with the cool kids, please come chat with us in the
 [`#zbus:matrix.org`](https://matrix.to/#/#zbus:matrix.org) Matrix room. If something doesn't seem
-right, please [file an issue](https://github.com/dbus2/zbus/issues/new).
+right, please [file an issue](https://github.com/z-galaxy/zbus/issues/new).
 
 ## Security
 

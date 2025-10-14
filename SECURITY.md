@@ -70,7 +70,7 @@ We request that you:
 Published security advisories will be available through:
 
 - GitHub Security Advisories on the
-  [zbus repository](https://github.com/dbus2/zbus/security/advisories)
+  [zbus repository](https://github.com/z-galaxy/zbus/security/advisories)
 - [RustSec Advisory Database](https://rustsec.org/)
 - Release notes and changelog entries
 
@@ -87,7 +87,7 @@ If you prefer to remain anonymous, please let us know in your report.
 
 ## Scope
 
-This security policy covers all repositories and crates maintained by the dbus2 organization:
+This security policy covers all repositories and crates maintained by the z-galaxy organization:
 
 - **zbus**: Main D-Bus API and connection handling
 - **zvariant**: D-Bus/GVariant serialization library

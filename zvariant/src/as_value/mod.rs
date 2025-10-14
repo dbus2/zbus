@@ -4,7 +4,7 @@
 //! containing string keys and variant values (`a{sv}` in D-Bus language) See the relevant
 //! [FAQ entry] in our book for more details and examples.
 //!
-//! [FAQ entry]: https://dbus2.github.io/zbus/faq.html#how-to-use-a-struct-as-a-dictionary
+//! [FAQ entry]: https://z-galaxy.github.io/zbus/faq.html#how-to-use-a-struct-as-a-dictionary
 
 mod deserialize;
 pub use deserialize::{deserialize, Deserialize};

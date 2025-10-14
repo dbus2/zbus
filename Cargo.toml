@@ -19,7 +19,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tokio_unstable)'] }
 edition = "2021"
 rust-version = "1.77"
 license = "MIT"
-repository = "https://github.com/dbus2/zbus/"
+repository = "https://github.com/z-galaxy/zbus/"
 
 [profile.bench]
 debug = true

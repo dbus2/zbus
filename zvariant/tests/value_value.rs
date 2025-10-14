@@ -50,7 +50,7 @@ fn value_value() {
     let v = serde_json::from_str::<Value<'_>>(&encoded).unwrap();
     assert_eq!(v, Value::U64(0xFEFE));
 
-    // Now a test case for https://github.com/dbus2/zbus/issues/549
+    // Now a test case for https://github.com/z-galaxy/zbus/issues/549
     #[derive(Deserialize, Serialize, Debug, PartialEq)]
     struct Data {
         inner: OwnedValue,

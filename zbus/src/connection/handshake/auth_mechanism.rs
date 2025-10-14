@@ -13,7 +13,7 @@ use crate::{Error, Result};
 ///
 /// See <https://dbus.freedesktop.org/doc/dbus-specification.html#auth-mechanisms>
 ///
-/// [problematic for some users]: https://github.com/dbus2/zbus/issues/543
+/// [problematic for some users]: https://github.com/z-galaxy/zbus/issues/543
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AuthMechanism {
     /// This is the recommended authentication mechanism on platforms where credentials can be

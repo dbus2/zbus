@@ -58,7 +58,7 @@ pub use builder::Builder;
 /// At the moment, `Proxy` doesn't prevent [auto-launching][al].
 ///
 /// [`proxy`]: attr.proxy.html
-/// [al]: https://github.com/dbus2/zbus/issues/54
+/// [al]: https://github.com/z-galaxy/zbus/issues/54
 #[derive(Clone)]
 pub struct Proxy<'a> {
     conn: Connection,

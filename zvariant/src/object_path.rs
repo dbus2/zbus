@@ -354,7 +354,7 @@ mod unit {
 
     #[test]
     fn owned_from_reader() {
-        // See https://github.com/dbus2/zbus/issues/287
+        // See https://github.com/z-galaxy/zbus/issues/287
         let json_str = "\"/some/path\"";
         serde_json::de::from_reader::<_, OwnedObjectPath>(json_str.as_bytes()).unwrap();
     }

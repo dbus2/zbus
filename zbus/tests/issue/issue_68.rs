@@ -7,7 +7,7 @@ use zbus::{message::Message, names::UniqueName, Connection, MessageStream};
 #[test]
 #[timeout(15000)]
 fn issue_68() {
-    // Tests the fix for https://github.com/dbus2/zbus/issues/68
+    // Tests the fix for https://github.com/z-galaxy/zbus/issues/68
     //
     // While this is not an exact reproduction of the issue 68, the underlying problem it
     // produces is exactly the same: `Connection::call_method` dropping all incoming messages
