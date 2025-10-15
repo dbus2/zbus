@@ -89,7 +89,7 @@ impl super::WriteHalf for Arc<Async<UnixStream>> {
             move || stream.get_ref().shutdown(std::net::Shutdown::Both),
             "close socket",
         )
-        .await
+        .await?
     }
 
     #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
@@ -236,7 +236,7 @@ impl super::ReadHalf for Arc<Async<UnixStream>> {
             },
             "peer credentials",
         )
-        .await
+        .await?
     }
 }
 
@@ -257,7 +257,7 @@ impl super::WriteHalf for Arc<Async<UnixStream>> {
             move || stream.get_ref().shutdown(std::net::Shutdown::Both),
             "close socket",
         )
-        .await
+        .await?
     }
 
     async fn peer_credentials(&mut self) -> io::Result<crate::fdo::ConnectionCredentials> {
@@ -323,7 +323,8 @@ async fn get_unix_peer_creds(fd: &impl AsRawFd) -> io::Result<crate::fdo::Connec
     let fd = fd.as_raw_fd();
     // FIXME: Is it likely enough for sending of 1 byte to block, to justify a task (possibly
     // launching a thread in turn)?
-    crate::Task::spawn_blocking(move || get_unix_peer_creds_blocking(fd), "peer credentials").await
+    crate::Task::spawn_blocking(move || get_unix_peer_creds_blocking(fd), "peer credentials")
+        .await?
 }
 
 #[cfg(unix)]
@@ -407,7 +408,7 @@ fn get_unix_peer_creds_blocking(fd: RawFd) -> io::Result<crate::fdo::ConnectionC
 #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
 async fn send_zero_byte(fd: &impl AsRawFd) -> io::Result<usize> {
     let fd = fd.as_raw_fd();
-    crate::Task::spawn_blocking(move || send_zero_byte_blocking(fd), "send zero byte").await
+    crate::Task::spawn_blocking(move || send_zero_byte_blocking(fd), "send zero byte").await?
 }
 
 #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]

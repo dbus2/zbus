@@ -193,7 +193,7 @@ async fn iface_and_proxy_(#[allow(unused)] p2p: bool) {
 
     let val = child.await.unwrap();
     debug!("Client task done.");
-    assert_eq!(val, 2);
+    assert_eq!(val.unwrap(), 2);
 
     if p2p {
         debug!("p2p connection, no need to release names..");

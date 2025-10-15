@@ -5,9 +5,14 @@ use async_task::Task as AsyncTask;
 #[cfg(not(feature = "tokio"))]
 use std::sync::Arc;
 #[cfg(feature = "tokio")]
-use std::{future::pending, marker::PhantomData};
+use std::{
+    future::pending,
+    io::{Error, ErrorKind},
+    marker::PhantomData,
+};
 use std::{
     future::Future,
+    io::Result,
     pin::Pin,
     task::{Context, Poll},
 };
@@ -204,12 +209,14 @@ impl<T> Drop for Task<T> {
 }
 
 impl<T> Future for Task<T> {
-    type Output = T;
+    type Output = Result<T>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         #[cfg(not(feature = "tokio"))]
         {
-            Pin::new(&mut self.get_mut().0.as_mut().expect("async_task::Task is none")).poll(cx)
+            Pin::new(&mut self.get_mut().0.as_mut().expect("async_task::Task is none"))
+                .poll(cx)
+                .map(|r| Ok(r))
         }
 
         #[cfg(feature = "tokio")]
@@ -222,7 +229,16 @@ impl<T> Future for Task<T> {
                     .expect("tokio::task::JoinHandle is none"),
             )
             .poll(cx)
-            .map(|r| r.expect("tokio::task::JoinHandle error"))
+            .map(|r| match r {
+                Ok(v) => Ok(v),
+                Err(e) => {
+                    if e.is_cancelled() {
+                        Err(Error::new(ErrorKind::Other, "tokio::task cancelled"))
+                    } else {
+                        panic!("tokio::task::JoinHandle error: {e}")
+                    }
+                }
+            })
         }
     }
 }

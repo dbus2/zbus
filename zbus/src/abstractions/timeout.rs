@@ -10,7 +10,7 @@ where
     tokio::time::timeout(timeout, fut).await.map_err(|_| {
         Error::from(std::io::Error::new(
             ErrorKind::TimedOut,
-            format!("timed out"),
+            "timed out".to_string(),
         ))
     })?
 }

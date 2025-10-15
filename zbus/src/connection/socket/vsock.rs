@@ -49,7 +49,7 @@ impl super::WriteHalf for std::sync::Arc<async_io::Async<vsock::VsockStream>> {
             move || stream.get_ref().shutdown(std::net::Shutdown::Both),
             "close socket",
         )
-        .await
+        .await?
     }
 }
 

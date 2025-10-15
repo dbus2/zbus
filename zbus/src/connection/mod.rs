@@ -1766,7 +1766,8 @@ mod p2p_tests {
 
         let server = async {
             #[cfg(all(feature = "vsock", not(feature = "tokio")))]
-            let server = crate::Task::spawn_blocking(move || listener.incoming().next(), "").await;
+            let server =
+                crate::Task::spawn_blocking(move || listener.incoming().next(), "").await?;
             #[cfg(feature = "tokio-vsock")]
             let server = listener.incoming().next().await;
             Builder::vsock_stream(server.unwrap()?)
