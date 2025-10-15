@@ -144,10 +144,10 @@
                         <a href="print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        <a href="https://github.com/dbus2/zbus" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/z-galaxy/zbus" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
-                        <a href="https://github.com/dbus2/zbus/edit/main/book/src/blocking.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
+                        <a href="https://github.com/z-galaxy/zbus/edit/main/book/src/blocking.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
                             <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
@@ -281,9 +281,9 @@ same as well. One difference that’s not obvious is that the blocking API for r
 implement <a href="https://doc.rust-lang.org/nightly/std/iter/trait.Iterator.html"><code>std::iter::Iterator</code></a> trait instead of <a href="https://docs.rs/futures/0.3.17/futures/stream/trait.Stream.html"><code>futures::stream::Stream</code></a>.</p>
 <h3 id="watching-for-properties"><a class="header" href="#watching-for-properties">Watching for properties</a></h3>
 <p>That’s almost the same as receiving signals:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">use zbus::{blocking::Connection, proxy, Result};
-</span><span class="boring">
-</span>#[proxy(
+<pre><pre class="playground"><code class="language-rust no_run edition2021">use zbus::{blocking::Connection, proxy, Result};
+
+#[proxy(
     interface = "org.freedesktop.systemd1.Manager",
     default_service = "org.freedesktop.systemd1",
     default_path = "/org/freedesktop/systemd1"
@@ -309,10 +309,8 @@ fn main() -&gt; Result&lt;()&gt; {
 <p><strong>Note:</strong> Even though you can write non-async methods, these methods are still called from an async
 context. Therefore, you can not use blocking API in the method implementation directly. See note at
 the beginning of this chapter for details on why and a possible workaround.</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">use std::error::Error;
-</span><span class="boring">use zbus::{blocking::connection, interface, fdo, object_server::SignalEmitter};
-</span><span class="boring">
-</span>use event_listener::{Event, Listener};
+<pre><pre class="playground"><code class="language-rust no_run edition2021">use zbus::{blocking::connection, interface, fdo, object_server::SignalEmitter};
+use event_listener::{Event, Listener};
 
 struct Greeter {
     name: String,
@@ -358,7 +356,7 @@ impl Greeter {
     async fn greeted_everyone(emitter: &amp;SignalEmitter&lt;'_&gt;) -&gt; zbus::Result&lt;()&gt;;
 }
 
-fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
+fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
     let greeter = Greeter {
         name: "GreeterName".to_string(),
         done: event_listener::Event::new(),

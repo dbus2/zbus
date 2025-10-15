@@ -144,10 +144,10 @@
                         <a href="print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        <a href="https://github.com/dbus2/zbus" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/z-galaxy/zbus" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
-                        <a href="https://github.com/dbus2/zbus/edit/main/book/src/service.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
+                        <a href="https://github.com/z-galaxy/zbus/edit/main/book/src/service.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
                             <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
@@ -287,9 +287,8 @@ write the D-Bus message handling details. It will dispatch the incoming method c
 respective handlers, as well as replying to introspection requests.</p>
 <h3 id="mygreeter-simple-example"><a class="header" href="#mygreeter-simple-example"><code>MyGreeter</code> simple example</a></h3>
 <p>Let see how to use it for <code>MyGreeter</code> interface:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">use zbus::{Connection, interface, Result};
-</span><span class="boring">
-</span>
+<pre><pre class="playground"><code class="language-rust no_run edition2021">use zbus::{Connection, interface, Result};
+
 struct Greeter;
 
 #[interface(name = "org.zbus.MyGreeter1")]
@@ -371,9 +370,8 @@ org.zbus.MyGreeter1                 interface -         -             -
 <p>This is a more complete example, demonstrating some of its usages. It also shows a way to
 synchronize with the interface handlers from outside, thanks to the <code>event_listener</code> crate
 (this is just one of the many ways).</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">use zbus::{object_server::SignalEmitter, connection::Builder, interface, fdo, Result};
-</span><span class="boring">
-</span>use event_listener::{Event, Listener};
+<pre><pre class="playground"><code class="language-rust no_run edition2021">use zbus::{object_server::SignalEmitter, connection::Builder, interface, fdo, Result};
+use event_listener::{Event, Listener};
 
 struct Greeter {
     name: String,

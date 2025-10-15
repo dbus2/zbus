@@ -145,7 +145,7 @@
                         <a href="print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        <a href="https://github.com/dbus2/zbus" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/z-galaxy/zbus" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
 
@@ -181,7 +181,7 @@
                     <main>
                         <img src="zbus-pixels.gif" alt="zbus illustration" style="width: 100%;">
 <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
-<p><strong><a href="https://github.com/dbus2/zbus">zbus</a></strong> is a <strong><a href="https://www.rust-lang.org/">Rust</a></strong> crate for <strong><a href="https://dbus.freedesktop.org/">D-Bus</a></strong>. If you are not familiar with D-Bus, you should
+<p><strong><a href="https://github.com/z-galaxy/zbus">zbus</a></strong> is a <strong><a href="https://www.rust-lang.org/">Rust</a></strong> crate for <strong><a href="https://dbus.freedesktop.org/">D-Bus</a></strong>. If you are not familiar with D-Bus, you should
 read <a href="https://www.freedesktop.org/wiki/Software/dbus/#index1h1">what is D-Bus?</a> first<sup class="footnote-reference" id="fr-outdated-1"><a href="#footnote-outdated">1</a></sup>. In short, zbus allows you to communicate from one program
 to another, using the D-Bus protocol. In other words, it’s an <em>inter-process</em> communication (IPC)
 solution. It is a very popular IPC solution on Linux and many Linux services (e.g systemd,
@@ -624,9 +624,9 @@ LOC) code for getting our location.</p>
 <p>Interfaces can have associated properties, which can be read or set with the
 <code>org.freedesktop.DBus.Properties</code> interface. Here again, the <code>#[proxy]</code> attribute comes to the
 rescue to help you. You can annotate a trait method to be a getter:</p>
-<pre><code class="language-rust noplayground"><span class="boring">use zbus::{proxy, Result};
-</span><span class="boring">
-</span>#[proxy]
+<pre><code class="language-rust noplayground">use zbus::{proxy, Result};
+
+#[proxy]
 trait MyInterface {
     #[zbus(property)]
     fn state(&amp;self) -&gt; Result&lt;String&gt;;
@@ -634,9 +634,9 @@ trait MyInterface {
 <p>The <code>state()</code> method will translate to a <code>"State"</code> property <code>Get</code> call.</p>
 <p>To set the property, prefix the name of the property with <code>set_</code>.</p>
 <p>For a more real world example, let’s try and read two properties from systemd’s main service:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">use zbus::{Connection, proxy, Result};
-</span><span class="boring">
-</span>#[proxy(
+<pre><pre class="playground"><code class="language-rust no_run edition2021">use zbus::{Connection, proxy, Result};
+
+#[proxy(
     interface = "org.freedesktop.systemd1.Manager",
     default_service = "org.freedesktop.systemd1",
     default_path = "/org/freedesktop/systemd1"
@@ -689,9 +689,9 @@ implement these conversions for you.</p>
 <p>To be notified of a property change, you use a stream API, just like for receiving signals. The
 methods are named after the properties’ names: <code>receive_&lt;prop_name&gt;_changed()</code>.</p>
 <p>Here is an example:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">use zbus::{Connection, proxy, Result};
-</span><span class="boring">use futures_util::stream::StreamExt;
-</span><span class="boring">
+<pre><pre class="playground"><code class="language-rust no_run edition2021">use zbus::{Connection, proxy, Result};
+use futures_util::stream::StreamExt;
+<span class="boring">
 </span><span class="boring">#[tokio::main]
 </span><span class="boring">async fn main() -&gt; Result&lt;()&gt; {
 </span>    #[proxy(
@@ -799,9 +799,9 @@ the <code>busctl</code><sup class="footnote-reference" id="fr-busctl-2"><a href=
 </code></pre>
 <p>This will give back effortlessly the corresponding Rust traits boilerplate
 code:</p>
-<pre><code class="language-rust noplayground"><span class="boring">use zbus::proxy;
-</span><span class="boring">
-</span>#[proxy(
+<pre><code class="language-rust noplayground">use zbus::proxy;
+
+#[proxy(
     interface = "org.freedesktop.Notifications",
     default_service = "org.freedesktop.Notifications",
     default_path= "/org/freedesktop/Notifications",
@@ -841,10 +841,10 @@ trait Notifications {
 better types (using <code>BitFlags</code>, structs or other custom types), add extra documentation, and other
 functions to make the binding more pleasing to use from Rust.</p>
 <p>For example, the generated <code>GetServerInformation</code> method can be improved to a nicer version:</p>
-<pre><code class="language-rust noplayground"><span class="boring">use serde::{Serialize, Deserialize};
-</span><span class="boring">use zbus::{zvariant::Type, proxy};
-</span><span class="boring">
-</span>#[derive(Debug, Type, Serialize, Deserialize)]
+<pre><code class="language-rust noplayground">use serde::{Serialize, Deserialize};
+use zbus::{zvariant::Type, proxy};
+
+#[derive(Debug, Type, Serialize, Deserialize)]
 pub struct ServerInformation {
     /// The product name of the server.
     pub name: String,
@@ -870,7 +870,7 @@ trait Notifications {
     /// This message returns the information on the server.
     fn get_server_information(&amp;self) -&gt; zbus::Result&lt;ServerInformation&gt;;
 }</code></pre>
-<p>You can learn more from the zbus-ify <a href="https://github.com/dbus2/zbus_polkit">binding of
+<p>You can learn more from the zbus-ify <a href="https://github.com/z-galaxy/zbus_polkit">binding of
 PolicyKit</a>, for example, which was
 implemented starting from the <em>xmlgen</em> output.</p>
 <p>There you have it, a Rust-friendly binding for your D-Bus service!</p>
@@ -984,9 +984,8 @@ write the D-Bus message handling details. It will dispatch the incoming method c
 respective handlers, as well as replying to introspection requests.</p>
 <h3 id="mygreeter-simple-example"><a class="header" href="#mygreeter-simple-example"><code>MyGreeter</code> simple example</a></h3>
 <p>Let see how to use it for <code>MyGreeter</code> interface:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">use zbus::{Connection, interface, Result};
-</span><span class="boring">
-</span>
+<pre><pre class="playground"><code class="language-rust no_run edition2021">use zbus::{Connection, interface, Result};
+
 struct Greeter;
 
 #[interface(name = "org.zbus.MyGreeter1")]
@@ -1068,9 +1067,8 @@ org.zbus.MyGreeter1                 interface -         -             -
 <p>This is a more complete example, demonstrating some of its usages. It also shows a way to
 synchronize with the interface handlers from outside, thanks to the <code>event_listener</code> crate
 (this is just one of the many ways).</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">use zbus::{object_server::SignalEmitter, connection::Builder, interface, fdo, Result};
-</span><span class="boring">
-</span>use event_listener::{Event, Listener};
+<pre><pre class="playground"><code class="language-rust no_run edition2021">use zbus::{object_server::SignalEmitter, connection::Builder, interface, fdo, Result};
+use event_listener::{Event, Listener};
 
 struct Greeter {
     name: String,
@@ -1386,9 +1384,9 @@ same as well. One difference that’s not obvious is that the blocking API for r
 implement <a href="https://doc.rust-lang.org/nightly/std/iter/trait.Iterator.html"><code>std::iter::Iterator</code></a> trait instead of <a href="https://docs.rs/futures/0.3.17/futures/stream/trait.Stream.html"><code>futures::stream::Stream</code></a>.</p>
 <h3 id="watching-for-properties"><a class="header" href="#watching-for-properties">Watching for properties</a></h3>
 <p>That’s almost the same as receiving signals:</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">use zbus::{blocking::Connection, proxy, Result};
-</span><span class="boring">
-</span>#[proxy(
+<pre><pre class="playground"><code class="language-rust no_run edition2021">use zbus::{blocking::Connection, proxy, Result};
+
+#[proxy(
     interface = "org.freedesktop.systemd1.Manager",
     default_service = "org.freedesktop.systemd1",
     default_path = "/org/freedesktop/systemd1"
@@ -1414,10 +1412,8 @@ fn main() -&gt; Result&lt;()&gt; {
 <p><strong>Note:</strong> Even though you can write non-async methods, these methods are still called from an async
 context. Therefore, you can not use blocking API in the method implementation directly. See note at
 the beginning of this chapter for details on why and a possible workaround.</p>
-<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">use std::error::Error;
-</span><span class="boring">use zbus::{blocking::connection, interface, fdo, object_server::SignalEmitter};
-</span><span class="boring">
-</span>use event_listener::{Event, Listener};
+<pre><pre class="playground"><code class="language-rust no_run edition2021">use zbus::{blocking::connection, interface, fdo, object_server::SignalEmitter};
+use event_listener::{Event, Listener};
 
 struct Greeter {
     name: String,
@@ -1463,7 +1459,7 @@ impl Greeter {
     async fn greeted_everyone(emitter: &amp;SignalEmitter&lt;'_&gt;) -&gt; zbus::Result&lt;()&gt;;
 }
 
-fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
+fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
     let greeter = Greeter {
         name: "GreeterName".to_string(),
         done: event_listener::Event::new(),
@@ -1597,7 +1593,7 @@ feature:</p>
 <pre><code class="language-toml"># Sample Cargo.toml snippet.
 [dependencies]
 # Also disable the default `async-io` feature to avoid unused dependencies.
-zbus = { version = "3", default-features = false, features = ["tokio"] }
+zbus = { version = "5", default-features = false, features = ["tokio"] }
 </code></pre>
 <p><strong>Note</strong>: On Windows, the <code>async-io</code> feature is currently required for UNIX domain socket support,
 see <a href="https://github.com/tokio-rs/tokio/issues/2201">the corresponding tokio issue on GitHub</a>.</p>
