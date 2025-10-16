@@ -62,11 +62,8 @@ pub use defaults::Defaults;
 ///
 /// # Note
 ///
-/// It is recommended to use the [`proxy`] macro, which provides a more convenient and
-/// type-safe *façade* `Proxy` derived from a Rust trait.
-///
-/// [`futures` crate]: https://crates.io/crates/futures
-/// [`proxy`]: attr.proxy.html
+/// It is recommended to use the [`macro@crate::proxy`] macro, which provides a more
+/// convenient and type-safe *façade* `Proxy` derived from a Rust trait.
 #[derive(Clone, Debug)]
 pub struct Proxy<'a> {
     pub(crate) inner: Arc<ProxyInner<'a>>,

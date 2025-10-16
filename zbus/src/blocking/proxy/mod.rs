@@ -50,14 +50,13 @@ pub use builder::Builder;
 ///
 /// # Note
 ///
-/// It is recommended to use the [`proxy`] macro, which provides a more convenient and
-/// type-safe *façade* `Proxy` derived from a Rust trait.
+/// It is recommended to use the [`macro@crate::proxy`] macro, which provides a more
+/// convenient and type-safe *façade* `Proxy` derived from a Rust trait.
 ///
 /// ## Current limitations:
 ///
 /// At the moment, `Proxy` doesn't prevent [auto-launching][al].
 ///
-/// [`proxy`]: attr.proxy.html
 /// [al]: https://github.com/z-galaxy/zbus/issues/54
 #[derive(Clone)]
 pub struct Proxy<'a> {

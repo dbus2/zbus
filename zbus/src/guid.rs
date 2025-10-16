@@ -12,10 +12,9 @@ use zvariant::{Str, Type};
 ///
 /// See the D-Bus specification [UUIDs chapter] for details.
 ///
-/// You can create a `Guid` from an existing string with [`Guid::try_from::<&str>`][TryFrom].
+/// You can create a `Guid` from an existing string with [`Guid::try_from::<&str>`].
 ///
 /// [UUIDs chapter]: https://dbus.freedesktop.org/doc/dbus-specification.html#uuids
-/// [TryFrom]: #impl-TryFrom%3C%26%27_%20str%3E
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Type, Serialize)]
 pub struct Guid<'g>(Str<'g>);
 
