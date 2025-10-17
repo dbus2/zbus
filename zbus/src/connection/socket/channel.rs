@@ -126,11 +126,11 @@ async fn self_credentials() -> io::Result<ConnectionCredentials> {
 
     #[cfg(unix)]
     {
-        use nix::unistd::{Gid, Uid};
+        use rustix::process::{getegid, geteuid};
 
         creds = creds
-            .set_unix_user_id(Uid::effective().into())
-            .add_unix_group_id(Gid::effective().into());
+            .set_unix_user_id(geteuid().as_raw())
+            .add_unix_group_id(getegid().as_raw());
     }
     #[cfg(windows)]
     {

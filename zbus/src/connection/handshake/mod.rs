@@ -7,7 +7,7 @@ mod server;
 
 use async_trait::async_trait;
 #[cfg(unix)]
-use nix::unistd::Uid;
+use rustix::process::geteuid;
 use std::fmt::Debug;
 use zbus_names::OwnedUniqueName;
 
@@ -99,7 +99,7 @@ fn sasl_auth_id() -> Result<String> {
     let id = {
         #[cfg(unix)]
         {
-            Uid::effective().to_string()
+            geteuid().as_raw().to_string()
         }
 
         #[cfg(windows)]
@@ -158,8 +158,7 @@ mod tests {
 
         let guid = OwnedGuid::from(Guid::generate());
         let client = Client::new(p0.into(), None, Some(guid.clone()), false);
-        let server =
-            Server::new(p1.into(), guid, Some(Uid::effective().into()), None, None).unwrap();
+        let server = Server::new(p1.into(), guid, Some(geteuid().as_raw()), None, None).unwrap();
 
         // proceed to the handshakes
         let (client, server) = crate::utils::block_on(join(
@@ -178,7 +177,7 @@ mod tests {
         let server = Server::new(
             p1.into(),
             Guid::generate().into(),
-            Some(Uid::effective().into()),
+            Some(geteuid().as_raw()),
             None,
             None,
         )
@@ -206,7 +205,7 @@ mod tests {
         let server = Server::new(
             p1.into(),
             Guid::generate().into(),
-            Some(Uid::effective().into()),
+            Some(geteuid().as_raw()),
             None,
             None,
         )
@@ -232,7 +231,7 @@ mod tests {
         let server = Server::new(
             p1.into(),
             Guid::generate().into(),
-            Some(Uid::effective().into()),
+            Some(geteuid().as_raw()),
             None,
             None,
         )
@@ -249,7 +248,7 @@ mod tests {
         let server = Server::new(
             p1.into(),
             Guid::generate().into(),
-            Some(Uid::effective().into()),
+            Some(geteuid().as_raw()),
             Some(AuthMechanism::Anonymous),
             None,
         )
@@ -266,7 +265,7 @@ mod tests {
         let server = Server::new(
             p1.into(),
             Guid::generate().into(),
-            Some(Uid::effective().into()),
+            Some(geteuid().as_raw()),
             Some(AuthMechanism::Anonymous),
             None,
         )

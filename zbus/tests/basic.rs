@@ -329,7 +329,7 @@ async fn test_freedesktop_api() -> Result<()> {
 #[timeout(15000)]
 #[instrument]
 async fn test_freedesktop_credentials() -> Result<()> {
-    use nix::unistd::{Gid, Uid};
+    use rustix::process::{getegid, geteuid};
 
     let connection = Connection::session().await?;
     let dbus = zbus::fdo::DBusProxy::new(&connection).await?;
@@ -352,15 +352,12 @@ async fn test_freedesktop_credentials() -> Result<()> {
     }
 
     assert_eq!(std::process::id(), credentials.process_id().unwrap());
-    assert_eq!(
-        u32::from(Uid::effective()),
-        credentials.unix_user_id().unwrap()
-    );
+    assert_eq!(geteuid().as_raw(), credentials.unix_user_id().unwrap());
 
     if let Some(group_ids) = credentials.unix_group_ids() {
         group_ids
             .iter()
-            .find(|group| **group == u32::from(Gid::effective()))
+            .find(|group| **group == getegid().as_raw())
             .unwrap();
     }
 

@@ -97,11 +97,14 @@ static_assertions = "1.1.0"
 async-recursion = "1.1.1"
 winnow = "0.7"
 uds_windows = "1.1.0"
-nix = { version = "0.30", default-features = false, features = [
-    "socket",
-    "uio",
-    "user",
+rustix = { version = "1.1.2", default-features = false, features = [
+    "net",
+    "process",
+    "std",
 ] }
+# FIXME: Remove when rustix provides the needed API. See `FIXME` comments in
+# `zbus::connection::socket::unix` module.
+libc = { version = "0.2", default-features = false }
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Security_Authorization",
