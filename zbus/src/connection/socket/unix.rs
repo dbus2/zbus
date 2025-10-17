@@ -1,8 +1,10 @@
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
 use std::io;
+#[cfg(target_os = "linux")]
+use std::os::unix::io::FromRawFd;
 #[cfg(unix)]
-use std::os::unix::io::{AsRawFd, BorrowedFd, FromRawFd, RawFd};
+use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, RawFd};
 #[cfg(all(unix, not(feature = "tokio")))]
 use std::os::unix::net::UnixStream;
 #[cfg(not(feature = "tokio"))]
@@ -18,9 +20,9 @@ use std::{
 use uds_windows::UnixStream;
 
 #[cfg(unix)]
-use nix::{
-    cmsg_space,
-    sys::socket::{recvmsg, sendmsg, ControlMessage, ControlMessageOwned, MsgFlags, UnixAddr},
+use rustix::net::{
+    recvmsg, sendmsg, RecvAncillaryBuffer, RecvAncillaryMessage, RecvFlags, SendAncillaryBuffer,
+    SendAncillaryMessage, SendFlags,
 };
 
 #[cfg(unix)]
@@ -32,7 +34,7 @@ impl super::ReadHalf for Arc<Async<UnixStream>> {
     async fn recvmsg(&mut self, buf: &mut [u8]) -> super::RecvmsgResult {
         poll_fn(|cx| {
             let (len, fds) = loop {
-                match fd_recvmsg(self.as_raw_fd(), buf) {
+                match fd_recvmsg(self.as_fd(), buf) {
                     Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
                     Err(e) if e.kind() == io::ErrorKind::WouldBlock => match self.poll_readable(cx)
                     {
@@ -67,7 +69,7 @@ impl super::WriteHalf for Arc<Async<UnixStream>> {
     ) -> io::Result<usize> {
         poll_fn(|cx| loop {
             match fd_sendmsg(
-                self.as_raw_fd(),
+                self.as_fd(),
                 buffer,
                 #[cfg(unix)]
                 fds,
@@ -129,7 +131,7 @@ impl super::ReadHalf for tokio::net::unix::OwnedReadHalf {
                 match stream.try_io(tokio::io::Interest::READABLE, || {
                     // We use own custom function for reading because we need to receive file
                     // descriptors too.
-                    fd_recvmsg(stream.as_raw_fd(), buf)
+                    fd_recvmsg(stream.as_fd(), buf)
                 }) {
                     Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
                     Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
@@ -167,7 +169,7 @@ impl super::WriteHalf for tokio::net::unix::OwnedWriteHalf {
         poll_fn(|cx| loop {
             match stream.try_io(tokio::io::Interest::WRITABLE, || {
                 fd_sendmsg(
-                    stream.as_raw_fd(),
+                    stream.as_fd(),
                     buffer,
                     #[cfg(unix)]
                     fds,
@@ -266,11 +268,14 @@ impl super::WriteHalf for Arc<Async<UnixStream>> {
 }
 
 #[cfg(unix)]
-fn fd_recvmsg(fd: RawFd, buffer: &mut [u8]) -> io::Result<(usize, Vec<OwnedFd>)> {
-    let mut iov = [IoSliceMut::new(buffer)];
-    let mut cmsgspace = cmsg_space!([RawFd; FDS_MAX]);
+fn fd_recvmsg(fd: BorrowedFd<'_>, buffer: &mut [u8]) -> io::Result<(usize, Vec<OwnedFd>)> {
+    use std::mem::MaybeUninit;
 
-    let msg = recvmsg::<UnixAddr>(fd, &mut iov, Some(&mut cmsgspace), MsgFlags::empty())?;
+    let mut iov = [IoSliceMut::new(buffer)];
+    let mut cmsg_buffer = [MaybeUninit::uninit(); rustix::cmsg_space!(ScmRights(FDS_MAX))];
+    let mut ancillary = RecvAncillaryBuffer::new(&mut cmsg_buffer);
+
+    let msg = recvmsg(fd, &mut iov, &mut ancillary, RecvFlags::empty())?;
     if msg.bytes == 0 {
         return Err(io::Error::new(
             io::ErrorKind::BrokenPipe,
@@ -278,49 +283,58 @@ fn fd_recvmsg(fd: RawFd, buffer: &mut [u8]) -> io::Result<(usize, Vec<OwnedFd>)>
         ));
     }
     let mut fds = vec![];
-    for cmsg in msg.cmsgs()? {
-        #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
-        if let ControlMessageOwned::ScmCreds(_) = cmsg {
-            continue;
-        }
-        if let ControlMessageOwned::ScmRights(fd) = cmsg {
-            fds.extend(fd.iter().map(|&f| unsafe { OwnedFd::from_raw_fd(f) }));
-        } else {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "unexpected CMSG kind",
-            ));
+    for msg in ancillary.drain() {
+        match msg {
+            RecvAncillaryMessage::ScmRights(iter) => {
+                fds.extend(iter);
+            }
+            #[cfg(any(target_os = "linux", target_os = "android"))]
+            RecvAncillaryMessage::ScmCredentials(_) => {
+                // On Linux, credentials might be received. This shouldn't normally happen
+                // in our use case since we don't request them, but ignore if present.
+                continue;
+            }
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "unexpected CMSG kind",
+                ));
+            }
         }
     }
     Ok((msg.bytes, fds))
 }
 
 #[cfg(unix)]
-fn fd_sendmsg(fd: RawFd, buffer: &[u8], fds: &[BorrowedFd<'_>]) -> io::Result<usize> {
-    // FIXME: Remove this conversion once nix supports BorrowedFd here.
-    //
-    // Tracking issue: https://github.com/nix-rust/nix/issues/1750
-    let fds: Vec<_> = fds.iter().map(|f| f.as_raw_fd()).collect();
-    let cmsg = if !fds.is_empty() {
-        vec![ControlMessage::ScmRights(&fds)]
-    } else {
-        vec![]
-    };
+fn fd_sendmsg(fd: BorrowedFd<'_>, buffer: &[u8], fds: &[BorrowedFd<'_>]) -> io::Result<usize> {
+    use std::mem::MaybeUninit;
+
     let iov = [IoSlice::new(buffer)];
-    match sendmsg::<UnixAddr>(fd, &iov, &cmsg, MsgFlags::empty(), None) {
+    let mut cmsg_buffer = [MaybeUninit::uninit(); rustix::cmsg_space!(ScmRights(FDS_MAX))];
+    let mut ancillary = SendAncillaryBuffer::new(&mut cmsg_buffer);
+
+    if !fds.is_empty() && !ancillary.push(SendAncillaryMessage::ScmRights(fds)) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "too many file descriptors",
+        ));
+    }
+
+    let sent = sendmsg(fd, &iov, &mut ancillary, SendFlags::empty())?;
+    if sent == 0 {
         // can it really happen?
-        Ok(0) => Err(io::Error::new(
+        return Err(io::Error::new(
             io::ErrorKind::WriteZero,
             "failed to write to buffer",
-        )),
-        Ok(n) => Ok(n),
-        Err(e) => Err(e.into()),
+        ));
     }
+
+    Ok(sent)
 }
 
 #[cfg(unix)]
-async fn get_unix_peer_creds(fd: &impl AsRawFd) -> io::Result<crate::fdo::ConnectionCredentials> {
-    let fd = fd.as_raw_fd();
+async fn get_unix_peer_creds(fd: &impl AsFd) -> io::Result<crate::fdo::ConnectionCredentials> {
+    let fd = fd.as_fd().as_raw_fd();
     // FIXME: Is it likely enough for sending of 1 byte to block, to justify a task (possibly
     // launching a thread in turn)?
     crate::Task::spawn_blocking(move || get_unix_peer_creds_blocking(fd), "peer credentials")
@@ -336,53 +350,93 @@ fn get_unix_peer_creds_blocking(fd: RawFd) -> io::Result<crate::fdo::ConnectionC
 
     #[cfg(any(target_os = "android", target_os = "linux"))]
     {
-        use nix::{
-            sys::socket::{getsockopt, sockopt::PeerCredentials},
-            unistd::{getgrouplist, Gid, Uid, User},
-        };
-        use std::ffi::CString;
+        use rustix::net::sockopt::socket_peercred;
         use tracing::debug;
 
-        let (uid, gid, pid) = {
-            let unix_creds = getsockopt(&fd, PeerCredentials)?;
-            (
-                Uid::from_raw(unix_creds.uid()),
-                Gid::from_raw(unix_creds.uid()),
-                unix_creds.pid() as u32,
-            )
-        };
-        creds = creds.set_unix_user_id(uid.as_raw()).set_process_id(pid);
+        let ucred = socket_peercred(fd)?;
+        let uid = ucred.uid.as_raw();
+        let gid = ucred.gid.as_raw();
+        let pid = ucred.pid.as_raw_nonzero().get() as u32;
 
-        // the dbus spec requires groups to be either absent or complete (primary + secondary
-        // groups)
-        let mut groups = User::from_uid(uid)
-            .map_err(|e| debug!("User lookup failed: {}", e))
-            .ok()
-            .flatten()
-            .map(|user| CString::new(user.name))
-            .transpose()?
-            .map(|user| getgrouplist(&user, gid))
-            .transpose()
-            .map_err(|e| debug!("Group lookup failed: {}", e))
-            .ok()
-            .flatten()
-            .unwrap_or(Vec::new());
-        // it also requires the groups to be numerically sorted
-        groups.sort_by_key(|gid| gid.as_raw());
-        for group in groups.iter() {
-            creds = creds.add_unix_group_id(group.as_raw());
+        creds = creds.set_unix_user_id(uid).set_process_id(pid);
+
+        // The dbus spec requires groups to be either absent or complete (primary +
+        // secondary groups).
+
+        // FIXME: rustix does not and [will not] provide `getpwuid_r` and `getgrouplist` so we're
+        // left with no choice but to use libc directly. We could consider using `sysinfo` crate
+        // though.
+        //
+        // [will not]: https://docs.rs/rustix/latest/rustix/not_implemented/higher_level/index.html
+        let mut passwd: libc::passwd = unsafe { std::mem::zeroed() };
+        let mut buf = vec![0u8; 16384];
+        let mut result: *mut libc::passwd = std::ptr::null_mut();
+
+        unsafe {
+            libc::getpwuid_r(
+                uid,
+                &mut passwd,
+                buf.as_mut_ptr() as *mut libc::c_char,
+                buf.len(),
+                &mut result,
+            );
+        }
+
+        if !result.is_null() {
+            let username = unsafe { std::ffi::CStr::from_ptr((*result).pw_name) };
+
+            // Get supplementary groups.
+            let mut ngroups = 64i32;
+            let mut groups = vec![0u32; ngroups as usize];
+
+            unsafe {
+                if libc::getgrouplist(
+                    username.as_ptr(),
+                    gid,
+                    groups.as_mut_ptr() as *mut libc::gid_t,
+                    &mut ngroups,
+                ) >= 0
+                {
+                    groups.truncate(ngroups as usize);
+                    // The spec also requires the groups to be numerically sorted.
+                    groups.sort();
+                    for group in groups {
+                        creds = creds.add_unix_group_id(group);
+                    }
+                } else {
+                    debug!("Group lookup failed for user {:?}", username);
+                }
+            }
         }
 
         #[cfg(target_os = "linux")]
         {
-            use nix::{errno::Errno, sys::socket::sockopt::PeerPidfd};
-            use zvariant::OwnedFd;
+            // FIXME: Replace with rustix API when it provides SO_PEERPIDFD sockopt:
+            // https://github.com/bytecodealliance/rustix/pull/1474
+            const SO_PEERPIDFD: libc::c_int = 79;
+            let mut pidfd: libc::c_int = -1;
+            let mut len = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
 
-            match getsockopt(&fd, PeerPidfd) {
-                Err(Errno::ENOPROTOOPT) => (),
-                Ok(pidfd) => creds = creds.set_process_fd(OwnedFd::from(pidfd)),
-                Err(e) => return Err(e.into()),
+            let ret = unsafe {
+                libc::getsockopt(
+                    fd.as_raw_fd(),
+                    libc::SOL_SOCKET,
+                    SO_PEERPIDFD,
+                    &mut pidfd as *mut _ as *mut libc::c_void,
+                    &mut len,
+                )
             };
+
+            if ret == 0 && pidfd >= 0 {
+                creds = creds
+                    .set_process_fd(unsafe { std::os::fd::OwnedFd::from_raw_fd(pidfd).into() });
+            } else if ret < 0 {
+                let err = io::Error::last_os_error();
+                // ENOPROTOOPT means the kernel doesn't support this feature.
+                if err.raw_os_error() != Some(libc::ENOPROTOOPT) {
+                    return Err(err);
+                }
+            }
         }
     }
 
@@ -395,8 +449,17 @@ fn get_unix_peer_creds_blocking(fd: RawFd) -> io::Result<crate::fdo::ConnectionC
         target_os = "netbsd"
     ))]
     {
-        let (uid, _gid) = nix::unistd::getpeereid(fd)?;
-        creds = creds.set_unix_user_id(uid.as_raw())
+        // FIXME: Replace with rustix API when it provides the require API:
+        // https://github.com/bytecodealliance/rustix/issues/1533
+        let mut uid: libc::uid_t = 0;
+        let mut gid: libc::gid_t = 0;
+
+        let ret = unsafe { libc::getpeereid(fd.as_raw_fd(), &mut uid, &mut gid) };
+        if ret != 0 {
+            return Err(io::Error::last_os_error());
+        }
+
+        creds = creds.set_unix_user_id(uid);
 
         // FIXME: Handle pid fetching too
     }
@@ -406,20 +469,48 @@ fn get_unix_peer_creds_blocking(fd: RawFd) -> io::Result<crate::fdo::ConnectionC
 
 // Send 0 byte as a separate SCM_CREDS message.
 #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
-async fn send_zero_byte(fd: &impl AsRawFd) -> io::Result<usize> {
-    let fd = fd.as_raw_fd();
+async fn send_zero_byte(fd: &impl AsFd) -> io::Result<usize> {
+    let fd = fd.as_fd().as_raw_fd();
     crate::Task::spawn_blocking(move || send_zero_byte_blocking(fd), "send zero byte").await?
 }
 
 #[cfg(any(target_os = "freebsd", target_os = "dragonfly"))]
 fn send_zero_byte_blocking(fd: RawFd) -> io::Result<usize> {
-    let iov = [std::io::IoSlice::new(b"\0")];
-    sendmsg::<()>(
-        fd,
-        &iov,
-        &[ControlMessage::ScmCreds],
-        MsgFlags::empty(),
-        None,
-    )
-    .map_err(|e| e.into())
+    // FIXME: Replace with rustix API when it provides SCM_CREDS support for BSD.
+    // For now, use libc directly since rustix doesn't support sending SCM_CREDS on BSD.
+    use std::mem::MaybeUninit;
+
+    let mut iov = libc::iovec {
+        iov_base: c"".as_ptr() as *mut libc::c_void,
+        iov_len: 1,
+    };
+
+    let mut msg: libc::msghdr = unsafe { MaybeUninit::zeroed().assume_init() };
+    msg.msg_iov = &mut iov;
+    msg.msg_iovlen = 1;
+
+    // SCM_CREDS on BSD doesn't actually send data in the control message.
+    // Instead, it tells the kernel to attach credentials when receiving.
+    // We just need to allocate space for the cmsg header with no data.
+    let cmsg_space = unsafe { libc::CMSG_SPACE(0) as usize };
+    let mut cmsg_buf = vec![0u8; cmsg_space];
+
+    msg.msg_control = cmsg_buf.as_mut_ptr() as *mut libc::c_void;
+    msg.msg_controllen = cmsg_space as _;
+
+    let cmsg = unsafe { libc::CMSG_FIRSTHDR(&msg) };
+    if !cmsg.is_null() {
+        unsafe {
+            (*cmsg).cmsg_level = libc::SOL_SOCKET;
+            (*cmsg).cmsg_type = libc::SCM_CREDS;
+            (*cmsg).cmsg_len = libc::CMSG_LEN(0) as _;
+        }
+    }
+
+    let ret = unsafe { libc::sendmsg(fd, &msg, 0) };
+    if ret < 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(ret as usize)
+    }
 }

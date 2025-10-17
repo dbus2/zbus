@@ -96,7 +96,8 @@ windows-sys.workspace = true
 uds_windows.workspace = true
 
 [target.'cfg(unix)'.dependencies]
-nix.workspace = true
+rustix.workspace = true
+libc.workspace = true
 
 [target.'cfg(any(target_os = "macos", windows))'.dependencies]
 async-recursion.workspace = true

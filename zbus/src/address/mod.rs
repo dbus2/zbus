@@ -13,7 +13,7 @@ pub mod transport;
 
 use crate::{Error, Guid, OwnedGuid, Result};
 #[cfg(all(unix, not(target_os = "macos")))]
-use nix::unistd::Uid;
+use rustix::process::geteuid;
 use std::{collections::HashMap, env, str::FromStr};
 
 use std::fmt::{Display, Formatter};
@@ -72,7 +72,7 @@ impl Address {
                 #[cfg(all(unix, not(target_os = "macos")))]
                 {
                     let runtime_dir = env::var("XDG_RUNTIME_DIR")
-                        .unwrap_or_else(|_| format!("/run/user/{}", Uid::effective()));
+                        .unwrap_or_else(|_| format!("/run/user/{}", geteuid().as_raw()));
                     let path = format!("unix:path={runtime_dir}/bus");
 
                     Self::from_str(&path)

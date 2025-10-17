@@ -16,7 +16,7 @@ fn issue_813() {
     // 1 FD each. Before a fix for this issue, the server handshake would fail with an
     // `Unexpected FDs during handshake` error.
     use futures_util::try_join;
-    use nix::unistd::Uid;
+    use rustix::process::geteuid;
     #[cfg(not(feature = "tokio"))]
     use std::os::unix::net::UnixStream;
     use std::{os::fd::AsFd, vec};
@@ -79,7 +79,7 @@ fn issue_813() {
         let client = async move {
             let commands = format!(
                 "\0AUTH EXTERNAL {}\r\nNEGOTIATE_UNIX_FD\r\nBEGIN\r\n",
-                hex::encode(Uid::effective().to_string())
+                hex::encode(geteuid().as_raw().to_string())
             );
             let mut bytes: Vec<u8> = commands.bytes().collect();
             let fd = std::io::stdin();
