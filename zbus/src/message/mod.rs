@@ -45,13 +45,12 @@ impl Sequence {
 ///
 /// Also provided are constructors for messages of different types. These will mainly be useful for
 /// very advanced use cases as typically you will want to create a message for immediate dispatch
-/// and hence use the API provided by [`Connection`], even when using the low-level API.
+/// and hence use the API provided by [`crate::connection::Connection::call_method`], even when
+/// using the low-level API.
 ///
 /// **Note**: The message owns the received FDs and will close them when dropped. You can
 /// deserialize the body (that you get using [`Message::body`]) to [`zvariant::OwnedFd`] if you want
 /// to keep the FDs around after the containing message is dropped.
-///
-/// [`Connection`]: struct.Connection#method.call_method
 #[derive(Clone)]
 pub struct Message {
     pub(super) inner: Arc<Inner>,

@@ -1,6 +1,6 @@
 use crate::{serialized::Format, Endian};
 
-/// The encoding context to use with the [serialization and deserialization] API.
+/// The encoding context to use with the [serialization] and [deserialization] API.
 ///
 /// The encoding is dependent on the position of the encoding in the entire message and hence the
 /// need to [specify] the byte position of the data being serialized or deserialized. Simply pass
@@ -24,8 +24,9 @@ use crate::{serialized::Format, Endian};
 /// assert_eq!(decoded, "World");
 /// ```
 ///
-/// [serialization and deserialization]: index.html#functions
-/// [specify]: #method.new
+/// [serialization]: zvariant#functions
+/// [deserialization]: zvariant::serialized::Data::deserialize
+/// [specify]: Context::new
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct Context {
     format: Format,

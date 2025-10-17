@@ -5,7 +5,7 @@ use crate::Type;
 /// A wrapper to serialize `T: Type + serde::Serialize` as a value.
 ///
 /// When the type of a value is well-known, you may avoid the cost and complexity of wrapping to a
-/// generic [`Value`] and instead use this wrapper.
+/// generic [`enum@crate::Value`] and instead use this wrapper.
 ///
 /// ```
 /// # use zvariant::{to_bytes, serialized::Context, as_value::Serialize, LE};
@@ -13,8 +13,6 @@ use crate::Type;
 /// # let ctxt = Context::new_dbus(LE, 0);
 /// let _ = to_bytes(ctxt, &Serialize(&[0, 1, 2])).unwrap();
 /// ```
-///
-/// [`Value`]: enum.Value.html
 pub struct Serialize<'a, T: Type + serde::Serialize>(pub &'a T);
 
 impl<T: Type + serde::Serialize> serde::Serialize for Serialize<'_, T> {

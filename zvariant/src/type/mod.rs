@@ -16,24 +16,21 @@ use crate::Signature;
 /// Trait implemented by all serializable types.
 ///
 /// This very simple trait provides the signature for the implementing type. Since the [D-Bus type
-/// system] relies on these signatures, our [serialization and deserialization] API requires this
-/// trait in addition to [`Serialize`] and [`Deserialize`], respectively.
+/// system] relies on these signatures, our [serialization] and [deserialization] API requires this
+/// trait in addition to [`trait@serde::Serialize`] and [`serde::de::Deserialize`], respectively.
 ///
-/// Implementation is provided for all the [basic types] and blanket implementations for common
-/// container types, such as, arrays, slices, tuples, [`Vec`] and [`HashMap`]. For easy
-/// implementation for custom types, use `Type` derive macro from [zvariant_derive] crate.
+/// Implementation is provided for all the [basic types](crate::Basic) and blanket implementations
+/// for common container types, such as, arrays, slices, tuples, [`Vec`] and
+/// [`std::collections::HashMap`]. For easy implementation for custom types, use `Type` derive macro
+/// from [zvariant_derive] crate.
 ///
 /// If your type's signature cannot be determined statically, you should implement the
-/// [DynamicType] trait instead, which is otherwise automatically implemented if you implement this
-/// trait.
+/// [`DynamicType`] trait instead, which is otherwise automatically implemented if you implement
+/// this trait.
 ///
 /// [D-Bus type system]: https://dbus.freedesktop.org/doc/dbus-specification.html#type-system
-/// [serialization and deserialization]: index.html#functions
-/// [`Serialize`]: https://docs.serde.rs/serde/trait.Serialize.html
-/// [`Deserialize`]: https://docs.serde.rs/serde/de/trait.Deserialize.html
-/// [basic types]: trait.Basic.html
-/// [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
-/// [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
+/// [serialization]: zvariant#functions
+/// [deserialization]: zvariant::serialized::Data::deserialize
 /// [zvariant_derive]: https://docs.rs/zvariant_derive/latest/zvariant_derive/
 pub trait Type {
     /// The signature for the implementing type, in parsed format.

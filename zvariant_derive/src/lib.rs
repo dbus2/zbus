@@ -466,7 +466,7 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// `dict` or `a{sv}` values. All other values will be ignored.
 ///
 /// [`Value`]: https://docs.rs/zvariant/latest/zvariant/enum.Value.html
-/// [`Type`]: derive.Type.html#custom-types
+/// [`Type`]: crate::Type#custom-signatures
 #[proc_macro_derive(Value, attributes(zbus, zvariant))]
 pub fn value_macro_derive(input: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(input).unwrap();

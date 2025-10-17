@@ -139,7 +139,8 @@ impl ObjectServer {
         }
     }
 
-    /// Register a D-Bus [`Interface`] at a given path (see the example above).
+    /// Register a D-Bus [`crate::object_server::Interface`] at a given path (see the example
+    /// above).
     ///
     /// Typically you'd want your interfaces to be registered immediately after the associated
     /// connection is established and therefore use
@@ -148,8 +149,6 @@ impl ObjectServer {
     /// method becomes useful.
     ///
     /// If the interface already exists at this path, returns false.
-    ///
-    /// [`Interface`]: trait.Interface.html
     pub fn at<'p, P, I>(&self, path: P, iface: I) -> Result<bool>
     where
         I: Interface,
@@ -159,12 +158,10 @@ impl ObjectServer {
         block_on(self.azync.at(path, iface))
     }
 
-    /// Unregister a D-Bus [`Interface`] at a given path.
+    /// Unregister a D-Bus [`crate::object_server::Interface`] at a given path.
     ///
     /// If there are no more interfaces left at that path, destroys the object as well.
     /// Returns whether the object was destroyed.
-    ///
-    /// [`Interface`]: trait.Interface.html
     pub fn remove<'p, I, P>(&self, path: P) -> Result<bool>
     where
         I: Interface,

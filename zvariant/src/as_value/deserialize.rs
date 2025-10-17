@@ -8,7 +8,7 @@ use crate::{Signature, Type};
 /// A wrapper to deserialize a value to `T: Type + serde::Deserialize`.
 ///
 /// When the type of a value is well-known, you may avoid the cost and complexity of wrapping to a
-/// generic [`Value`] and instead use this wrapper.
+/// generic [`enum@crate::Value`] and instead use this wrapper.
 ///
 /// ```
 /// # use zvariant::{to_bytes, serialized::Context, as_value::{Deserialize, Serialize}, LE};
@@ -20,8 +20,6 @@ use crate::{Signature, Type};
 /// let decoded: Deserialize<[u8; 3]> = encoded.deserialize().unwrap().0;
 /// # assert_eq!(decoded.0, array);
 /// ```
-///
-/// [`Value`]: enum.Value.html
 pub struct Deserialize<'de, T: Type + serde::Deserialize<'de>>(
     pub T,
     std::marker::PhantomData<&'de T>,

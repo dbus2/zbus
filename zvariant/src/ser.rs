@@ -208,11 +208,8 @@ where
 /// Serialize `T` that has the given signature, to a new byte vector.
 ///
 /// Use this function instead of [`to_bytes`] if the value being serialized does not implement
-/// [`DynamicType`]. See [`from_slice_for_signature`] documentation for an example of how to use
-/// this function.
-///
-/// [`to_bytes`]: fn.to_bytes.html
-/// [`from_slice_for_signature`]: fn.from_slice_for_signature.html#examples
+/// [`DynamicType`]. See [`Data::deserialize_for_signature`] documentation for an example of how to
+/// use this function.
 pub fn to_bytes_for_signature<S, T>(
     ctxt: Context,
     signature: S,
