@@ -102,6 +102,7 @@ rustix = { version = "1.1.2", default-features = false, features = [
     "process",
     "std",
 ] }
+sysinfo = { version = "0.37.0", default-features = false, features = ["user"] }
 # FIXME: Remove when rustix provides the needed API. See `FIXME` comments in
 # `zbus::connection::socket::unix` module.
 libc = { version = "0.2", default-features = false }

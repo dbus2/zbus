@@ -343,128 +343,102 @@ async fn get_unix_peer_creds(fd: &impl AsFd) -> io::Result<crate::fdo::Connectio
 
 #[cfg(unix)]
 fn get_unix_peer_creds_blocking(fd: RawFd) -> io::Result<crate::fdo::ConnectionCredentials> {
+    use sysinfo::Users;
+    use tracing::debug;
+
     // TODO: get this BorrowedFd directly from get_unix_peer_creds(), but this requires a
     // 'static lifetime due to the Task.
     let fd = unsafe { BorrowedFd::borrow_raw(fd) };
     let mut creds = crate::fdo::ConnectionCredentials::default();
 
-    #[cfg(any(target_os = "android", target_os = "linux"))]
-    {
-        use rustix::net::sockopt::socket_peercred;
-        use tracing::debug;
-
-        let ucred = socket_peercred(fd)?;
-        let uid = ucred.uid.as_raw();
-        let gid = ucred.gid.as_raw();
-        let pid = ucred.pid.as_raw_nonzero().get() as u32;
-
-        creds = creds.set_unix_user_id(uid).set_process_id(pid);
-
-        // The dbus spec requires groups to be either absent or complete (primary +
-        // secondary groups).
-
-        // FIXME: rustix does not and [will not] provide `getpwuid_r` and `getgrouplist` so we're
-        // left with no choice but to use libc directly. We could consider using `sysinfo` crate
-        // though.
-        //
-        // [will not]: https://docs.rs/rustix/latest/rustix/not_implemented/higher_level/index.html
-        let mut passwd: libc::passwd = unsafe { std::mem::zeroed() };
-        let mut buf = vec![0u8; 16384];
-        let mut result: *mut libc::passwd = std::ptr::null_mut();
-
-        unsafe {
-            libc::getpwuid_r(
-                uid,
-                &mut passwd,
-                buf.as_mut_ptr() as *mut libc::c_char,
-                buf.len(),
-                &mut result,
-            );
-        }
-
-        if !result.is_null() {
-            let username = unsafe { std::ffi::CStr::from_ptr((*result).pw_name) };
-
-            // Get supplementary groups.
-            let mut ngroups = 64i32;
-            let mut groups = vec![0u32; ngroups as usize];
-
-            unsafe {
-                if libc::getgrouplist(
-                    username.as_ptr(),
-                    gid,
-                    groups.as_mut_ptr() as *mut libc::gid_t,
-                    &mut ngroups,
-                ) >= 0
-                {
-                    groups.truncate(ngroups as usize);
-                    // The spec also requires the groups to be numerically sorted.
-                    groups.sort();
-                    for group in groups {
-                        creds = creds.add_unix_group_id(group);
-                    }
-                } else {
-                    debug!("Group lookup failed for user {:?}", username);
-                }
-            }
-        }
-
-        #[cfg(target_os = "linux")]
-        {
-            // FIXME: Replace with rustix API when it provides SO_PEERPIDFD sockopt:
-            // https://github.com/bytecodealliance/rustix/pull/1474
-            const SO_PEERPIDFD: libc::c_int = 79;
-            let mut pidfd: libc::c_int = -1;
-            let mut len = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
-
-            let ret = unsafe {
-                libc::getsockopt(
-                    fd.as_raw_fd(),
-                    libc::SOL_SOCKET,
-                    SO_PEERPIDFD,
-                    &mut pidfd as *mut _ as *mut libc::c_void,
-                    &mut len,
-                )
-            };
-
-            if ret == 0 && pidfd >= 0 {
-                creds = creds
-                    .set_process_fd(unsafe { std::os::fd::OwnedFd::from_raw_fd(pidfd).into() });
-            } else if ret < 0 {
-                let err = io::Error::last_os_error();
-                // ENOPROTOOPT means the kernel doesn't support this feature.
-                if err.raw_os_error() != Some(libc::ENOPROTOOPT) {
-                    return Err(err);
-                }
-            }
-        }
+    // Get basic credentials (uid, gid, pid) using platform-specific methods.
+    let (uid, pid) = get_peer_uid_pid(&fd)?;
+    creds = creds.set_unix_user_id(uid);
+    if let Some(pid) = pid {
+        creds = creds.set_process_id(pid);
     }
 
-    #[cfg(any(
-        target_os = "macos",
-        target_os = "ios",
-        target_os = "freebsd",
-        target_os = "dragonfly",
-        target_os = "openbsd",
-        target_os = "netbsd"
-    ))]
-    {
-        // FIXME: Replace with rustix API when it provides the require API:
-        // https://github.com/bytecodealliance/rustix/issues/1533
-        let mut uid: libc::uid_t = 0;
-        let mut gid: libc::gid_t = 0;
-
-        let ret = unsafe { libc::getpeereid(fd.as_raw_fd(), &mut uid, &mut gid) };
-        if ret != 0 {
-            return Err(io::Error::last_os_error());
+    // The dbus spec requires groups to be either absent or complete (primary + secondary groups).
+    let users = Users::new_with_refreshed_list();
+    if let Some(user) = users.iter().find(|u| **u.id() == uid) {
+        let mut groups: Vec<u32> = user.groups().iter().map(|g| **g.id()).collect();
+        // The spec also requires the groups to be numerically sorted.
+        groups.sort_unstable();
+        for group in groups {
+            creds = creds.add_unix_group_id(group);
         }
+    } else {
+        debug!("User lookup failed for uid {}", uid);
+    }
 
-        creds = creds.set_unix_user_id(uid);
+    // Linux-specific: try to get pidfd if available.
+    #[cfg(target_os = "linux")]
+    {
+        // FIXME: Replace with rustix API when it provides SO_PEERPIDFD sockopt:
+        // https://github.com/bytecodealliance/rustix/pull/1474
+        const SO_PEERPIDFD: libc::c_int = 79;
+        let mut pidfd: libc::c_int = -1;
+        let mut len = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
 
-        // FIXME: Handle pid fetching too
+        let ret = unsafe {
+            libc::getsockopt(
+                fd.as_raw_fd(),
+                libc::SOL_SOCKET,
+                SO_PEERPIDFD,
+                &mut pidfd as *mut _ as *mut libc::c_void,
+                &mut len,
+            )
+        };
+
+        if ret == 0 && pidfd >= 0 {
+            creds =
+                creds.set_process_fd(unsafe { std::os::fd::OwnedFd::from_raw_fd(pidfd).into() });
+        } else if ret < 0 {
+            let err = io::Error::last_os_error();
+            // ENOPROTOOPT means the kernel doesn't support this feature.
+            if err.raw_os_error() != Some(libc::ENOPROTOOPT) {
+                return Err(err);
+            }
+        }
     }
 
     Ok(creds)
+}
+
+// Get peer uid and optionally pid.
+#[cfg(any(target_os = "android", target_os = "linux"))]
+fn get_peer_uid_pid(fd: &BorrowedFd<'_>) -> io::Result<(u32, Option<u32>)> {
+    use rustix::net::sockopt::socket_peercred;
+
+    let ucred = socket_peercred(fd)?;
+    let uid = ucred.uid.as_raw();
+    let pid = ucred.pid.as_raw_nonzero().get() as u32;
+
+    Ok((uid, Some(pid)))
+}
+
+#[cfg(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "freebsd",
+    target_os = "dragonfly",
+    target_os = "openbsd",
+    target_os = "netbsd"
+))]
+fn get_peer_uid_pid(fd: &BorrowedFd<'_>) -> io::Result<(u32, Option<u32>)> {
+    // FIXME: Replace with rustix API when it provides the require API:
+    // https://github.com/bytecodealliance/rustix/issues/1533
+    let mut uid: libc::uid_t = 0;
+    let mut gid: libc::gid_t = 0;
+
+    let ret = unsafe { libc::getpeereid(fd.as_raw_fd(), &mut uid, &mut gid) };
+    if ret != 0 {
+        return Err(io::Error::last_os_error());
+    }
+
+    // FIXME: Handle pid fetching too
+
+    Ok((uid, None))
 }
 
 // Send 0 byte as a separate SCM_CREDS message.
