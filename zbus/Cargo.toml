@@ -98,6 +98,7 @@ uds_windows.workspace = true
 [target.'cfg(unix)'.dependencies]
 rustix.workspace = true
 libc.workspace = true
+sysinfo.workspace = true
 
 [target.'cfg(any(target_os = "macos", windows))'.dependencies]
 async-recursion.workspace = true

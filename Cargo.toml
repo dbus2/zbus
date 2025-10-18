@@ -17,7 +17,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tokio_unstable)'] }
 
 [workspace.package]
 edition = "2021"
-rust-version = "1.77"
+rust-version = "1.88"
 license = "MIT"
 repository = "https://github.com/z-galaxy/zbus/"
 
@@ -102,6 +102,7 @@ rustix = { version = "1.1.2", default-features = false, features = [
     "process",
     "std",
 ] }
+sysinfo = { version = "0.37.0", default-features = false, features = ["user"] }
 # FIXME: Remove when rustix provides the needed API. See `FIXME` comments in
 # `zbus::connection::socket::unix` module.
 libc = { version = "0.2", default-features = false }
