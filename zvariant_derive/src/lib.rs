@@ -15,6 +15,7 @@ use proc_macro::TokenStream;
 use syn::DeriveInput;
 
 mod dict;
+mod signature;
 mod r#type;
 mod utils;
 mod value;
@@ -486,6 +487,21 @@ pub fn value_macro_derive(input: TokenStream) -> TokenStream {
 pub fn owned_value_macro_derive(input: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(input).unwrap();
     value::expand_derive(ast, value::ValueType::OwnedValue)
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
+}
+
+/// Constructs a const [`Signature`] with compile-time validation.
+///
+/// Allows to create a `Signature` from a string literal at compile time,
+/// with validation to ensure the signature string is valid.
+///
+/// The macro validates the signature string at compile time:
+///
+/// [`Signature`]: https://docs.rs/zvariant/latest/zvariant/enum.Signature.html
+#[proc_macro]
+pub fn signature(input: TokenStream) -> TokenStream {
+    signature::expand_signature_macro(input.into())
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
 }

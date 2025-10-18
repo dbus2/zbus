@@ -1,5 +1,4 @@
-use std::str::FromStr;
-use zvariant::{Signature, Value, LE};
+use zvariant::{signature, Signature, Value, LE};
 
 #[macro_use]
 mod common {
@@ -8,7 +7,8 @@ mod common {
 
 #[test]
 fn signature() {
-    let sig = Signature::from_str("yys").unwrap();
+    let sig: Signature = signature!("yys");
+
     // Structure will always add () around the signature if it's a struct.
     basic_type_test!(LE, DBus, sig, 7, Signature, 1);
 
@@ -20,13 +20,13 @@ fn signature() {
     assert_eq!(v.value_signature(), "g");
     let encoded = value_test!(LE, DBus, v, 10);
     let v = encoded.deserialize::<Value<'_>>().unwrap().0;
-    assert_eq!(v, Value::Signature(Signature::try_from("yys").unwrap()));
+    assert_eq!(v, Value::Signature(signature!("yys")));
 
     // GVariant format now
     #[cfg(feature = "gvariant")]
     {
         let encoded = value_test!(LE, GVariant, v, 8);
         let v = encoded.deserialize::<Value<'_>>().unwrap().0;
-        assert_eq!(v, Value::Signature(Signature::try_from("yys").unwrap()));
+        assert_eq!(v, Value::Signature(signature!("yys")));
     }
 }
