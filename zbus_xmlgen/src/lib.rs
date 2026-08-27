@@ -253,108 +253,107 @@ impl<'i> CodeGenerator<'i> {
         writeln!(w, ")]")?;
         writeln!(w, "pub trait {name} {{")?;
 
-        let mut methods = iface.methods().collect::<Vec<_>>();
-        methods.sort_by(|a, b| a.name().partial_cmp(&b.name()).unwrap());
-        for m in &methods {
-            let (inputs, output) = inputs_output_from_args(m.args(), &types);
-            let name = to_identifier(&to_snakecase(m.name().as_str()));
-            writeln!(w)?;
-            writeln!(w, "    /// {} method", m.name())?;
-            write_member_docs(w, m.docstring(), m.args())?;
-            if pascal_case(&name) != m.name().as_str() {
-                writeln!(w, "    #[zbus(name = \"{}\")]", m.name())?;
-            }
-            hide_clippy_lints(w, m, &types)?;
-            writeln!(w, "    fn {name}({inputs}){output};")?;
-        }
+        // The names of the signal methods ending in `_changed`, for collision detection with the
+        // implicit property change receivers. They are collected upfront, since a property can
+        // come before the signal it collides with.
+        let changed_suffix_signals: HashSet<String> = iface
+            .signals()
+            .map(|signal| to_identifier(&to_snakecase(signal.name().as_str())))
+            .filter(|name| name.ends_with("_changed"))
+            .collect();
 
-        let mut signals = iface.signals().collect::<Vec<_>>();
-        signals.sort_by(|a, b| a.name().partial_cmp(&b.name()).unwrap());
-
-        // Collect signal method names for collision detection with the implicit property change
-        // receivers.
-        let mut changed_suffix_signals = HashSet::new();
-
-        for signal in &signals {
-            let args = parse_signal_args(signal.args(), &types);
-            let name = to_identifier(&to_snakecase(signal.name().as_str()));
-            writeln!(w)?;
-            writeln!(w, "    /// {} signal", signal.name())?;
-            write_member_docs(w, signal.docstring(), signal.args())?;
-            if pascal_case(&name) != signal.name().as_str() {
-                writeln!(w, "    #[zbus(signal, name = \"{}\")]", signal.name())?;
-            } else {
-                writeln!(w, "    #[zbus(signal)]")?;
-            }
-            writeln!(w, "    fn {name}({args}) -> zbus::Result<()>;",)?;
-
-            if name.ends_with("_changed") {
-                changed_suffix_signals.insert(name);
-            }
-        }
-
-        let mut props = iface.properties().collect::<Vec<_>>();
-        props.sort_by(|a, b| a.name().partial_cmp(&b.name()).unwrap());
-        for p in props {
-            let name = to_identifier(&to_snakecase(p.name().as_str()));
-
-            // If an explicit `{prop}_changed` signal exists, it shadows the implicit change
-            // receiver the `#[proxy]` macro would generate for the property, causing duplicate
-            // methods. Mark the property as not emitting a change signal so only the explicit
-            // signal's receiver is generated.
-            let prop_change_receiver_name = format!("{name}_changed");
-            let signal_collision = changed_suffix_signals.contains(&prop_change_receiver_name);
-
-            let (fn_attribute, comment) = if signal_collision {
-                let fn_attribute = if pascal_case(&name) != p.name().as_str() {
-                    format!(
-                        "    #[zbus(property(emits_changed_signal = \"false\"), name = \"{}\")]",
-                        p.name()
-                    )
-                } else {
-                    "    #[zbus(property(emits_changed_signal = \"false\"))]".to_string()
-                };
-                (
-                    fn_attribute,
-                    format!(
-                        "    // Note: changed signal is shadowed by `{}` signal method.\n",
-                        prop_change_receiver_name,
-                    ),
-                )
-            } else if pascal_case(&name) != p.name().as_str() {
-                (
-                    format!("    #[zbus(property, name = \"{}\")]", p.name()),
-                    String::new(),
-                )
-            } else {
-                ("    #[zbus(property)]".to_string(), String::new())
-            };
-
-            writeln!(w)?;
-            writeln!(w, "    /// {} property", p.name())?;
-            write_member_docs(w, p.docstring(), &[])?;
-            write!(w, "{comment}")?;
-            // Named types satisfy both directions of the property value conversions, owned.
-            let named = types.resolve(p.tp_type(), p.ty(), false);
-            if p.access().read() {
-                writeln!(w, "{fn_attribute}")?;
-                let output = match &named {
-                    Some(named) => named.clone(),
-                    None => {
-                        hide_clippy_type_complexity_lint(w, p.ty())?;
-                        to_rust_type(p.ty(), false, false)
+        for child in iface.children() {
+            match child {
+                zbus_xml::Child::Method(m) => {
+                    let (inputs, output) = inputs_output_from_args(m.args(), &types);
+                    let name = to_identifier(&to_snakecase(m.name().as_str()));
+                    writeln!(w)?;
+                    writeln!(w, "    /// {} method", m.name())?;
+                    write_member_docs(w, m.docstring(), m.args())?;
+                    if pascal_case(&name) != m.name().as_str() {
+                        writeln!(w, "    #[zbus(name = \"{}\")]", m.name())?;
                     }
-                };
-                writeln!(w, "    fn {name}(&self) -> zbus::Result<{output}>;",)?;
-            }
+                    hide_clippy_lints(w, m, &types)?;
+                    writeln!(w, "    fn {name}({inputs}){output};")?;
+                }
+                zbus_xml::Child::Signal(signal) => {
+                    let args = parse_signal_args(signal.args(), &types);
+                    let name = to_identifier(&to_snakecase(signal.name().as_str()));
+                    writeln!(w)?;
+                    writeln!(w, "    /// {} signal", signal.name())?;
+                    write_member_docs(w, signal.docstring(), signal.args())?;
+                    if pascal_case(&name) != signal.name().as_str() {
+                        writeln!(w, "    #[zbus(signal, name = \"{}\")]", signal.name())?;
+                    } else {
+                        writeln!(w, "    #[zbus(signal)]")?;
+                    }
+                    writeln!(w, "    fn {name}({args}) -> zbus::Result<()>;",)?;
+                }
+                zbus_xml::Child::Property(p) => {
+                    let name = to_identifier(&to_snakecase(p.name().as_str()));
 
-            if p.access().write() {
-                writeln!(w, "{fn_attribute}")?;
-                let input = named.unwrap_or_else(|| to_property_setter_type(p.ty()));
-                writeln!(
-                    w,
-                    "    fn set_{name}(&self, value: {input}) -> zbus::Result<()>;",
-                )?;
+                    // If an explicit `{prop}_changed` signal exists, it shadows the implicit
+                    // change receiver the `#[proxy]` macro would generate for the property,
+                    // causing duplicate methods. Mark the property as not emitting a change
+                    // signal so only the explicit signal's receiver is generated.
+                    let prop_change_receiver_name = format!("{name}_changed");
+                    let signal_collision =
+                        changed_suffix_signals.contains(&prop_change_receiver_name);
+
+                    let (fn_attribute, comment) = if signal_collision {
+                        let fn_attribute = if pascal_case(&name) != p.name().as_str() {
+                            format!(
+                                "    #[zbus(property(emits_changed_signal = \"false\"), \
+                                 name = \"{}\")]",
+                                p.name()
+                            )
+                        } else {
+                            "    #[zbus(property(emits_changed_signal = \"false\"))]".to_string()
+                        };
+                        (
+                            fn_attribute,
+                            format!(
+                                "    // Note: changed signal is shadowed by `{}` signal method.\n",
+                                prop_change_receiver_name,
+                            ),
+                        )
+                    } else if pascal_case(&name) != p.name().as_str() {
+                        (
+                            format!("    #[zbus(property, name = \"{}\")]", p.name()),
+                            String::new(),
+                        )
+                    } else {
+                        ("    #[zbus(property)]".to_string(), String::new())
+                    };
+
+                    writeln!(w)?;
+                    writeln!(w, "    /// {} property", p.name())?;
+                    write_member_docs(w, p.docstring(), &[])?;
+                    write!(w, "{comment}")?;
+                    // Named types satisfy both directions of the property value conversions, owned.
+                    let named = types.resolve(p.tp_type(), p.ty(), false);
+                    if p.access().read() {
+                        writeln!(w, "{fn_attribute}")?;
+                        let output = match &named {
+                            Some(named) => named.clone(),
+                            None => {
+                                hide_clippy_type_complexity_lint(w, p.ty())?;
+                                to_rust_type(p.ty(), false, false)
+                            }
+                        };
+                        writeln!(w, "    fn {name}(&self) -> zbus::Result<{output}>;",)?;
+                    }
+
+                    if p.access().write() {
+                        writeln!(w, "{fn_attribute}")?;
+                        let input = named.unwrap_or_else(|| to_property_setter_type(p.ty()));
+                        writeln!(
+                            w,
+                            "    fn set_{name}(&self, value: {input}) -> zbus::Result<()>;",
+                        )?;
+                    }
+                }
+                _ => (),
             }
         }
         writeln!(w, "}}")
