@@ -517,23 +517,23 @@ impl<'a> Interface<'a> {
     }
 
     /// Returns the interface methods.
-    pub fn methods(&self) -> &[Method<'a>] {
-        &self.methods
+    pub fn methods(&self) -> impl Iterator<Item = &Method<'a>> {
+        self.methods.iter()
     }
 
     /// Returns the interface signals.
-    pub fn signals(&self) -> &[Signal<'a>] {
-        &self.signals
+    pub fn signals(&self) -> impl Iterator<Item = &Signal<'a>> {
+        self.signals.iter()
     }
 
     /// Returns the interface properties.
-    pub fn properties(&self) -> &[Property<'a>] {
-        &self.properties
+    pub fn properties(&self) -> impl Iterator<Item = &Property<'a>> {
+        self.properties.iter()
     }
 
     /// Return the associated annotations.
-    pub fn annotations(&self) -> &[Annotation<'a>] {
-        &self.annotations
+    pub fn annotations(&self) -> impl Iterator<Item = &Annotation<'a>> {
+        self.annotations.iter()
     }
 
     /// Return the content of the Telepathy `tp:docstring` extension element, if any.
@@ -546,8 +546,8 @@ impl<'a> Interface<'a> {
     }
 
     /// Return the Telepathy type definitions on this interface.
-    pub fn telepathy_types(&self) -> &[telepathy::TypeDef<'a>] {
-        &self.telepathy_types
+    pub fn telepathy_types(&self) -> impl Iterator<Item = &telepathy::TypeDef<'a>> {
+        self.telepathy_types.iter()
     }
 
     /// Creates an owned clone of `self`.
