@@ -251,31 +251,28 @@ fn interface<'i>(
     self_closing: bool,
 ) -> PResult<Interface<'i>> {
     let name = attrs.name(|n| InterfaceName::try_from(n).map_err(Error::Zbus))?;
-    let mut methods = Vec::new();
-    let mut properties = Vec::new();
-    let mut signals = Vec::new();
-    let mut annotations = Vec::new();
+    let mut children = Vec::<crate::Child<'i>>::new();
     let mut docstring = None;
     let mut telepathy_types = Vec::new();
-    children(
+    self::children(
         input,
         tag,
         self_closing,
         |input, child, attrs, sc| match child {
             "method" => {
-                methods.push(method(input, child, attrs, sc)?);
+                children.push(method(input, child, attrs, sc)?.into());
                 Ok(true)
             }
             "property" => {
-                properties.push(property(input, child, attrs, sc)?);
+                children.push(property(input, child, attrs, sc)?.into());
                 Ok(true)
             }
             "signal" => {
-                signals.push(signal(input, child, attrs, sc)?);
+                children.push(signal(input, child, attrs, sc)?.into());
                 Ok(true)
             }
             "annotation" => {
-                annotations.push(annotation(input, child, attrs, sc)?);
+                children.push(annotation(input, child, attrs, sc)?.into());
                 Ok(true)
             }
             other if is_docstring(other) => {
@@ -293,10 +290,7 @@ fn interface<'i>(
 
     Ok(Interface {
         name,
-        methods,
-        properties,
-        signals,
-        annotations,
+        children,
         docstring,
         telepathy_types,
     })
