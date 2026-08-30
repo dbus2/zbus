@@ -513,6 +513,12 @@ impl<'a> Interface<'a> {
         self.name.as_ref()
     }
 
+    /// The methods, signals, properties and annotations of the interface, in the order they are
+    /// defined in the document.
+    pub fn children(&self) -> impl Iterator<Item = &Child<'a>> {
+        self.children.iter()
+    }
+
     /// Returns the interface methods.
     pub fn methods(&self) -> impl Iterator<Item = &Method<'a>> {
         self.children.iter().filter_map(|child| {

@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use zbus::Signature;
-use zbus_xml::{Arg, ArgDirection, Interface, Node, PropertyAccess};
+use zbus_xml::{Arg, ArgDirection, Child, Interface, Node, PropertyAccess};
 
 #[test]
 fn sample_object() -> Result<(), Box<dyn Error>> {
@@ -998,6 +998,74 @@ fn telepathy_type_definitions() -> Result<(), Box<dyn Error>> {
             .tp_type(),
         Some("Playlist_Ordering[]")
     );
+
+    Ok(())
+}
+
+#[test]
+fn docstrings_and_type_definitions_are_not_interface_members() -> Result<(), Box<dyn Error>> {
+    // The docstrings and the definitions come between the members, and one interface has nothing
+    // else.
+    let input = r#"
+        <node xmlns:tp="http://telepathy.freedesktop.org/wiki/DbusSpec#extensions-v0">
+            <interface name="org.test.testinterface">
+                <tp:enum name="Playlist_Ordering" type="s">
+                    <tp:enumvalue suffix="Alphabetical" value="Alphabetical"/>
+                </tp:enum>
+                <method name="GetPlaylists"/>
+                <tp:docstring>First.</tp:docstring>
+                <tp:struct name="Playlist" array-name="Playlist_List">
+                    <tp:member type="s" name="Name"/>
+                </tp:struct>
+                <property name="Orderings" type="as" access="read"/>
+                <tp:docstring>Last.</tp:docstring>
+                <tp:mapping name="String_Variant_Map">
+                    <tp:member type="s" name="Key"/>
+                    <tp:member type="v" name="Value"/>
+                </tp:mapping>
+                <tp:docstring>  </tp:docstring>
+            </interface>
+            <interface name="org.test.onlytypes">
+                <tp:docstring>Only docs.</tp:docstring>
+                <tp:mapping name="String_Variant_Map">
+                    <tp:member type="s" name="Key"/>
+                    <tp:member type="v" name="Value"/>
+                </tp:mapping>
+            </interface>
+        </node>
+    "#;
+
+    let node = Node::try_from(input)?;
+    let interface = &node.interfaces()[0];
+    assert_eq!(interface.telepathy_types().count(), 3);
+    // The last docstring that isn't empty is the interface's.
+    assert_eq!(interface.docstring(), Some("Last."));
+    // The docstrings and the type definitions are not among the children, only the members are.
+    let [Child::Method(method), Child::Property(property)] =
+        interface.children().collect::<Vec<_>>()[..]
+    else {
+        panic!("expected the method and the property as the only children");
+    };
+    assert_eq!(method.name(), "GetPlaylists");
+    assert_eq!(property.name(), "Orderings");
+    assert_eq!(node.interfaces()[1].docstring(), Some("Only docs."));
+    assert_eq!(node.interfaces()[1].telepathy_types().count(), 1);
+    assert_eq!(node.interfaces()[1].children().count(), 0);
+
+    // Writing the node leaves the docstrings and the type definitions out and keeps the members.
+    let mut written = Vec::new();
+    node.to_writer(&mut written)?;
+    let reparsed = Node::from_reader(&written[..])?;
+    assert_eq!(reparsed.interfaces().len(), 2);
+    assert_eq!(
+        reparsed.interfaces()[0].children().collect::<Vec<_>>(),
+        interface.children().collect::<Vec<_>>()
+    );
+    for interface in reparsed.interfaces() {
+        assert_eq!(interface.docstring(), None);
+        assert_eq!(interface.telepathy_types().count(), 0);
+    }
+    assert_eq!(reparsed.interfaces()[1].children().count(), 0);
 
     Ok(())
 }
