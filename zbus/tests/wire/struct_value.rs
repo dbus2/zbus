@@ -1,18 +1,18 @@
 use serde::{Deserialize, Serialize};
 use zbus::{
-    Str, Structure, Type, Value, as_value,
+    Str, Structure, Type, Variant, as_variant,
     wire::{LE, serialized::Context, to_bytes},
 };
 
 #[test]
 fn struct_value() {
-    // Struct->Value
-    let s: Value<'_> = ("a", "b", (1, 2)).into();
+    // Struct->Variant
+    let s: Variant<'_> = ("a", "b", (1, 2)).into();
 
     let ctxt = Context::new(LE, 0);
     let encoded = to_bytes(ctxt, &s).unwrap();
     assert_eq!(dbg!(encoded.len()), 40);
-    let decoded: Value<'_> = encoded.deserialize().unwrap().0;
+    let decoded: Variant<'_> = encoded.deserialize().unwrap().0;
     let s = <Structure<'_>>::try_from(decoded).unwrap();
     let outer = <(Str<'_>, Str<'_>, Structure<'_>)>::try_from(s).unwrap();
     assert_eq!(outer.0, "a");
@@ -28,9 +28,9 @@ fn struct_value() {
     }
 
     let foo = Foo { val: 99 };
-    let v = as_value::Serialize(&foo);
+    let v = as_variant::Serialize(&foo);
     let encoded = to_bytes(ctxt, &v).unwrap();
-    let decoded: as_value::Deserialize<'_, Foo> = encoded.deserialize().unwrap().0;
+    let decoded: as_variant::Deserialize<'_, Foo> = encoded.deserialize().unwrap().0;
     assert_eq!(decoded.0, foo);
 
     // A struct with underaligned tail.

@@ -1,4 +1,4 @@
-//! Utilities to (de)serialize a value as a [`enum@zbus::Value`].
+//! Utilities to (de)serialize a value as a [`enum@zbus::Variant`].
 //!
 //! This is mainly useful for constructing a strongly-typed API for dealing with dictionaries
 //! containing string keys and variant values (`a{sv}` in D-Bus language) See the relevant
@@ -12,10 +12,10 @@ mod serialize;
 pub use serialize::{Serialize, serialize};
 mod property;
 pub use property::deserialize_for_property;
-mod value_serializer;
-pub use value_serializer::to_owned_value;
+mod variant_serializer;
+pub use variant_serializer::to_owned_variant;
 
-/// Utilities to (de)serialize an optional value as a [`enum@zbus::Value`].
+/// Utilities to (de)serialize an optional value as a [`enum@zbus::Variant`].
 pub mod optional {
     use super::*;
 

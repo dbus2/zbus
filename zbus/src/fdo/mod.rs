@@ -229,7 +229,7 @@ mod tests {
             signal.args().unwrap().interfaces_and_properties,
             vec![(
                 "org.zbus.TestObj".try_into().unwrap(),
-                vec![("Test", crate::Value::new("test"))]
+                vec![("Test", crate::Variant::new("test"))]
                     .into_iter()
                     .collect()
             )]

@@ -1,7 +1,7 @@
 //! In-memory serializer for values wrapped by [`super::Serialize`].
 //!
 //! This is deliberately kept separate from `serialize.rs`: the latter is the public Serde
-//! wrapper, while this module is the `Value`-building backend used when no wire representation is
+//! wrapper, while this module is the `Variant`-building backend used when no wire representation is
 //! needed.
 
 use serde::{
@@ -10,7 +10,8 @@ use serde::{
 };
 
 use crate::wire::{
-    Array, Dict, OwnedValue, Signature, Structure, Type, Value, container_depths::ContainerDepths,
+    Array, Dict, OwnedVariant, Signature, Structure, Type, Variant,
+    container_depths::ContainerDepths,
 };
 
 #[cfg(unix)]
@@ -18,21 +19,21 @@ use std::os::fd::BorrowedFd;
 
 /// Serialize `value` directly into an owned D-Bus variant.
 #[doc(hidden)]
-pub fn to_owned_value<T>(value: &T) -> crate::Result<OwnedValue>
+pub fn to_owned_variant<T>(value: &T) -> crate::Result<OwnedVariant>
 where
     T: Type + Serialize,
 {
-    Ok(OwnedValue(to_value(value)?))
+    Ok(OwnedVariant(to_value(value)?))
 }
 
 /// Serialize `value` directly into the payload of an owned D-Bus variant.
-fn to_value<T>(value: &T) -> crate::Result<Value<'static>>
+fn to_value<T>(value: &T) -> crate::Result<Variant<'static>>
 where
     T: Type + Serialize,
 {
     let mut serializer = ValueSerializer::new(Signature::Variant, ContainerDepths::default());
     let variant = super::Serialize(value).serialize(&mut serializer)?;
-    let Value::Value(value) = variant else {
+    let Variant::Variant(value) = variant else {
         return Err(crate::Error::Failure(
             "as-value serializer did not produce a variant".to_owned(),
         ));
@@ -64,7 +65,7 @@ impl ValueSerializer {
 }
 
 impl ser::Serializer for &mut ValueSerializer {
-    type Ok = Value<'static>;
+    type Ok = Variant<'static>;
     type Error = crate::Error;
     type SerializeSeq = SeqSerializer;
     type SerializeTuple = StructSeqSerializer;
@@ -75,16 +76,16 @@ impl ser::Serializer for &mut ValueSerializer {
     type SerializeStructVariant = StructSeqSerializer;
 
     fn serialize_bool(self, value: bool) -> crate::Result<Self::Ok> {
-        self.expect(Signature::Bool).map(|()| Value::Bool(value))
+        self.expect(Signature::Bool).map(|()| Variant::Bool(value))
     }
 
     fn serialize_i8(self, value: i8) -> crate::Result<Self::Ok> {
         self.expect(Signature::I16)
-            .map(|()| Value::I16(value as i16))
+            .map(|()| Variant::I16(value as i16))
     }
 
     fn serialize_i16(self, value: i16) -> crate::Result<Self::Ok> {
-        self.expect(Signature::I16).map(|()| Value::I16(value))
+        self.expect(Signature::I16).map(|()| Variant::I16(value))
     }
 
     fn serialize_i32(self, value: i32) -> crate::Result<Self::Ok> {
@@ -93,39 +94,39 @@ impl ser::Serializer for &mut ValueSerializer {
             // SAFETY: `value` is the raw descriptor supplied by the Serialize implementation.
             // It is borrowed only for the duration of the immediate clone operation.
             let fd = unsafe { BorrowedFd::borrow_raw(value) }.try_clone_to_owned()?;
-            return Ok(Value::Fd(crate::Fd::Owned(fd)));
+            return Ok(Variant::Fd(crate::Fd::Owned(fd)));
         }
 
-        self.expect(Signature::I32).map(|()| Value::I32(value))
+        self.expect(Signature::I32).map(|()| Variant::I32(value))
     }
 
     fn serialize_i64(self, value: i64) -> crate::Result<Self::Ok> {
-        self.expect(Signature::I64).map(|()| Value::I64(value))
+        self.expect(Signature::I64).map(|()| Variant::I64(value))
     }
 
     fn serialize_u8(self, value: u8) -> crate::Result<Self::Ok> {
-        self.expect(Signature::U8).map(|()| Value::U8(value))
+        self.expect(Signature::U8).map(|()| Variant::U8(value))
     }
 
     fn serialize_u16(self, value: u16) -> crate::Result<Self::Ok> {
-        self.expect(Signature::U16).map(|()| Value::U16(value))
+        self.expect(Signature::U16).map(|()| Variant::U16(value))
     }
 
     fn serialize_u32(self, value: u32) -> crate::Result<Self::Ok> {
-        self.expect(Signature::U32).map(|()| Value::U32(value))
+        self.expect(Signature::U32).map(|()| Variant::U32(value))
     }
 
     fn serialize_u64(self, value: u64) -> crate::Result<Self::Ok> {
-        self.expect(Signature::U64).map(|()| Value::U64(value))
+        self.expect(Signature::U64).map(|()| Variant::U64(value))
     }
 
     fn serialize_f32(self, value: f32) -> crate::Result<Self::Ok> {
         self.expect(Signature::F64)
-            .map(|()| Value::F64(value as f64))
+            .map(|()| Variant::F64(value as f64))
     }
 
     fn serialize_f64(self, value: f64) -> crate::Result<Self::Ok> {
-        self.expect(Signature::F64).map(|()| Value::F64(value))
+        self.expect(Signature::F64).map(|()| Variant::F64(value))
     }
 
     fn serialize_char(self, value: char) -> crate::Result<Self::Ok> {
@@ -134,11 +135,11 @@ impl ser::Serializer for &mut ValueSerializer {
 
     fn serialize_str(self, value: &str) -> crate::Result<Self::Ok> {
         match self.signature {
-            Signature::Str => Ok(Value::Str(value.to_owned().into())),
-            Signature::ObjectPath => Ok(Value::ObjectPath(crate::ObjectPath::try_from(
+            Signature::Str => Ok(Variant::Str(value.to_owned().into())),
+            Signature::ObjectPath => Ok(Variant::ObjectPath(crate::ObjectPath::try_from(
                 value.to_owned(),
             )?)),
-            Signature::Signature => Ok(Value::Signature(value.parse()?)),
+            Signature::Signature => Ok(Variant::Signature(value.parse()?)),
             _ => Err(self.mismatch("a string, signature, or object path")),
         }
     }
@@ -152,9 +153,9 @@ impl ser::Serializer for &mut ValueSerializer {
         }
         let mut array = Array::new(&Signature::U8);
         for byte in value {
-            array.append(Value::U8(*byte))?;
+            array.append(Variant::U8(*byte))?;
         }
-        Ok(Value::Array(array))
+        Ok(Variant::Array(array))
     }
 
     fn serialize_none(self) -> crate::Result<Self::Ok> {
@@ -200,7 +201,7 @@ impl ser::Serializer for &mut ValueSerializer {
         variant: &'static str,
     ) -> crate::Result<Self::Ok> {
         if self.signature == Signature::Str {
-            return Ok(Value::Str(variant.to_owned().into()));
+            return Ok(Variant::Str(variant.to_owned().into()));
         }
         self.serialize_u32(variant_index)
     }
@@ -314,12 +315,12 @@ impl ser::Serializer for &mut ValueSerializer {
 struct SeqSerializer {
     element_signature: Signature,
     array_signature: Signature,
-    elements: Vec<Value<'static>>,
+    elements: Vec<Variant<'static>>,
     depths: ContainerDepths,
 }
 
 impl ser::SerializeSeq for SeqSerializer {
-    type Ok = Value<'static>;
+    type Ok = Variant<'static>;
     type Error = crate::Error;
 
     fn serialize_element<T>(&mut self, value: &T) -> crate::Result<()>
@@ -337,7 +338,7 @@ impl ser::SerializeSeq for SeqSerializer {
             array.append(element)?;
         }
         debug_assert_eq!(array.signature(), &self.array_signature);
-        Ok(Value::Array(array))
+        Ok(Variant::Array(array))
     }
 }
 
@@ -345,13 +346,13 @@ struct MapSerializer {
     key_signature: Signature,
     value_signature: Signature,
     dict_signature: Signature,
-    entries: Vec<(Value<'static>, Value<'static>)>,
-    pending_key: Option<Value<'static>>,
+    entries: Vec<(Variant<'static>, Variant<'static>)>,
+    pending_key: Option<Variant<'static>>,
     depths: ContainerDepths,
 }
 
 impl ser::SerializeMap for MapSerializer {
-    type Ok = Value<'static>;
+    type Ok = Variant<'static>;
     type Error = crate::Error;
 
     fn serialize_key<T>(&mut self, key: &T) -> crate::Result<()>
@@ -387,16 +388,16 @@ impl ser::SerializeMap for MapSerializer {
             dict.append(key, value)?;
         }
         debug_assert_eq!(dict.signature(), &self.dict_signature);
-        Ok(Value::Dict(dict))
+        Ok(Variant::Dict(dict))
     }
 }
 
 struct StructSerializer {
     expected: Signature,
-    fields: Vec<Value<'static>>,
+    fields: Vec<Variant<'static>>,
     field_idx: usize,
     depths: ContainerDepths,
-    enum_inner: Option<(Signature, Vec<Value<'static>>, usize, ContainerDepths)>,
+    enum_inner: Option<(Signature, Vec<Variant<'static>>, usize, ContainerDepths)>,
 }
 
 impl StructSerializer {
@@ -414,7 +415,7 @@ impl StructSerializer {
         serializer.expect(Signature::U8)?;
         Ok(Self {
             expected: Signature::U8,
-            fields: vec![Value::U8(0)],
+            fields: vec![Variant::U8(0)],
             field_idx: 0,
             depths: serializer.depths,
             enum_inner: None,
@@ -440,7 +441,7 @@ impl StructSerializer {
         }
         Ok(Self {
             expected: serializer.signature.clone(),
-            fields: vec![Value::U32(variant_index)],
+            fields: vec![Variant::U32(variant_index)],
             field_idx: 1,
             depths: outer_depths,
             enum_inner,
@@ -482,7 +483,7 @@ impl StructSerializer {
         Ok(())
     }
 
-    fn end(mut self) -> crate::Result<Value<'static>> {
+    fn end(mut self) -> crate::Result<Variant<'static>> {
         if let Some((inner_signature, inner_fields, inner_idx, _)) = self.enum_inner.take() {
             let Signature::Structure(fields) = &inner_signature else {
                 unreachable!()
@@ -494,18 +495,18 @@ impl StructSerializer {
                 ));
             }
             let mut builder = Structure::builder();
-            builder.push_value(Value::U32(match self.fields.first() {
-                Some(Value::U32(index)) => *index,
+            builder.push_value(Variant::U32(match self.fields.first() {
+                Some(Variant::U32(index)) => *index,
                 _ => unreachable!(),
             }));
             let mut inner_builder = Structure::builder();
             for field in inner_fields {
                 inner_builder.push_value(field);
             }
-            builder.push_value(Value::Structure(
+            builder.push_value(Variant::Structure(
                 inner_builder.build_with_signature(&inner_signature),
             ));
-            return Ok(Value::Structure(
+            return Ok(Variant::Structure(
                 builder.build_with_signature(&self.expected),
             ));
         }
@@ -525,7 +526,7 @@ impl StructSerializer {
         for field in self.fields {
             builder.push_value(field);
         }
-        Ok(Value::Structure(
+        Ok(Variant::Structure(
             builder.build_with_signature(&self.expected),
         ))
     }
@@ -533,7 +534,7 @@ impl StructSerializer {
 
 struct VariantSerializer {
     signature: Option<Signature>,
-    value: Option<Value<'static>>,
+    value: Option<Variant<'static>>,
     depths: ContainerDepths,
 }
 
@@ -552,7 +553,7 @@ impl VariantSerializer {
     {
         if self.signature.is_none() {
             let mut serializer = ValueSerializer::new(Signature::Signature, self.depths);
-            let Value::Signature(signature) = value.serialize(&mut serializer)? else {
+            let Variant::Signature(signature) = value.serialize(&mut serializer)? else {
                 unreachable!()
             };
             self.signature = Some(signature);
@@ -569,7 +570,7 @@ impl VariantSerializer {
         Ok(())
     }
 
-    fn end(self) -> crate::Result<Value<'static>> {
+    fn end(self) -> crate::Result<Variant<'static>> {
         let Some(signature) = self.signature else {
             return Err(crate::Error::Failure(
                 "variant is missing its signature".to_owned(),
@@ -586,7 +587,7 @@ impl VariantSerializer {
                 &format!("`{signature}`"),
             ));
         }
-        Ok(Value::Value(Box::new(value)))
+        Ok(Variant::Variant(Box::new(value)))
     }
 }
 
@@ -598,7 +599,7 @@ enum StructSeqSerializer {
 }
 
 impl ser::SerializeTuple for StructSeqSerializer {
-    type Ok = Value<'static>;
+    type Ok = Variant<'static>;
     type Error = crate::Error;
 
     fn serialize_element<T>(&mut self, value: &T) -> crate::Result<()>
@@ -630,7 +631,7 @@ impl ser::SerializeTuple for StructSeqSerializer {
 }
 
 impl ser::SerializeTupleStruct for StructSeqSerializer {
-    type Ok = Value<'static>;
+    type Ok = Variant<'static>;
     type Error = crate::Error;
 
     fn serialize_field<T>(&mut self, value: &T) -> crate::Result<()>
@@ -646,7 +647,7 @@ impl ser::SerializeTupleStruct for StructSeqSerializer {
 }
 
 impl ser::SerializeTupleVariant for StructSeqSerializer {
-    type Ok = Value<'static>;
+    type Ok = Variant<'static>;
     type Error = crate::Error;
 
     fn serialize_field<T>(&mut self, value: &T) -> crate::Result<()>
@@ -662,7 +663,7 @@ impl ser::SerializeTupleVariant for StructSeqSerializer {
 }
 
 impl ser::SerializeStruct for StructSeqSerializer {
-    type Ok = Value<'static>;
+    type Ok = Variant<'static>;
     type Error = crate::Error;
 
     fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> crate::Result<()>
@@ -687,7 +688,7 @@ impl ser::SerializeStruct for StructSeqSerializer {
 }
 
 impl ser::SerializeStructVariant for StructSeqSerializer {
-    type Ok = Value<'static>;
+    type Ok = Variant<'static>;
     type Error = crate::Error;
 
     fn serialize_field<T>(&mut self, _key: &'static str, value: &T) -> crate::Result<()>
@@ -753,10 +754,10 @@ mod tests {
     where
         T: Type + Serialize,
     {
-        let direct = to_owned_value(value).unwrap();
+        let direct = to_owned_variant(value).unwrap();
         let encoded = to_bytes(Context::new(LE, 0), &super::super::Serialize(value)).unwrap();
-        let wire: OwnedValue = encoded.deserialize().unwrap().0;
-        assert_eq!(Value::from(direct), Value::from(wire));
+        let wire: OwnedVariant = encoded.deserialize().unwrap().0;
+        assert_eq!(Variant::from(direct), Variant::from(wire));
     }
 
     #[test]
@@ -767,7 +768,7 @@ mod tests {
 
     #[test]
     fn nested_variant_matches_wire_round_trip() {
-        let value = Value::new(Value::new(42_u32));
+        let value = Variant::new(Variant::new(42_u32));
         assert_matches_wire(&value);
     }
 
@@ -780,7 +781,7 @@ mod tests {
             ("bye".to_owned(), "now".to_owned()),
         ]);
         assert_matches_wire(&map);
-        let value = Value::from(to_owned_value(&map).unwrap());
+        let value = Variant::from(to_owned_variant(&map).unwrap());
         let decoded: HashMap<String, String> =
             super::super::deserialize_for_property(&value).unwrap();
         assert_eq!(decoded, map);

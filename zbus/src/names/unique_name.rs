@@ -40,14 +40,14 @@ define_name_type_impls! {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{OwnedValue, Value};
+    use crate::{OwnedVariant, Variant};
 
     #[test]
     fn value_conversion_rejects_empty_name() {
-        let value = Value::from("");
+        let value = Variant::from("");
         UniqueName::try_from(value).unwrap_err();
-        OwnedUniqueName::try_from(Value::from("")).unwrap_err();
-        OwnedUniqueName::try_from(OwnedValue::from(crate::Str::from(""))).unwrap_err();
+        OwnedUniqueName::try_from(Variant::from("")).unwrap_err();
+        OwnedUniqueName::try_from(OwnedVariant::from(crate::Str::from(""))).unwrap_err();
     }
 
     #[test]
@@ -56,14 +56,14 @@ mod tests {
 
         // An empty string is the D-Bus sentinel for "no name" and must map to `None`
         // rather than fail validation.
-        let opt = Optional::<UniqueName<'_>>::try_from(Value::from("")).unwrap();
+        let opt = Optional::<UniqueName<'_>>::try_from(Variant::from("")).unwrap();
         assert_eq!(Option::from(opt), None::<UniqueName<'_>>);
 
-        let opt = Optional::<UniqueName<'_>>::try_from(Value::from(":1.23")).unwrap();
+        let opt = Optional::<UniqueName<'_>>::try_from(Variant::from(":1.23")).unwrap();
         assert_eq!(opt.as_ref().unwrap().as_str(), ":1.23");
 
         // Non-empty invalid names must still be rejected.
-        Optional::<UniqueName<'_>>::try_from(Value::from("not a unique name")).unwrap_err();
+        Optional::<UniqueName<'_>>::try_from(Variant::from("not a unique name")).unwrap_err();
     }
 
     #[test]
@@ -71,11 +71,11 @@ mod tests {
         use crate::Optional;
 
         // The sentinel must be recognized before the empty name is validated.
-        let owned = OwnedValue::from(crate::Str::from(""));
+        let owned = OwnedVariant::from(crate::Str::from(""));
         let opt = Optional::<OwnedUniqueName>::try_from(owned).unwrap();
         assert!(Option::<OwnedUniqueName>::from(opt).is_none());
 
-        let owned = OwnedValue::from(crate::Str::from(":1.23"));
+        let owned = OwnedVariant::from(crate::Str::from(":1.23"));
         let opt = Optional::<OwnedUniqueName>::try_from(owned).unwrap();
         assert_eq!(
             Option::<OwnedUniqueName>::from(opt).unwrap().as_str(),
@@ -137,18 +137,18 @@ mod tests {
     #[test]
     fn value_conversion_round_trips_valid_name() {
         let name = UniqueName::try_from(":1.23").unwrap();
-        let value = Value::from(name.clone());
+        let value = Variant::from(name.clone());
         let parsed = UniqueName::try_from(value).unwrap();
         assert_eq!(parsed, name);
 
-        let owned = OwnedValue::try_from(name.clone()).unwrap();
+        let owned = OwnedVariant::try_from(name.clone()).unwrap();
         assert_eq!(UniqueName::try_from(owned).unwrap(), name);
 
         let owned_name = OwnedUniqueName::from(name.clone());
-        let value: Value<'static> = Value::from(owned_name.clone());
+        let value: Variant<'static> = Variant::from(owned_name.clone());
         assert_eq!(OwnedUniqueName::try_from(value).unwrap(), owned_name);
 
-        let owned = OwnedValue::try_from(owned_name.clone()).unwrap();
+        let owned = OwnedVariant::try_from(owned_name.clone()).unwrap();
         assert_eq!(OwnedUniqueName::try_from(owned).unwrap(), owned_name);
     }
 }

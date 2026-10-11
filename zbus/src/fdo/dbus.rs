@@ -12,7 +12,9 @@ use std::collections::HashMap;
 use std::fmt;
 
 use super::Result;
-use crate::{Basic, DeserializeDict, OwnedValue, SerializeDict, Type, Value, utils::fmt_bitflags};
+use crate::{
+    Basic, DeserializeDict, OwnedVariant, SerializeDict, Type, Variant, utils::fmt_bitflags,
+};
 #[cfg(feature = "proxy")]
 use crate::{
     Optional, OwnedGuid,
@@ -48,8 +50,8 @@ use crate::{
     Serialize,
     Deserialize,
     Type,
-    Value,
-    OwnedValue,
+    Variant,
+    OwnedVariant,
 )]
 pub struct RequestNameFlags(u32);
 
@@ -525,11 +527,11 @@ mod test {
     fn request_name_flags_convert_from_borrowed_value() {
         use crate::wire::{LE, serialized::Context, to_bytes};
 
-        // A `Value` that borrows from the buffer it was decoded from, as one taken out of a
+        // A `Variant` that borrows from the buffer it was decoded from, as one taken out of a
         // received message does.
         let flags = RequestNameFlags::REPLACE_EXISTING | RequestNameFlags::DO_NOT_QUEUE;
-        let encoded = to_bytes(Context::new(LE, 0), &Value::from(flags)).unwrap();
-        let (value, _): (Value<'_>, _) = encoded.deserialize().unwrap();
+        let encoded = to_bytes(Context::new(LE, 0), &Variant::from(flags)).unwrap();
+        let (value, _): (Variant<'_>, _) = encoded.deserialize().unwrap();
         assert_eq!(RequestNameFlags::try_from(value).unwrap(), flags);
     }
 }

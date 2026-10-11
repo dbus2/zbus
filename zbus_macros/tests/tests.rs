@@ -548,7 +548,7 @@ fn signature_macro_resolves_zvariant_through_zbus() {
 
 #[test]
 fn interface_property_setter_with_crate_attr() {
-    use mybus::{Value, object_server::Interface};
+    use mybus::{Variant, object_server::Interface};
 
     struct CrateAttrProperties;
 
@@ -558,7 +558,7 @@ fn interface_property_setter_with_crate_attr() {
         fn set_owned(&self, _value: u32) {}
 
         #[zbus(property)]
-        fn set_borrowed(&self, _value: Value<'_>) {}
+        fn set_borrowed(&self, _value: Variant<'_>) {}
     }
 
     assert_eq!(

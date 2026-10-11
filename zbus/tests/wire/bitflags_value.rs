@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 use zbus::{
-    Basic, Optional, OwnedValue, Type, Value,
+    Basic, Optional, OwnedVariant, Type, Variant,
     wire::{LE, serialized::Context, to_bytes},
 };
 
@@ -38,7 +38,7 @@ fn encodes_as_the_integer() {
 #[test]
 fn decoding_retains_unknown_bits() {
     // 0x4 is no flag of `Permissions`. It survives decoding, from the wire format and from a
-    // `Value` alike, the way `Permissions::from_bits_retain` keeps it.
+    // `Variant` alike, the way `Permissions::from_bits_retain` keeps it.
     let ctxt = Context::new(LE, 0);
     let encoded = to_bytes(ctxt, &0x5u32).unwrap();
     let decoded: Permissions = encoded.deserialize().unwrap().0;
@@ -47,7 +47,7 @@ fn decoding_retains_unknown_bits() {
     assert!(!decoded.contains(Permissions::WRITE));
     assert_eq!(Permissions::from_bits(decoded.bits()), None);
 
-    let decoded = Permissions::try_from(Value::from(0x5u32)).unwrap();
+    let decoded = Permissions::try_from(Variant::from(0x5u32)).unwrap();
     assert_eq!(decoded.bits(), 0x5);
 }
 
@@ -55,40 +55,40 @@ fn decoding_retains_unknown_bits() {
 fn value_conversions() {
     let flags = Permissions::READ | Permissions::WRITE;
 
-    assert_eq!(Value::from(flags), Value::U32(0x3));
-    assert_eq!(Value::from(Permissions::empty()), Value::U32(0));
+    assert_eq!(Variant::from(flags), Variant::U32(0x3));
+    assert_eq!(Variant::from(Permissions::empty()), Variant::U32(0));
     assert_eq!(
-        Permissions::try_from(Value::from(0x2u32)).unwrap(),
+        Permissions::try_from(Variant::from(0x2u32)).unwrap(),
         Permissions::WRITE
     );
     // Only the integer of the flags converts.
-    Permissions::try_from(Value::from(0x2u16)).unwrap_err();
-    Permissions::try_from(Value::from("WRITE")).unwrap_err();
-    // So does a `Value` that borrows from the buffer it was decoded from, as one taken out of a
+    Permissions::try_from(Variant::from(0x2u16)).unwrap_err();
+    Permissions::try_from(Variant::from("WRITE")).unwrap_err();
+    // So does a `Variant` that borrows from the buffer it was decoded from, as one taken out of a
     // received message does.
-    let encoded = to_bytes(Context::new(LE, 0), &Value::from(flags)).unwrap();
-    let (value, _): (Value<'_>, _) = encoded.deserialize().unwrap();
+    let encoded = to_bytes(Context::new(LE, 0), &Variant::from(flags)).unwrap();
+    let (value, _): (Variant<'_>, _) = encoded.deserialize().unwrap();
     assert_eq!(Permissions::try_from(value).unwrap(), flags);
 
-    let owned = OwnedValue::try_from(flags).unwrap();
-    assert_eq!(*owned, Value::U32(0x3));
+    let owned = OwnedVariant::try_from(flags).unwrap();
+    assert_eq!(*owned, Variant::U32(0x3));
     assert_eq!(Permissions::try_from(owned).unwrap(), flags);
-    let owned = OwnedValue::try_from(Value::from(0x1u32)).unwrap();
+    let owned = OwnedVariant::try_from(Variant::from(0x1u32)).unwrap();
     assert_eq!(Permissions::try_from(owned).unwrap(), Permissions::READ);
 }
 
 #[test]
 fn empty_flags_are_the_optional_null_value() {
     // The derived `Default` is the empty set, so that is what `Optional` maps to `None`.
-    let opt = Optional::<Permissions>::try_from(Value::from(0u32)).unwrap();
+    let opt = Optional::<Permissions>::try_from(Variant::from(0u32)).unwrap();
     assert_eq!(*opt, None);
-    let opt = Optional::<Permissions>::try_from(Value::from(0x2u32)).unwrap();
+    let opt = Optional::<Permissions>::try_from(Variant::from(0x2u32)).unwrap();
     assert_eq!(*opt, Some(Permissions::WRITE));
 
-    let owned = OwnedValue::try_from(Value::from(0u32)).unwrap();
+    let owned = OwnedVariant::try_from(Variant::from(0u32)).unwrap();
     let opt = Optional::<Permissions>::try_from(owned).unwrap();
     assert_eq!(*opt, None);
-    let owned = OwnedValue::try_from(Value::from(0x3u32)).unwrap();
+    let owned = OwnedVariant::try_from(Variant::from(0x3u32)).unwrap();
     let opt = Optional::<Permissions>::try_from(owned).unwrap();
     assert_eq!(*opt, Some(Permissions::READ | Permissions::WRITE));
 
@@ -115,7 +115,7 @@ fn dictionary_key() {
         "read-write"
     );
 
-    let value = Value::from(dict);
+    let value = Variant::from(dict);
     assert_eq!(value.value_signature(), "a{us}");
     let decoded = HashMap::<Permissions, String>::try_from(value).unwrap();
     assert_eq!(decoded[&Permissions::READ], "read-only");
@@ -132,8 +132,8 @@ fn dictionary_key() {
     Serialize,
     Deserialize,
     Type,
-    Value,
-    OwnedValue,
+    Variant,
+    OwnedVariant,
 )]
 struct Permissions(u32);
 

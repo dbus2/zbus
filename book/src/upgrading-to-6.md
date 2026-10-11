@@ -109,7 +109,7 @@ needed it. zbus's own dependency on the macro crate is such a defaults-off one, 
 | --- | --- |
 | Common `zvariant::X`, `zbus::zvariant::X` types and derives | `zbus::X` |
 | `zvariant::serialized::Context` | `zbus::wire::serialized::Context` |
-| `zvariant::as_value`, `zvariant::dbus` | `zbus::as_value`, `zbus::wire::dbus` |
+| `zvariant::as_value`, `zvariant::dbus` | `zbus::as_variant`, `zbus::wire::dbus` |
 | `zvariant::signature!` | `zbus::signature!` |
 | `zbus_names::X`, `zbus::names::X` | `zbus::names::X` |
 | `zvariant::Error`, `zvariant::Result` | `zbus::Error`, `zbus::Result` |
@@ -307,7 +307,7 @@ And the module does not cover:
   ```
 
   Spell it `zbus::DynamicTuple((1u32, "a"))`. `DynamicTuple` and `OwnedStructure` are the
-  two aliased types this bites; `zbus::as_value::Serialize` also has a public tuple field
+  two aliased types this bites; `zbus::as_variant::Serialize` also has a public tuple field
   but is re-exported rather than aliased, so it constructs fine either way.
 * Anything that named the crates themselves: `extern crate zvariant;`, a `zvariant = "5"`
   dependency, `#[zbus(crate = "zvariant")]`.
@@ -455,17 +455,17 @@ Two signatures lose the argument with it. `Signature::alignment(format)` is
 `Basic::alignment()`; its default body covers every type zbus can encode, so that one reaches you
 only through a direct `T::alignment(..)` call or an `impl Basic` that overrode it.
 
-### `PropertiesProxy::set` takes a `&Value`
+### `PropertiesProxy::set` takes a `&Variant`
 
 The `org.freedesktop.DBus.Properties` proxy — `zbus::fdo::PropertiesProxy` — takes the new value
 by reference:
 
 ```rust,noplayground
-use zbus::{fdo::PropertiesProxy, names::InterfaceName, Value};
+use zbus::{fdo::PropertiesProxy, names::InterfaceName, Variant};
 
 async fn mute(proxy: &PropertiesProxy<'_>, iface: InterfaceName<'_>) -> zbus::fdo::Result<()> {
-    // Was: proxy.set(iface, "Muted", Value::from(true)).await
-    proxy.set(iface, "Muted", &Value::from(true)).await
+    // Was: proxy.set(iface, "Muted", Variant::from(true)).await
+    proxy.set(iface, "Muted", &Variant::from(true)).await
 }
 ```
 
@@ -474,28 +474,28 @@ only code that drives the `Properties` interface by hand needs the `&`.
 
 The macro change behind it widens what an `#[interface]` method may take: an argument that is a
 reference to anything other than `str` is deserialized as the owned type and then handed to the
-method by reference, so `&Value<'_>`, `&Str<'_>` and the other borrowed wire types work as
+method by reference, so `&Variant<'_>`, `&Str<'_>` and the other borrowed wire types work as
 arguments now. What stops compiling is `&[u8]` (or any other unsized `&[T]`), which used to
 deserialize as a borrowed slice and now asks for an unsized `[u8]`; take `Vec<u8>`, or `&Vec<u8>`
-to keep the reference. Property setters are unaffected: their value already arrived as a `Value`
-to convert.
+to keep the reference. Property setters are unaffected: their value already arrived as a
+`Variant` to convert.
 
-### Name types validate when converted from a `Value`
+### Name types validate when converted from a `Variant`
 
-`TryFrom<Value>` and `TryFrom<OwnedValue>` for `ErrorName`, `InterfaceName`, `MemberName`,
+`TryFrom<Variant>` and `TryFrom<OwnedVariant>` for `ErrorName`, `InterfaceName`, `MemberName`,
 `PropertyName`, `UniqueName`, `WellKnownName` and their `Owned*` siblings run the validator that
 `TryFrom<&str>` has always run, and return `Error::InvalidName` when it fails. In 5.x they wrapped
 the string as it came, so a malformed name off the wire became a typed name and surfaced later —
 as a method call with an empty destination, say. `BusName` and `OwnedBusName` already validated.
 
 ```rust,noplayground
-use zbus::{names::UniqueName, Optional, Value};
+use zbus::{names::UniqueName, Optional, Variant};
 
 // Accepted in 5.x, an `Error::InvalidName` now.
-UniqueName::try_from(Value::from("not.unique")).unwrap_err();
+UniqueName::try_from(Variant::from("not.unique")).unwrap_err();
 
 // The empty string is D-Bus's "no name" sentinel, so it still reads back as `None`.
-let name = Optional::<UniqueName<'_>>::try_from(Value::from("")).unwrap();
+let name = Optional::<UniqueName<'_>>::try_from(Variant::from("")).unwrap();
 assert!(Option::<UniqueName<'_>>::from(name).is_none());
 ```
 
@@ -547,12 +547,12 @@ drop any `.inner()` or `.into_inner()` call on their result.
 
 ### `Optional<T>` compares the sentinel before converting
 
-`TryFrom<Value>` and `TryFrom<OwnedValue>` for `Optional<T>` check the incoming value against
+`TryFrom<Variant>` and `TryFrom<OwnedVariant>` for `Optional<T>` check the incoming value against
 `T::null_value()` first and convert only when it does not match. Their bound moved from
-`T: PartialEq<<T as NoneValue>::NoneType>` to `<T as NoneValue>::NoneType: Into<Value<'_>>`. The
-types you would normally put in an `Optional` — strings, numbers, flags, the name types —
+`T: PartialEq<<T as NoneValue>::NoneType>` to `<T as NoneValue>::NoneType: Into<Variant<'_>>`.
+The types you would normally put in an `Optional` — strings, numbers, flags, the name types —
 satisfy it; a `NoneValue` implementation of your own does not automatically, and loses these two
-conversions if its `NoneType` has no `Into<Value>`.
+conversions if its `NoneType` has no `Into<Variant>`.
 
 The order matters for any `T` whose conversion validates its input. The name types above reject
 the empty string, and the sentinel now maps to `None` without being converted at all.
@@ -947,15 +947,15 @@ unknown bit stays in `PrimaryHeader::flags`.
 
 ### The `enumflags2` feature is gone
 
-The `enumflags2` feature implemented `Type`, `Basic` and the `Value` and `OwnedValue` conversions
-for `enumflags2::BitFlags<F>`. Now that zbus's own flag types are `bitflags` types (see
+The `enumflags2` feature implemented `Type`, `Basic` and the `Variant` and `OwnedVariant`
+conversions for `enumflags2::BitFlags<F>`. Now that zbus's own flag types are `bitflags` types (see
 [above][flag-types]), zbus has no use for `enumflags2`, and the feature is gone with these
 implementations. A `BitFlags<F>` can no longer be an argument, return value or property of a
 `#[proxy]` or `#[interface]`, nor a field of a type that derives `Type`.
 
 You cannot add the implementations back in your own crate either. Rust accepts an implementation
 of a trait only in the crate that defines the trait or the one that defines the type, and `Type`
-and `Value` are zbus's while `BitFlags` is `enumflags2`'s. Wrapping your enum does not make
+and `Variant` are zbus's while `BitFlags` is `enumflags2`'s. Wrapping your enum does not make
 `BitFlags<YourEnum>` a type of yours, so `impl Type for BitFlags<YourEnum>` is rejected (`E0117`).
 
 Instead, make the set of flags your own type: a newtype over the integer that derives zbus's
@@ -965,7 +965,7 @@ your dependencies and replace the enum:
 
 ```rust,noplayground
 use serde::{Deserialize, Serialize};
-use zbus::{OwnedValue, Type, Value, proxy};
+use zbus::{OwnedVariant, Type, Variant, proxy};
 
 // Was:
 //
@@ -978,7 +978,7 @@ use zbus::{OwnedValue, Type, Value, proxy};
 // }
 #[derive(
     Clone, Copy, Debug, Default, PartialEq, Eq, Hash,
-    Serialize, Deserialize, Type, Value, OwnedValue,
+    Serialize, Deserialize, Type, Variant, OwnedVariant,
 )]
 pub struct Permissions(u32);
 
@@ -1023,8 +1023,9 @@ return the integer, and convert it with `BitFlags::bits` and `BitFlags::from_bit
 ## A stale zvariant in the dependency graph
 
 If another crate in your tree still depends on zvariant 5, your build contains two unrelated
-`Type`, `Value` and `Signature` types, and the resulting errors ("expected `zbus::Value`,
-found `zvariant::Value`") are confusing. `Signature` is duplicated like the other two: zbus 6
+copies of the wire types — zvariant's `Type`, `Value` and `Signature` next to zbus's `Type`,
+`Variant` and `Signature` — and the resulting errors ("expected `zbus::Variant`, found
+`zvariant::Value`") are confusing. `Signature` is duplicated like the other two: zbus 6
 re-exports it from `zbus_utils`, which no zvariant 5 release uses. Find the culprit with:
 
 ```bash

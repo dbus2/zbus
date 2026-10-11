@@ -5,10 +5,10 @@ use zbus::OwnedObjectPath;
 #[test]
 #[ignore]
 fn issue_81() {
-    use zbus::{OwnedValue, Type, proxy};
+    use zbus::{OwnedVariant, Type, proxy};
 
     #[derive(
-        Debug, PartialEq, Eq, Clone, Type, OwnedValue, serde::Serialize, serde::Deserialize,
+        Debug, PartialEq, Eq, Clone, Type, OwnedVariant, serde::Serialize, serde::Deserialize,
     )]
     pub struct DbusPath {
         id: String,

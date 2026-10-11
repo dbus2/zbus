@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use crate::{
-    Basic, Error, ObjectPath, OwnedValue, Signature, Type as VariantType, Value,
+    Basic, Error, ObjectPath, OwnedVariant, Signature, Type as VariantType, Variant,
     message::Fields,
     names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName},
     utils::fmt_bitflags,
@@ -104,8 +104,8 @@ pub enum Type {
     Serialize,
     Deserialize,
     VariantType,
-    Value,
-    OwnedValue,
+    Variant,
+    OwnedVariant,
 )]
 pub struct Flags(u8);
 
@@ -420,15 +420,15 @@ mod tests {
     #[test]
     fn flags_convert_from_borrowed_value() {
         use crate::{
-            Value,
+            Variant,
             wire::{LE, serialized::Context, to_bytes},
         };
 
-        // A `Value` that borrows from the buffer it was decoded from, as one taken out of a
+        // A `Variant` that borrows from the buffer it was decoded from, as one taken out of a
         // received message does.
         let flags = Flags::NO_REPLY_EXPECTED | Flags::NO_AUTO_START;
-        let encoded = to_bytes(Context::new(LE, 0), &Value::from(flags)).unwrap();
-        let (value, _): (Value<'_>, _) = encoded.deserialize().unwrap();
+        let encoded = to_bytes(Context::new(LE, 0), &Variant::from(flags)).unwrap();
+        let (value, _): (Variant<'_>, _) = encoded.deserialize().unwrap();
         assert_eq!(Flags::try_from(value).unwrap(), flags);
     }
 

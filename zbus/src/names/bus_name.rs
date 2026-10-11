@@ -6,7 +6,7 @@ use core::{
 use std::{borrow::Cow, sync::Arc};
 
 use crate::{
-    Error, NoneValue, OwnedValue, Result, Str, Type, Value,
+    Error, NoneValue, OwnedVariant, Result, Str, Type, Variant,
     names::{
         OwnedUniqueName, OwnedWellKnownName, UniqueName, WellKnownName, utils::impl_str_basic,
     },
@@ -284,10 +284,10 @@ impl TryFrom<Arc<str>> for BusName<'_> {
     }
 }
 
-impl<'s> TryFrom<Value<'s>> for BusName<'s> {
+impl<'s> TryFrom<Variant<'s>> for BusName<'s> {
     type Error = Error;
 
-    fn try_from(value: Value<'s>) -> Result<Self> {
+    fn try_from(value: Variant<'s>) -> Result<Self> {
         Str::try_from(value).and_then(TryInto::try_into)
     }
 }
@@ -310,7 +310,7 @@ impl<'name> TryFrom<Cow<'name, str>> for BusName<'name> {
     }
 }
 
-impl<'s> From<BusName<'s>> for Value<'s> {
+impl<'s> From<BusName<'s>> for Variant<'s> {
     fn from(name: BusName<'s>) -> Self {
         match name {
             BusName::Unique(name) => name.into(),
@@ -334,15 +334,15 @@ impl<'name> From<&BusName<'name>> for BusName<'name> {
     }
 }
 
-impl TryFrom<OwnedValue> for BusName<'_> {
+impl TryFrom<OwnedVariant> for BusName<'_> {
     type Error = Error;
 
-    fn try_from(value: OwnedValue) -> Result<Self> {
+    fn try_from(value: OwnedVariant) -> Result<Self> {
         Str::try_from(value).and_then(TryInto::try_into)
     }
 }
 
-impl TryFrom<BusName<'static>> for OwnedValue {
+impl TryFrom<BusName<'static>> for OwnedVariant {
     type Error = Error;
 
     fn try_from(name: BusName<'static>) -> Result<Self> {
@@ -481,29 +481,29 @@ impl TryFrom<Cow<'_, str>> for OwnedBusName {
     }
 }
 
-impl TryFrom<Value<'static>> for OwnedBusName {
+impl TryFrom<Variant<'static>> for OwnedBusName {
     type Error = Error;
 
-    fn try_from(value: Value<'static>) -> Result<Self> {
+    fn try_from(value: Variant<'static>) -> Result<Self> {
         BusName::try_from(value).map(Self::from)
     }
 }
 
-impl From<OwnedBusName> for Value<'_> {
+impl From<OwnedBusName> for Variant<'_> {
     fn from(name: OwnedBusName) -> Self {
         name.0.into()
     }
 }
 
-impl TryFrom<OwnedValue> for OwnedBusName {
+impl TryFrom<OwnedVariant> for OwnedBusName {
     type Error = Error;
 
-    fn try_from(value: OwnedValue) -> Result<Self> {
+    fn try_from(value: OwnedVariant) -> Result<Self> {
         BusName::try_from(value).map(Self::from)
     }
 }
 
-impl TryFrom<OwnedBusName> for OwnedValue {
+impl TryFrom<OwnedBusName> for OwnedVariant {
     type Error = Error;
 
     fn try_from(name: OwnedBusName) -> Result<Self> {

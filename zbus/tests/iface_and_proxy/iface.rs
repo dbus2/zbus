@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
 use tracing::{debug, instrument};
 use zbus::{
-    Optional, OwnedValue, Value,
+    Optional, OwnedVariant, Variant,
     connection::Connection,
     interface,
     message::{self, Header},
@@ -332,12 +332,12 @@ impl MyIface {
     // this works both ways.
     #[instrument]
     #[zbus(property)]
-    fn address_data2(&self) -> HashMap<String, OwnedValue> {
+    fn address_data2(&self) -> HashMap<String, OwnedVariant> {
         debug!("`AddressData2` getter called.");
         let mut map = HashMap::new();
         map.insert(
             "address".into(),
-            Value::from("127.0.0.1").try_into().unwrap(),
+            Variant::from("127.0.0.1").try_into().unwrap(),
         );
         map.insert("prefix".into(), 1234u32.into());
 

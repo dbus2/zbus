@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use zbus::{
-    DeserializeDict, Dict, SerializeDict, Type, Value,
+    DeserializeDict, Dict, SerializeDict, Type, Variant,
     wire::{LE, serialized::Context, to_bytes},
 };
 
@@ -22,12 +22,12 @@ fn issue_1819() {
     }
 
     let ctxt = Context::new(LE, 0);
-    let mut update: HashMap<&str, Value<'_>> = HashMap::new();
-    update.insert("version", Value::new("1.0"));
-    let mut info: HashMap<&str, Value<'_>> = HashMap::new();
+    let mut update: HashMap<&str, Variant<'_>> = HashMap::new();
+    update.insert("version", Variant::new("1.0"));
+    let mut info: HashMap<&str, Variant<'_>> = HashMap::new();
     info.insert(
         "update",
-        Value::Value(Box::new(Value::Dict(Dict::from(update)))),
+        Variant::Variant(Box::new(Variant::Dict(Dict::from(update)))),
     );
     let encoded = to_bytes(ctxt, &info).unwrap();
 

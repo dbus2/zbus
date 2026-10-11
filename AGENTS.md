@@ -80,7 +80,7 @@ threads. A target holds benchmarks of one kind only, and a new one goes in the l
   the `comms` feature; the `wire` module (D-Bus wire format) and the `names` module (D-Bus name
   types) are always compiled
 - **zbus_macros**: Procedural macros: `#[interface]`, `#[proxy]`, `#[derive(DBusError)]` and the
-  wire derives (`Type`, `Value`, `OwnedValue`, `SerializeDict`, `DeserializeDict`, `signature!`)
+  wire derives (`Type`, `Variant`, `OwnedVariant`, `SerializeDict`, `DeserializeDict`, `signature!`)
 - **zbus_utils**: Signature parser, D-Bus name validators and the derive codegen shared by zbus
   and zbus_macros; the sibling zgvariant project shares it from its 2.0 release
 - **zbus_xml**: D-Bus introspection XML handling

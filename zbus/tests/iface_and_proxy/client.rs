@@ -4,7 +4,7 @@ use tracing::{debug, instrument};
 #[cfg(feature = "object-manager")]
 use zbus::fdo::ObjectManagerProxy;
 use zbus::{
-    Connection, DBusError, Error, Message, MessageStream, Value, fdo::PropertiesProxy, message,
+    Connection, DBusError, Error, Message, MessageStream, Variant, fdo::PropertiesProxy, message,
     proxy::CacheProperties,
 };
 use zruntime::Event;
@@ -395,7 +395,7 @@ pub async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> 
     assert_eq!(my_obj_proxy.cached_count()?, Some(0));
     assert_eq!(
         my_obj_proxy.inner().cached_property_raw("Count").as_deref(),
-        Some(&Value::from(0u32))
+        Some(&Variant::from(0u32))
     );
     my_obj_proxy.ping().await?;
 
@@ -483,7 +483,7 @@ pub async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> 
 
     let changed_value = &args.changed_properties()[expected_property_key];
     assert_eq!(
-        <&Value as TryInto<u32>>::try_into(changed_value).unwrap(),
+        <&Variant as TryInto<u32>>::try_into(changed_value).unwrap(),
         expected_property_value
     );
     assert!(args.invalidated_properties().is_empty());
@@ -501,7 +501,7 @@ pub async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> 
 
     let changed_value = &args.changed_properties()[expected_property_key];
     assert_eq!(
-        <&Value as TryInto<u32>>::try_into(changed_value).unwrap(),
+        <&Variant as TryInto<u32>>::try_into(changed_value).unwrap(),
         expected_property_value
     );
     assert!(args.invalidated_properties().is_empty());

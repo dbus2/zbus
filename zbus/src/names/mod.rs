@@ -7,7 +7,7 @@
 //!
 //! Each type has an owned counterpart ([`OwnedBusName`], [`OwnedInterfaceName`] and so on) for
 //! when the borrowed form is inconvenient, and all of them implement [`Type`] and convert to
-//! and from [`Value`], so they can be sent over the bus directly.
+//! and from [`Variant`], so they can be sent over the bus directly.
 //!
 //! Validation failures are reported as [`crate::Error::InvalidName`], and conversions between
 //! two name kinds that cannot succeed as [`crate::Error::InvalidNameConversion`].
@@ -26,7 +26,7 @@
 //!
 //! [dbn]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names
 //! [`Type`]: trait@crate::Type
-//! [`Value`]: enum@crate::Value
+//! [`Variant`]: enum@crate::Variant
 
 mod bus_name;
 pub use bus_name::*;

@@ -8,8 +8,8 @@ use std::collections::HashMap;
 
 use super::Result;
 use crate::{
-    OwnedValue, Type,
-    as_value::optional,
+    OwnedVariant, Type,
+    as_variant::optional,
     names::{BusName, OwnedUniqueName},
     proxy,
 };
@@ -62,7 +62,7 @@ pub struct Stats {
     #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
     pub(crate) peak_bus_names_per_connection: Option<u32>,
     #[serde(flatten)]
-    pub(crate) rest: HashMap<String, OwnedValue>,
+    pub(crate) rest: HashMap<String, OwnedVariant>,
 }
 
 impl Stats {
@@ -120,7 +120,7 @@ impl Stats {
 
     /// The rest of the statistics, that are not defined by the D-Bus specificiation and hence
     /// specific to individual D-Bus broker implementations.
-    pub fn rest(&self) -> &HashMap<String, OwnedValue> {
+    pub fn rest(&self) -> &HashMap<String, OwnedVariant> {
         &self.rest
     }
 }
@@ -167,7 +167,7 @@ pub struct ConnectionStats {
     #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
     pub(crate) peak_outgoing_fds: Option<u32>,
     #[serde(flatten)]
-    pub(crate) rest: HashMap<String, OwnedValue>,
+    pub(crate) rest: HashMap<String, OwnedVariant>,
 }
 
 impl ConnectionStats {
@@ -269,7 +269,7 @@ impl ConnectionStats {
 
     /// The rest of the statistics, that are not defined by the D-Bus specificiation and hence
     /// specific to individual D-Bus broker implementations.
-    pub fn rest(&self) -> &HashMap<String, OwnedValue> {
+    pub fn rest(&self) -> &HashMap<String, OwnedVariant> {
         &self.rest
     }
 }

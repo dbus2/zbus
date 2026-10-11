@@ -5,8 +5,8 @@
     serde::Serialize,
     serde::Deserialize,
     zbus::Type,
-    zbus::Value,
-    zbus::OwnedValue,
+    zbus::Variant,
+    zbus::OwnedVariant,
 )]
 #[zvariant(crate = "zbus::wire")]
 pub struct PlayList {
@@ -22,8 +22,8 @@ pub struct PlayList {
     serde_repr::Deserialize_repr,
     serde_repr::Serialize_repr,
     zbus::Type,
-    zbus::Value,
-    zbus::OwnedValue,
+    zbus::Variant,
+    zbus::OwnedVariant,
 )]
 #[zvariant(crate = "zbus::wire")]
 #[repr(i32)]
@@ -41,8 +41,8 @@ pub enum OddValues {
     serde::Serialize,
     serde::Deserialize,
     zbus::Type,
-    zbus::Value,
-    zbus::OwnedValue,
+    zbus::Variant,
+    zbus::OwnedVariant,
 )]
 #[zvariant(signature = "s", crate = "zbus::wire")]
 pub enum Status {

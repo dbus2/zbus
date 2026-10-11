@@ -2,7 +2,7 @@ use crate::{
     Error,
     wire::{
         Array, Dict, NoneValue, ObjectPath, Optional, OwnedObjectPath, Signature, Str, Structure,
-        Value,
+        Variant,
     },
 };
 
@@ -16,11 +16,11 @@ use std::{
 
 macro_rules! value_try_from {
     ($kind:ident, $to:ty) => {
-        impl<'a> TryFrom<Value<'a>> for $to {
+        impl<'a> TryFrom<Variant<'a>> for $to {
             type Error = Error;
 
-            fn try_from(value: Value<'a>) -> Result<Self, Self::Error> {
-                if let Value::$kind(value) = value {
+            fn try_from(value: Variant<'a>) -> Result<Self, Self::Error> {
+                if let Variant::$kind(value) = value {
                     Ok(value.into())
                 } else {
                     Err(Error::IncorrectType)
@@ -32,11 +32,11 @@ macro_rules! value_try_from {
 
 macro_rules! value_try_from_ref {
     ($kind:ident, $to:ty) => {
-        impl<'a> TryFrom<&'a Value<'_>> for &'a $to {
+        impl<'a> TryFrom<&'a Variant<'_>> for &'a $to {
             type Error = Error;
 
-            fn try_from(value: &'a Value<'_>) -> Result<Self, Self::Error> {
-                if let Value::$kind(value) = value {
+            fn try_from(value: &'a Variant<'_>) -> Result<Self, Self::Error> {
+                if let Variant::$kind(value) = value {
                     Ok(value)
                 } else {
                     Err(Error::IncorrectType)
@@ -48,11 +48,11 @@ macro_rules! value_try_from_ref {
 
 macro_rules! value_try_from_ref_clone {
     ($kind:ident, $to:ty) => {
-        impl<'a> TryFrom<&Value<'a>> for $to {
+        impl<'a> TryFrom<&Variant<'a>> for $to {
             type Error = Error;
 
-            fn try_from(value: &Value<'a>) -> Result<Self, Self::Error> {
-                if let Value::$kind(value) = value {
+            fn try_from(value: &Variant<'a>) -> Result<Self, Self::Error> {
+                if let Variant::$kind(value) = value {
                     Ok(value.clone().into())
                 } else {
                     Err(Error::IncorrectType)
@@ -88,11 +88,11 @@ value_try_from_ref!(Str, str);
 
 macro_rules! value_try_from_ref_try_clone {
     ($kind:ident, $to:ty) => {
-        impl<'a> TryFrom<&Value<'a>> for $to {
+        impl<'a> TryFrom<&Variant<'a>> for $to {
             type Error = Error;
 
-            fn try_from(value: &Value<'a>) -> Result<Self, Self::Error> {
-                if let Value::$kind(value) = value {
+            fn try_from(value: &Variant<'a>) -> Result<Self, Self::Error> {
+                if let Variant::$kind(value) = value {
                     value.try_clone().map_err(Into::into)
                 } else {
                     Err(Error::IncorrectType)
@@ -121,23 +121,23 @@ value_try_from_ref!(Fd, Fd<'a>);
 #[cfg(unix)]
 value_try_from_ref_try_clone!(Fd, Fd<'a>);
 
-impl TryFrom<&Value<'_>> for String {
+impl TryFrom<&Variant<'_>> for String {
     type Error = Error;
 
-    fn try_from(value: &Value<'_>) -> Result<Self, Self::Error> {
+    fn try_from(value: &Variant<'_>) -> Result<Self, Self::Error> {
         Ok(<&str>::try_from(value)?.into())
     }
 }
 
-impl<'a, T> TryFrom<Value<'a>> for Vec<T>
+impl<'a, T> TryFrom<Variant<'a>> for Vec<T>
 where
-    T: TryFrom<Value<'a>>,
+    T: TryFrom<Variant<'a>>,
     T::Error: Into<crate::Error>,
 {
     type Error = Error;
 
-    fn try_from(value: Value<'a>) -> Result<Self, Self::Error> {
-        if let Value::Array(v) = value {
+    fn try_from(value: Variant<'a>) -> Result<Self, Self::Error> {
+        if let Variant::Array(v) = value {
             Self::try_from(v)
         } else {
             Err(Error::IncorrectType)
@@ -145,27 +145,27 @@ where
     }
 }
 
-impl TryFrom<Value<'_>> for OwnedObjectPath {
+impl TryFrom<Variant<'_>> for OwnedObjectPath {
     type Error = Error;
 
-    fn try_from(value: Value<'_>) -> Result<Self, Self::Error> {
+    fn try_from(value: Variant<'_>) -> Result<Self, Self::Error> {
         ObjectPath::try_from(value).map(OwnedObjectPath::from)
     }
 }
 
 // tuple conversions in `structure` module for avoiding code-duplication.
 
-impl<'a, K, V> TryFrom<Value<'a>> for BTreeMap<K, V>
+impl<'a, K, V> TryFrom<Variant<'a>> for BTreeMap<K, V>
 where
-    K: crate::Basic + TryFrom<Value<'a>> + std::cmp::Ord,
-    V: TryFrom<Value<'a>>,
+    K: crate::Basic + TryFrom<Variant<'a>> + std::cmp::Ord,
+    V: TryFrom<Variant<'a>>,
     K::Error: Into<crate::wire::Error>,
     V::Error: Into<crate::wire::Error>,
 {
     type Error = crate::wire::Error;
 
-    fn try_from(value: Value<'a>) -> Result<Self, Self::Error> {
-        if let Value::Dict(v) = value {
+    fn try_from(value: Variant<'a>) -> Result<Self, Self::Error> {
+        if let Variant::Dict(v) = value {
             Self::try_from(v)
         } else {
             Err(crate::wire::Error::IncorrectType)
@@ -173,18 +173,18 @@ where
     }
 }
 
-impl<'a, K, V, H> TryFrom<Value<'a>> for HashMap<K, V, H>
+impl<'a, K, V, H> TryFrom<Variant<'a>> for HashMap<K, V, H>
 where
-    K: crate::Basic + TryFrom<Value<'a>> + std::hash::Hash + std::cmp::Eq,
-    V: TryFrom<Value<'a>>,
+    K: crate::Basic + TryFrom<Variant<'a>> + std::hash::Hash + std::cmp::Eq,
+    V: TryFrom<Variant<'a>>,
     H: BuildHasher + Default,
     K::Error: Into<crate::Error>,
     V::Error: Into<crate::Error>,
 {
     type Error = crate::Error;
 
-    fn try_from(value: Value<'a>) -> Result<Self, Self::Error> {
-        if let Value::Dict(v) = value {
+    fn try_from(value: Variant<'a>) -> Result<Self, Self::Error> {
+        if let Variant::Dict(v) = value {
             Self::try_from(v)
         } else {
             Err(crate::Error::IncorrectType)
@@ -192,15 +192,15 @@ where
     }
 }
 
-impl<'a, T> TryFrom<Value<'a>> for Optional<T>
+impl<'a, T> TryFrom<Variant<'a>> for Optional<T>
 where
-    T: TryFrom<Value<'a>> + NoneValue,
-    <T as NoneValue>::NoneType: Into<Value<'a>>,
+    T: TryFrom<Variant<'a>> + NoneValue,
+    <T as NoneValue>::NoneType: Into<Variant<'a>>,
     T::Error: Into<crate::Error>,
 {
     type Error = crate::Error;
 
-    fn try_from(value: Value<'a>) -> Result<Self, Self::Error> {
+    fn try_from(value: Variant<'a>) -> Result<Self, Self::Error> {
         // Check for the null sentinel before converting, since `T`'s conversion may
         // legitimately reject it (e.g. name types validating the empty string).
         if value == T::null_value().into() {
@@ -216,9 +216,9 @@ where
 // This would be great but somehow it conflicts with some blanket generic implementations from
 // core:
 //
-// impl<'a, T> TryFrom<Value<'a>> for Option<T>
+// impl<'a, T> TryFrom<Variant<'a>> for Option<T>
 //
 // TODO: this could be useful
-// impl<'a, 'b, T> TryFrom<&'a Value<'b>> for Vec<T>
-// impl<'a, 'b, K, V, H> TryFrom<&'a Value<'v>> for HashMap<K, V, H>
+// impl<'a, 'b, T> TryFrom<&'a Variant<'b>> for Vec<T>
+// impl<'a, 'b, K, V, H> TryFrom<&'a Variant<'v>> for HashMap<K, V, H>
 // and more..

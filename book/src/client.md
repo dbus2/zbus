@@ -60,7 +60,7 @@ zbus `Connection` has a `call_method()` method, which you can use directly:
 use std::collections::HashMap;
 use std::error::Error;
 
-use zbus::{Value, Connection};
+use zbus::{Variant, Connection};
 
 // Although we use `tokio` here, you can use any async runtime of choice.
 #[tokio::main]
@@ -73,7 +73,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Some("org.freedesktop.Notifications"),
         "Notify",
         &("my-app", 0u32, "dialog-information", "A summary", "Some body",
-          vec![""; 0], HashMap::<&str, &Value>::new(), 5000),
+          vec![""; 0], HashMap::<&str, &Variant>::new(), 5000),
     ).await?;
     let reply: u32 = m.body().deserialize().unwrap();
     dbg!(reply);
@@ -97,7 +97,7 @@ procedural macros. The trait methods will have respective `impl` methods wrappin
 use std::collections::HashMap;
 use std::error::Error;
 
-use zbus::{Value, proxy, Connection};
+use zbus::{Variant, proxy, Connection};
 
 #[proxy(
     default_service = "org.freedesktop.Notifications",
@@ -112,7 +112,7 @@ trait Notifications {
               summary: &str,
               body: &str,
               actions: &[&str],
-              hints: HashMap<&str, &Value<'_>>,
+              hints: HashMap<&str, &Variant<'_>>,
               expire_timeout: i32) -> zbus::Result<u32>;
 }
 
@@ -539,7 +539,7 @@ trait Notifications {
         arg_3: &str,
         arg_4: &str,
         arg_5: &[&str],
-        arg_6: std::collections::HashMap<&str, zbus::Value<'_>>,
+        arg_6: std::collections::HashMap<&str, zbus::Variant<'_>>,
         arg_7: i32,
     ) -> zbus::Result<u32>;
 

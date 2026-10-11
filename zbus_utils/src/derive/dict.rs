@@ -18,7 +18,7 @@ fn dict_name_for_field(
 
 /// Whether the dict's value type is `Variant` (i.e. signature `a{?v}`).
 ///
-/// Variant-typed values get wrapped/unwrapped via `as_value`; any other value type defers to
+/// Variant-typed values get wrapped/unwrapped via `as_variant`; any other value type defers to
 /// the field type's own `Serialize`/`Deserialize`.
 fn dict_value_is_variant(signature: Option<&str>, span: Span) -> Result<bool, Error> {
     let Some(s) = signature else {
@@ -72,7 +72,7 @@ pub fn expand_serialize_dict_derive(
         let is_opt = macros::ty_is_option(ty);
         let field_def = match (value_is_variant, is_opt) {
             (true, true) => {
-                let path = format!("{}::as_value::optional", quote! { #zv });
+                let path = format!("{}::as_variant::optional", quote! { #zv });
                 quote! {
                     #[serde(
                         rename = #dict_name,
@@ -83,7 +83,7 @@ pub fn expand_serialize_dict_derive(
                 }
             }
             (true, false) => {
-                let path = format!("{}::as_value", quote! { #zv });
+                let path = format!("{}::as_variant", quote! { #zv });
                 quote! {
                     #[serde(rename = #dict_name, with = #path)]
                     #ident: &'a #ty
@@ -194,7 +194,7 @@ pub fn expand_deserialize_dict_derive(
         return Err(Error::new(input.span(), "only structs supported"));
     };
     let opt_path = if value_is_variant {
-        format!("{}::as_value::optional", quote! { #zv })
+        format!("{}::as_variant::optional", quote! { #zv })
     } else {
         "__zv_dict_de_opt".to_string()
     };

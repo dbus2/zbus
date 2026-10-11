@@ -3,8 +3,9 @@
 //! Every item here is an alias for, a forwarding wrapper around, or a re-export of, its
 //! [`crate::wire`] counterpart. The module exists so that most `zbus::zvariant::…` paths keep
 //! compiling after the merge; notable exceptions — tuple-struct constructors called through an
-//! alias, such as `DynamicTuple(…)`, the removed `Error` variants and the removed GVariant
-//! APIs, such as `Value::Maybe` and `Context::new_gvariant` — are covered by the "Upgrading to
+//! alias, such as `DynamicTuple(…)`, patterns on the `Value::Value` variant (now
+//! `Variant::Variant`), the removed `Error` variants and the removed GVariant APIs, such as
+//! `Value::Maybe` and `Context::new_gvariant` — are covered by the "Upgrading to
 //! zbus 6.0" chapter of the zbus book. Code written against the `zvariant` crate itself needs
 //! more than this: it switches its dependency to `zbus` and uses the corresponding items from
 //! the `zbus` crate root (or [`crate::wire`] for the low-level encoding and decoding API), as the
@@ -40,14 +41,21 @@ pub use crate::wire::{
     Basic, DynamicDeserialize, DynamicType, NoneValue, ReadBytes, Type, WriteBytes,
 };
 // The remaining derives and `signature!` come straight from the macro crate so that they land
-// only in the macro namespace and leave the type namespace to the aliases below.
-pub use zbus_macros::{DeserializeDict, OwnedValue, SerializeDict, Value, signature};
+// only in the macro namespace and leave the type namespace to the aliases below. The `Value` and
+// `OwnedValue` derives are the `Variant` and `OwnedVariant` derives under their pre-6.0 names.
+pub use zbus_macros::{
+    DeserializeDict, OwnedVariant as OwnedValue, SerializeDict, Variant as Value, signature,
+};
 // Submodules, the two `unsafe` writer functions and the `Type` helper macros, all silent.
 pub use crate::wire::{
-    as_value,
-    as_value::{Deserialize as DeserializeValue, Serialize as SerializeValue},
+    as_variant as as_value,
+    as_variant::{Deserialize as DeserializeValue, Serialize as SerializeValue},
     dbus, export, impl_type_with_repr, static_str_type, to_writer, to_writer_for_signature,
 };
+// The derives generate code that names `Variant`, `OwnedVariant` and `as_variant` under the path
+// of their `crate` attribute, so a derive pointed at this module needs them here under their 6.0
+// names. Re-exporting the `wire` items carries the `Variant` and `OwnedVariant` derives along.
+pub use crate::wire::{OwnedVariant, Variant, as_variant};
 
 /// Deprecated alias of [`crate::Array`].
 #[deprecated(since = "6.0.0", note = "use `zbus::Array` instead")]
@@ -127,13 +135,13 @@ pub type OwnedStructure = wire::OwnedStructure;
 #[deprecated(since = "6.0.0", note = "use `zbus::wire::OwnedStructureSeed` instead")]
 pub type OwnedStructureSeed = wire::OwnedStructureSeed;
 
-/// Deprecated alias of [`enum@crate::Value`].
-#[deprecated(since = "6.0.0", note = "use `zbus::Value` instead")]
-pub type Value<'a> = wire::Value<'a>;
+/// Deprecated alias of [`enum@crate::Variant`].
+#[deprecated(since = "6.0.0", note = "use `zbus::Variant` instead")]
+pub type Value<'a> = wire::Variant<'a>;
 
-/// Deprecated alias of [`struct@crate::OwnedValue`].
-#[deprecated(since = "6.0.0", note = "use `zbus::OwnedValue` instead")]
-pub type OwnedValue = wire::OwnedValue;
+/// Deprecated alias of [`struct@crate::OwnedVariant`].
+#[deprecated(since = "6.0.0", note = "use `zbus::OwnedVariant` instead")]
+pub type OwnedValue = wire::OwnedVariant;
 
 /// Deprecated alias of [`crate::Error`].
 #[deprecated(since = "6.0.0", note = "use `zbus::Error` instead")]

@@ -14,7 +14,7 @@ use crate::{
     runtime::locks::RwLock,
 };
 #[cfg(feature = "object-manager")]
-use crate::{Value, fdo::ObjectManager};
+use crate::{Variant, fdo::ObjectManager};
 
 mod interface;
 pub(crate) use interface::ArcInterface;
@@ -268,7 +268,7 @@ impl ObjectServer {
                     .map(|(i, props)| {
                         let props = props
                             .iter()
-                            .map(|(k, v)| Ok((k.as_str(), Value::try_from(v)?)))
+                            .map(|(k, v)| Ok((k.as_str(), Variant::try_from(v)?)))
                             .collect::<Result<_>>();
                         Ok((i.into(), props?))
                     })
@@ -283,7 +283,7 @@ impl ObjectServer {
                 .await?;
             let props = owned_props
                 .iter()
-                .map(|(k, v)| Ok((k.as_str(), Value::try_from(v)?)))
+                .map(|(k, v)| Ok((k.as_str(), Variant::try_from(v)?)))
                 .collect::<Result<_>>()?;
             interfaces.insert(name, props);
 

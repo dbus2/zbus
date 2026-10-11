@@ -4,7 +4,7 @@
 use ::serde::{Deserialize, Serialize};
 use ::zbus::{
     Type,
-    as_value::{self, optional},
+    as_variant::{self, optional},
 };
 
 #[derive(Type)]
@@ -36,8 +36,8 @@ struct Test {
     )]
     field_a: ::std::option::Option<u32>,
     #[serde(rename = "field-b")]
-    #[serde(with = "as_value")]
+    #[serde(with = "as_variant")]
     field_b: ::std::string::String,
-    #[serde(with = "as_value")]
+    #[serde(with = "as_variant")]
     field_c: ::std::vec::Vec<u8>,
 }

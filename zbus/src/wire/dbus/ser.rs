@@ -500,10 +500,10 @@ where
         let field_signature = match signature {
             Signature::Variant => {
                 match &self.ser.0.value_sign {
-                    // Serializing the value of a Value, which means signature was serialized
+                    // Serializing the value of a Variant, which means signature was serialized
                     // already, and also put aside for us to be picked here.
                     Some(signature) => signature,
-                    // Serializing the signature of a Value.
+                    // Serializing the signature of a Variant.
                     None => &Signature::Variant,
                 }
             }

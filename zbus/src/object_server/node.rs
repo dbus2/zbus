@@ -7,7 +7,7 @@ use std::{
 
 #[cfg(feature = "object-manager")]
 use crate::{
-    Connection, ObjectServer, OwnedValue,
+    Connection, ObjectServer, OwnedVariant,
     fdo::{self, ManagedObjects, ObjectManager},
     object_server::SignalEmitter,
 };
@@ -312,7 +312,7 @@ impl Node {
         object_server: &ObjectServer,
         connection: &Connection,
         interface_name: InterfaceName<'_>,
-    ) -> fdo::Result<HashMap<String, OwnedValue>> {
+    ) -> fdo::Result<HashMap<String, OwnedVariant>> {
         let emitter = SignalEmitter::new(connection, self.path.clone())?;
         self.interface_lock(interface_name)
             .expect("Interface was added but not found")

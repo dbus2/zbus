@@ -14,8 +14,8 @@ use super::Result;
 #[cfg(feature = "object-manager")]
 use crate::{Connection, ObjectServer, interface, message::Header, object_server::SignalEmitter};
 #[cfg(any(feature = "proxy", feature = "object-manager"))]
-use crate::{ObjectPath, Value, names::InterfaceName};
-use crate::{OwnedObjectPath, OwnedValue, names::OwnedInterfaceName};
+use crate::{ObjectPath, Variant, names::InterfaceName};
+use crate::{OwnedObjectPath, OwnedVariant, names::OwnedInterfaceName};
 
 #[cfg_attr(
     feature = "proxy",
@@ -27,7 +27,7 @@ use crate::{OwnedObjectPath, OwnedValue, names::OwnedInterfaceName};
     doc = "feature)."
 )]
 pub type ManagedObjects =
-    HashMap<OwnedObjectPath, BTreeMap<OwnedInterfaceName, HashMap<String, OwnedValue>>>;
+    HashMap<OwnedObjectPath, BTreeMap<OwnedInterfaceName, HashMap<String, OwnedVariant>>>;
 
 /// Service-side [Object Manager][om] interface implementation.
 ///
@@ -129,7 +129,7 @@ impl ObjectManager {
     pub async fn interfaces_added(
         emitter: &SignalEmitter<'_>,
         object_path: ObjectPath<'_>,
-        interfaces_and_properties: HashMap<InterfaceName<'_>, HashMap<&str, Value<'_>>>,
+        interfaces_and_properties: HashMap<InterfaceName<'_>, HashMap<&str, Variant<'_>>>,
     ) -> zbus::Result<()>;
 
     /// This signal is emitted whenever an object is removed or it loses one or more interfaces.
@@ -163,7 +163,7 @@ pub trait ObjectManager {
     fn interfaces_added(
         &self,
         object_path: ObjectPath<'_>,
-        interfaces_and_properties: HashMap<InterfaceName<'_>, HashMap<&str, Value<'_>>>,
+        interfaces_and_properties: HashMap<InterfaceName<'_>, HashMap<&str, Variant<'_>>>,
     ) -> zbus::Result<()>;
 
     /// This signal is emitted whenever an object is removed or it loses one or more interfaces.

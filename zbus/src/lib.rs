@@ -59,8 +59,8 @@ pub mod wire;
 #[doc(inline)]
 pub use wire::{
     Array, Basic, DeserializeDict, Dict, DynamicTuple, DynamicType, FilePath, NoneValue,
-    ObjectPath, Optional, OwnedObjectPath, OwnedStructure, OwnedValue, SerializeDict, Signature,
-    Str, Structure, Type, Value, as_value,
+    ObjectPath, Optional, OwnedObjectPath, OwnedStructure, OwnedVariant, SerializeDict, Signature,
+    Str, Structure, Type, Variant, as_variant,
 };
 #[cfg(unix)]
 #[doc(inline)]

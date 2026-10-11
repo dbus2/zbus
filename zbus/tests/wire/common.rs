@@ -38,13 +38,13 @@ macro_rules! basic_type_test {
     ) => {{
         let encoded = basic_type_test!($endian, $test_value, $expected_len, $expected_ty, $align);
 
-        // As Value
-        let v: zbus::Value<'_> = $test_value.into();
+        // As Variant
+        let v: zbus::Variant<'_> = $test_value.into();
         assert_eq!(
             v.value_signature(),
             <$expected_ty as zbus::Basic>::SIGNATURE_STR
         );
-        assert_eq!(v, zbus::Value::$kind($test_value));
+        assert_eq!(v, zbus::Variant::$kind($test_value));
         value_test!($endian, v, $expected_value_len);
 
         let v: $expected_ty = v.try_into().unwrap();
@@ -64,7 +64,7 @@ macro_rules! value_test {
             $expected_len,
             "invalid encoding using `to_bytes`"
         );
-        let (decoded, parsed): (zbus::Value<'_>, _) = encoded.deserialize().unwrap();
+        let (decoded, parsed): (zbus::Variant<'_>, _) = encoded.deserialize().unwrap();
         assert!(decoded == $test_value, "invalid decoding");
         assert!(parsed == encoded.len(), "invalid parsing");
 
@@ -109,10 +109,10 @@ macro_rules! fd_value_test {
             "invalid encoding using `to_bytes`"
         );
 
-        // As Value
-        let v: zbus::Value<'_> = $test_value.into();
+        // As Variant
+        let v: zbus::Variant<'_> = $test_value.into();
         assert_eq!(v.value_signature(), zbus::Fd::SIGNATURE_STR);
-        assert_eq!(v, zbus::Value::Fd($test_value));
+        assert_eq!(v, zbus::Variant::Fd($test_value));
         let encoded = zbus::wire::to_bytes(ctxt, &v).unwrap();
         assert_eq!(encoded.fds().len(), 1, "invalid encoding using `to_bytes`");
         assert_eq!(
@@ -120,7 +120,7 @@ macro_rules! fd_value_test {
             $expected_value_len,
             "invalid encoding using `to_bytes`"
         );
-        let (decoded, parsed): (zbus::Value<'_>, _) = encoded.deserialize().unwrap();
+        let (decoded, parsed): (zbus::Variant<'_>, _) = encoded.deserialize().unwrap();
         assert_eq!(
             decoded,
             zbus::Fd::from(encoded.fds()[0].as_fd()).into(),

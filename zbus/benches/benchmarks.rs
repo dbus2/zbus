@@ -4,7 +4,7 @@ use zbus::Message;
 
 use criterion::{Criterion, criterion_group, criterion_main};
 
-use zbus::{Type, Value};
+use zbus::{Type, Variant};
 
 fn msg_ser(c: &mut Criterion) {
     let mut g = c.benchmark_group("message-ser");
@@ -75,7 +75,7 @@ struct BigBoy<'s> {
     field: (u64, &'s str),
     int_array: Vec<u64>,
     string_array: Vec<&'s str>,
-    asv_dict: HashMap<&'s str, Value<'s>>,
+    asv_dict: HashMap<&'s str, Variant<'s>>,
 }
 
 impl<'s> BigBoy<'s> {
@@ -90,7 +90,7 @@ impl<'s> BigBoy<'s> {
         }
         for s in strings {
             string_array.push(s.as_str());
-            asv_dict.insert(s.as_str(), Value::from(s.as_str()));
+            asv_dict.insert(s.as_str(), Variant::from(s.as_str()));
         }
 
         BigBoy {
