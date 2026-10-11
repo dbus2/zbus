@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use zbus::{
-    OwnedValue, Value,
+    OwnedVariant, Variant,
     wire::{BE, LE, serialized::Context, to_bytes},
 };
 
@@ -22,43 +22,43 @@ fn value_value() {
     assert_eq!(decoded, 0xABBA_ABBA_ABBA_ABBA_u64);
     let ctxt = Context::new(LE, 0);
 
-    // As Value
-    let v: Value<'_> = 0xFEFE_u64.into();
+    // As Variant
+    let v: Variant<'_> = 0xFEFE_u64.into();
     assert_eq!(v.value_signature(), "t");
     let encoded = to_bytes(ctxt, &v).unwrap();
     assert_eq!(encoded.len(), 16);
     let v = encoded.deserialize().unwrap().0;
-    assert_eq!(v, Value::U64(0xFEFE));
+    assert_eq!(v, Variant::U64(0xFEFE));
 
-    // And now as Value in a Value
-    let v = Value::Value(Box::new(v));
+    // And now as Variant in a Variant
+    let v = Variant::Variant(Box::new(v));
     let encoded = to_bytes(ctxt, &v).unwrap();
     assert_eq!(encoded.len(), 16);
     let v = encoded.deserialize().unwrap().0;
-    if let Value::Value(v) = v {
+    if let Variant::Variant(v) = v {
         assert_eq!(v.value_signature(), "t");
-        assert_eq!(*v, Value::U64(0xFEFE));
+        assert_eq!(*v, Variant::U64(0xFEFE));
     } else {
         panic!();
     }
 
-    // Ensure Value works with other Serializer & Deserializer
-    let v: Value<'_> = 0xFEFE_u64.into();
+    // Ensure Variant works with other Serializer & Deserializer
+    let v: Variant<'_> = 0xFEFE_u64.into();
     let encoded = serde_json::to_string(&v).unwrap();
-    let v = serde_json::from_str::<Value<'_>>(&encoded).unwrap();
-    assert_eq!(v, Value::U64(0xFEFE));
+    let v = serde_json::from_str::<Variant<'_>>(&encoded).unwrap();
+    assert_eq!(v, Variant::U64(0xFEFE));
 
     // Now a test case for https://github.com/z-galaxy/zbus/issues/549
     #[derive(Deserialize, Serialize, Debug, PartialEq)]
     struct Data {
-        inner: OwnedValue,
+        inner: OwnedVariant,
     }
 
-    let value = zbus::Value::new("variant-value");
+    let value = zbus::Variant::new("variant-value");
     let inner = zbus::Structure::builder()
         .add_field("value1".to_string())
         .add_field("value2")
-        .append_field(zbus::Value::new(value)) // let's try to get a variant
+        .append_field(zbus::Variant::new(value)) // let's try to get a variant
         .build()
         .unwrap()
         .try_into()

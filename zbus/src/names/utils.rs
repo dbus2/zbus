@@ -251,31 +251,31 @@ macro_rules! define_name_type_impls {
             }
         }
 
-        impl<'s> TryFrom<crate::Value<'s>> for $name<'s> {
+        impl<'s> TryFrom<crate::Variant<'s>> for $name<'s> {
             type Error = crate::Error;
 
-            fn try_from(value: crate::Value<'s>) -> crate::Result<Self> {
+            fn try_from(value: crate::Variant<'s>) -> crate::Result<Self> {
                 let s = crate::Str::try_from(value)?;
                 Self::try_from(s)
             }
         }
 
-        impl<'s> From<$name<'s>> for crate::Value<'s> {
+        impl<'s> From<$name<'s>> for crate::Variant<'s> {
             fn from(name: $name<'s>) -> Self {
                 name.0.into()
             }
         }
 
-        impl TryFrom<crate::OwnedValue> for $name<'_> {
+        impl TryFrom<crate::OwnedVariant> for $name<'_> {
             type Error = crate::Error;
 
-            fn try_from(value: crate::OwnedValue) -> crate::Result<Self> {
+            fn try_from(value: crate::OwnedVariant) -> crate::Result<Self> {
                 let s = crate::Str::try_from(value)?;
                 Self::try_from(s)
             }
         }
 
-        impl TryFrom<$name<'_>> for crate::OwnedValue {
+        impl TryFrom<$name<'_>> for crate::OwnedVariant {
             type Error = crate::Error;
 
             fn try_from(name: $name<'_>) -> crate::Result<Self> {
@@ -405,29 +405,29 @@ macro_rules! define_name_type_impls {
             }
         }
 
-        impl TryFrom<crate::Value<'static>> for $owned_name {
+        impl TryFrom<crate::Variant<'static>> for $owned_name {
             type Error = crate::Error;
 
-            fn try_from(value: crate::Value<'static>) -> crate::Result<Self> {
+            fn try_from(value: crate::Variant<'static>) -> crate::Result<Self> {
                 <$name<'static>>::try_from(value).map(Self::from)
             }
         }
 
-        impl From<$owned_name> for crate::Value<'_> {
+        impl From<$owned_name> for crate::Variant<'_> {
             fn from(name: $owned_name) -> Self {
                 name.0.into()
             }
         }
 
-        impl TryFrom<crate::OwnedValue> for $owned_name {
+        impl TryFrom<crate::OwnedVariant> for $owned_name {
             type Error = crate::Error;
 
-            fn try_from(value: crate::OwnedValue) -> crate::Result<Self> {
+            fn try_from(value: crate::OwnedVariant) -> crate::Result<Self> {
                 <$name<'static>>::try_from(value).map(Self::from)
             }
         }
 
-        impl TryFrom<$owned_name> for crate::OwnedValue {
+        impl TryFrom<$owned_name> for crate::OwnedVariant {
             type Error = crate::Error;
 
             fn try_from(name: $owned_name) -> crate::Result<Self> {

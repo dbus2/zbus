@@ -8,20 +8,20 @@ use std::fmt::{Display, Write};
 use crate::{
     Error, Result,
     wire::{
-        DynamicDeserialize, DynamicType, Signature, Type, Value,
-        value::{SignatureSeed, value_display_fmt},
+        DynamicDeserialize, DynamicType, Signature, Type, Variant,
+        variant::{SignatureSeed, value_display_fmt},
     },
 };
 
-/// A helper type to wrap arrays in a [`Value`].
+/// A helper type to wrap arrays in a [`Variant`].
 ///
 /// API is provided to convert from, and to a [`Vec`].
 ///
-/// [`Value`]: enum.Value.html#variant.Array
+/// [`Variant`]: enum.Variant.html#variant.Array
 /// [`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
 #[derive(Debug, Hash, PartialEq, PartialOrd, Eq, Ord)]
 pub struct Array<'a> {
-    elements: Vec<Value<'a>>,
+    elements: Vec<Variant<'a>>,
     signature: Signature,
 }
 
@@ -50,7 +50,7 @@ impl<'a> Array<'a> {
     /// # Errors
     ///
     /// if `element`'s signature doesn't match the element signature `self` was created for.
-    pub fn append<'e: 'a>(&mut self, element: Value<'e>) -> Result<()> {
+    pub fn append<'e: 'a>(&mut self, element: Variant<'e>) -> Result<()> {
         match &self.signature {
             Signature::Array(child) if element.value_signature() != child.signature() => {
                 return Err(Error::signature_mismatch(
@@ -68,15 +68,15 @@ impl<'a> Array<'a> {
     }
 
     /// Get all the elements.
-    pub fn inner(&self) -> &[Value<'a>] {
+    pub fn inner(&self) -> &[Variant<'a>] {
         &self.elements
     }
 
     /// Get the value at the given index.
     pub fn get<V>(&'a self, idx: usize) -> Result<Option<V>>
     where
-        V: TryFrom<&'a Value<'a>>,
-        <V as TryFrom<&'a Value<'a>>>::Error: Into<crate::Error>,
+        V: TryFrom<&'a Variant<'a>>,
+        <V as TryFrom<&'a Variant<'a>>>::Error: Into<crate::Error>,
     {
         self.elements
             .get(idx)
@@ -155,8 +155,8 @@ pub(crate) fn array_display_fmt(
     type_annotate: bool,
 ) -> std::fmt::Result {
     // Print as string if it is a bytestring (i.e., first nul character is the last byte)
-    if let [leading @ .., Value::U8(b'\0')] = array.as_ref()
-        && !leading.contains(&Value::U8(b'\0'))
+    if let [leading @ .., Variant::U8(b'\0')] = array.as_ref()
+        && !leading.contains(&Variant::U8(b'\0'))
     {
         let bytes = leading
             .iter()
@@ -241,7 +241,7 @@ impl<'a> DynamicDeserialize<'a> for Array<'a> {
 }
 
 impl<'a> std::ops::Deref for Array<'a> {
-    type Target = [Value<'a>];
+    type Target = [Variant<'a>];
 
     fn deref(&self) -> &Self::Target {
         self.inner()
@@ -250,11 +250,11 @@ impl<'a> std::ops::Deref for Array<'a> {
 
 impl<'a, T> From<Vec<T>> for Array<'a>
 where
-    T: Type + Into<Value<'a>>,
+    T: Type + Into<Variant<'a>>,
 {
     fn from(values: Vec<T>) -> Self {
         let element_signature = T::SIGNATURE.clone();
-        let elements = values.into_iter().map(Value::new).collect();
+        let elements = values.into_iter().map(Variant::new).collect();
         let signature = Signature::array(element_signature);
 
         Self {
@@ -266,13 +266,13 @@ where
 
 impl<'a, T> From<&[T]> for Array<'a>
 where
-    T: Type + Into<Value<'a>> + Clone,
+    T: Type + Into<Variant<'a>> + Clone,
 {
     fn from(values: &[T]) -> Self {
         let element_signature = T::SIGNATURE.clone();
         let elements = values
             .iter()
-            .map(|value| Value::new(value.clone()))
+            .map(|value| Variant::new(value.clone()))
             .collect();
         let signature = Signature::array(element_signature);
 
@@ -285,7 +285,7 @@ where
 
 impl<'a, T> From<&Vec<T>> for Array<'a>
 where
-    T: Type + Into<Value<'a>> + Clone,
+    T: Type + Into<Variant<'a>> + Clone,
 {
     fn from(values: &Vec<T>) -> Self {
         Self::from(&values[..])
@@ -294,7 +294,7 @@ where
 
 impl<'a, T> TryFrom<Array<'a>> for Vec<T>
 where
-    T: TryFrom<Value<'a>>,
+    T: TryFrom<Variant<'a>>,
     T::Error: Into<crate::Error>,
 {
     type Error = Error;
@@ -303,7 +303,7 @@ where
         // there is no try_map yet..
         let mut res = vec![];
         for e in v.elements.into_iter() {
-            let value = if let Value::Value(v) = e {
+            let value = if let Variant::Variant(v) = e {
                 T::try_from(*v)
             } else {
                 T::try_from(e)

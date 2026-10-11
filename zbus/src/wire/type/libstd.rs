@@ -273,7 +273,7 @@ mod tests {
     use static_assertions::{assert_impl_all, assert_not_impl_any};
 
     use super::*;
-    use crate::wire::{Dict, OwnedValue, Value};
+    use crate::wire::{Dict, OwnedVariant, Variant};
 
     type BasicHashMap = HashMap<String, u8>;
     type NonBasicHashMap = HashMap<Vec<u8>, u8>;
@@ -285,34 +285,34 @@ mod tests {
 
     assert_impl_all!(
         BasicHashMap: Type,
-        Into<Value<'static>>,
-        Into<OwnedValue>,
+        Into<Variant<'static>>,
+        Into<OwnedVariant>,
         Into<Dict<'static, 'static>>
     );
     assert_impl_all!(
         BasicBTreeMap: Type,
-        Into<Value<'static>>,
-        Into<OwnedValue>,
+        Into<Variant<'static>>,
+        Into<OwnedVariant>,
         Into<Dict<'static, 'static>>
     );
     assert_not_impl_any!(
         NonBasicHashMap: Type,
-        Into<Value<'static>>,
-        Into<OwnedValue>,
+        Into<Variant<'static>>,
+        Into<OwnedVariant>,
         Into<Dict<'static, 'static>>
     );
     assert_not_impl_any!(
         NonBasicBTreeMap: Type,
-        Into<Value<'static>>,
-        Into<OwnedValue>,
+        Into<Variant<'static>>,
+        Into<OwnedVariant>,
         Into<Dict<'static, 'static>>
     );
     assert_impl_all!(PathHashMap: Type);
     assert_impl_all!(EmptyArrayHashMap: Type);
     assert_impl_all!(
         OptionalHashMap: Type,
-        Into<Value<'static>>,
-        Into<OwnedValue>,
+        Into<Variant<'static>>,
+        Into<OwnedVariant>,
         Into<Dict<'static, 'static>>
     );
 
@@ -320,8 +320,8 @@ mod tests {
     assert_impl_all!(
         HashMap<crate::fdo::RequestNameFlags, u8>:
             Type,
-            Into<Value<'static>>,
-            Into<OwnedValue>,
+            Into<Variant<'static>>,
+            Into<OwnedVariant>,
             Into<Dict<'static, 'static>>
     );
 }

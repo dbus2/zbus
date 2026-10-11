@@ -15,8 +15,8 @@ pub use signature::*;
 mod r#type;
 pub use r#type::expand_type_derive;
 
-mod value;
-pub use value::{ValueType, expand_value_derive};
+mod variant;
+pub use variant::{VariantType, expand_variant_derive};
 
 /// Configuration for a derive crate using this code generation.
 pub struct Config {

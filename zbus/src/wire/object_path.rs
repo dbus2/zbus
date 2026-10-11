@@ -288,7 +288,7 @@ impl std::convert::From<OwnedObjectPath> for ObjectPath<'_> {
     }
 }
 
-impl std::convert::From<OwnedObjectPath> for crate::Value<'_> {
+impl std::convert::From<OwnedObjectPath> for crate::Variant<'_> {
     fn from(o: OwnedObjectPath) -> Self {
         o.into_inner().into()
     }

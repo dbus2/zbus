@@ -212,9 +212,9 @@ impl Message {
     /// let body = message.body();
     /// let body: zbus::Structure<'_> = body.deserialize()?;
     /// let fields = body.fields();
-    /// assert!(matches!(fields[0], zbus::Value::I32(7)));
-    /// assert!(matches!(fields[1], zbus::Value::Structure(_)));
-    /// assert!(matches!(fields[2], zbus::Value::Array(_)));
+    /// assert!(matches!(fields[0], zbus::Variant::I32(7)));
+    /// assert!(matches!(fields[1], zbus::Variant::Structure(_)));
+    /// assert!(matches!(fields[2], zbus::Variant::Array(_)));
     ///
     /// let reply_body = Message::method_return(&header).build(&body)?.body();
     /// let reply_value : (i32, (i32, &str), Vec<String>) = reply_body.deserialize()?;

@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, HashMap};
 
 use endi::NATIVE_ENDIAN;
 use zbus::{
-    DeserializeDict, Dict, OwnedObjectPath, SerializeDict, Str, Type, Value,
-    as_value::{Serialize, optional},
+    DeserializeDict, Dict, OwnedObjectPath, SerializeDict, Str, Type, Variant,
+    as_variant::{Serialize, optional},
     wire::{LE, serialized::Context, to_bytes},
 };
 
@@ -19,8 +19,8 @@ fn dict_value() {
     assert_eq!(decoded[&1], "123");
     assert_eq!(decoded[&2], "456");
 
-    // As Value
-    let v: Value<'_> = Dict::from(map).into();
+    // As Variant
+    let v: Variant<'_> = Dict::from(map).into();
     assert_eq!(v.value_signature(), "a{xs}");
     let encoded = to_bytes(ctxt, &v).unwrap();
     assert_eq!(encoded.len(), 48);
@@ -31,7 +31,7 @@ fn dict_value() {
     assert_eq!(map[&2], "456");
     // Also decode it back
     let v = encoded.deserialize().unwrap().0;
-    if let Value::Dict(dict) = v {
+    if let Variant::Dict(dict) = v {
         assert_eq!(dict.get::<i64, &str>(&1).unwrap().unwrap(), "123");
         assert_eq!(dict.get::<i64, &str>(&2).unwrap().unwrap(), "456");
     } else {
@@ -44,8 +44,8 @@ fn dict_value() {
     // Use iterator
     let mut dict = Dict::from(map);
     let expect = [
-        (Value::from(1i64), Value::from("123")),
-        (Value::from(2i64), Value::from("456")),
+        (Variant::from(1i64), Variant::from("123")),
+        (Variant::from(2i64), Variant::from("456")),
     ];
     let expect_iter = expect.iter().map(|(k, v)| (k, v)).collect::<Vec<_>>();
     let actual = dict.iter().collect::<Vec<_>>();
@@ -55,23 +55,23 @@ fn dict_value() {
     let actual = dict.iter().collect::<Vec<_>>();
     assert_eq!(actual, expect_iter);
     for (_, v) in dict.iter_mut() {
-        if let Value::Str(vv) = v {
+        if let Variant::Str(vv) = v {
             *vv = Str::from(vv.to_string() + "-hello");
         }
     }
     let actual = dict.into_iter().collect::<Vec<_>>();
     let expect = vec![
-        (Value::from(1i64), Value::from("123-hello")),
-        (Value::from(2i64), Value::from("456-hello")),
+        (Variant::from(1i64), Variant::from("123-hello")),
+        (Variant::from(2i64), Variant::from("456-hello")),
     ];
     assert_eq!(actual, expect);
 
-    // `as_value::Serialize` must produce the same encoding as wrapping the value in `Value`
+    // `as_variant::Serialize` must produce the same encoding as wrapping the value in `Variant`
     // directly (https://github.com/z-galaxy/zbus/issues/868).
     let mut map = HashMap::<&str, &str>::new();
     map.insert("k", "v");
     let ser_value_encoded = to_bytes(ctxt, &Serialize(&map)).unwrap();
-    let value_encoded = to_bytes(ctxt, &Value::new(map)).unwrap();
+    let value_encoded = to_bytes(ctxt, &Variant::new(map)).unwrap();
     assert_eq!(*value_encoded, *ser_value_encoded);
 
     // Dict<u32, u8>
@@ -88,34 +88,34 @@ fn dict_value() {
     let decoded: HashMap<u32, u8> = encoded.deserialize().unwrap().0;
     assert_eq!(decoded, map);
 
-    // Now a hand-crafted Dict Value but with a Value as value
-    let mut dict = Dict::new(<&str>::SIGNATURE, Value::SIGNATURE);
-    dict.add("hello", Value::new("there")).unwrap();
-    dict.add("bye", Value::new("now")).unwrap();
-    let v: Value<'_> = dict.into();
+    // Now a hand-crafted Dict Variant but with a Variant as value
+    let mut dict = Dict::new(<&str>::SIGNATURE, Variant::SIGNATURE);
+    dict.add("hello", Variant::new("there")).unwrap();
+    dict.add("bye", Variant::new("now")).unwrap();
+    let v: Variant<'_> = dict.into();
     assert_eq!(v.value_signature(), "a{sv}");
     let encoded = to_bytes(ctxt, &v).unwrap();
     assert_eq!(dbg!(encoded.len()), 66);
-    let v: Value<'_> = encoded.deserialize().unwrap().0;
-    if let Value::Dict(dict) = v {
+    let v: Variant<'_> = encoded.deserialize().unwrap().0;
+    if let Variant::Dict(dict) = v {
         assert_eq!(
-            dict.get::<&str, Value<'_>>(&"hello").unwrap().unwrap(),
-            Value::new("there")
+            dict.get::<&str, Variant<'_>>(&"hello").unwrap().unwrap(),
+            Variant::new("there")
         );
         assert_eq!(
-            dict.get::<_, Value<'_>>(&"bye").unwrap().unwrap(),
-            Value::new("now")
+            dict.get::<_, Variant<'_>>(&"bye").unwrap().unwrap(),
+            Variant::new("now")
         );
 
         // Try converting to a HashMap
-        let map = <HashMap<String, Value<'_>>>::try_from(dict.try_clone().unwrap()).unwrap();
-        assert_eq!(map["hello"], Value::new("there"));
-        assert_eq!(map["bye"], Value::new("now"));
+        let map = <HashMap<String, Variant<'_>>>::try_from(dict.try_clone().unwrap()).unwrap();
+        assert_eq!(map["hello"], Variant::new("there"));
+        assert_eq!(map["bye"], Variant::new("now"));
 
         // Try converting to a BTreeMap
-        let map = <BTreeMap<String, Value<'_>>>::try_from(dict).unwrap();
-        assert_eq!(map["hello"], Value::new("there"));
-        assert_eq!(map["bye"], Value::new("now"));
+        let map = <BTreeMap<String, Variant<'_>>>::try_from(dict).unwrap();
+        assert_eq!(map["hello"], Variant::new("there"));
+        assert_eq!(map["bye"], Variant::new("now"));
     } else {
         panic!();
     }
@@ -137,9 +137,9 @@ fn dict_value() {
     let encoded = to_bytes(ctxt, &test).unwrap();
     assert_eq!(encoded.len(), 51);
 
-    let decoded: HashMap<&str, Value<'_>> = encoded.deserialize().unwrap().0;
-    assert_eq!(decoded["process_id"], Value::U32(42));
-    assert_eq!(decoded["user"], Value::new("me"));
+    let decoded: HashMap<&str, Variant<'_>> = encoded.deserialize().unwrap().0;
+    assert_eq!(decoded["process_id"], Variant::U32(42));
+    assert_eq!(decoded["user"], Variant::new("me"));
     assert!(!decoded.contains_key("group_id"));
 
     let decoded: Test = encoded.deserialize().unwrap().0;
@@ -182,11 +182,11 @@ fn dict_value() {
         #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
         group_id: Option<u32>,
         #[serde(flatten, borrow)]
-        rest: HashMap<&'s str, Value<'s>>,
+        rest: HashMap<&'s str, Variant<'s>>,
     }
     let decoded: TestParseUnknown<'_> = encoded.deserialize().unwrap().0;
     assert_eq!(decoded.rest.len(), 1);
-    assert_eq!(decoded.rest["user"], Value::new("me"));
+    assert_eq!(decoded.rest["user"], Variant::new("me"));
 
     #[derive(Default, Debug, SerializeDict, DeserializeDict, Type)]
     #[zvariant(signature = "dict")]
@@ -269,17 +269,17 @@ fn nested_dict_value() {
     let decoded: Interfaces = encoded.deserialize().unwrap().0;
     assert_eq!(decoded, interfaces);
 
-    let mut outer: HashMap<&str, HashMap<&str, Value<'_>>> = HashMap::new();
-    let mut adapter_props: HashMap<&str, Value<'_>> = HashMap::new();
-    adapter_props.insert("Address", Value::new("00:11:22:33:44:55"));
-    adapter_props.insert("Name", Value::new("test-adapter"));
-    adapter_props.insert("Powered", Value::new(true));
+    let mut outer: HashMap<&str, HashMap<&str, Variant<'_>>> = HashMap::new();
+    let mut adapter_props: HashMap<&str, Variant<'_>> = HashMap::new();
+    adapter_props.insert("Address", Variant::new("00:11:22:33:44:55"));
+    adapter_props.insert("Name", Variant::new("test-adapter"));
+    adapter_props.insert("Powered", Variant::new(true));
     outer.insert("org.bluez.Adapter1", adapter_props);
-    let mut media_props: HashMap<&str, Value<'_>> = HashMap::new();
-    media_props.insert("SupportedFeatures", Value::new(vec!["tx-timestamping"]));
+    let mut media_props: HashMap<&str, Variant<'_>> = HashMap::new();
+    media_props.insert("SupportedFeatures", Variant::new(vec!["tx-timestamping"]));
     media_props.insert(
         "SupportedUUIDs",
-        Value::new(vec!["001-233-22333", "222-222-222"]),
+        Variant::new(vec!["001-233-22333", "222-222-222"]),
     );
     outer.insert("org.bluez.Media1", media_props);
 
@@ -302,7 +302,7 @@ fn nested_dict_value() {
     // `a{sv}` (so the value type is `v`) where one variant value is itself an `a{sv}`. Unlike
     // `Interfaces` above, the outer value type here is `v`, so each field is wrapped in a
     // variant on the wire.
-    use zbus::OwnedValue;
+    use zbus::OwnedVariant;
 
     #[derive(DeserializeDict, SerializeDict, Type, PartialEq, Debug, Default)]
     #[zvariant(signature = "a{sv}", rename_all = "kebab-case")]
@@ -319,12 +319,12 @@ fn nested_dict_value() {
         update: Option<InspectBundleUpdateInfo>,
     }
 
-    // The same, but capturing the nested variant verbatim as an `OwnedValue` field.
+    // The same, but capturing the nested variant verbatim as an `OwnedVariant` field.
     #[derive(DeserializeDict, SerializeDict, Type, PartialEq, Debug, Default)]
     #[zvariant(signature = "a{sv}", rename_all = "kebab-case")]
     struct InspectBundleInfoRaw {
         manifest_hash: Option<String>,
-        update: Option<OwnedValue>,
+        update: Option<OwnedVariant>,
     }
 
     let info = InspectBundleInfo {
@@ -342,17 +342,17 @@ fn nested_dict_value() {
 
     // And it decodes from data produced the way a real D-Bus peer would send it: an `a{sv}`
     // whose `update` key holds a variant containing another `a{sv}`.
-    let mut update_props: HashMap<&str, Value<'_>> = HashMap::new();
-    update_props.insert("compatible", Value::new(true));
-    update_props.insert("version", Value::new("1.0"));
-    let mut info_props: HashMap<&str, Value<'_>> = HashMap::new();
-    info_props.insert("manifest-hash", Value::new("abc"));
-    info_props.insert("update", Value::Dict(Dict::from(update_props)));
+    let mut update_props: HashMap<&str, Variant<'_>> = HashMap::new();
+    update_props.insert("compatible", Variant::new(true));
+    update_props.insert("version", Variant::new("1.0"));
+    let mut info_props: HashMap<&str, Variant<'_>> = HashMap::new();
+    info_props.insert("manifest-hash", Variant::new("abc"));
+    info_props.insert("update", Variant::Dict(Dict::from(update_props)));
     let map_encoded = to_bytes(ctxt, &info_props).unwrap();
     let from_map: InspectBundleInfo = map_encoded.deserialize().unwrap().0;
     assert_eq!(from_map, info);
 
-    // `OwnedValue` field: must capture the nested `a{sv}` variant verbatim, without an extra
+    // `OwnedVariant` field: must capture the nested `a{sv}` variant verbatim, without an extra
     // variant-of-variant layer (the bug fixed in #1819).
     let raw: InspectBundleInfoRaw = map_encoded.deserialize().unwrap().0;
     assert_eq!(raw.manifest_hash.as_deref(), Some("abc"));
@@ -366,7 +366,7 @@ fn nested_dict_value() {
             .unwrap()
     );
 
-    // Re-serializing the `OwnedValue` field must not double-wrap it: the bytes still read back
+    // Re-serializing the `OwnedVariant` field must not double-wrap it: the bytes still read back
     // both as the same raw struct and as the typed-struct view.
     let reencoded = to_bytes(ctxt, &raw).unwrap();
     let raw_again: InspectBundleInfoRaw = reencoded.deserialize().unwrap().0;
@@ -402,9 +402,9 @@ fn nested_dict_object_path_keys() {
     let decoded: ByPath = encoded.deserialize().unwrap().0;
     assert_eq!(decoded, by_path);
 
-    let mut props: HashMap<&str, Value<'_>> = HashMap::new();
-    props.insert("Value", Value::new(7u32));
-    let mut outer: HashMap<OwnedObjectPath, HashMap<&str, Value<'_>>> = HashMap::new();
+    let mut props: HashMap<&str, Variant<'_>> = HashMap::new();
+    props.insert("Value", Variant::new(7u32));
+    let mut outer: HashMap<OwnedObjectPath, HashMap<&str, Variant<'_>>> = HashMap::new();
     outer.insert(OwnedObjectPath::try_from("/org/example/A").unwrap(), props);
     let map_encoded = to_bytes(ctxt, &outer).unwrap();
     let from_map: ByPath = map_encoded.deserialize().unwrap().0;

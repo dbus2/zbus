@@ -9,16 +9,17 @@ use crate::macros;
 
 use super::{Config, attrs::*};
 
-/// Which of the `Value`-family traits `expand_value_derive` should implement.
-pub enum ValueType {
-    Value,
-    OwnedValue,
+/// Which of the `Variant`-family traits `expand_variant_derive` should implement.
+pub enum VariantType {
+    Variant,
+    OwnedVariant,
 }
 
-/// Implements the `Value` or `OwnedValue` conversions, per `value_type`, for structs and enums.
-pub fn expand_value_derive(
+/// Implements the `Variant` or `OwnedVariant` conversions, per `variant_type`, for structs and
+/// enums.
+pub fn expand_variant_derive(
     ast: DeriveInput,
-    value_type: ValueType,
+    variant_type: VariantType,
     config: &Config,
 ) -> Result<TokenStream, Error> {
     let StructAttributes {
@@ -41,7 +42,7 @@ pub fn expand_value_derive(
     match &ast.data {
         Data::Struct(ds) => match &ds.fields {
             Fields::Named(_) | Fields::Unnamed(_) => impl_struct(
-                value_type,
+                variant_type,
                 ast.ident,
                 ast.generics,
                 &ds.fields,
@@ -51,7 +52,7 @@ pub fn expand_value_derive(
             ),
             Fields::Unit => Err(Error::new(ast.span(), "Unit structures not supported")),
         },
-        Data::Enum(data) => impl_enum(value_type, ast.ident, ast.generics, ast.attrs, data, &ctx),
+        Data::Enum(data) => impl_enum(variant_type, ast.ident, ast.generics, ast.attrs, data, &ctx),
         _ => Err(Error::new(
             ast.span(),
             "only structs and enums are supported",
@@ -67,7 +68,7 @@ struct Ctx<'a> {
 }
 
 fn impl_struct(
-    value_type: ValueType,
+    variant_type: VariantType,
     name: Ident,
     generics: Generics,
     fields: &Fields,
@@ -78,8 +79,8 @@ fn impl_struct(
     let Ctx { zv, attr_lists } = *ctx;
     let statc_lifetime = LifetimeParam::new(Lifetime::new("'static", Span::call_site()));
     let newtype = matches!(fields, Fields::Unnamed(_)) && fields.len() == 1;
-    // A newtype that has no lifetime of its own converts from and to a `Value` of any lifetime,
-    // as far as the type it wraps does, so that it can be taken out of a `Value` borrowed from a
+    // A newtype that has no lifetime of its own converts from and to a `Variant` of any lifetime,
+    // as far as the type it wraps does, so that it can be taken out of a `Variant` borrowed from a
     // message, for instance. The impls get a lifetime parameter of their own for that.
     let mut value_generics = generics.clone();
     let mut fresh_lifetime = None;
@@ -91,8 +92,8 @@ fn impl_struct(
         into_value_error_decl,
         into_value_ret,
         into_value_error_transform,
-    ) = match value_type {
-        ValueType::Value => {
+    ) = match variant_type {
+        VariantType::Variant => {
             let mut lifetimes = generics.lifetimes();
             let value_lifetime = match lifetimes.next() {
                 Some(lifetime) => lifetime.clone(),
@@ -115,7 +116,7 @@ fn impl_struct(
             }
 
             (
-                quote! { #zv::Value<#value_lifetime> },
+                quote! { #zv::Variant<#value_lifetime> },
                 value_lifetime,
                 quote! { From },
                 quote! { from },
@@ -124,8 +125,8 @@ fn impl_struct(
                 quote! {},
             )
         }
-        ValueType::OwnedValue => (
-            quote! { #zv::OwnedValue },
+        VariantType::OwnedVariant => (
+            quote! { #zv::OwnedVariant },
             statc_lifetime,
             quote! { TryFrom },
             quote! { try_from },
@@ -140,8 +141,8 @@ fn impl_struct(
         .iter()
         .map(|type_param| {
             quote! {
-                #type_param: ::std::convert::TryFrom<#zv::Value<#value_lifetime>> + #zv::Type,
-                <#type_param as ::std::convert::TryFrom<#zv::Value<#value_lifetime>>>::Error:
+                #type_param: ::std::convert::TryFrom<#zv::Variant<#value_lifetime>> + #zv::Type,
+                <#type_param as ::std::convert::TryFrom<#zv::Variant<#value_lifetime>>>::Error:
                     ::std::convert::Into<#zv::Error>
             }
         })
@@ -150,19 +151,19 @@ fn impl_struct(
         .iter()
         .map(|type_param| {
             quote! {
-                #type_param: ::std::convert::Into<#zv::Value<#value_lifetime>> + #zv::Type
+                #type_param: ::std::convert::Into<#zv::Variant<#value_lifetime>> + #zv::Type
             }
         })
         .collect::<Vec<_>>();
     if let Some(lifetime) = &fresh_lifetime {
-        // The conversions of the wrapped type have to work for any lifetime of the `Value`, which
+        // The conversions of the wrapped type have to work for any lifetime of the `Variant`, which
         // they do for the types that hold no borrowed data.
         let field_ty = &fields.iter().next().unwrap().ty;
         from_value_bounds.push(quote! {
-            #field_ty: ::std::convert::TryFrom<#zv::Value<#lifetime>, Error = #zv::Error>
+            #field_ty: ::std::convert::TryFrom<#zv::Variant<#lifetime>, Error = #zv::Error>
         });
         into_value_bounds.push(quote! {
-            #zv::Value<#lifetime>: ::std::convert::From<#field_ty>
+            #zv::Variant<#lifetime>: ::std::convert::From<#field_ty>
         });
     }
     let where_clause =
@@ -196,7 +197,7 @@ fn impl_struct(
                             .unwrap_or(field_name.to_string());
                             let convert = if macros::ty_is_option(&field.ty) {
                                 quote! {
-                                    .map(#zv::Value::downcast)
+                                    .map(#zv::Variant::downcast)
                                     .transpose()?
                                 }
                             } else {
@@ -216,7 +217,7 @@ fn impl_struct(
                                     if let Some(v) = s.#field_name {
                                         fields.insert(
                                             #key_name,
-                                            #zv::Value::from(v),
+                                            #zv::Variant::from(v),
                                         );
                                     }
                                 }
@@ -224,7 +225,7 @@ fn impl_struct(
                                 quote! {
                                     fields.insert(
                                         #key_name,
-                                        #zv::Value::from(s.#field_name),
+                                        #zv::Variant::from(s.#field_name),
                                     );
                                 }
                             };
@@ -239,7 +240,7 @@ fn impl_struct(
                         quote! {
                             let mut fields = <::std::collections::HashMap::<
                                 ::std::string::String,
-                                #zv::Value,
+                                #zv::Variant,
                             >>::try_from(value)?;
 
                             ::std::result::Result::Ok(Self { #fields_init })
@@ -248,7 +249,7 @@ fn impl_struct(
                             let mut fields = ::std::collections::HashMap::new();
                             #entries_init
 
-                            <#value_type>::#into_value_method(#zv::Value::from(fields))
+                            <#value_type>::#into_value_method(#zv::Variant::from(fields))
                                 #into_value_error_transform
                         },
                     )
@@ -329,7 +330,7 @@ fn impl_struct(
 }
 
 fn impl_enum(
-    value_type: ValueType,
+    variant_type: VariantType,
     name: Ident,
     _generics: Generics,
     attrs: Vec<Attribute>,
@@ -380,28 +381,28 @@ fn impl_enum(
         quote! { e as #repr }
     };
 
-    let (value_type, into_value) = match value_type {
-        ValueType::Value => (
-            quote! { #zv::Value<'_> },
+    let (value_type, into_value) = match variant_type {
+        VariantType::Variant => (
+            quote! { #zv::Variant<'_> },
             quote! {
-                impl ::std::convert::From<#name> for #zv::Value<'_> {
+                impl ::std::convert::From<#name> for #zv::Variant<'_> {
                     #[inline]
                     fn from(e: #name) -> Self {
-                        <#zv::Value as ::std::convert::From<_>>::from(#into_val)
+                        <#zv::Variant as ::std::convert::From<_>>::from(#into_val)
                     }
                 }
             },
         ),
-        ValueType::OwnedValue => (
-            quote! { #zv::OwnedValue },
+        VariantType::OwnedVariant => (
+            quote! { #zv::OwnedVariant },
             quote! {
-                impl ::std::convert::TryFrom<#name> for #zv::OwnedValue {
+                impl ::std::convert::TryFrom<#name> for #zv::OwnedVariant {
                     type Error = #zv::Error;
 
                     #[inline]
                     fn try_from(e: #name) -> #zv::Result<Self> {
-                        <#zv::OwnedValue as ::std::convert::TryFrom<_>>::try_from(
-                            <#zv::Value as ::std::convert::From<_>>::from(#into_val)
+                        <#zv::OwnedVariant as ::std::convert::TryFrom<_>>::try_from(
+                            <#zv::Variant as ::std::convert::From<_>>::from(#into_val)
                         )
                     }
                 }
@@ -482,7 +483,7 @@ mod tests {
             }
         };
 
-        let err = expand_value_derive(ast, ValueType::Value, &config()).unwrap_err();
+        let err = expand_variant_derive(ast, VariantType::Variant, &config()).unwrap_err();
 
         assert!(
             err.to_string().contains("duplicate"),
@@ -500,6 +501,6 @@ mod tests {
             }
         };
 
-        assert!(expand_value_derive(ast, ValueType::Value, &config()).is_ok());
+        assert!(expand_variant_derive(ast, VariantType::Variant, &config()).is_ok());
     }
 }

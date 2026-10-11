@@ -172,19 +172,19 @@ mod tests {
 
     #[test]
     fn value_conversion_maps_null_sentinel_to_none() {
-        use crate::wire::{Optional, OwnedValue, Str, Value};
+        use crate::wire::{Optional, OwnedVariant, Str, Variant};
 
-        let opt = Optional::<String>::try_from(Value::from("")).unwrap();
+        let opt = Optional::<String>::try_from(Variant::from("")).unwrap();
         assert_eq!(*opt, None);
-        let opt = Optional::<String>::try_from(Value::from("hello")).unwrap();
+        let opt = Optional::<String>::try_from(Variant::from("hello")).unwrap();
         assert_eq!(*opt, Some("hello".to_string()));
 
-        let opt = Optional::<u32>::try_from(Value::from(0u32)).unwrap();
+        let opt = Optional::<u32>::try_from(Variant::from(0u32)).unwrap();
         assert_eq!(*opt, None);
-        let opt = Optional::<u32>::try_from(Value::from(42u32)).unwrap();
+        let opt = Optional::<u32>::try_from(Variant::from(42u32)).unwrap();
         assert_eq!(*opt, Some(42));
 
-        let owned = OwnedValue::try_from(Value::from(Str::from(""))).unwrap();
+        let owned = OwnedVariant::try_from(Variant::from(Str::from(""))).unwrap();
         let opt = Optional::<String>::try_from(owned).unwrap();
         assert_eq!(*opt, None);
     }

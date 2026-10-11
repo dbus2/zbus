@@ -8,10 +8,10 @@ use crate::wire::{Signature, Type};
 /// A wrapper to deserialize a value to `T: Type + serde::Deserialize`.
 ///
 /// When the type of a value is well-known, you may avoid the cost and complexity of wrapping to a
-/// generic [`enum@crate::Value`] and instead use this wrapper.
+/// generic [`enum@crate::Variant`] and instead use this wrapper.
 ///
 /// ```
-/// # use zbus::{as_value::{Deserialize, Serialize}, wire::{LE, serialized::Context, to_bytes}};
+/// # use zbus::{as_variant::{Deserialize, Serialize}, wire::{LE, serialized::Context, to_bytes}};
 /// #
 /// # let ctxt = Context::new(LE, 0);
 /// # let array = [0, 1, 2];
@@ -30,7 +30,7 @@ impl<'de, T: Type + serde::Deserialize<'de>> serde::Deserialize<'de> for Deseria
     where
         D: Deserializer<'de>,
     {
-        // `Value`/`OwnedValue` (and any other type whose signature is already `v`) deserialize
+        // `Variant`/`OwnedVariant` (and any other type whose signature is already `v`) deserialize
         // themselves from a variant, so the extra unwrapping below would expect a
         // variant-of-variant. Just delegate to their own `Deserialize` impl in that case.
         if T::SIGNATURE == &Signature::Variant {
@@ -126,7 +126,7 @@ impl<'de, T: Type + serde::Deserialize<'de>> Type for Deserialize<'de, T> {
     const SIGNATURE: &'static Signature = &Signature::Variant;
 }
 
-/// Deserialize a value as a [`enum@zbus::Value`].
+/// Deserialize a value as a [`enum@zbus::Variant`].
 pub fn deserialize<'de, T, D>(deserializer: D) -> std::result::Result<T, D::Error>
 where
     D: Deserializer<'de>,
@@ -137,7 +137,7 @@ where
     Deserialize::deserialize(deserializer).map(|v| v.0)
 }
 
-/// Deserialize an optional value as a [`enum@zbus::Value`].
+/// Deserialize an optional value as a [`enum@zbus::Variant`].
 pub fn deserialize_optional<'de, T, D>(deserializer: D) -> std::result::Result<Option<T>, D::Error>
 where
     D: Deserializer<'de>,
@@ -149,7 +149,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wire::as_value::Serialize;
+    use crate::wire::as_variant::Serialize;
 
     // `Serialize` writes a struct. D-Bus reads that back as a sequence; a self-describing format
     // reads it back as a map, so both visitors have to exist for a value to survive a trip through

@@ -8,7 +8,7 @@ use test_log::test;
 use tracing::{debug, instrument};
 use zbus::block_on;
 
-use zbus::{OwnedValue, Type, names::UniqueName};
+use zbus::{OwnedVariant, Type, names::UniqueName};
 
 use zbus::{
     Connection, Result,
@@ -182,7 +182,7 @@ async fn test_freedesktop_api() -> Result<()> {
 
     let body = reply.body();
     assert_eq!(body.signature(), "a{sv}");
-    let hashmap: HashMap<&str, OwnedValue> = body.deserialize().unwrap();
+    let hashmap: HashMap<&str, OwnedVariant> = body.deserialize().unwrap();
 
     let pid: u32 = (&hashmap["ProcessID"]).try_into().unwrap();
     debug!("DBus bus PID: {}", pid);

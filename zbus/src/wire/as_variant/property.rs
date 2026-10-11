@@ -1,10 +1,10 @@
 use serde::de::{self, DeserializeSeed, EnumAccess, MapAccess, SeqAccess, VariantAccess, Visitor};
 
-use crate::wire::{Dict, Signature, Type, Value};
+use crate::wire::{Dict, Signature, Type, Variant};
 
 /// Deserializes a property value directly from its in-memory representation.
 #[doc(hidden)]
-pub fn deserialize_for_property<'de, T>(value: &'de Value<'_>) -> crate::Result<T>
+pub fn deserialize_for_property<'de, T>(value: &'de Variant<'_>) -> crate::Result<T>
 where
     T: Type + serde::Deserialize<'de>,
 {
@@ -12,14 +12,14 @@ where
 }
 
 struct ValueDeserializer<'de, 'sig> {
-    value: &'de Value<'de>,
+    value: &'de Variant<'de>,
     expected: &'sig Signature,
     unwrap_variant: bool,
     variant_payload: bool,
 }
 
 impl<'de, 'sig> ValueDeserializer<'de, 'sig> {
-    fn new(value: &'de Value<'de>, expected: &'sig Signature, unwrap_variant: bool) -> Self {
+    fn new(value: &'de Variant<'de>, expected: &'sig Signature, unwrap_variant: bool) -> Self {
         Self {
             value,
             expected,
@@ -28,10 +28,10 @@ impl<'de, 'sig> ValueDeserializer<'de, 'sig> {
         }
     }
 
-    fn actual(&self) -> &'de Value<'de> {
+    fn actual(&self) -> &'de Variant<'de> {
         if self.unwrap_variant
             && self.expected != &Signature::Variant
-            && let Value::Value(value) = self.value
+            && let Variant::Variant(value) = self.value
         {
             return value;
         }
@@ -39,7 +39,7 @@ impl<'de, 'sig> ValueDeserializer<'de, 'sig> {
         self.value
     }
 
-    fn check(&self) -> crate::Result<&'de Value<'de>> {
+    fn check(&self) -> crate::Result<&'de Variant<'de>> {
         let value = self.actual();
         if self.expected == &Signature::Variant
             || signatures_compatible(value.value_signature(), self.expected, self.unwrap_variant)
@@ -64,7 +64,7 @@ impl<'de, 'sig> ValueDeserializer<'de, 'sig> {
     #[cfg(feature = "option-as-array")]
     fn child(
         &self,
-        value: &'de Value<'de>,
+        value: &'de Variant<'de>,
         expected: &'sig Signature,
         unwrap_variant: bool,
     ) -> Self {
@@ -81,14 +81,14 @@ impl<'de, 'sig> ValueDeserializer<'de, 'sig> {
             return Err(self.mismatch("an array of bytes"));
         }
 
-        let Value::Array(array) = self.check()? else {
+        let Variant::Array(array) = self.check()? else {
             return Err(self.mismatch("an array of bytes"));
         };
         array
             .inner()
             .iter()
             .map(|value| match Self::new(value, expected, true).check()? {
-                Value::U8(value) => Ok(*value),
+                Variant::U8(value) => Ok(*value),
                 _ => Err(self.mismatch("an array of bytes")),
             })
             .collect()
@@ -114,28 +114,28 @@ impl<'de, 'sig> de::Deserializer<'de> for ValueDeserializer<'de, 'sig> {
         }
 
         match self.check()? {
-            Value::U8(value) => visitor.visit_u8(*value),
-            Value::Bool(value) => visitor.visit_bool(*value),
-            Value::I16(value) => visitor.visit_i16(*value),
-            Value::U16(value) => visitor.visit_u16(*value),
-            Value::I32(value) => visitor.visit_i32(*value),
-            Value::U32(value) => visitor.visit_u32(*value),
-            Value::I64(value) => visitor.visit_i64(*value),
-            Value::U64(value) => visitor.visit_u64(*value),
-            Value::F64(value) => visitor.visit_f64(*value),
-            Value::Str(value) => visitor.visit_borrowed_str(value.as_str()),
-            Value::Signature(value) => visitor.visit_string(value.to_string()),
-            Value::ObjectPath(value) => visitor.visit_borrowed_str(value.as_str()),
-            Value::Array(array) => {
+            Variant::U8(value) => visitor.visit_u8(*value),
+            Variant::Bool(value) => visitor.visit_bool(*value),
+            Variant::I16(value) => visitor.visit_i16(*value),
+            Variant::U16(value) => visitor.visit_u16(*value),
+            Variant::I32(value) => visitor.visit_i32(*value),
+            Variant::U32(value) => visitor.visit_u32(*value),
+            Variant::I64(value) => visitor.visit_i64(*value),
+            Variant::U64(value) => visitor.visit_u64(*value),
+            Variant::F64(value) => visitor.visit_f64(*value),
+            Variant::Str(value) => visitor.visit_borrowed_str(value.as_str()),
+            Variant::Signature(value) => visitor.visit_string(value.to_string()),
+            Variant::ObjectPath(value) => visitor.visit_borrowed_str(value.as_str()),
+            Variant::Array(array) => {
                 visitor.visit_seq(ArrayAccess::new(array.inner(), self.expected))
             }
-            Value::Dict(dict) => visitor.visit_map(DictAccess::new(dict, self.expected)),
-            Value::Structure(structure) => {
+            Variant::Dict(dict) => visitor.visit_map(DictAccess::new(dict, self.expected)),
+            Variant::Structure(structure) => {
                 visitor.visit_seq(StructureAccess::new(structure.fields(), self.expected))
             }
             #[cfg(unix)]
-            Value::Fd(fd) => visitor.visit_i32(std::os::fd::AsRawFd::as_raw_fd(fd)),
-            Value::Value(_) => unreachable!("variants are handled above"),
+            Variant::Fd(fd) => visitor.visit_i32(std::os::fd::AsRawFd::as_raw_fd(fd)),
+            Variant::Variant(_) => unreachable!("variants are handled above"),
         }
     }
 
@@ -144,7 +144,7 @@ impl<'de, 'sig> de::Deserializer<'de> for ValueDeserializer<'de, 'sig> {
         V: Visitor<'de>,
     {
         match self.check()? {
-            Value::Bool(value) => visitor.visit_bool(*value),
+            Variant::Bool(value) => visitor.visit_bool(*value),
             _ => Err(self.mismatch("a boolean")),
         }
     }
@@ -161,7 +161,7 @@ impl<'de, 'sig> de::Deserializer<'de> for ValueDeserializer<'de, 'sig> {
         V: Visitor<'de>,
     {
         match self.check()? {
-            Value::I16(value) => visitor.visit_i16(*value),
+            Variant::I16(value) => visitor.visit_i16(*value),
             _ => Err(self.mismatch("an int16")),
         }
     }
@@ -171,9 +171,9 @@ impl<'de, 'sig> de::Deserializer<'de> for ValueDeserializer<'de, 'sig> {
         V: Visitor<'de>,
     {
         match self.check()? {
-            Value::I32(value) => visitor.visit_i32(*value),
+            Variant::I32(value) => visitor.visit_i32(*value),
             #[cfg(unix)]
-            Value::Fd(value) => visitor.visit_i32(std::os::fd::AsRawFd::as_raw_fd(value)),
+            Variant::Fd(value) => visitor.visit_i32(std::os::fd::AsRawFd::as_raw_fd(value)),
             _ => Err(self.mismatch("an int32")),
         }
     }
@@ -183,7 +183,7 @@ impl<'de, 'sig> de::Deserializer<'de> for ValueDeserializer<'de, 'sig> {
         V: Visitor<'de>,
     {
         match self.check()? {
-            Value::I64(value) => visitor.visit_i64(*value),
+            Variant::I64(value) => visitor.visit_i64(*value),
             _ => Err(self.mismatch("an int64")),
         }
     }
@@ -193,7 +193,7 @@ impl<'de, 'sig> de::Deserializer<'de> for ValueDeserializer<'de, 'sig> {
         V: Visitor<'de>,
     {
         match self.check()? {
-            Value::U8(value) => visitor.visit_u8(*value),
+            Variant::U8(value) => visitor.visit_u8(*value),
             _ => Err(self.mismatch("a byte")),
         }
     }
@@ -203,7 +203,7 @@ impl<'de, 'sig> de::Deserializer<'de> for ValueDeserializer<'de, 'sig> {
         V: Visitor<'de>,
     {
         match self.check()? {
-            Value::U16(value) => visitor.visit_u16(*value),
+            Variant::U16(value) => visitor.visit_u16(*value),
             _ => Err(self.mismatch("a uint16")),
         }
     }
@@ -213,7 +213,7 @@ impl<'de, 'sig> de::Deserializer<'de> for ValueDeserializer<'de, 'sig> {
         V: Visitor<'de>,
     {
         match self.check()? {
-            Value::U32(value) => visitor.visit_u32(*value),
+            Variant::U32(value) => visitor.visit_u32(*value),
             _ => Err(self.mismatch("a uint32")),
         }
     }
@@ -223,7 +223,7 @@ impl<'de, 'sig> de::Deserializer<'de> for ValueDeserializer<'de, 'sig> {
         V: Visitor<'de>,
     {
         match self.check()? {
-            Value::U64(value) => visitor.visit_u64(*value),
+            Variant::U64(value) => visitor.visit_u64(*value),
             _ => Err(self.mismatch("a uint64")),
         }
     }
@@ -233,7 +233,7 @@ impl<'de, 'sig> de::Deserializer<'de> for ValueDeserializer<'de, 'sig> {
         V: Visitor<'de>,
     {
         match self.check()? {
-            Value::F64(value) => {
+            Variant::F64(value) => {
                 if value.is_finite() && *value > f32::MAX as f64 {
                     return Err(de::Error::invalid_value(
                         de::Unexpected::Float(*value),
@@ -251,7 +251,7 @@ impl<'de, 'sig> de::Deserializer<'de> for ValueDeserializer<'de, 'sig> {
         V: Visitor<'de>,
     {
         match self.check()? {
-            Value::F64(value) => visitor.visit_f64(*value),
+            Variant::F64(value) => visitor.visit_f64(*value),
             _ => Err(self.mismatch("a double")),
         }
     }
@@ -268,9 +268,9 @@ impl<'de, 'sig> de::Deserializer<'de> for ValueDeserializer<'de, 'sig> {
         V: Visitor<'de>,
     {
         match self.check()? {
-            Value::Str(value) => visitor.visit_borrowed_str(value.as_str()),
-            Value::Signature(value) => visitor.visit_string(value.to_string()),
-            Value::ObjectPath(value) => visitor.visit_borrowed_str(value.as_str()),
+            Variant::Str(value) => visitor.visit_borrowed_str(value.as_str()),
+            Variant::Signature(value) => visitor.visit_string(value.to_string()),
+            Variant::ObjectPath(value) => visitor.visit_borrowed_str(value.as_str()),
             _ => Err(self.mismatch("a string")),
         }
     }
@@ -305,7 +305,7 @@ impl<'de, 'sig> de::Deserializer<'de> for ValueDeserializer<'de, 'sig> {
         {
             let value = self.check()?;
             let array = match value {
-                Value::Array(array) => array,
+                Variant::Array(array) => array,
                 _ => return Err(self.mismatch("an option array")),
             };
             let element_signature = self.expected_array_element()?;
@@ -322,7 +322,7 @@ impl<'de, 'sig> de::Deserializer<'de> for ValueDeserializer<'de, 'sig> {
         {
             let _ = visitor;
             Err(de::Error::custom(
-                "Can only decode Option<T> from a Value if the `option-as-array` feature is \
+                "Can only decode Option<T> from a Variant if the `option-as-array` feature is \
                  enabled",
             ))
         }
@@ -363,13 +363,13 @@ impl<'de, 'sig> de::Deserializer<'de> for ValueDeserializer<'de, 'sig> {
             return visitor.visit_seq(self.variant_access());
         }
         match self.check()? {
-            Value::Array(array) => {
+            Variant::Array(array) => {
                 visitor.visit_seq(ArrayAccess::new(array.inner(), self.expected))
             }
-            Value::Structure(structure) => {
+            Variant::Structure(structure) => {
                 visitor.visit_seq(StructureAccess::new(structure.fields(), self.expected))
             }
-            Value::U8(_) if self.expected == &Signature::U8 => visitor.visit_seq(EmptyAccess),
+            Variant::U8(_) if self.expected == &Signature::U8 => visitor.visit_seq(EmptyAccess),
             _ => Err(self.mismatch("an array or structure")),
         }
     }
@@ -379,7 +379,7 @@ impl<'de, 'sig> de::Deserializer<'de> for ValueDeserializer<'de, 'sig> {
         V: Visitor<'de>,
     {
         match self.check()? {
-            Value::Dict(dict) => visitor.visit_map(DictAccess::new(dict, self.expected)),
+            Variant::Dict(dict) => visitor.visit_map(DictAccess::new(dict, self.expected)),
             _ => Err(self.mismatch("a dictionary")),
         }
     }
@@ -430,7 +430,7 @@ impl<'de, 'sig> de::Deserializer<'de> for ValueDeserializer<'de, 'sig> {
     {
         let value = self.check()?;
         let access = match value {
-            Value::Structure(structure) => {
+            Variant::Structure(structure) => {
                 ValueEnumAccess::structure(structure.fields(), self.expected)?
             }
             _ => ValueEnumAccess::scalar(value, self.expected),
@@ -459,13 +459,13 @@ impl<'de, 'sig> de::Deserializer<'de> for ValueDeserializer<'de, 'sig> {
 }
 
 struct ArrayAccess<'de> {
-    elements: &'de [Value<'de>],
+    elements: &'de [Variant<'de>],
     index: usize,
     expected: Signature,
 }
 
 impl<'de> ArrayAccess<'de> {
-    fn new(elements: &'de [Value<'de>], expected: &Signature) -> Self {
+    fn new(elements: &'de [Variant<'de>], expected: &Signature) -> Self {
         let expected = match expected {
             Signature::Array(element) => element.signature().clone(),
             _ => expected.clone(),
@@ -495,10 +495,10 @@ impl<'de> SeqAccess<'de> for ArrayAccess<'de> {
 }
 
 struct DictAccess<'de> {
-    entries: Box<dyn Iterator<Item = (&'de Value<'de>, &'de Value<'de>)> + 'de>,
+    entries: Box<dyn Iterator<Item = (&'de Variant<'de>, &'de Variant<'de>)> + 'de>,
     key: Signature,
     value: Signature,
-    pending_value: Option<&'de Value<'de>>,
+    pending_value: Option<&'de Variant<'de>>,
 }
 
 impl<'de> DictAccess<'de> {
@@ -543,13 +543,13 @@ impl<'de> MapAccess<'de> for DictAccess<'de> {
 }
 
 struct StructureAccess<'de> {
-    fields: &'de [Value<'de>],
+    fields: &'de [Variant<'de>],
     signatures: Vec<Signature>,
     index: usize,
 }
 
 impl<'de> StructureAccess<'de> {
-    fn new(fields: &'de [Value<'de>], expected: &Signature) -> Self {
+    fn new(fields: &'de [Variant<'de>], expected: &Signature) -> Self {
         let signatures = match expected {
             Signature::Structure(signatures) => signatures.iter().cloned().collect(),
             _ => vec![],
@@ -600,12 +600,12 @@ impl<'de> SeqAccess<'de> for EmptyAccess {
 
 struct VariantSeqAccess<'de> {
     signature: Signature,
-    value: &'de Value<'de>,
+    value: &'de Variant<'de>,
     index: usize,
 }
 
 impl<'de> VariantSeqAccess<'de> {
-    fn new(value: &'de Value<'de>) -> Self {
+    fn new(value: &'de Variant<'de>) -> Self {
         let signature = value.value_signature().clone();
         Self {
             signature,
@@ -614,9 +614,9 @@ impl<'de> VariantSeqAccess<'de> {
         }
     }
 
-    fn new_existing(value: &'de Value<'de>) -> Self {
+    fn new_existing(value: &'de Variant<'de>) -> Self {
         match value {
-            Value::Value(value) => Self::new(value),
+            Variant::Variant(value) => Self::new(value),
             value => Self::new(value),
         }
     }
@@ -649,14 +649,14 @@ impl<'de> SeqAccess<'de> for VariantSeqAccess<'de> {
 }
 
 struct ValueEnumAccess<'de> {
-    discriminant: &'de Value<'de>,
+    discriminant: &'de Variant<'de>,
     discriminant_signature: Signature,
-    payload: Option<&'de Value<'de>>,
+    payload: Option<&'de Variant<'de>>,
     payload_signature: Option<Signature>,
 }
 
 impl<'de> ValueEnumAccess<'de> {
-    fn scalar(value: &'de Value<'de>, expected: &Signature) -> Self {
+    fn scalar(value: &'de Variant<'de>, expected: &Signature) -> Self {
         Self {
             discriminant: value,
             discriminant_signature: expected.clone(),
@@ -665,7 +665,7 @@ impl<'de> ValueEnumAccess<'de> {
         }
     }
 
-    fn structure(value: &'de [Value<'de>], expected: &Signature) -> crate::Result<Self> {
+    fn structure(value: &'de [Variant<'de>], expected: &Signature) -> crate::Result<Self> {
         let Signature::Structure(signatures) = expected else {
             return Err(crate::Error::signature_mismatch(
                 expected,
@@ -717,7 +717,7 @@ impl<'de> EnumAccess<'de> for ValueEnumAccess<'de> {
 }
 
 struct ValueVariantAccess<'de> {
-    payload: Option<&'de Value<'de>>,
+    payload: Option<&'de Variant<'de>>,
     payload_signature: Option<Signature>,
 }
 
@@ -766,7 +766,7 @@ impl<'de> ValueVariantAccess<'de> {
     where
         V: Visitor<'de>,
     {
-        let Some((Value::Structure(structure), Signature::Structure(signatures))) =
+        let Some((Variant::Structure(structure), Signature::Structure(signatures))) =
             self.payload.zip(self.payload_signature)
         else {
             return Err(de::Error::invalid_type(
@@ -782,13 +782,13 @@ impl<'de> ValueVariantAccess<'de> {
 }
 
 struct EnumFieldsAccess<'de> {
-    fields: &'de [Value<'de>],
+    fields: &'de [Variant<'de>],
     signatures: Vec<Signature>,
     index: usize,
 }
 
 impl<'de> EnumFieldsAccess<'de> {
-    fn new(fields: &'de [Value<'de>], signatures: Vec<Signature>) -> Self {
+    fn new(fields: &'de [Variant<'de>], signatures: Vec<Signature>) -> Self {
         Self {
             fields,
             signatures,
@@ -862,9 +862,9 @@ mod tests {
     use serde::Deserialize;
 
     use super::*;
-    use crate::wire::{Array, OwnedValue, Structure, Type};
+    use crate::wire::{Array, OwnedVariant, Structure, Type};
 
-    fn convert_property_value<T>(value: &Value<'_>) -> T
+    fn convert_property_value<T>(value: &Variant<'_>) -> T
     where
         T: for<'de> Deserialize<'de> + Type,
     {
@@ -875,14 +875,14 @@ mod tests {
     fn unwraps_array_variants() {
         let mut array = Array::new(&Signature::Variant);
         array
-            .append(Value::Value(Box::new(Value::from("one"))))
+            .append(Variant::Variant(Box::new(Variant::from("one"))))
             .unwrap();
         array
-            .append(Value::Value(Box::new(Value::from("two"))))
+            .append(Variant::Variant(Box::new(Variant::from("two"))))
             .unwrap();
 
         assert_eq!(
-            convert_property_value::<Vec<String>>(&Value::Array(array)),
+            convert_property_value::<Vec<String>>(&Variant::Array(array)),
             ["one", "two"]
         );
     }
@@ -891,15 +891,15 @@ mod tests {
     fn unwraps_variants_in_nested_containers() {
         let mut inner = Array::new(&Signature::Variant);
         inner
-            .append(Value::Value(Box::new(Value::from("value"))))
+            .append(Variant::Variant(Box::new(Variant::from("value"))))
             .unwrap();
         let mut outer = Array::new(inner.signature());
-        outer.append(Value::Array(inner)).unwrap();
+        outer.append(Variant::Array(inner)).unwrap();
         let structure = Structure::builder()
-            .append_field(Value::Array(outer))
+            .append_field(Variant::Array(outer))
             .build()
             .unwrap();
-        let decoded: (Vec<Vec<String>>,) = convert_property_value(&Value::Structure(structure));
+        let decoded: (Vec<Vec<String>>,) = convert_property_value(&Variant::Structure(structure));
 
         assert_eq!(decoded.0, [vec!["value".to_string()]]);
     }
@@ -908,13 +908,13 @@ mod tests {
     fn unwraps_dict_variants() {
         let mut dict = Dict::new(&Signature::Str, &Signature::Variant);
         dict.append(
-            Value::from("key"),
-            Value::Value(Box::new(Value::from("value"))),
+            Variant::from("key"),
+            Variant::Variant(Box::new(Variant::from("value"))),
         )
         .unwrap();
 
         assert_eq!(
-            convert_property_value::<HashMap<String, String>>(&Value::Dict(dict))["key"],
+            convert_property_value::<HashMap<String, String>>(&Variant::Dict(dict))["key"],
             "value"
         );
     }
@@ -924,86 +924,86 @@ mod tests {
         let mut properties = Dict::new(&Signature::Str, &Signature::Variant);
         properties
             .append(
-                Value::from("ssid"),
-                Value::Value(Box::new(Value::from("home"))),
+                Variant::from("ssid"),
+                Variant::Variant(Box::new(Variant::from("home"))),
             )
             .unwrap();
         let mut interfaces = Dict::new(&Signature::Str, properties.signature());
         interfaces
-            .append(Value::from("802-11-wireless"), Value::Dict(properties))
+            .append(Variant::from("802-11-wireless"), Variant::Dict(properties))
             .unwrap();
 
         let decoded: HashMap<String, HashMap<String, String>> =
-            convert_property_value(&Value::Dict(interfaces));
+            convert_property_value(&Variant::Dict(interfaces));
         assert_eq!(decoded["802-11-wireless"]["ssid"], "home");
     }
 
     #[test]
     fn rejects_unrelated_empty_containers() {
-        let array = Value::Array(Array::new(&Signature::I32));
+        let array = Variant::Array(Array::new(&Signature::I32));
         assert!(deserialize_for_property::<Vec<String>>(&array).is_err());
 
-        let dict = Value::Dict(Dict::new(&Signature::I32, &Signature::Str));
+        let dict = Variant::Dict(Dict::new(&Signature::I32, &Signature::Str));
         assert!(deserialize_for_property::<HashMap<String, String>>(&dict).is_err());
     }
 
     #[test]
     fn preserves_variant_values() {
-        let value = Value::U32(42);
-        let decoded: Value<'_> = deserialize_for_property(&value).unwrap();
-        assert_eq!(decoded, Value::U32(42));
+        let value = Variant::U32(42);
+        let decoded: Variant<'_> = deserialize_for_property(&value).unwrap();
+        assert_eq!(decoded, Variant::U32(42));
 
-        let decoded = convert_property_value::<OwnedValue>(&value);
-        assert_eq!(decoded, OwnedValue::from(42_u32));
+        let decoded = convert_property_value::<OwnedVariant>(&value);
+        assert_eq!(decoded, OwnedVariant::from(42_u32));
 
-        let value = Value::Value(Box::new(Value::U32(42)));
-        let decoded = convert_property_value::<OwnedValue>(&value);
-        assert_eq!(decoded, OwnedValue::try_from(value).unwrap());
+        let value = Variant::Variant(Box::new(Variant::U32(42)));
+        let decoded = convert_property_value::<OwnedVariant>(&value);
+        assert_eq!(decoded, OwnedVariant::try_from(value).unwrap());
     }
 
     #[test]
     fn unwraps_variant_structure_and_enum_fields() {
         #[derive(Debug, PartialEq, serde::Deserialize, serde::Serialize, crate::Type)]
-        struct WithValue(u32, OwnedValue);
+        struct WithValue(u32, OwnedVariant);
 
         #[derive(Debug, PartialEq, serde::Deserialize, serde::Serialize, crate::Type)]
         enum NewType {
-            First(OwnedValue),
-            Second(OwnedValue),
+            First(OwnedVariant),
+            Second(OwnedVariant),
         }
 
         #[derive(Debug, PartialEq, serde::Deserialize, serde::Serialize, crate::Type)]
         enum Fields {
-            First(u8, OwnedValue),
-            Second { y: u8, value: OwnedValue },
+            First(u8, OwnedVariant),
+            Second { y: u8, value: OwnedVariant },
         }
 
-        let value = WithValue(7, OwnedValue::from(42_u32));
-        let serialized = Value::from(super::super::to_owned_value(&value).unwrap());
+        let value = WithValue(7, OwnedVariant::from(42_u32));
+        let serialized = Variant::from(super::super::to_owned_variant(&value).unwrap());
         assert_eq!(convert_property_value::<WithValue>(&serialized), value);
 
-        let value = NewType::Second(OwnedValue::from(42_u32));
-        let serialized = Value::from(super::super::to_owned_value(&value).unwrap());
+        let value = NewType::Second(OwnedVariant::from(42_u32));
+        let serialized = Variant::from(super::super::to_owned_variant(&value).unwrap());
         assert_eq!(convert_property_value::<NewType>(&serialized), value);
 
         let value = Fields::Second {
             y: 7,
-            value: OwnedValue::from(42_u32),
+            value: OwnedVariant::from(42_u32),
         };
-        let serialized = Value::from(super::super::to_owned_value(&value).unwrap());
+        let serialized = Variant::from(super::super::to_owned_variant(&value).unwrap());
         assert_eq!(convert_property_value::<Fields>(&serialized), value);
     }
 
     #[test]
     fn borrows_strings_from_values() {
-        let value = Value::from("borrowed");
+        let value = Variant::from("borrowed");
         let decoded: &str = deserialize_for_property(&value).unwrap();
         assert_eq!(decoded, "borrowed");
     }
 
     #[test]
     fn deserializes_signatures() {
-        let value = Value::Signature(Signature::try_from("a{sv}").unwrap());
+        let value = Variant::Signature(Signature::try_from("a{sv}").unwrap());
         assert_eq!(
             deserialize_for_property::<Signature>(&value).unwrap(),
             Signature::try_from("a{sv}").unwrap()
@@ -1019,7 +1019,7 @@ mod tests {
             Second = 2,
         }
 
-        let value = Value::U32(2);
+        let value = Variant::U32(2);
         assert_eq!(
             deserialize_for_property::<Kind>(&value).unwrap(),
             Kind::Second
@@ -1034,7 +1034,7 @@ mod tests {
             Second,
         }
 
-        let value = Value::U32(1);
+        let value = Variant::U32(1);
         assert_eq!(
             deserialize_for_property::<Unit>(&value).unwrap(),
             Unit::Second
@@ -1048,7 +1048,7 @@ mod tests {
             Second,
         }
 
-        let value = Value::from("second");
+        let value = Variant::from("second");
         assert_eq!(
             deserialize_for_property::<StringUnit>(&value).unwrap(),
             StringUnit::Second
@@ -1061,12 +1061,12 @@ mod tests {
         }
 
         let value = Structure::builder()
-            .append_field(Value::U32(1))
-            .append_field(Value::F64(2.5))
+            .append_field(Variant::U32(1))
+            .append_field(Variant::F64(2.5))
             .build()
             .unwrap();
         assert_eq!(
-            deserialize_for_property::<NewType>(&Value::Structure(value)).unwrap(),
+            deserialize_for_property::<NewType>(&Variant::Structure(value)).unwrap(),
             NewType::Second(2.5)
         );
 
@@ -1077,17 +1077,17 @@ mod tests {
         }
 
         let payload = Structure::builder()
-            .append_field(Value::U8(3))
-            .append_field(Value::U32(4))
+            .append_field(Variant::U8(3))
+            .append_field(Variant::U32(4))
             .build()
             .unwrap();
         let value = Structure::builder()
-            .append_field(Value::U32(1))
-            .append_field(Value::Structure(payload))
+            .append_field(Variant::U32(1))
+            .append_field(Variant::Structure(payload))
             .build()
             .unwrap();
         assert_eq!(
-            deserialize_for_property::<Fields>(&Value::Structure(value)).unwrap(),
+            deserialize_for_property::<Fields>(&Variant::Structure(value)).unwrap(),
             Fields::Second { y: 3, t: 4 }
         );
     }
@@ -1102,12 +1102,12 @@ mod tests {
         }
 
         let mut dict = Dict::new(&Signature::Str, &Signature::Variant);
-        dict.append(Value::from("count"), Value::new(Value::from(7_u32)))
+        dict.append(Variant::from("count"), Variant::new(Variant::from(7_u32)))
             .unwrap();
-        dict.append(Value::from("name"), Value::new(Value::from("dict")))
+        dict.append(Variant::from("name"), Variant::new(Variant::from("dict")))
             .unwrap();
         assert_eq!(
-            deserialize_for_property::<DictStruct>(&Value::Dict(dict)).unwrap(),
+            deserialize_for_property::<DictStruct>(&Variant::Dict(dict)).unwrap(),
             DictStruct {
                 count: 7,
                 name: "dict".to_owned(),
@@ -1115,11 +1115,11 @@ mod tests {
         );
 
         let mut array = Array::new(&Signature::Variant);
-        array.append(Value::new(Value::from("first"))).unwrap();
-        array.append(Value::new(Value::from(42_u32))).unwrap();
+        array.append(Variant::new(Variant::from("first"))).unwrap();
+        array.append(Variant::new(Variant::from(42_u32))).unwrap();
         assert_eq!(
-            deserialize_for_property::<Vec<Value<'_>>>(&Value::Array(array)).unwrap(),
-            [Value::from("first"), Value::from(42_u32)],
+            deserialize_for_property::<Vec<Variant<'_>>>(&Variant::Array(array)).unwrap(),
+            [Variant::from("first"), Variant::from(42_u32)],
         );
     }
 
@@ -1128,7 +1128,7 @@ mod tests {
         #[derive(serde::Deserialize, crate::Type)]
         struct Empty {}
 
-        deserialize_for_property::<Empty>(&Value::U8(0)).unwrap();
+        deserialize_for_property::<Empty>(&Variant::U8(0)).unwrap();
     }
 
     #[cfg(feature = "serde_bytes")]
@@ -1137,12 +1137,12 @@ mod tests {
         let mut values = Array::new(&Signature::Variant);
         for byte in [1_u8, 2, 3] {
             values
-                .append(Value::Value(Box::new(Value::from(byte))))
+                .append(Variant::Variant(Box::new(Variant::from(byte))))
                 .unwrap();
         }
 
         assert_eq!(
-            deserialize_for_property::<serde_bytes::ByteBuf>(&Value::Array(values)).unwrap(),
+            deserialize_for_property::<serde_bytes::ByteBuf>(&Variant::Array(values)).unwrap(),
             serde_bytes::ByteBuf::from(vec![1, 2, 3]),
         );
     }
@@ -1150,11 +1150,11 @@ mod tests {
     #[cfg(feature = "option-as-array")]
     #[test]
     fn deserializes_option_arrays() {
-        let some = Value::Array(Array::from(vec![42_i32]));
-        let none = Value::Array(Array::new(&Signature::I32));
+        let some = Variant::Array(Array::from(vec![42_i32]));
+        let none = Variant::Array(Array::new(&Signature::I32));
         let mut variants = Array::new(&Signature::Variant);
         variants
-            .append(Value::Value(Box::new(Value::from(42_i32))))
+            .append(Variant::Variant(Box::new(Variant::from(42_i32))))
             .unwrap();
         assert_eq!(
             deserialize_for_property::<Option<i32>>(&some).unwrap(),
@@ -1165,7 +1165,7 @@ mod tests {
             None
         );
         assert_eq!(
-            deserialize_for_property::<Option<i32>>(&Value::Array(variants)).unwrap(),
+            deserialize_for_property::<Option<i32>>(&Variant::Array(variants)).unwrap(),
             Some(42)
         );
     }

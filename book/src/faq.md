@@ -62,15 +62,15 @@ struct. You can not do that with `DeserializeDict` but you can with `serde::Dese
 
 ```rust,noplayground
 use std::collections::HashMap;
-use zbus::{as_value::{self, optional}, OwnedValue, Type};
+use zbus::{as_variant::{self, optional}, OwnedVariant, Type};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Type)]
 #[zbus(signature = "dict")]
 pub struct Dictionary {
-    #[serde(with = "as_value")]
+    #[serde(with = "as_variant")]
     field1: u16,
-    #[serde(rename = "another-name", with = "as_value")]
+    #[serde(rename = "another-name", with = "as_variant")]
     field2: i64,
     #[serde(
         with = "optional",
@@ -79,26 +79,26 @@ pub struct Dictionary {
     )]
     optional_field: Option<String>,
     #[serde(flatten)]
-    the_rest: HashMap<String, OwnedValue>,
+    the_rest: HashMap<String, OwnedVariant>,
 }
 ```
 
-Since the fields have to be transformed from/into `zbus::Value`, make sure to use the
-`with` attribute with the appropriate helper module from the `zbus::as_value` module.
+Since the fields have to be transformed from/into `zbus::Variant`, make sure to use the
+`with` attribute with the appropriate helper module from the `zbus::as_variant` module.
 
 Moreover, since D-Bus does not have a concept of nullable types, it's important to ensure that
 `skip_serializing_if` and `default` attributes are used for optional fields. Fortunately, you can
 make use of the `default` container attribute if your struct can implemented the `Default` trait:
 
 ```rust,noplayground
-# use zbus::{as_value::{self, optional}, Type};
+# use zbus::{as_variant::{self, optional}, Type};
 # use serde::{Deserialize, Serialize};
 #
 #[derive(Default, Deserialize, Serialize, Type)]
 #[zbus(signature = "dict")]
 #[serde(default)]
 pub struct Dictionary {
-    #[serde(with = "as_value")]
+    #[serde(with = "as_variant")]
     field1: u16,
     #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
     optional_field1: Option<i64>,
@@ -308,7 +308,7 @@ all types. However, it does come with some caveats and limitations:
     methods.
   3. Both the sender and receiver must agree on use of this encoding. If the sender sends `T`, the
     receiver will not be able to decode it successfully as `Option<T>` and vice versa.
-  4. While `zbus::Value` can be converted into `Option<T>`, the reverse is currently not
+  4. While `zbus::Variant` can be converted into `Option<T>`, the reverse is currently not
     possible.
 
 Due to these limitations, `option-as-array` feature is not enabled by default and must be explicitly
@@ -321,8 +321,8 @@ enabled.
 By default, `zbus::wire` encodes an unit-type enum as a `u32`, denoting the variant index. Other
 enums are encoded as a structure whose first field is the variant index and the second one are the
 variant's field(s). The only caveat here is that all variants must have the same number and types
-of fields. Names of fields don't matter though. You can make use of [`Value`] or [`OwnedValue`] if
-you want to encode different data in different fields. Here is a simple example:
+of fields. Names of fields don't matter though. You can make use of [`Variant`] or [`OwnedVariant`]
+if you want to encode different data in different fields. Here is a simple example:
 
 ```rust,noplayground
 use zbus::{Type, wire::{serialized::Context, to_bytes, LE}};
@@ -403,13 +403,13 @@ the `impl` form of its `bitflags!` macro:
 ```rust,noplayground
 use serde::{Deserialize, Serialize};
 use zbus::{
-    Basic, OwnedValue, Type, Value, proxy,
+    Basic, OwnedVariant, Type, Variant, proxy,
     wire::{serialized::Context, to_bytes, LE},
 };
 
 #[derive(
     Clone, Copy, Debug, Default, PartialEq, Eq, Hash,
-    Serialize, Deserialize, Type, Value, OwnedValue,
+    Serialize, Deserialize, Type, Variant, OwnedVariant,
 )]
 pub struct Permissions(u32);
 
@@ -450,9 +450,9 @@ assert_eq!(decoded, flags);
 ```
 
 `Type` gives the flags the signature of the integer, and the serde derives encode them as it.
-`Value` and `OwnedValue` convert them to and from a [`Value`] holding the integer, which a property
-needs, since property values travel as variants. `Default` makes the empty set the null value of
-an [`Optional<T>`].
+`Variant` and `OwnedVariant` convert them to and from a [`Variant`] holding the integer, which a
+property needs, since property values travel as variants. `Default` makes the empty set the null
+value of an [`Optional<T>`].
 
 A few things to be aware of:
 
@@ -463,7 +463,7 @@ A few things to be aware of:
   instead (`READ | WRITE`), implement `Debug` with `bitflags::parser::to_writer`; it writes
   nothing for an empty set.
 * A flags type made with the `struct` form of `bitflags!` can go over the bus too, but without the
-  `Value` conversions: enable the `bitflags` crate's `serde` feature, derive `Serialize`,
+  `Variant` conversions: enable the `bitflags` crate's `serde` feature, derive `Serialize`,
   `Deserialize` and `Type` inside the macro, and give `Type` the signature with
   `#[zbus(signature = "u")]`, as the struct wraps an internal type the macro generates, which
   implements none of zbus's traits.
@@ -489,8 +489,8 @@ to allow.
 [`Optional<T>`]: https://docs.rs/zbus/latest/zbus/wire/struct.Optional.html
 [`d-feet`]: https://wiki.gnome.org/Apps/DFeet
 [specialization]: https://rust-lang.github.io/rfcs/1210-impl-specialization.html
-[`Value`]: https://docs.rs/zbus/latest/zbus/wire/enum.Value.html
-[`OwnedValue`]: https://docs.rs/zbus/latest/zbus/wire/struct.OwnedValue.html
+[`Variant`]: https://docs.rs/zbus/latest/zbus/wire/enum.Variant.html
+[`OwnedVariant`]: https://docs.rs/zbus/latest/zbus/wire/struct.OwnedVariant.html
 [`serde_repr`]: https://crates.io/crates/serde_repr
 [`bitflags`]: https://docs.rs/bitflags
 [zruntime]: https://docs.rs/zruntime

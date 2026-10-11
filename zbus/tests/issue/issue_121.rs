@@ -18,6 +18,6 @@ fn issue_121() {
 
         /// Engines property
         #[zbus(property)]
-        fn engines(&self) -> zbus::Result<Vec<zbus::OwnedValue>>;
+        fn engines(&self) -> zbus::Result<Vec<zbus::OwnedVariant>>;
     }
 }

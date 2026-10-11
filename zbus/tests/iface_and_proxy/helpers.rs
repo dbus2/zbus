@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use zbus::{OwnedValue, Value};
+use zbus::{OwnedVariant, Variant};
 
 use super::types::IP4Adress;
 
@@ -18,7 +18,10 @@ pub fn check_ipv4_address(address: IP4Adress) {
     );
 }
 
-pub fn check_ipv4_address_hashmap(address: HashMap<String, OwnedValue>) {
-    assert_eq!(**address.get("address").unwrap(), Value::from("127.0.0.1"));
-    assert_eq!(**address.get("prefix").unwrap(), Value::from(1234u32));
+pub fn check_ipv4_address_hashmap(address: HashMap<String, OwnedVariant>) {
+    assert_eq!(
+        **address.get("address").unwrap(),
+        Variant::from("127.0.0.1")
+    );
+    assert_eq!(**address.get("prefix").unwrap(), Variant::from(1234u32));
 }

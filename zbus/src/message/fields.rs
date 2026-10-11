@@ -6,7 +6,7 @@ use serde::{
 use std::{borrow::Cow, num::NonZeroU32};
 
 use crate::{
-    ObjectPath, Signature, Type, Value,
+    ObjectPath, Signature, Type, Variant,
     message::{FieldCode, Header, Message},
     names::{BusName, ErrorName, InterfaceName, MemberName, UniqueName},
 };
@@ -42,41 +42,41 @@ impl Serialize for Fields<'_> {
     {
         let mut seq = serializer.serialize_seq(None)?;
         if let Some(path) = &self.path {
-            seq.serialize_element(&(FieldCode::Path, Value::from(path)))?;
+            seq.serialize_element(&(FieldCode::Path, Variant::from(path)))?;
         }
         if let Some(interface) = &self.interface {
-            seq.serialize_element(&(FieldCode::Interface, Value::from(interface.as_str())))?;
+            seq.serialize_element(&(FieldCode::Interface, Variant::from(interface.as_str())))?;
         }
         if let Some(member) = &self.member {
-            seq.serialize_element(&(FieldCode::Member, Value::from(member.as_str())))?;
+            seq.serialize_element(&(FieldCode::Member, Variant::from(member.as_str())))?;
         }
         if let Some(error_name) = &self.error_name {
-            seq.serialize_element(&(FieldCode::ErrorName, Value::from(error_name.as_str())))?;
+            seq.serialize_element(&(FieldCode::ErrorName, Variant::from(error_name.as_str())))?;
         }
         if let Some(reply_serial) = self.reply_serial {
-            seq.serialize_element(&(FieldCode::ReplySerial, Value::from(reply_serial.get())))?;
+            seq.serialize_element(&(FieldCode::ReplySerial, Variant::from(reply_serial.get())))?;
         }
         if let Some(destination) = &self.destination {
-            seq.serialize_element(&(FieldCode::Destination, Value::from(destination.as_str())))?;
+            seq.serialize_element(&(FieldCode::Destination, Variant::from(destination.as_str())))?;
         }
         if let Some(sender) = &self.sender {
-            seq.serialize_element(&(FieldCode::Sender, Value::from(sender.as_str())))?;
+            seq.serialize_element(&(FieldCode::Sender, Variant::from(sender.as_str())))?;
         }
         if !matches!(&*self.signature, Signature::Unit) {
             seq.serialize_element(&(FieldCode::Signature, SignatureSerializer(&self.signature)))?;
         }
         if let Some(unix_fds) = self.unix_fds {
-            seq.serialize_element(&(FieldCode::UnixFDs, Value::from(unix_fds)))?;
+            seq.serialize_element(&(FieldCode::UnixFDs, Variant::from(unix_fds)))?;
         }
         seq.end()
     }
 }
 
-/// Our special serializer for [`Value::Signature`].
+/// Our special serializer for [`Variant::Signature`].
 ///
-/// Normally `Value` would use the default serializer for `Signature`, which will include the `()`
+/// Normally `Variant` would use the default serializer for `Signature`, which will include the `()`
 /// for strucutures but for body signature, that's what what the D-Bus expects so we do the same as
-/// `Value` here, except we serialize signature value as string w/o the `()`.
+/// `Variant` here, except we serialize signature value as string w/o the `()`.
 #[derive(Debug, Type)]
 #[zvariant(signature = "v")]
 struct SignatureSerializer<'a>(&'a Signature);
@@ -120,7 +120,7 @@ impl<'de> Visitor<'de> for FieldsVisitor {
         V: SeqAccess<'de>,
     {
         let mut fields = Fields::new();
-        while let Some((code, value)) = visitor.next_element::<(FieldCode, Value<'de>)>()? {
+        while let Some((code, value)) = visitor.next_element::<(FieldCode, Variant<'de>)>()? {
             match code {
                 FieldCode::Path => {
                     fields.path = Some(ObjectPath::try_from(value).map_err(V::Error::custom)?)

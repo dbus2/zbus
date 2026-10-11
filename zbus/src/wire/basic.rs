@@ -5,7 +5,7 @@ use crate::wire::{Signature, Type, impl_type_with_repr};
 /// All basic types are also [`Type`] implementers.
 ///
 /// [`Type`]: trait.Type.html
-/// [`Value`]: enum.Value.html
+/// [`Variant`]: enum.Variant.html
 pub trait Basic: Type {
     /// The type signature, as a character.
     const SIGNATURE_CHAR: char;

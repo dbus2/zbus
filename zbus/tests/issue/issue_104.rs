@@ -2,7 +2,7 @@ use ntest::timeout;
 use test_log::test;
 use tracing::trace;
 
-use zbus::{OwnedObjectPath, OwnedValue};
+use zbus::{OwnedObjectPath, OwnedVariant};
 
 use zbus::{
     conn::{self, Connection},
@@ -22,7 +22,7 @@ fn issue104() {
 }
 
 async fn issue104_async() {
-    use zbus::{ObjectPath, Value};
+    use zbus::{ObjectPath, Variant};
 
     struct Secret;
     #[zbus::interface(name = "org.freedesktop.Secret.Service")]
@@ -30,10 +30,10 @@ async fn issue104_async() {
         fn open_session(
             &self,
             _algorithm: &str,
-            input: Value<'_>,
-        ) -> zbus::fdo::Result<(OwnedValue, OwnedObjectPath)> {
+            input: Variant<'_>,
+        ) -> zbus::fdo::Result<(OwnedVariant, OwnedObjectPath)> {
             Ok((
-                OwnedValue::try_from(input).unwrap(),
+                OwnedVariant::try_from(input).unwrap(),
                 ObjectPath::try_from("/org/freedesktop/secrets/Blah")
                     .unwrap()
                     .into(),
@@ -56,8 +56,8 @@ async fn issue104_async() {
             fn open_session(
                 &self,
                 algorithm: &str,
-                input: &zbus::Value<'_>,
-            ) -> zbus::Result<(OwnedValue, OwnedObjectPath)>;
+                input: &zbus::Variant<'_>,
+            ) -> zbus::Result<(OwnedVariant, OwnedObjectPath)>;
         }
 
         let proxy = SecretProxy::builder(&conn)
@@ -68,7 +68,10 @@ async fn issue104_async() {
             .unwrap();
 
         trace!("Calling open_session");
-        proxy.open_session("plain", &Value::from("")).await.unwrap();
+        proxy
+            .open_session("plain", &Variant::from(""))
+            .await
+            .unwrap();
         trace!("Called open_session");
     };
 }

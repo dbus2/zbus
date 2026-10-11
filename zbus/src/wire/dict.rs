@@ -8,18 +8,18 @@ use serde::ser::{Serialize, SerializeMap, Serializer};
 
 use crate::{
     Error,
-    wire::{Basic, DynamicType, Signature, Type, Value, value_display_fmt},
+    wire::{Basic, DynamicType, Signature, Type, Variant, value_display_fmt},
 };
 
-/// A helper type to wrap dictionaries in a [`Value`].
+/// A helper type to wrap dictionaries in a [`Variant`].
 ///
 /// API is provided to convert from, and to a [`HashMap`].
 ///
-/// [`Value`]: enum.Value.html#variant.Dict
+/// [`Variant`]: enum.Variant.html#variant.Dict
 /// [`HashMap`]: https://doc.rust-lang.org/std/collections/struct.HashMap.html
 #[derive(Debug, Hash, PartialEq, PartialOrd, Eq, Ord)]
 pub struct Dict<'k, 'v> {
-    map: BTreeMap<Value<'k>, Value<'v>>,
+    map: BTreeMap<Variant<'k>, Variant<'v>>,
     signature: Signature,
 }
 
@@ -41,12 +41,12 @@ impl<'k, 'v> Dict<'k, 'v> {
     /// * if [`key.value_signature()`] doesn't match the key signature `self` was created for.
     /// * if [`value.value_signature()`] doesn't match the value signature `self` was created for.
     ///
-    /// [`key.value_signature()`]: enum.Value.html#method.value_signature
-    /// [`value.value_signature()`]: enum.Value.html#method.value_signature
+    /// [`key.value_signature()`]: enum.Variant.html#method.value_signature
+    /// [`value.value_signature()`]: enum.Variant.html#method.value_signature
     pub fn append<'kv: 'k, 'vv: 'v>(
         &mut self,
-        key: Value<'kv>,
-        value: Value<'vv>,
+        key: Variant<'kv>,
+        value: Variant<'vv>,
     ) -> Result<(), Error> {
         match &self.signature {
             Signature::Dict { key: key_sig, .. }
@@ -77,22 +77,22 @@ impl<'k, 'v> Dict<'k, 'v> {
     /// Add a new entry.
     pub fn add<K, V>(&mut self, key: K, value: V) -> Result<(), Error>
     where
-        K: Basic + Into<Value<'k>> + Ord,
-        V: Into<Value<'v>> + DynamicType,
+        K: Basic + Into<Variant<'k>> + Ord,
+        V: Into<Variant<'v>> + DynamicType,
     {
-        self.append(Value::new(key), Value::new(value))
+        self.append(Variant::new(key), Variant::new(value))
     }
 
     /// Get the value for the given key.
     pub fn get<'d, K, V>(&'d self, key: &'k K) -> Result<Option<V>, Error>
     where
         'd: 'k + 'v,
-        &'k K: TryInto<Value<'k>>,
-        <&'k K as TryInto<Value<'k>>>::Error: Into<crate::Error>,
-        V: TryFrom<&'v Value<'v>>,
-        <V as TryFrom<&'v Value<'v>>>::Error: Into<crate::Error>,
+        &'k K: TryInto<Variant<'k>>,
+        <&'k K as TryInto<Variant<'k>>>::Error: Into<crate::Error>,
+        V: TryFrom<&'v Variant<'v>>,
+        <V as TryFrom<&'v Variant<'v>>>::Error: Into<crate::Error>,
     {
-        let key: Value<'_> = key.try_into().map_err(Into::into)?;
+        let key: Variant<'_> = key.try_into().map_err(Into::into)?;
 
         self.map.get(&key).map(|v| v.downcast_ref()).transpose()
     }
@@ -158,11 +158,11 @@ impl<'k, 'v> Dict<'k, 'v> {
         }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&Value<'k>, &Value<'v>)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&Variant<'k>, &Variant<'v>)> {
         self.map.iter()
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&Value<'k>, &mut Value<'v>)> {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&Variant<'k>, &mut Variant<'v>)> {
         self.map.iter_mut()
     }
 
@@ -176,8 +176,8 @@ impl Display for Dict<'_, '_> {
 }
 
 impl<'k, 'v> IntoIterator for Dict<'k, 'v> {
-    type Item = (Value<'k>, Value<'v>);
-    type IntoIter = <BTreeMap<Value<'k>, Value<'v>> as IntoIterator>::IntoIter;
+    type Item = (Variant<'k>, Variant<'v>);
+    type IntoIter = <BTreeMap<Variant<'k>, Variant<'v>> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.map.into_iter()
@@ -237,8 +237,8 @@ macro_rules! from_dict {
     ($ty:ident <K $(: $kbound1:ident $(+ $kbound2:ident)*)*, V $(, $typaram:ident)*>) => {
         impl<'k, 'v, K, V $(, $typaram)*> TryFrom<Dict<'k, 'v>> for $ty<K, V $(, $typaram)*>
         where
-            K: Basic + TryFrom<Value<'k>> $(+ $kbound1 $(+ $kbound2)*)*,
-            V: TryFrom<Value<'v>>,
+            K: Basic + TryFrom<Variant<'k>> $(+ $kbound1 $(+ $kbound2)*)*,
+            V: TryFrom<Variant<'v>>,
             K::Error: Into<crate::Error>,
             V::Error: Into<crate::Error>,
             $($typaram: BuildHasher + Default,)*
@@ -247,14 +247,14 @@ macro_rules! from_dict {
 
             fn try_from(v: Dict<'k, 'v>) -> Result<Self, Self::Error> {
                 v.map.into_iter().map(|(key, value)| {
-                    let key = if let Value::Value(v) = key {
+                    let key = if let Variant::Variant(v) = key {
                         K::try_from(*v)
                     } else {
                         K::try_from(key)
                     }
                     .map_err(Into::into)?;
 
-                    let value = if let Value::Value(v) = value {
+                    let value = if let Variant::Variant(v) = value {
                         V::try_from(*v)
                     } else {
                         V::try_from(value)
@@ -278,14 +278,14 @@ macro_rules! to_dict {
     ($ty:ident <K $(: $kbound1:ident $(+ $kbound2:ident)*)*, V $(, $typaram:ident)*>) => {
         impl<'k, 'v, K, V $(, $typaram)*> From<$ty<K, V $(, $typaram)*>> for Dict<'k, 'v>
         where
-            K: Basic + Into<Value<'k>>,
-            V: Type + Into<Value<'v>>,
+            K: Basic + Into<Variant<'k>>,
+            V: Type + Into<Variant<'v>>,
             $($typaram: BuildHasher,)*
         {
             fn from(value: $ty<K, V $(, $typaram)*>) -> Self {
                 let entries = value
                     .into_iter()
-                    .map(|(key, value)| (Value::new(key), Value::new(value)))
+                    .map(|(key, value)| (Variant::new(key), Variant::new(value)))
                     .collect();
                 let key_signature = K::SIGNATURE.clone();
                 let value_signature = V::SIGNATURE.clone();

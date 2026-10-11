@@ -6,7 +6,7 @@
 #![allow(dead_code)]
 
 use serde::{Deserialize, Serialize};
-use zbus::{DeserializeDict, OwnedValue, SerializeDict, Type, Value};
+use zbus::{DeserializeDict, OwnedVariant, SerializeDict, Type, Variant};
 
 #[derive(DeserializeDict, SerializeDict, Type)]
 #[zbus(signature = "dict")]
@@ -17,7 +17,7 @@ struct Dictionary {
     optional_field: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Type, Value, OwnedValue)]
+#[derive(Deserialize, Serialize, Type, Variant, OwnedVariant)]
 struct Data {
     field1: u32,
     field2: String,

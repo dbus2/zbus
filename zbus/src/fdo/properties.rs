@@ -13,7 +13,7 @@ use crate::{
     BoxDBusError, Connection, ObjectServer, interface, message::Header,
     object_server::SignalEmitter,
 };
-use crate::{OwnedValue, Value, names::InterfaceName};
+use crate::{OwnedVariant, Variant, names::InterfaceName};
 
 /// Service-side implementation for the `org.freedesktop.DBus.Properties` interface.
 /// This interface is implemented automatically for any object registered to the
@@ -33,7 +33,7 @@ impl Properties {
         #[zbus(object_server)] server: &ObjectServer,
         #[zbus(header)] header: Header<'_>,
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
-    ) -> std::result::Result<OwnedValue, BoxDBusError> {
+    ) -> std::result::Result<OwnedVariant, BoxDBusError> {
         let path = header.path().ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
         let iface = root
@@ -60,7 +60,7 @@ impl Properties {
         &self,
         interface_name: InterfaceName<'_>,
         property_name: &str,
-        value: &Value<'_>,
+        value: &Variant<'_>,
         #[zbus(object_server)] server: &ObjectServer,
         #[zbus(connection)] connection: &Connection,
         #[zbus(header)] header: Header<'_>,
@@ -119,7 +119,7 @@ impl Properties {
         #[zbus(connection)] connection: &Connection,
         #[zbus(header)] header: Header<'_>,
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
-    ) -> Result<HashMap<String, OwnedValue>> {
+    ) -> Result<HashMap<String, OwnedVariant>> {
         let path = header.path().ok_or(crate::Error::MissingField)?;
         let root = server.root().read().await;
         let iface = root
@@ -144,7 +144,7 @@ impl Properties {
     pub async fn properties_changed(
         emitter: &SignalEmitter<'_>,
         interface_name: InterfaceName<'_>,
-        changed_properties: HashMap<&str, Value<'_>>,
+        changed_properties: HashMap<&str, Variant<'_>>,
         invalidated_properties: Cow<'_, [&str]>,
     ) -> zbus::Result<()>;
 }
@@ -154,25 +154,25 @@ impl Properties {
 #[crate::proxy(interface = "org.freedesktop.DBus.Properties")]
 pub trait Properties {
     /// Get a property value.
-    fn get(&self, interface_name: InterfaceName<'_>, property_name: &str) -> Result<OwnedValue>;
+    fn get(&self, interface_name: InterfaceName<'_>, property_name: &str) -> Result<OwnedVariant>;
 
     /// Set a property value.
     fn set(
         &self,
         interface_name: InterfaceName<'_>,
         property_name: &str,
-        value: &Value<'_>,
+        value: &Variant<'_>,
     ) -> Result<()>;
 
     /// Get all properties.
-    fn get_all(&self, interface_name: InterfaceName<'_>) -> Result<HashMap<String, OwnedValue>>;
+    fn get_all(&self, interface_name: InterfaceName<'_>) -> Result<HashMap<String, OwnedVariant>>;
 
     /// Emit the `org.freedesktop.DBus.Properties.PropertiesChanged` signal.
     #[zbus(signal)]
     fn properties_changed(
         &self,
         interface_name: InterfaceName<'_>,
-        changed_properties: HashMap<&str, Value<'_>>,
+        changed_properties: HashMap<&str, Variant<'_>>,
         invalidated_properties: Cow<'_, [&str]>,
     ) -> zbus::Result<()>;
 }

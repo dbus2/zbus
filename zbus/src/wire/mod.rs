@@ -89,7 +89,7 @@
 //! assert_eq!(decoded, s);
 //!
 //! // It can handle enums too, just that all variants must have the same number and types of
-//! // fields. Names of fields don't matter though. You can make use of `Value` or `OwnedValue`
+//! // fields. Names of fields don't matter though. You can make use of `Variant` or `OwnedVariant`
 //! // if you want to encode different data in different fields.
 //! #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
 //! enum Enum<'s> {
@@ -163,8 +163,8 @@
 //! restriction that strings in Rust do not. They must not contain any interior null bytes
 //! (`'\0'`). Encoding or decoding strings that contain this character returns an error.
 //!
-//! The generic D-Bus type `VARIANT` is represented by [`Value`], an enum that holds exactly one
-//! value of any of the other types. Please refer to the [`Value`] documentation for examples.
+//! The generic D-Bus type `VARIANT` is represented by [`Variant`], an enum that holds exactly one
+//! value of any of the other types. Please refer to the [`Variant`] documentation for examples.
 //!
 //! # no-std
 //!
@@ -172,7 +172,7 @@
 //!
 //! # Optional features
 //!
-//! Each of these adds [`Type`] (and, where it applies, [`Value`]) implementations for a
+//! Each of these adds [`Type`] (and, where it applies, [`Variant`]) implementations for a
 //! third-party crate's types, except `option-as-array`, which instead changes how `Option<T>`
 //! is encoded. None of them enables the D-Bus API, and the D-Bus API enables none of them: they
 //! are all off unless asked for, in a default build as much as in a wire-only one
@@ -201,7 +201,7 @@
 //! [serde]: https://crates.io/crates/serde
 //! [tutorial]: https://serde.rs/
 //! [`Type`]: trait@Type
-//! [`Value`]: enum@Value
+//! [`Variant`]: enum@Variant
 //! [`Serialize`]: trait@serde::Serialize
 //! [`Deserialize`]: trait@serde::Deserialize
 //! [basic types]: https://dbus.freedesktop.org/doc/dbus-specification.html#basic-types
@@ -254,8 +254,8 @@ pub use structure::*;
 mod optional;
 pub use optional::*;
 
-mod value;
-pub use value::*;
+mod variant;
+pub use variant::*;
 
 // The shared derive codegen in zbus_utils emits `<path>::Error` and `<path>::Result` where
 // `<path>` is whatever module holds the wire types, and a glob import of this module must bring
@@ -270,18 +270,18 @@ pub use r#type::*;
 mod tuple;
 pub use tuple::*;
 
-mod from_value;
+mod from_variant;
 
-mod into_value;
+mod into_variant;
 
-mod owned_value;
-pub use owned_value::*;
+mod owned_variant;
+pub use owned_variant::*;
 
 mod container_depths;
 
-pub mod as_value;
+pub mod as_variant;
 
-pub use zbus_macros::{DeserializeDict, OwnedValue, SerializeDict, Type, Value, signature};
+pub use zbus_macros::{DeserializeDict, OwnedVariant, SerializeDict, Type, Variant, signature};
 
 // Macro support module, not part of the public API.
 #[doc(hidden)]

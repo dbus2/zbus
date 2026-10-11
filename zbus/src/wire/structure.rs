@@ -6,8 +6,8 @@ use serde::{
 use std::fmt::{Display, Write};
 
 use crate::wire::{
-    DynamicDeserialize, DynamicType, OwnedValue, Signature, Value, value::SignatureSeed,
-    value_display_fmt,
+    DynamicDeserialize, DynamicType, OwnedVariant, Signature, Variant, value_display_fmt,
+    variant::SignatureSeed,
 };
 
 /// Use this to efficiently build a [`Structure`].
@@ -16,7 +16,7 @@ use crate::wire::{
 ///
 /// [`Structure`]: struct.Structure.html
 #[derive(Debug, Default, PartialEq)]
-pub struct StructureBuilder<'a>(Vec<Value<'a>>);
+pub struct StructureBuilder<'a>(Vec<Variant<'a>>);
 
 impl<'a> StructureBuilder<'a> {
     /// Create a new `StructureBuilder`.
@@ -33,16 +33,16 @@ impl<'a> StructureBuilder<'a> {
     #[must_use]
     pub fn add_field<T>(self, field: T) -> Self
     where
-        T: DynamicType + Into<Value<'a>>,
+        T: DynamicType + Into<Variant<'a>>,
     {
-        self.append_field(Value::new(field))
+        self.append_field(Variant::new(field))
     }
 
     /// Append `field` to `self`.
     ///
-    /// Identical to `add_field`, except the field must be in the form of a `Value`.
+    /// Identical to `add_field`, except the field must be in the form of a `Variant`.
     #[must_use]
-    pub fn append_field<'e: 'a>(mut self, field: Value<'e>) -> Self {
+    pub fn append_field<'e: 'a>(mut self, field: Variant<'e>) -> Self {
         self.0.push(field);
 
         self
@@ -53,15 +53,15 @@ impl<'a> StructureBuilder<'a> {
     /// Identical to `add_field`, except it makes changes in-place.
     pub fn push_field<T>(&mut self, field: T)
     where
-        T: DynamicType + Into<Value<'a>>,
+        T: DynamicType + Into<Variant<'a>>,
     {
-        self.push_value(Value::new(field))
+        self.push_value(Variant::new(field))
     }
 
     /// Append `field` to `self`.
     ///
     /// Identical to `append_field`, except it makes changes in-place.
-    pub fn push_value<'e: 'a>(&mut self, field: Value<'e>) {
+    pub fn push_value<'e: 'a>(&mut self, field: Variant<'e>) {
         self.0.push(field)
     }
 
@@ -73,8 +73,12 @@ impl<'a> StructureBuilder<'a> {
             return Err(crate::Error::EmptyStructure);
         }
 
-        let fields_signatures: Box<[Signature]> =
-            self.0.iter().map(Value::value_signature).cloned().collect();
+        let fields_signatures: Box<[Signature]> = self
+            .0
+            .iter()
+            .map(Variant::value_signature)
+            .cloned()
+            .collect();
         let signature = Signature::structure(fields_signatures);
 
         Ok(Structure {
@@ -165,14 +169,14 @@ impl<'de> Visitor<'de> for StructureVisitor {
     }
 }
 
-/// A helper type to wrap structs in [`Value`].
+/// A helper type to wrap structs in [`Variant`].
 ///
 /// API is provided to convert from, and to tuples.
 ///
-/// [`Value`]: enum.Value.html
+/// [`Variant`]: enum.Variant.html
 #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Structure<'a> {
-    fields: Vec<Value<'a>>,
+    fields: Vec<Variant<'a>>,
     signature: Signature,
 }
 
@@ -196,12 +200,12 @@ impl<'a> Structure<'a> {
     }
 
     /// Get a reference to all the fields of `self`.
-    pub fn fields(&self) -> &[Value<'a>] {
+    pub fn fields(&self) -> &[Variant<'a>] {
         &self.fields
     }
 
     /// Converts `self` to a `Vec` containing all its fields.
-    pub fn into_fields(self) -> Vec<Value<'a>> {
+    pub fn into_fields(self) -> Vec<Variant<'a>> {
         self.fields
     }
 
@@ -328,7 +332,7 @@ macro_rules! tuple_impls {
         $(
             impl<'a, $($name),+> From<($($name),+,)> for Structure<'a>
             where
-                $($name: DynamicType + Into<Value<'a>>,)+
+                $($name: DynamicType + Into<Variant<'a>>,)+
             {
                 #[inline]
                 fn from(value: ($($name),+,)) -> Self {
@@ -342,7 +346,7 @@ macro_rules! tuple_impls {
 
             impl<'a, E, $($name),+> TryFrom<Structure<'a>> for ($($name),+,)
             where
-                $($name: TryFrom<Value<'a>, Error = E>,)+
+                $($name: TryFrom<Variant<'a>, Error = E>,)+
                 crate::Error: From<E>,
 
             {
@@ -357,42 +361,42 @@ macro_rules! tuple_impls {
                 }
             }
 
-            impl<'a, E, $($name),+> TryFrom<&Value<'a>> for ($($name),+,)
+            impl<'a, E, $($name),+> TryFrom<&Variant<'a>> for ($($name),+,)
             where
-                $($name: TryFrom<Value<'a>, Error = E>,)+
+                $($name: TryFrom<Variant<'a>, Error = E>,)+
                 crate::Error: From<E>,
 
             {
                 type Error = crate::Error;
 
-                fn try_from(v: &Value<'a>) -> core::result::Result<Self, Self::Error> {
+                fn try_from(v: &Variant<'a>) -> core::result::Result<Self, Self::Error> {
                     Self::try_from(Structure::try_from(v)?)
                 }
             }
 
-            impl<'a, E, $($name),+> TryFrom<Value<'a>> for ($($name),+,)
+            impl<'a, E, $($name),+> TryFrom<Variant<'a>> for ($($name),+,)
             where
-                $($name: TryFrom<Value<'a>, Error = E>,)+
+                $($name: TryFrom<Variant<'a>, Error = E>,)+
                 crate::Error: From<E>,
 
             {
                 type Error = crate::Error;
 
-                fn try_from(v: Value<'a>) -> core::result::Result<Self, Self::Error> {
+                fn try_from(v: Variant<'a>) -> core::result::Result<Self, Self::Error> {
                     Self::try_from(Structure::try_from(v)?)
                 }
             }
 
-            impl<E, $($name),+> TryFrom<OwnedValue> for ($($name),+,)
+            impl<E, $($name),+> TryFrom<OwnedVariant> for ($($name),+,)
             where
-                $($name: TryFrom<Value<'static>, Error = E>,)+
+                $($name: TryFrom<Variant<'static>, Error = E>,)+
                 crate::Error: From<E>,
 
             {
                 type Error = crate::Error;
 
-                fn try_from(v: OwnedValue) -> core::result::Result<Self, Self::Error> {
-                    Self::try_from(Value::from(v))
+                fn try_from(v: OwnedVariant) -> core::result::Result<Self, Self::Error> {
+                    Self::try_from(Variant::from(v))
                 }
             }
         )+

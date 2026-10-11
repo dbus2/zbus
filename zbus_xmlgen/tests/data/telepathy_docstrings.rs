@@ -7,8 +7,8 @@
     serde::Serialize,
     serde::Deserialize,
     zbus::Type,
-    zbus::Value,
-    zbus::OwnedValue,
+    zbus::Variant,
+    zbus::OwnedVariant,
 )]
 #[zvariant(signature = "s", crate = "zbus::wire")]
 pub enum PlaylistOrdering {
@@ -30,8 +30,8 @@ pub enum PlaylistOrdering {
     serde_repr::Deserialize_repr,
     serde_repr::Serialize_repr,
     zbus::Type,
-    zbus::Value,
-    zbus::OwnedValue,
+    zbus::Variant,
+    zbus::OwnedVariant,
 )]
 #[zvariant(crate = "zbus::wire")]
 #[repr(u32)]
@@ -52,8 +52,8 @@ pub enum LoopStatus {
     serde::Serialize,
     serde::Deserialize,
     zbus::Type,
-    zbus::Value,
-    zbus::OwnedValue,
+    zbus::Variant,
+    zbus::OwnedVariant,
 )]
 #[zvariant(crate = "zbus::wire")]
 pub struct Playlist {
@@ -73,8 +73,8 @@ pub struct Playlist {
     serde::Serialize,
     serde::Deserialize,
     zbus::Type,
-    zbus::Value,
-    zbus::OwnedValue,
+    zbus::Variant,
+    zbus::OwnedVariant,
 )]
 #[zvariant(crate = "zbus::wire")]
 pub struct MaybePlaylist {
@@ -85,7 +85,7 @@ pub struct MaybePlaylist {
 }
 
 /// A mapping from metadata attribute names to values.
-pub type MetadataMap = std::collections::HashMap<String, zbus::OwnedValue>;
+pub type MetadataMap = std::collections::HashMap<String, zbus::OwnedVariant>;
 
 /// Unique playlist identifier.
 pub type PlaylistId = zbus::OwnedObjectPath;

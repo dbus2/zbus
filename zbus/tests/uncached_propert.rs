@@ -99,7 +99,7 @@ async fn test_serde_property() -> Result<()> {
 
     use futures_util::StreamExt;
     use serde::{Deserialize, Serialize};
-    use zbus::{Optional, OwnedValue, Str, Type, names::OwnedUniqueName};
+    use zbus::{Optional, OwnedVariant, Str, Type, names::OwnedUniqueName};
 
     #[derive(Debug, Deserialize, Serialize, Type, PartialEq)]
     #[zvariant(signature = "s")]
@@ -130,13 +130,16 @@ async fn test_serde_property() -> Result<()> {
         }
 
         #[zbus(property)]
-        fn dynamic_array(&self) -> Vec<OwnedValue> {
-            vec![OwnedValue::from(Str::from("array value"))]
+        fn dynamic_array(&self) -> Vec<OwnedVariant> {
+            vec![OwnedVariant::from(Str::from("array value"))]
         }
 
         #[zbus(property)]
-        fn dynamic_dict(&self) -> HashMap<String, OwnedValue> {
-            HashMap::from([("key".to_string(), OwnedValue::from(Str::from("dict value")))])
+        fn dynamic_dict(&self) -> HashMap<String, OwnedVariant> {
+            HashMap::from([(
+                "key".to_string(),
+                OwnedVariant::from(Str::from("dict value")),
+            )])
         }
     }
 

@@ -15,7 +15,7 @@ use std::{
 use async_trait::async_trait;
 
 use crate::{
-    BoxDBusError, Connection, DBusError, Error, ObjectServer, OwnedValue, Value, fdo,
+    BoxDBusError, Connection, DBusError, Error, ObjectServer, OwnedVariant, Variant, fdo,
     message::{self, Header, Message},
     names::{InterfaceName, MemberName},
     object_server::SignalEmitter,
@@ -76,7 +76,7 @@ pub trait Interface: Any + Send + Sync {
         connection: &Connection,
         header: Option<&message::Header<'_>>,
         emitter: &SignalEmitter<'_>,
-    ) -> Option<Result<OwnedValue, BoxDBusError>>;
+    ) -> Option<Result<OwnedVariant, BoxDBusError>>;
 
     /// Return all the properties.
     ///
@@ -88,7 +88,7 @@ pub trait Interface: Any + Send + Sync {
         connection: &Connection,
         header: Option<&message::Header<'_>>,
         emitter: &SignalEmitter<'_>,
-    ) -> fdo::Result<HashMap<String, OwnedValue>>;
+    ) -> fdo::Result<HashMap<String, OwnedVariant>>;
 
     /// Set a property value.
     ///
@@ -99,7 +99,7 @@ pub trait Interface: Any + Send + Sync {
     fn set<'call>(
         &'call self,
         property_name: &'call str,
-        value: &'call Value<'_>,
+        value: &'call Variant<'_>,
         object_server: &'call ObjectServer,
         connection: &'call Connection,
         header: Option<&'call message::Header<'_>>,
@@ -125,7 +125,7 @@ pub trait Interface: Any + Send + Sync {
     async fn set_mut(
         &mut self,
         property_name: &str,
-        value: &Value<'_>,
+        value: &Variant<'_>,
         object_server: &ObjectServer,
         connection: &Connection,
         header: Option<&Header<'_>>,

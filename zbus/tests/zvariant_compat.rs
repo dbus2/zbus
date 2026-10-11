@@ -4,6 +4,7 @@
 #![allow(deprecated)]
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use zbus::{
     names::{self, InterfaceName},
     zvariant::{self, LE, ObjectPath, Signature, Type, Value, serialized::Context, to_bytes},
@@ -31,6 +32,10 @@ fn value_alias_and_variants() {
 
     let owned = zvariant::OwnedValue::try_from(zvariant::Value::from(7u32)).unwrap();
     assert_eq!(u32::try_from(owned).unwrap(), 7);
+
+    // The variant holding a variant is `Variant` now, but it still constructs under its old name.
+    let nested = Value::Value(Box::new(Value::from(42u8)));
+    assert!(matches!(nested, Value::Variant(inner) if *inner == Value::U8(42)));
 }
 
 #[test]
@@ -51,6 +56,75 @@ fn value_and_ownedvalue_derives_reached_through_the_module() {
             y: "hello".to_string()
         }
     );
+}
+
+#[test]
+fn as_value_module() {
+    #[derive(Serialize, Deserialize, Type, PartialEq, Debug)]
+    #[zvariant(signature = "dict")]
+    struct Props {
+        #[serde(with = "zvariant::as_value")]
+        count: u32,
+        #[serde(
+            with = "zvariant::as_value::optional",
+            skip_serializing_if = "Option::is_none",
+            default
+        )]
+        name: Option<String>,
+    }
+
+    let props = Props {
+        count: 7,
+        name: Some("seven".to_string()),
+    };
+    let ctxt = Context::new_dbus(LE, 0);
+    let encoded = to_bytes(ctxt, &props).unwrap();
+    let decoded: Props = encoded.deserialize().unwrap().0;
+    assert_eq!(decoded, props);
+
+    let map: HashMap<String, zvariant::OwnedValue> = encoded.deserialize().unwrap().0;
+    assert_eq!(u32::try_from(&map["count"]).unwrap(), 7);
+}
+
+// Code that depends on zbus alone points the derives at the compatibility module. The code they
+// generate names the items under their 6.0 names, so the module has to carry those too.
+#[derive(Serialize, Deserialize, Type, zvariant::Value, zvariant::OwnedValue, PartialEq, Debug)]
+#[zvariant(crate = "zbus::zvariant")]
+struct PairThroughTheModule {
+    x: i32,
+    y: String,
+}
+
+#[derive(zvariant::SerializeDict, zvariant::DeserializeDict, Type, PartialEq, Debug)]
+#[zvariant(crate = "zbus::zvariant", signature = "dict")]
+struct DictThroughTheModule {
+    count: u32,
+    name: Option<String>,
+}
+
+#[test]
+fn derives_pointed_at_the_module() {
+    let pair = PairThroughTheModule {
+        x: 42,
+        y: "hello".to_string(),
+    };
+    let owned = zvariant::OwnedValue::try_from(zvariant::Value::from(pair)).unwrap();
+    let back = PairThroughTheModule::try_from(owned).unwrap();
+    assert_eq!(
+        back,
+        PairThroughTheModule {
+            x: 42,
+            y: "hello".to_string()
+        }
+    );
+
+    let dict = DictThroughTheModule {
+        count: 7,
+        name: Some("seven".to_string()),
+    };
+    let encoded = to_bytes(Context::new_dbus(LE, 0), &dict).unwrap();
+    let decoded: DictThroughTheModule = encoded.deserialize().unwrap().0;
+    assert_eq!(decoded, dict);
 }
 
 #[test]

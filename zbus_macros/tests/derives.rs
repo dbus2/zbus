@@ -3,8 +3,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use zbus::{
-    OwnedValue, Signature, Type, Value,
-    as_value::{self, optional},
+    OwnedVariant, Signature, Type, Variant,
+    as_variant::{self, optional},
     wire::{LE, serialized::Context},
 };
 
@@ -49,9 +49,9 @@ fn derive_dict() {
     struct Test {
         #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
         field_a: Option<u32>,
-        #[serde(with = "as_value", rename = "field-b")]
+        #[serde(with = "as_variant", rename = "field-b")]
         field_b: String,
-        #[serde(with = "as_value")]
+        #[serde(with = "as_variant")]
         field_c: Vec<u8>,
     }
 
@@ -63,19 +63,19 @@ fn derive_dict() {
 
     let ctxt = Context::new(LE, 0);
     let serialized = zbus::wire::to_bytes(ctxt, &test).unwrap();
-    let deserialized: HashMap<String, OwnedValue> = serialized.deserialize().unwrap().0;
+    let deserialized: HashMap<String, OwnedVariant> = serialized.deserialize().unwrap().0;
 
     assert_eq!(
         deserialized["fieldA"],
-        Value::from(1u32).try_into().unwrap()
+        Variant::from(1u32).try_into().unwrap()
     );
     assert_eq!(
         deserialized["field-b"],
-        Value::from("foo").try_into().unwrap()
+        Variant::from("foo").try_into().unwrap()
     );
     assert_eq!(
         deserialized["fieldC"],
-        Value::from(&[1u8, 2, 3][..]).try_into().unwrap()
+        Variant::from(&[1u8, 2, 3][..]).try_into().unwrap()
     );
 
     let serialized = zbus::wire::to_bytes(ctxt, &deserialized).unwrap();
@@ -91,11 +91,11 @@ fn derive_dict() {
 #[test]
 #[ignore]
 fn issues_311() {
-    // Issue 311: Value macro not able to handle Option in Dict.
+    // Issue 311: Variant macro not able to handle Option in Dict.
     //
     // org.freedesktop.ModemManager1.Modem.Signal props are a dict with optional values depending on
     // the property you read.
-    #[derive(Debug, Type, Deserialize, OwnedValue, Value, Default)]
+    #[derive(Debug, Type, Deserialize, OwnedVariant, Variant, Default)]
     #[zbus(signature = "dict")]
     #[serde(deny_unknown_fields, default)]
     pub struct SignalInfo {
@@ -118,10 +118,10 @@ fn issues_1252() {
     #[derive(Type, Deserialize)]
     #[zvariant(signature = "a{sv}")]
     pub struct OwnedProperties {
-        #[serde(with = "as_value")]
+        #[serde(with = "as_variant")]
         key: String,
-        #[serde(with = "as_value")]
-        val: OwnedValue,
+        #[serde(with = "as_variant")]
+        val: OwnedVariant,
     }
 }
 

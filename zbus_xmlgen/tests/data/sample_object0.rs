@@ -20,7 +20,7 @@ pub trait SampleInterface0 {
     fn bazic(&self, bar: &(i32, i32), foo: &(i32,)) -> zbus::Result<((i32, i32), Vec<(i32,)>)>;
 
     /// Bazify method
-    fn bazify(&self, bar: &(i32, i32, u32)) -> zbus::Result<zbus::OwnedValue>;
+    fn bazify(&self, bar: &(i32, i32, u32)) -> zbus::Result<zbus::OwnedVariant>;
 
     /// Frobate method
     fn frobate(
@@ -33,7 +33,7 @@ pub trait SampleInterface0 {
     fn get_signature(&self, challenge: &zbus::Signature) -> zbus::Result<zbus::Signature>;
 
     /// MogrifyMe method
-    fn mogrify_me(&self, bar: &(i32, i32, &[&zbus::Value<'_>])) -> zbus::Result<()>;
+    fn mogrify_me(&self, bar: &(i32, i32, &[&zbus::Variant<'_>])) -> zbus::Result<()>;
 
     /// Odyssey method
     #[allow(clippy::too_many_arguments)]
@@ -45,7 +45,7 @@ pub trait SampleInterface0 {
         circe: i32,
         athena: bool,
         polyphemus: i32,
-        calypso: &zbus::Value<'_>,
+        calypso: &zbus::Variant<'_>,
     ) -> zbus::Result<()>;
 
     /// Changed signal
@@ -64,12 +64,12 @@ pub trait SampleInterface0 {
     #[zbus(signal)]
     fn signal_dict_string_to_value(
         &self,
-        dict: std::collections::HashMap<&str, zbus::Value<'_>>,
+        dict: std::collections::HashMap<&str, zbus::Variant<'_>>,
     ) -> zbus::Result<()>;
 
     /// SignalValue signal
     #[zbus(signal)]
-    fn signal_value(&self, value: zbus::Value<'_>) -> zbus::Result<()>;
+    fn signal_value(&self, value: zbus::Variant<'_>) -> zbus::Result<()>;
 
     /// StateChanged signal
     #[zbus(signal)]
@@ -98,7 +98,7 @@ pub trait SampleInterface0 {
             i32,
             Vec<String>,
             u64,
-            std::collections::HashMap<String, zbus::OwnedValue>,
+            std::collections::HashMap<String, zbus::OwnedVariant>,
         )>,
     >;
 

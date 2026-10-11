@@ -6,7 +6,7 @@
 //! (signature) or `v` (variant) value.
 
 use zbus::{
-    Signature, Value,
+    Signature, Variant,
     wire::{
         LE,
         serialized::{Context, Data},
@@ -81,7 +81,7 @@ fn dbus_deserialize_rejects_variant_carrying_maybe() {
     let ctxt = Context::new(LE, 0);
     let bytes = [3u8, b'a', b'm', b'i', 0, 0, 0, 0, 0, 0, 0, 0];
     let data = Data::new(&bytes[..], ctxt);
-    let res: zbus::Result<(Value<'_>, usize)> = data.deserialize_for_signature(&v);
+    let res: zbus::Result<(Variant<'_>, usize)> = data.deserialize_for_signature(&v);
     assert_maybe_rejected(res, "deserialize variant carrying maybe");
 }
 

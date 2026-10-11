@@ -2,7 +2,7 @@
 
 use crate::{
     AsyncDrop, Basic, Connection, Error, MatchRule, MessageStream, ObjectPath, OwnedMatchRule,
-    OwnedValue, Result, Str, Value, as_value,
+    OwnedVariant, Result, Str, Variant, as_variant,
     fdo::{self, IntrospectableProxy, NameOwnerChanged, PropertiesChangedStream, PropertiesProxy},
     log::{Instrument, debug, info_span, trace, warn},
     message::{Flags, Message, Sequence, Type},
@@ -130,14 +130,14 @@ impl<T> PropertyChanged<'_, T> {
     /// If the notification signal contained the new value, it has been cached already and this call
     /// will return that value. Otherwise (i.e. invalidated property), a D-Bus call is made to fetch
     /// and cache the new value.
-    pub async fn get_raw(&self) -> Result<impl Deref<Target = Value<'static>> + '_> {
+    pub async fn get_raw(&self) -> Result<impl Deref<Target = Variant<'static>> + '_> {
         struct Wrapper<'w> {
             name: &'w str,
             values: RwLockReadGuard<'w, HashMap<String, PropertyValue>>,
         }
 
         impl Deref for Wrapper<'_> {
-            type Target = Value<'static>;
+            type Target = Variant<'static>;
 
             fn deref(&self) -> &Self::Target {
                 self.values
@@ -425,7 +425,7 @@ impl PropertiesCache {
     fn update_cache(
         &self,
         uncached_properties: &HashSet<Str<'_>>,
-        changed: &HashMap<&str, Value<'_>>,
+        changed: &HashMap<&str, Variant<'_>>,
         invalidated: &[&str],
         interface: &InterfaceName<'_>,
     ) {
@@ -459,11 +459,12 @@ impl PropertiesCache {
 
             let entry = values.entry(property_name.to_string()).or_default();
 
-            let value = match OwnedValue::try_from(value) {
+            let value = match OwnedVariant::try_from(value) {
                 Ok(value) => value,
                 Err(e) => {
                     debug!(
-                        "Failed to convert property `{interface}.{property_name}` to OwnedValue: {e}"
+                        "Failed to convert property `{interface}.{property_name}` to \
+                         OwnedVariant: {e}"
                     );
                     continue;
                 }
@@ -727,7 +728,7 @@ impl<'a> Proxy<'a> {
     pub fn cached_property_raw<'p>(
         &'p self,
         property_name: &'p str,
-    ) -> Option<impl Deref<Target = Value<'static>> + 'p> {
+    ) -> Option<impl Deref<Target = Variant<'static>> + 'p> {
         if let Some(values) = self
             .inner
             .property_cache
@@ -747,7 +748,7 @@ impl<'a> Proxy<'a> {
             }
 
             impl Deref for Wrapper<'_> {
-                type Target = Value<'static>;
+                type Target = Variant<'static>;
 
                 fn deref(&self) -> &Self::Target {
                     self.values
@@ -767,7 +768,7 @@ impl<'a> Proxy<'a> {
         }
     }
 
-    async fn get_proxy_property(&self, property_name: &str) -> Result<OwnedValue> {
+    async fn get_proxy_property(&self, property_name: &str) -> Result<OwnedVariant> {
         Ok(self
             .properties_proxy()
             .get(self.inner.interface.as_ref(), property_name)
@@ -807,7 +808,7 @@ impl<'a> Proxy<'a> {
                 &crate::DynamicTuple((
                     self.inner.interface.as_ref(),
                     property_name,
-                    as_value::Serialize(&value),
+                    as_variant::Serialize(&value),
                 )),
             )
             .await?;
@@ -1031,7 +1032,7 @@ impl<'a> Proxy<'a> {
 
 #[derive(Debug, Default)]
 struct PropertyValue {
-    value: Option<OwnedValue>,
+    value: Option<OwnedVariant>,
     event: Event,
 }
 
@@ -1052,8 +1053,8 @@ struct PropertyValue {
     serde::Serialize,
     serde::Deserialize,
     crate::Type,
-    Value,
-    OwnedValue,
+    Variant,
+    OwnedVariant,
 )]
 pub struct MethodFlags(u8);
 
@@ -1392,11 +1393,11 @@ where
     fn inner(&self) -> &Proxy<'c>;
 }
 
-fn convert_property_value<T>(value: &Value<'_>) -> Result<T>
+fn convert_property_value<T>(value: &Variant<'_>) -> Result<T>
 where
     T: serde::de::DeserializeOwned + crate::Type,
 {
-    as_value::deserialize_for_property(value)
+    as_variant::deserialize_for_property(value)
 }
 
 enum Either<L, R> {
@@ -1430,15 +1431,15 @@ mod method_flags_tests {
     #[test]
     fn method_flags_convert_from_borrowed_value() {
         use crate::{
-            Value,
+            Variant,
             wire::{LE, serialized::Context, to_bytes},
         };
 
-        // A `Value` that borrows from the buffer it was decoded from, as one taken out of a
+        // A `Variant` that borrows from the buffer it was decoded from, as one taken out of a
         // received message does.
         let flags = MethodFlags::NO_AUTO_START | MethodFlags::ALLOW_INTERACTIVE_AUTH;
-        let encoded = to_bytes(Context::new(LE, 0), &Value::from(flags)).unwrap();
-        let (value, _): (Value<'_>, _) = encoded.deserialize().unwrap();
+        let encoded = to_bytes(Context::new(LE, 0), &Variant::from(flags)).unwrap();
+        let (value, _): (Variant<'_>, _) = encoded.deserialize().unwrap();
         assert_eq!(MethodFlags::try_from(value).unwrap(), flags);
     }
 
