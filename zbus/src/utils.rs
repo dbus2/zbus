@@ -1,4 +1,6 @@
-use std::fmt;
+use std::{fmt, future::poll_fn, pin::Pin};
+
+use futures_core::Stream;
 
 #[cfg(unix)]
 pub(crate) const FDS_MAX: usize = 1024; // this is hardcoded in sdbus - nothing in the spec
@@ -31,6 +33,14 @@ where
         bitflags::parser::to_writer(flags, &mut *f)?;
     }
     f.write_str(")")
+}
+
+/// The next item of `stream`, or `None` once it has ended.
+pub(crate) async fn next<S>(stream: &mut S) -> Option<S::Item>
+where
+    S: Stream + Unpin,
+{
+    poll_fn(|cx| Pin::new(&mut *stream).poll_next(cx)).await
 }
 
 /// Helper trait for macro-generated code.
@@ -89,7 +99,33 @@ pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
 /// [`Builder::runtime`]: crate::connection::Builder::runtime
 #[cfg(not(any(feature = "default-rt", feature = "tokio")))]
 pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
-    futures_lite::future::block_on(future)
+    use std::{
+        pin::pin,
+        sync::{Arc, atomic::Ordering},
+        task::{Context, Poll, Waker},
+        thread,
+    };
+
+    let unparker = Arc::new(Unparker {
+        thread: thread::current(),
+        woken: Default::default(),
+    });
+    let waker = Waker::from(unparker.clone());
+    let mut cx = Context::from_waker(&waker);
+    let mut future = pin!(future);
+
+    loop {
+        if let Poll::Ready(output) = future.as_mut().poll(&mut cx) {
+            return output;
+        }
+
+        // The flag, not the thread's park token, is what says the future was woken: the future
+        // may park the thread itself while it is polled, which uses the token up, and anything
+        // else may unpark the thread.
+        while !unparker.woken.swap(false, Ordering::Acquire) {
+            thread::park();
+        }
+    }
 }
 
 /// Runs a future to completion, blocking the calling thread until it is done.
@@ -129,4 +165,72 @@ pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
                 .expect("launch of tokio runtime")
         })
         .block_on(future)
+}
+
+/// The waker of [`block_on`] in a build with no runtime of zbus's own: it unparks the thread the
+/// call blocks.
+#[cfg(not(any(feature = "default-rt", feature = "tokio")))]
+struct Unparker {
+    thread: std::thread::Thread,
+    // Set by a wake-up, and cleared by the blocked thread as it polls the future again.
+    woken: std::sync::atomic::AtomicBool,
+}
+
+#[cfg(not(any(feature = "default-rt", feature = "tokio")))]
+impl std::task::Wake for Unparker {
+    fn wake(self: std::sync::Arc<Self>) {
+        self.wake_by_ref();
+    }
+
+    fn wake_by_ref(self: &std::sync::Arc<Self>) {
+        // A wake-up the thread has yet to take needs no second unpark.
+        if !self.woken.swap(true, std::sync::atomic::Ordering::Release) {
+            self.thread.unpark();
+        }
+    }
+}
+
+#[cfg(all(test, not(any(feature = "default-rt", feature = "tokio"))))]
+mod tests {
+    use std::{future::poll_fn, task::Poll, thread, time::Duration};
+
+    use ntest::timeout;
+
+    use super::block_on;
+
+    /// A future woken from another thread while the calling thread waits for it is polled again.
+    #[test]
+    #[timeout(15000)]
+    fn block_on_polls_again_once_another_thread_wakes_the_future() {
+        let event = zruntime::Event::new();
+        let listener = event.listen();
+        let notifier = thread::spawn(move || {
+            // Long enough for the calling thread to be parked by the time the wake-up comes.
+            thread::sleep(Duration::from_millis(50));
+            event.notify(1);
+        });
+
+        block_on(listener);
+        notifier.join().unwrap();
+    }
+
+    /// A wake-up whose park token the future itself uses up is not lost.
+    #[test]
+    #[timeout(15000)]
+    fn block_on_keeps_a_wake_up_the_future_parked_away() {
+        let mut polled = false;
+
+        block_on(poll_fn(|cx| {
+            if polled {
+                return Poll::Ready(());
+            }
+            polled = true;
+            let waker = cx.waker().clone();
+            thread::spawn(move || waker.wake()).join().unwrap();
+            // The wake-up above unparked this thread, so this returns at once, taking the token.
+            thread::park();
+
+            Poll::Pending
+        }));
+    }
 }

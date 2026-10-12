@@ -30,7 +30,7 @@ label=$1
 shift
 
 FORBIDDEN="async-io|async-executor|async-task|async-lock|async-process|blocking"
-FORBIDDEN="$FORBIDDEN|polling|async-channel|async-signal|piper"
+FORBIDDEN="$FORBIDDEN|polling|async-channel|async-signal|piper|futures-lite"
 
 tree_file=$(mktemp)
 trap 'rm -f "$tree_file"' EXIT
