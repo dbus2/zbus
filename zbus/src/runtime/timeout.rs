@@ -1,6 +1,10 @@
-use std::{future::Future, io::ErrorKind, time::Duration};
-
-use futures_lite::FutureExt;
+use std::{
+    future::{Future, poll_fn},
+    io::ErrorKind,
+    pin::pin,
+    task::Poll,
+    time::Duration,
+};
 
 use super::{Runtime, traits};
 use crate::{Error, Result};
@@ -22,12 +26,21 @@ impl Runtime {
     where
         F: Future<Output = Result<T>>,
     {
-        fut.or(async {
-            self.sleep(duration).await;
-            Err(Error::from(std::io::Error::new(
-                ErrorKind::TimedOut,
-                "timed out",
-            )))
+        let mut fut = pin!(fut);
+        let mut sleep = pin!(self.sleep(duration));
+
+        // `fut` is polled first, so that an outcome it has by the time the sleep ends still wins.
+        poll_fn(|cx| {
+            if let Poll::Ready(output) = fut.as_mut().poll(cx) {
+                return Poll::Ready(output);
+            }
+
+            sleep.as_mut().poll(cx).map(|()| {
+                Err(Error::from(std::io::Error::new(
+                    ErrorKind::TimedOut,
+                    "timed out",
+                )))
+            })
         })
         .await
     }
