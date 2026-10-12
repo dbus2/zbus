@@ -39,7 +39,6 @@ comms = [
     "zbus_macros/comms",
     "dep:serde_repr",
     "dep:futures-core",
-    "dep:futures-lite",
     "dep:hex",
     "dep:ordered-stream",
     # Without `dep:zruntime`, Cargo would also make `zruntime` a feature of zbus.
@@ -108,7 +107,6 @@ serde.workspace = true
 serde_repr = { workspace = true, optional = true }
 bitflags = { workspace = true, optional = true }
 futures-core = { workspace = true, optional = true }
-futures-lite = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
 ordered-stream = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }
@@ -151,6 +149,7 @@ zbus_xml.workspace = true
 
 doc-comment.workspace = true
 serde_repr.workspace = true
+futures-lite.workspace = true
 futures-util = { workspace = true, features = [
     "io",
     "async-await-macro",
