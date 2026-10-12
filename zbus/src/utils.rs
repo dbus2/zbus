@@ -1,4 +1,6 @@
-use std::fmt;
+use std::{fmt, future::poll_fn, pin::Pin};
+
+use futures_core::Stream;
 
 #[cfg(unix)]
 pub(crate) const FDS_MAX: usize = 1024; // this is hardcoded in sdbus - nothing in the spec
@@ -31,6 +33,14 @@ where
         bitflags::parser::to_writer(flags, &mut *f)?;
     }
     f.write_str(")")
+}
+
+/// The next item of `stream`, or `None` once it has ended.
+pub(crate) async fn next<S>(stream: &mut S) -> Option<S::Item>
+where
+    S: Stream + Unpin,
+{
+    poll_fn(|cx| Pin::new(&mut *stream).poll_next(cx)).await
 }
 
 /// Helper trait for macro-generated code.

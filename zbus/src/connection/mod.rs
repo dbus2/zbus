@@ -1,5 +1,4 @@
 //! Connection API.
-use futures_lite::StreamExt;
 use std::{
     borrow::Cow,
     collections::HashMap,
@@ -28,6 +27,7 @@ use crate::{
     message::{self, Flags, Message, Type},
     names::{BusName, ErrorName, InterfaceName, MemberName, OwnedUniqueName, WellKnownName},
     runtime::{Runtime, Task, locks::Mutex, traits},
+    utils::next,
 };
 
 mod activity_listener;
@@ -727,7 +727,7 @@ impl Connection {
             Some(
                 async move {
                     loop {
-                        let signal = lost_stream.next().await;
+                        let signal = next(&mut lost_stream).await;
                         let inner = match weak_conn.upgrade() {
                             Some(conn) => conn.inner,
                             None => break,
@@ -779,7 +779,7 @@ impl Connection {
                     task_name,
                     async move {
                         loop {
-                            let signal = acquired_stream.next().await;
+                            let signal = next(&mut acquired_stream).await;
                             let inner = match weak_conn.upgrade() {
                                 Some(conn) => conn.inner,
                                 None => break,
@@ -1017,7 +1017,7 @@ impl Connection {
                     }
 
                     trace!("waiting for incoming method call messages..");
-                    while let Some(msg) = stream.next().await.and_then(|m| {
+                    while let Some(msg) = next(&mut stream).await.and_then(|m| {
                         if let Err(e) = &m {
                             debug!("Error while reading from object server stream: {:?}", e);
                         }
@@ -1602,6 +1602,8 @@ mod tests {
         any(feature = "default-rt", feature = "tokio")
     ))]
     async fn test_disconnect_on_drop() {
+        use futures_lite::StreamExt;
+
         #[derive(Default)]
         struct MyInterface {}
 

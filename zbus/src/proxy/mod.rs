@@ -403,10 +403,8 @@ impl PropertiesCache {
         interface: InterfaceName<'static>,
         uncached_properties: HashSet<crate::Str<'static>>,
     ) -> Result<()> {
-        use futures_lite::StreamExt;
-
         trace!("Listening for property changes on {interface}...");
-        while let Some(update) = prop_changes.next().await {
+        while let Some(update) = crate::utils::next(&mut prop_changes).await {
             if let Ok(args) = update.args()
                 && args.interface_name == interface
             {

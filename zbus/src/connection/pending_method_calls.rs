@@ -7,8 +7,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures_core::Future;
-use futures_lite::Stream;
+use futures_core::{Future, Stream};
 use ordered_stream::OrderedFuture;
 use zruntime::broadcast::{Receiver, Sender, channel};
 
