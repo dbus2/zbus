@@ -4,15 +4,18 @@
 # reactor of its own: no build of zbus should link async-io, async-executor, async-task, blocking
 # or their private dependencies as a normal dependency, whether the default-rt feature, the tokio
 # feature, both or neither is on (`-e normal` already excludes dev-dependencies, so the test
-# suite's own use of async-io does not trip this). zbus builds its notifications on zruntime's
-# `Event`, and gets its async locks (where Tokio's do not stand in), broadcast channels and the
-# thread its default blocking-work hook runs on from zruntime too, so every tree with the `comms`
-# feature has the `zruntime` crate in it, with its `event`, `lock`, `broadcast` and `unblock`
-# features always, its `runtime`, `helper`, `tcp`, `unix` and `process` features only where zbus's
-# `default-rt` feature is on and its `tracing` feature only where zbus's `tracing` is; it is
-# expected there rather than being on the forbidden list. So is `signal-hook-registry`, which
-# Tokio's `process` feature adds in the builds with the `tokio` feature and a transport that runs
-# a program (`unixexec`, `ibus`, or macOS, where `launchd:` does).
+# suite's own use of async-io does not trip this, and `--target all` keeps the dependencies of
+# every platform in, so the Windows and macOS graphs are guarded along with the host's). zbus
+# builds its notifications on zruntime's `Event`, and gets its async locks (where Tokio's do not
+# stand in), broadcast channels and the thread its default blocking-work hook runs on from
+# zruntime too, so every tree with the `comms` feature has the `zruntime` crate in it, with its
+# `event`, `lock`, `broadcast` and `unblock` features always, its `runtime`, `helper`, `tcp`,
+# `unix` and `process` features only where zbus's `default-rt` feature is on and its `tracing`
+# feature only where zbus's `tracing` is; it is expected there rather than being on the forbidden
+# list. So is `signal-hook-registry`, which Tokio's `process` feature adds in the builds with the
+# `tokio` feature and a transport that runs a program (`unixexec`, `ibus`, or macOS, where
+# `launchd:` does). `fastrand`, which blocking and async-executor are built on, is not on the
+# list either: on Windows, `uds_windows` brings it in through `tempfile`.
 #
 # Usage: forbidden-deps.sh <label> [cargo tree arguments...]
 #
@@ -35,7 +38,7 @@ FORBIDDEN="$FORBIDDEN|polling|async-channel|async-signal|piper|futures-lite"
 tree_file=$(mktemp)
 trap 'rm -f "$tree_file"' EXIT
 
-cargo --locked tree -e normal -p zbus "$@" > "$tree_file"
+cargo --locked tree -e normal -p zbus --target all "$@" > "$tree_file"
 
 if grep -E "^[^a-zA-Z0-9]*($FORBIDDEN) v" "$tree_file"; then
     echo "a crate zbus's runtimes do not need is in the $label graph" >&2
