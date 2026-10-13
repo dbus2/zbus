@@ -114,10 +114,4 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_Threading",
 ] }
 
-# FIXME: Drop `git` and `rev` once zruntime 0.1.0 is on crates.io: `cargo publish` ignores
-# them, but it needs that release to be out.
-[workspace.dependencies.zruntime]
-version = "0.1.0"
-git = "https://github.com/z-galaxy/zruntime"
-rev = "1becd68a87d41d2efee99d78fa60ed7774eb0499"
-default-features = false
+zruntime = { version = "0.1.0", default-features = false }
