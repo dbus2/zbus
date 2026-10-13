@@ -1,6 +1,6 @@
 //! The handle a runtime registers for readiness.
 
-#[cfg(unix)]
+#[cfg(any(unix, target_os = "wasi"))]
 use std::os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd, RawFd};
 #[cfg(windows)]
 use std::os::windows::io::{AsRawSocket, AsSocket, BorrowedSocket, OwnedSocket, RawSocket};
@@ -13,7 +13,7 @@ use std::sync::Arc;
 #[derive(Clone, Debug)]
 pub struct IoSource(Arc<Owned>);
 
-#[cfg(unix)]
+#[cfg(any(unix, target_os = "wasi"))]
 type Owned = OwnedFd;
 #[cfg(windows)]
 type Owned = OwnedSocket;
@@ -24,7 +24,7 @@ impl IoSource {
     }
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, target_os = "wasi"))]
 impl From<OwnedFd> for IoSource {
     fn from(owned: OwnedFd) -> Self {
         Self::new(owned)
@@ -38,14 +38,14 @@ impl From<OwnedSocket> for IoSource {
     }
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, target_os = "wasi"))]
 impl AsFd for IoSource {
     fn as_fd(&self) -> BorrowedFd<'_> {
         self.0.as_fd()
     }
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, target_os = "wasi"))]
 impl AsRawFd for IoSource {
     fn as_raw_fd(&self) -> RawFd {
         self.0.as_raw_fd()

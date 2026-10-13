@@ -95,7 +95,7 @@ pub trait Runtime: Send + Sync + 'static {
     /// So a runtime that watched the socket to wait for the connect must have stopped doing so by
     /// then: a socket handed back out of the type the runtime wrapped it in, such as through
     /// `into_std`, has. An [`IoSource`] is made from an owned descriptor with `From`: an
-    /// `OwnedFd` on unix, an `OwnedSocket` on Windows.
+    /// `OwnedFd` on unix and WASI, an `OwnedSocket` on Windows.
     ///
     /// `address` is an IP address and a port; a host name is resolved before this is called. A
     /// connection that is refused, or that fails in any other way, is the future's `Err`.
@@ -117,7 +117,7 @@ pub trait Runtime: Send + Sync + 'static {
     /// So a runtime that watched the socket to wait for the connect must have stopped doing so by
     /// then: a socket handed back out of the type the runtime wrapped it in, such as through
     /// `into_std`, has. An [`IoSource`] is made from an owned descriptor with `From`: an
-    /// `OwnedFd` on unix, an `OwnedSocket` on Windows.
+    /// `OwnedFd` on unix and WASI, an `OwnedSocket` on Windows.
     ///
     /// On Linux and Android, a `path` whose first byte is zero does not name a file. The rest of
     /// it is a name in the abstract socket namespace instead. A `path` that is too long to make a

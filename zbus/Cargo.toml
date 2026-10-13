@@ -129,7 +129,6 @@ serde_bytes = { workspace = true, optional = true }
 time = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["rt", "net", "time", "sync"] }
-socket2 = { workspace = true, optional = true }
 
 # The `launchd:` transport runs a program on macOS whatever the features are, so the Tokio backend
 # needs Tokio's `process` feature there as well. Cargo adds the features of the two entries up.
@@ -141,8 +140,16 @@ windows-sys = { workspace = true, optional = true }
 uds_windows = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dependencies]
-rustix = { workspace = true, optional = true }
 libc = { workspace = true, optional = true }
+
+# On WASI, rustix is what a socket is read from, written to and switched to non-blocking mode
+# through: it has no sockets there, but a socket is a descriptor like any other.
+[target.'cfg(any(unix, target_os = "wasi"))'.dependencies]
+rustix = { workspace = true, optional = true }
+
+# socket2 does not build for WASI's preview 1, and zbus has no use for it on either preview.
+[target.'cfg(not(target_os = "wasi"))'.dependencies]
+socket2 = { workspace = true, optional = true }
 
 [dev-dependencies]
 zbus_xml.workspace = true
@@ -185,6 +192,8 @@ bitflags.workspace = true
 socket2.workspace = true
 libc.workspace = true
 
+# WASI is not among the targets: docs.rs builds with every feature on, and the `tokio` one needs
+# `--cfg tokio_unstable` to build for WASI.
 [package.metadata.docs.rs]
 all-features = true
 targets = [
