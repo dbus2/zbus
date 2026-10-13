@@ -61,12 +61,13 @@ impl Authenticated {
 
     /// Create a server-side `Authenticated` for the given `socket`.
     ///
-    /// The function takes `client_uid` on Unix only. On Windows, it takes `client_sid` instead.
+    /// The function takes `client_uid` on Unix and WASI only. On Windows, it takes `client_sid`
+    /// instead.
     #[cfg(feature = "p2p")]
     pub async fn server(
         socket: BoxedSplit,
         guid: OwnedGuid,
-        #[cfg(unix)] client_uid: Option<u32>,
+        #[cfg(any(unix, target_os = "wasi"))] client_uid: Option<u32>,
         #[cfg(windows)] client_sid: Option<String>,
         auth_mechanism: Option<AuthMechanism>,
         unique_name: Option<OwnedUniqueName>,
@@ -74,7 +75,7 @@ impl Authenticated {
         Server::new(
             socket,
             guid,
-            #[cfg(unix)]
+            #[cfg(any(unix, target_os = "wasi"))]
             client_uid,
             #[cfg(windows)]
             client_sid,
@@ -96,19 +97,26 @@ pub trait Handshake {
 }
 
 fn sasl_auth_id() -> Result<String> {
-    let id = {
-        #[cfg(unix)]
-        {
-            geteuid().as_raw().to_string()
-        }
+    #[cfg(unix)]
+    {
+        Ok(geteuid().as_raw().to_string())
+    }
 
-        #[cfg(windows)]
-        {
-            win32::ProcessToken::open(None)?.sid()?
-        }
-    };
+    #[cfg(windows)]
+    {
+        Ok(win32::ProcessToken::open(None)?.sid()?)
+    }
 
-    Ok(id)
+    // A WASI program has no user of its own: the one it authenticates as is the one the other end
+    // of the socket knows its host by, which only whoever builds the connection can say.
+    #[cfg(target_os = "wasi")]
+    {
+        Err(Error::Handshake(
+            "WASI has no user ID to authenticate with `EXTERNAL` as: set one with \
+             `Builder::user_id`"
+                .to_owned(),
+        ))
+    }
 }
 
 // The handshake runs over a real socket pair.
