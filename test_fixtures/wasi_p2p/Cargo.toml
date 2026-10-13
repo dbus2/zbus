@@ -1,0 +1,22 @@
+[package]
+name = "wasi_p2p_fixture"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+description = "Runs a peer-to-peer connection over TCP, as CI does on WASI under wasmtime"
+
+# Its own workspace, so that the `p2p` feature it turns on in zbus never joins the build of zbus's
+# workspace, whose suites test the features they ask for and no others.
+[workspace]
+
+[features]
+default = ["default-rt"]
+# The runtime the connections run on: zbus's own, or Tokio, whose sockets need
+# `--cfg tokio_unstable` on WASI.
+default-rt = ["zbus/default-rt"]
+tokio = ["zbus/tokio"]
+
+[dependencies]
+zbus = { path = "../../zbus", default-features = false, features = ["p2p", "service"] }
+futures-util = { version = "0.3.31", default-features = false }
