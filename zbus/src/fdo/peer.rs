@@ -204,19 +204,17 @@ fn get_platform_machine_id() -> Result<String> {
     ))
 }
 
-/// Fallback for other Unix platforms not explicitly supported.
+/// Fallback for other platforms not explicitly supported: the other Unix platforms, and WASI.
 #[cfg(feature = "service")]
-#[cfg(all(
-    unix,
-    not(any(
-        target_os = "linux",
-        target_os = "macos",
-        target_os = "freebsd",
-        target_os = "dragonfly",
-        target_os = "openbsd",
-        target_os = "netbsd"
-    ))
-))]
+#[cfg(not(any(
+    windows,
+    target_os = "linux",
+    target_os = "macos",
+    target_os = "freebsd",
+    target_os = "dragonfly",
+    target_os = "openbsd",
+    target_os = "netbsd"
+)))]
 fn get_platform_machine_id() -> Result<String> {
     Err(Error::NotSupported(
         "get_machine_id is not yet implemented on this platform".to_string(),
