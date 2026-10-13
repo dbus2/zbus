@@ -178,18 +178,20 @@ impl traits::PollIo for Registration {
         interest: Interest,
         operation: impl FnMut() -> io::Result<T>,
     ) -> Poll<io::Result<T>> {
-        self.0.poll_io(cx, interest.into(), operation)
+        self.0.poll_io(cx, zruntime_interest(interest), operation)
     }
 }
 
-impl From<Interest> for zruntime::Interest {
-    fn from(interest: Interest) -> Self {
-        // `Interest` is `non_exhaustive` for zbus's own callers, not for this crate, so an
-        // exhaustive match is fine here.
-        match interest {
-            Interest::Readable => zruntime::Interest::Readable,
-            Interest::Writable => zruntime::Interest::Writable,
-        }
+/// `interest` as zruntime's own.
+///
+/// A function rather than a `From` impl: `Interest` is public API, and a `From` impl between it
+/// and zruntime's would be too, making zruntime's type part of zbus's API.
+fn zruntime_interest(interest: Interest) -> zruntime::Interest {
+    // `Interest` is `non_exhaustive` for zbus's own callers, not for this crate, so an
+    // exhaustive match is fine here.
+    match interest {
+        Interest::Readable => zruntime::Interest::Readable,
+        Interest::Writable => zruntime::Interest::Writable,
     }
 }
 
