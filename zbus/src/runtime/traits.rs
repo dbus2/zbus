@@ -191,7 +191,9 @@ pub trait Runtime: Send + Sync + 'static {
     ///
     /// The default runs every call on a thread of zruntime's pool for blocking work, which starts
     /// a thread where none is free and whose failure to start one panics, so a runtime that keeps
-    /// a pool of threads for blocking work should hand the work to that pool instead.
+    /// a pool of threads for blocking work should hand the work to that pool instead. On WASI,
+    /// which cannot start a thread, the default runs the work on the calling thread, before it
+    /// returns.
     ///
     /// Work that has been handed over has to run to completion whether or not the future this
     /// returns is polled, and whether or not that future is dropped, as it may own something that
@@ -210,7 +212,14 @@ pub trait Runtime: Send + Sync + 'static {
     where
         T: Send + 'static,
     {
-        Box::pin(zruntime::unblock(work))
+        #[cfg(not(target_os = "wasi"))]
+        {
+            Box::pin(zruntime::unblock(work))
+        }
+        #[cfg(target_os = "wasi")]
+        {
+            Box::pin(std::future::ready(work()))
+        }
     }
 }
 
