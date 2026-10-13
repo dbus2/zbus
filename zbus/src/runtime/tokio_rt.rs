@@ -23,6 +23,14 @@
 //! Windows, and mio, which it watches sockets with, has none either. So a unix-domain connect
 //! there is `Unsupported`, and so is the registration of a unix-domain socket.
 //!
+//! On WASI, which needs `--cfg tokio_unstable` for Tokio's sockets, Tokio again watches only the
+//! sockets of its own types, and a descriptor cannot be duplicated there. So the registration is a
+//! `TcpStream` made from the connection's descriptor itself, which hands it back to std and lets
+//! go of it without closing it as the registration goes, while the connection goes on owning it.
+//! Tokio's pool for blocking work cannot start a thread there, so blocking work runs as the
+//! trait's default has it: on the thread that asks for it. A TCP connect needs preview 2 of WASI:
+//! preview 1 cannot create a socket, and only has those that a host hands to a program.
+//!
 //! A helper process is spawned by Tokio's own `Command` and waited for by Tokio's reactor, which
 //! watches a pidfd on Linux, or by its handler for `SIGCHLD` where there is none. Tokio collects a
 //! child whose wait is dropped while the process runs only when its driver next returns from
@@ -32,13 +40,14 @@
 //! `process` feature on only where a transport runs a program, so in any other build the spawn is
 //! `Unsupported`, and nothing asks for it.
 
+#[cfg(any(unix, windows))]
+use std::path::Path;
 #[cfg(unix)]
 use std::process::{Command, ExitStatus, Stdio};
 use std::{
     future::Future,
     io,
     net::SocketAddr,
-    path::Path,
     pin::Pin,
     task::{Context, Poll},
     time::Duration,
@@ -53,6 +62,8 @@ use tokio::runtime::Handle;
 #[cfg(unix)]
 use super::io::unix_socket_address;
 use super::{Interest, IoSource, traits};
+#[cfg(target_os = "wasi")]
+use crate::log::warn;
 
 /// The Tokio runtime a connection runs on.
 ///
@@ -108,6 +119,34 @@ impl traits::Runtime for Tokio {
         tokio::net::TcpStream::from_std(stream).map(Registration)
     }
 
+    #[cfg(target_os = "wasi")]
+    fn register_io_source(&self, source: IoSource) -> io::Result<Registration> {
+        use std::os::fd::{AsRawFd, FromRawFd};
+
+        // SAFETY: `source` holds the descriptor open, and the registration keeps it for as long as
+        // the stream lives. The stream does not close it: the registration hands it back to std and
+        // takes the raw descriptor out of it as it goes. Where Tokio fails to start or to stop
+        // watching it, as it does on a runtime that has shut down, Tokio closes it itself, and the
+        // clone of `source` that holds it is leaked then, so that nothing closes it a second time.
+        let stream = unsafe { std::net::TcpStream::from_raw_fd(source.as_raw_fd()) };
+        // A registration is made on the runtime of the calling thread, which is not necessarily
+        // the one this connection belongs to.
+        let _guard = self.handle.enter();
+        let stream = match tokio::net::TcpStream::from_std(stream) {
+            Ok(stream) => stream,
+            Err(e) => {
+                std::mem::forget(source);
+
+                return Err(e);
+            }
+        };
+
+        Ok(Registration {
+            stream: Some(stream),
+            source: Some(source),
+        })
+    }
+
     fn sleep(&self, duration: Duration) -> tokio::time::Sleep {
         // A timer is armed on the runtime of the calling thread, as a registration is.
         let _guard = self.handle.enter();
@@ -125,6 +164,7 @@ impl traits::Runtime for Tokio {
         TokioTask::new(spawn_named(&self.handle, name, future))
     }
 
+    #[cfg(not(all(target_os = "wasi", target_env = "p1")))]
     fn connect_tcp(
         &self,
         address: SocketAddr,
@@ -134,6 +174,15 @@ impl traits::Runtime for Tokio {
 
             Ok(IoSource::new(stream.into()))
         })
+    }
+
+    // Preview 1 of WASI cannot create a socket, so Tokio has no connect there.
+    #[cfg(all(target_os = "wasi", target_env = "p1"))]
+    fn connect_tcp(
+        &self,
+        _address: SocketAddr,
+    ) -> impl Future<Output = io::Result<IoSource>> + Send {
+        std::future::ready(Err(io::Error::from(io::ErrorKind::Unsupported)))
     }
 
     #[cfg(unix)]
@@ -212,6 +261,8 @@ impl traits::Runtime for Tokio {
         Err(io::Error::from(io::ErrorKind::Unsupported))
     }
 
+    // Tokio's pool cannot start a thread on WASI: the trait's default runs the work there.
+    #[cfg(not(target_os = "wasi"))]
     fn spawn_blocking<T>(
         &self,
         work: impl FnOnce() -> T + Send + 'static,
@@ -271,38 +322,102 @@ pub(crate) struct Registration(tokio::net::TcpStream);
 
 #[cfg(windows)]
 impl traits::PollIo for Registration {
-    /// Waits for Tokio's readiness of the stream, then runs `operation` under its `try_io`.
-    ///
-    /// `try_io` runs the operation only while Tokio holds readiness for the interest, and clears
-    /// that readiness when the operation reports `WouldBlock`. The stream is mio's underneath, and
-    /// mio's poll of a Windows socket reports an event once: it is armed again by a `WouldBlock`
-    /// that goes through mio's own `try_io`, which Tokio's calls. Neither looks at which handle the
-    /// operation used. Here it reads or writes the connection's own handle, which refers to the
-    /// same socket as the stream's, so the readiness waited for is that socket's, and so is the
-    /// `WouldBlock` that clears it and arms mio again.
-    ///
-    /// A `WouldBlock` sends the loop back to wait for readiness, which is `Pending` until mio
-    /// reports some, so the loop does not spin.
     fn poll_io<T>(
         &self,
         cx: &mut Context<'_>,
         interest: Interest,
-        mut operation: impl FnMut() -> io::Result<T>,
+        operation: impl FnMut() -> io::Result<T>,
     ) -> Poll<io::Result<T>> {
-        let tokio_interest = match interest {
-            Interest::Readable => tokio::io::Interest::READABLE,
-            Interest::Writable => tokio::io::Interest::WRITABLE,
-        };
+        poll_stream_io(&self.0, cx, interest, operation)
+    }
+}
 
-        loop {
-            std::task::ready!(match interest {
-                Interest::Readable => self.0.poll_read_ready(cx),
-                Interest::Writable => self.0.poll_write_ready(cx),
-            })?;
-            match self.0.try_io(tokio_interest, &mut operation) {
-                Err(e) if e.kind() == io::ErrorKind::WouldBlock => continue,
-                result => return Poll::Ready(result),
+/// A registration on Tokio's reactor.
+///
+/// It holds a `TcpStream` made from the very descriptor the connection owns, which is what Tokio
+/// watches, and keeps that descriptor open through the `IoSource` it holds alongside. Both are
+/// there from the registration until its drop, which hands the descriptor back to std and lets go
+/// of it unclosed.
+#[cfg(target_os = "wasi")]
+#[derive(Debug)]
+pub(crate) struct Registration {
+    stream: Option<tokio::net::TcpStream>,
+    source: Option<IoSource>,
+}
+
+#[cfg(target_os = "wasi")]
+impl traits::PollIo for Registration {
+    fn poll_io<T>(
+        &self,
+        cx: &mut Context<'_>,
+        interest: Interest,
+        operation: impl FnMut() -> io::Result<T>,
+    ) -> Poll<io::Result<T>> {
+        let stream = self
+            .stream
+            .as_ref()
+            .expect("a registration's stream is only taken as it is dropped");
+
+        poll_stream_io(stream, cx, interest, operation)
+    }
+}
+
+#[cfg(target_os = "wasi")]
+impl Drop for Registration {
+    fn drop(&mut self) {
+        use std::os::fd::IntoRawFd;
+
+        let (Some(stream), Some(source)) = (self.stream.take(), self.source.take()) else {
+            return;
+        };
+        // Tokio stops watching the descriptor here, and the raw descriptor taken out of the std
+        // stream it hands back is let go of: it is the connection's to close.
+        match stream.into_std() {
+            Ok(stream) => {
+                let _ = stream.into_raw_fd();
             }
+            Err(e) => {
+                warn!("Tokio failed to stop watching a socket: {}", e);
+                // Tokio has closed the descriptor as it failed. The clone of the source that holds
+                // it is leaked, so that nothing closes it a second time.
+                std::mem::forget(source);
+            }
+        }
+    }
+}
+
+/// Waits for Tokio's readiness of `stream`, then runs `operation` under its `try_io`.
+///
+/// `try_io` runs the operation only while Tokio holds readiness for the interest, and clears that
+/// readiness when the operation reports `WouldBlock`. The stream is mio's underneath, and mio's
+/// poll of a Windows socket reports an event once: it is armed again by a `WouldBlock` that goes
+/// through mio's own `try_io`, which Tokio's calls. Neither looks at which handle the operation
+/// used. Here it reads or writes the connection's own handle, which refers to the same socket as
+/// the stream's on Windows, and is the stream's very descriptor on WASI, so the readiness waited
+/// for is that socket's, and so is the `WouldBlock` that clears it and arms mio again.
+///
+/// A `WouldBlock` sends the loop back to wait for readiness, which is `Pending` until mio reports
+/// some, so the loop does not spin.
+#[cfg(any(windows, target_os = "wasi"))]
+fn poll_stream_io<T>(
+    stream: &tokio::net::TcpStream,
+    cx: &mut Context<'_>,
+    interest: Interest,
+    mut operation: impl FnMut() -> io::Result<T>,
+) -> Poll<io::Result<T>> {
+    let tokio_interest = match interest {
+        Interest::Readable => tokio::io::Interest::READABLE,
+        Interest::Writable => tokio::io::Interest::WRITABLE,
+    };
+
+    loop {
+        std::task::ready!(match interest {
+            Interest::Readable => stream.poll_read_ready(cx),
+            Interest::Writable => stream.poll_write_ready(cx),
+        })?;
+        match stream.try_io(tokio_interest, &mut operation) {
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => continue,
+            result => return Poll::Ready(result),
         }
     }
 }
@@ -315,6 +430,9 @@ impl traits::PollIo for Registration {
 /// for a child it is a poll that finds the pidfd readable before the process can be collected,
 /// which registers the pidfd again. The guard lives for one poll and never across an await, so this
 /// future is `Send` whenever `future` is.
+///
+/// Preview 1 of WASI has neither connects nor children, so nothing there needs this.
+#[cfg(not(all(target_os = "wasi", target_env = "p1")))]
 async fn entered<F>(handle: &Handle, future: F) -> F::Output
 where
     F: Future,

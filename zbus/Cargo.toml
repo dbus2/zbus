@@ -63,7 +63,8 @@ comms = [
 # Cargo cannot turn zruntime's `process` feature on only where `unixexec`, `ibus` or macOS needs
 # it, so it is on whenever this feature is, and the backend spawns through it on every unix
 # build, as the runtime trait has a spawn of a process there whatever the features.
-# `tokio` adds the Tokio backend, which a connection built inside a Tokio runtime prefers.
+# `tokio` adds the Tokio backend, which a connection built inside a Tokio runtime prefers. On WASI,
+# the Tokio sockets it turns on need `--cfg tokio_unstable`.
 default-rt = [
     "comms",
     "zruntime/runtime",
