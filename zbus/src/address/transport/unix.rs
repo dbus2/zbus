@@ -1,24 +1,18 @@
 #[cfg(target_os = "linux")]
 use std::ffi::OsString;
+#[cfg(any(unix, windows))]
+use std::{borrow::Cow, io, sync::Arc};
 use std::{
-    borrow::Cow,
     ffi::OsStr,
     fmt::{Display, Formatter},
-    io,
     path::PathBuf,
-    sync::Arc,
 };
 
 #[cfg(unix)]
 use super::encode_percents;
-use crate::{
-    Address, Error, Result,
-    connection::socket::BoxedSplit,
-    runtime::{
-        Runtime,
-        io::{RegisteredIo, UnixOps},
-    },
-};
+#[cfg(any(unix, windows))]
+use crate::runtime::io::{RegisteredIo, UnixOps};
+use crate::{Address, Error, Result, connection::socket::BoxedSplit, runtime::Runtime};
 
 /// A Unix domain socket transport in a D-Bus address.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -43,6 +37,7 @@ impl Unix {
     }
 
     /// Connects to the socket this address names.
+    #[cfg(any(unix, windows))]
     pub(super) async fn connect(&self, address: &Address, runtime: &Runtime) -> Result<BoxedSplit> {
         let path = match self.path() {
             UnixSocket::File(path) => Cow::Borrowed(path.as_path()),
@@ -64,6 +59,17 @@ impl Unix {
             })?;
 
         Ok(RegisteredIo::new(runtime, source, UnixOps)?.into())
+    }
+
+    /// Connects to the socket this address names, which WASI has no way to: it has no unix-domain
+    /// sockets.
+    #[cfg(target_os = "wasi")]
+    pub(super) async fn connect(
+        &self,
+        _address: &Address,
+        _runtime: &Runtime,
+    ) -> Result<BoxedSplit> {
+        Err(Error::Unsupported)
     }
 
     pub(super) fn from_options(opts: std::collections::HashMap<&str, &str>) -> crate::Result<Self> {
@@ -147,7 +153,7 @@ impl Display for UnixSocket {
                 encode_percents(f, path.as_bytes())?;
             }
 
-            #[cfg(windows)]
+            #[cfg(not(unix))]
             write!(f, "{}", path.to_str().ok_or(std::fmt::Error)?)?;
 
             Ok(())

@@ -16,6 +16,8 @@
 //! [zruntime]: https://docs.rs/zruntime
 //! [`Command`]: zruntime::process::Command
 
+#[cfg(any(unix, windows))]
+use std::path::Path;
 #[cfg(unix)]
 use std::process::{Command, ExitStatus, Stdio};
 use std::{
@@ -24,7 +26,6 @@ use std::{
     future::Future,
     io,
     net::SocketAddr,
-    path::Path,
     pin::Pin,
     task::{Context, Poll},
     time::Duration,

@@ -22,13 +22,14 @@
 //! [`Builder::runtime`]: crate::connection::Builder::runtime
 //! [zruntime]: https://docs.rs/zruntime
 
+#[cfg(any(unix, windows))]
+use std::path::Path;
 #[cfg(unix)]
 use std::process::{Command, ExitStatus, Stdio};
 use std::{
     future::Future,
     io,
     net::SocketAddr,
-    path::Path,
     pin::Pin,
     task::{Context, Poll},
     time::Duration,
@@ -112,6 +113,8 @@ pub trait Runtime: Send + Sync + 'static {
 
     /// Connect a stream socket to the unix-domain socket at `path`.
     ///
+    /// WASI has no unix-domain sockets, so a runtime has no such method to implement there.
+    ///
     /// The future resolves to the connected socket in non-blocking mode, which the connection then
     /// registers through [`Runtime::register_io_source`] as it does every socket it does I/O on.
     /// So a runtime that watched the socket to wait for the connect must have stopped doing so by
@@ -131,6 +134,7 @@ pub trait Runtime: Send + Sync + 'static {
     /// waits in the kernel until the listener accepts a connection. So a non-blocking
     /// implementation waits a moment and tries again for as long as that lasts, rather than fail
     /// the connect, and a blocking one holds its thread for as long as the listener takes.
+    #[cfg(any(unix, windows))]
     fn connect_unix(&self, path: &Path) -> impl Future<Output = io::Result<IoSource>> + Send;
 
     /// Spawn `command` as a child process, and wait for it to exit.
