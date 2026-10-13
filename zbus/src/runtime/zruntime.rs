@@ -13,6 +13,12 @@
 //! zruntime itself collects a process whose wait is dropped while it runs, once it has exited, and
 //! does not kill it. zbus does not rely on that, as it awaits the wait on a task of the runtime.
 //!
+//! On WASI, which cannot start a thread, zruntime has no helper thread to run a connection's tasks
+//! while no thread is inside [`block_on`](crate::block_on), and its pool for blocking work runs the
+//! work on the thread that hands it over. So a connection there makes progress only inside
+//! `block_on`. A TCP connect needs preview 2 of WASI: preview 1 cannot create a socket, and
+//! zruntime's connect fails there with `Unsupported`.
+//!
 //! [zruntime]: https://docs.rs/zruntime
 //! [`Command`]: zruntime::process::Command
 

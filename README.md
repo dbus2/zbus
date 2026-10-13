@@ -128,8 +128,11 @@ If you discover a security vulnerability, please report it privately following o
 
 ## Portability
 
-Supported targets include Unix, Windows and macOS with Linux as the main target. Integration tests
-of zbus crate currently require a session bus running on the build host.
+Supported targets include Unix, Windows and macOS with Linux as the main target, and WASI, with
+the limits [the zbus crate's documentation][zbwasi] describes. Integration tests of zbus crate
+currently require a session bus running on the build host.
+
+[zbwasi]: zbus/README.md#wasi
 
 ## License
 
