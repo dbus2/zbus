@@ -2162,7 +2162,8 @@ checksum = "e6d6085d62852e35540689d1f97ad663e3971fc19cf5eceab364d62c646ea167"
 [[package]]
 name = "zruntime"
 version = "0.2.0"
-source = "git+https://github.com/zeenix/zruntime?rev=2bf7d69ef4d9679fde7ed53e6a27cfda0f5a8e87#2bf7d69ef4d9679fde7ed53e6a27cfda0f5a8e87"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "467fd80a2014d186319f14b81aef027aa466712f355c90158a0e6b39de60726d"
 dependencies = [
  "futures-core",
  "futures-io",
