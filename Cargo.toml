@@ -69,7 +69,7 @@ futures-lite = { version = "2.6.0", default-features = false, features = [
 tracing = "0.1.40"
 async-task = "4.7.1"
 polling = "3.11.0"
-tokio = "1.53.2"
+tokio = "1.53.3"
 socket2 = "0.6.5"
 ntest = "0.10.0"
 test-log = { version = "0.2.16", features = [

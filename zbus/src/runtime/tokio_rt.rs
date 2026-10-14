@@ -85,7 +85,12 @@ impl traits::Runtime for Tokio {
         // the one this connection belongs to.
         let _guard = self.handle.enter();
 
-        AsyncFd::new(source).map(Registration)
+        // SAFETY: `source` is a shared owner of its descriptor, which closes only once every owner
+        // is gone, and the `AsyncFd` keeps `source` for as long as it lives. So the descriptor
+        // stays open, and is the one `as_raw_fd` returns every time, for the whole registration.
+        let async_fd = unsafe { AsyncFd::register(source) }?;
+
+        Ok(Registration(async_fd))
     }
 
     #[cfg(windows)]
