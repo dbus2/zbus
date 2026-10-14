@@ -2161,8 +2161,8 @@ checksum = "e6d6085d62852e35540689d1f97ad663e3971fc19cf5eceab364d62c646ea167"
 
 [[package]]
 name = "zruntime"
-version = "0.1.0"
-source = "git+https://github.com/z-galaxy/zruntime?rev=0b520289b0441d73bd045042cc21970e41b72b62#0b520289b0441d73bd045042cc21970e41b72b62"
+version = "0.2.0"
+source = "git+https://github.com/zeenix/zruntime?rev=2bf7d69ef4d9679fde7ed53e6a27cfda0f5a8e87#2bf7d69ef4d9679fde7ed53e6a27cfda0f5a8e87"
 dependencies = [
  "futures-core",
  "futures-io",
