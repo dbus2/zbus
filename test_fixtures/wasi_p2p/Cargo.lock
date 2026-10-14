@@ -319,9 +319,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.53.2"
+version = "1.53.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e95f91fcc7a621e8b030f6aa23c71fe9838ae2fb4d8118b75602a328f5144044"
+checksum = "ce3335fa71841cda333a58d7615b03901380ecf09d59b3296d21f8bbac0dde4e"
 dependencies = [
  "bytes",
  "libc",
@@ -502,8 +502,8 @@ dependencies = [
 
 [[package]]
 name = "zruntime"
-version = "0.1.0"
-source = "git+https://github.com/z-galaxy/zruntime?rev=0b520289b0441d73bd045042cc21970e41b72b62#0b520289b0441d73bd045042cc21970e41b72b62"
+version = "0.2.0"
+source = "git+https://github.com/zeenix/zruntime?rev=2bf7d69ef4d9679fde7ed53e6a27cfda0f5a8e87#2bf7d69ef4d9679fde7ed53e6a27cfda0f5a8e87"
 dependencies = [
  "futures-core",
  "futures-io",

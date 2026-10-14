@@ -115,9 +115,10 @@ windows-sys = { version = "0.61", features = [
 ] }
 
 # FIXME: Drop `git` and `rev` once a zruntime release that supports WASI is on crates.io: `cargo
-# publish` ignores them, but it needs that release to be out.
+# publish` ignores them, but it needs that release to be out. Until z-galaxy/zruntime has the
+# revision, `git` points at the fork whose branch holds it.
 [workspace.dependencies.zruntime]
-version = "0.1.0"
-git = "https://github.com/z-galaxy/zruntime"
-rev = "0b520289b0441d73bd045042cc21970e41b72b62"
+version = "0.2.0"
+git = "https://github.com/zeenix/zruntime"
+rev = "2bf7d69ef4d9679fde7ed53e6a27cfda0f5a8e87"
 default-features = false
