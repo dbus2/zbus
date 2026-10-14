@@ -41,9 +41,11 @@ pub(crate) mod process;
 #[cfg(all(test, target_os = "linux", feature = "unixexec"))]
 mod process_table;
 
+#[cfg(any(unix, windows))]
+use std::path::Path;
 #[cfg(all(unix, any(feature = "unixexec", feature = "ibus", target_os = "macos")))]
 use std::process::{Command, ExitStatus, Stdio};
-use std::{borrow::Cow, future::Future, net::SocketAddr, path::Path, pin::Pin, sync::Arc};
+use std::{borrow::Cow, future::Future, net::SocketAddr, pin::Pin, sync::Arc};
 
 #[cfg(all(unix, any(feature = "unixexec", feature = "ibus", target_os = "macos")))]
 use erased::BoxFuture;
@@ -164,7 +166,8 @@ impl Runtime {
     /// Connects a stream socket to the unix-domain socket at `path`, the way this runtime does it.
     ///
     /// A path whose first byte is zero names an abstract socket on Linux and Android. The socket
-    /// comes back as [`Runtime::connect_tcp`]'s does.
+    /// comes back as [`Runtime::connect_tcp`]'s does. WASI has no unix-domain sockets.
+    #[cfg(any(unix, windows))]
     pub(crate) async fn connect_unix(&self, path: &Path) -> std::io::Result<IoSource> {
         match self {
             #[cfg(feature = "default-rt")]

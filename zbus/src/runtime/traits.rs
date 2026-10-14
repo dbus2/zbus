@@ -22,13 +22,14 @@
 //! [`Builder::runtime`]: crate::connection::Builder::runtime
 //! [zruntime]: https://docs.rs/zruntime
 
+#[cfg(any(unix, windows))]
+use std::path::Path;
 #[cfg(unix)]
 use std::process::{Command, ExitStatus, Stdio};
 use std::{
     future::Future,
     io,
     net::SocketAddr,
-    path::Path,
     pin::Pin,
     task::{Context, Poll},
     time::Duration,
@@ -95,7 +96,7 @@ pub trait Runtime: Send + Sync + 'static {
     /// So a runtime that watched the socket to wait for the connect must have stopped doing so by
     /// then: a socket handed back out of the type the runtime wrapped it in, such as through
     /// `into_std`, has. An [`IoSource`] is made from an owned descriptor with `From`: an
-    /// `OwnedFd` on unix, an `OwnedSocket` on Windows.
+    /// `OwnedFd` on unix and WASI, an `OwnedSocket` on Windows.
     ///
     /// `address` is an IP address and a port; a host name is resolved before this is called. A
     /// connection that is refused, or that fails in any other way, is the future's `Err`.
@@ -112,12 +113,14 @@ pub trait Runtime: Send + Sync + 'static {
 
     /// Connect a stream socket to the unix-domain socket at `path`.
     ///
+    /// WASI has no unix-domain sockets, so a runtime has no such method to implement there.
+    ///
     /// The future resolves to the connected socket in non-blocking mode, which the connection then
     /// registers through [`Runtime::register_io_source`] as it does every socket it does I/O on.
     /// So a runtime that watched the socket to wait for the connect must have stopped doing so by
     /// then: a socket handed back out of the type the runtime wrapped it in, such as through
     /// `into_std`, has. An [`IoSource`] is made from an owned descriptor with `From`: an
-    /// `OwnedFd` on unix, an `OwnedSocket` on Windows.
+    /// `OwnedFd` on unix and WASI, an `OwnedSocket` on Windows.
     ///
     /// On Linux and Android, a `path` whose first byte is zero does not name a file. The rest of
     /// it is a name in the abstract socket namespace instead. A `path` that is too long to make a
@@ -131,6 +134,7 @@ pub trait Runtime: Send + Sync + 'static {
     /// waits in the kernel until the listener accepts a connection. So a non-blocking
     /// implementation waits a moment and tries again for as long as that lasts, rather than fail
     /// the connect, and a blocking one holds its thread for as long as the listener takes.
+    #[cfg(any(unix, windows))]
     fn connect_unix(&self, path: &Path) -> impl Future<Output = io::Result<IoSource>> + Send;
 
     /// Spawn `command` as a child process, and wait for it to exit.
@@ -191,7 +195,9 @@ pub trait Runtime: Send + Sync + 'static {
     ///
     /// The default runs every call on a thread of zruntime's pool for blocking work, which starts
     /// a thread where none is free and whose failure to start one panics, so a runtime that keeps
-    /// a pool of threads for blocking work should hand the work to that pool instead.
+    /// a pool of threads for blocking work should hand the work to that pool instead. On WASI,
+    /// which cannot start a thread, the default runs the work on the calling thread, before it
+    /// returns.
     ///
     /// Work that has been handed over has to run to completion whether or not the future this
     /// returns is polled, and whether or not that future is dropped, as it may own something that
@@ -210,7 +216,14 @@ pub trait Runtime: Send + Sync + 'static {
     where
         T: Send + 'static,
     {
-        Box::pin(zruntime::unblock(work))
+        #[cfg(not(target_os = "wasi"))]
+        {
+            Box::pin(zruntime::unblock(work))
+        }
+        #[cfg(target_os = "wasi")]
+        {
+            Box::pin(std::future::ready(work()))
+        }
     }
 }
 

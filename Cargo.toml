@@ -114,4 +114,10 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_Threading",
 ] }
 
-zruntime = { version = "0.1.0", default-features = false }
+# FIXME: Drop `git` and `rev` once a zruntime release that supports WASI is on crates.io: `cargo
+# publish` ignores them, but it needs that release to be out.
+[workspace.dependencies.zruntime]
+version = "0.1.0"
+git = "https://github.com/z-galaxy/zruntime"
+rev = "0b520289b0441d73bd045042cc21970e41b72b62"
+default-features = false

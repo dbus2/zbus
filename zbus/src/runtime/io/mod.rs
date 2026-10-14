@@ -36,6 +36,7 @@ use std::{
     task::{Context, Poll},
 };
 
+#[cfg(not(target_os = "wasi"))]
 use socket2::SockRef;
 
 #[cfg(all(unix, any(feature = "unixexec", feature = "ibus", target_os = "macos")))]
@@ -137,13 +138,17 @@ where
     let source = IoSource::from(stream.into());
     // socket2 is what gives one call for both platforms here: `fcntl` on a unix descriptor,
     // which a pipe takes as readily as a socket does, and `ioctlsocket` on a Windows one.
+    #[cfg(not(target_os = "wasi"))]
     SockRef::from(&source).set_nonblocking(true)?;
+    // socket2 does not build for WASI, whose `FIONBIO` rustix reaches instead.
+    #[cfg(target_os = "wasi")]
+    rustix::io::ioctl_fionbio(&source, true)?;
 
     RegisteredIo::new(runtime, source, ops)
 }
 
 /// What this platform owns a socket or pipe as.
-#[cfg(unix)]
+#[cfg(any(unix, target_os = "wasi"))]
 type Owned = std::os::fd::OwnedFd;
 #[cfg(windows)]
 type Owned = std::os::windows::io::OwnedSocket;
@@ -209,7 +214,7 @@ pub(crate) trait SocketOps: fmt::Debug + Send + Sync + 'static {
 
     /// Shuts both directions of the socket down.
     fn shutdown(&self, source: &IoSource) -> io::Result<()> {
-        SockRef::from(source).shutdown(Shutdown::Both)
+        shutdown(source)
     }
 }
 
@@ -349,6 +354,33 @@ where
     }
 }
 
+/// Shuts both directions of `source` down.
+#[cfg(not(target_os = "wasi"))]
+fn shutdown(source: &IoSource) -> io::Result<()> {
+    SockRef::from(source).shutdown(Shutdown::Both)
+}
+
+/// Shuts both directions of `source` down.
+///
+/// Neither rustix nor socket2 has sockets on WASI, so the call goes through std's TCP stream, the
+/// one type std has a `shutdown` of there. That shuts down whatever kind of socket the descriptor
+/// is: a host may hand a WASI program a unix-domain one, which it then talks to as a stream.
+#[cfg(target_os = "wasi")]
+fn shutdown(source: &IoSource) -> io::Result<()> {
+    use std::{
+        mem::ManuallyDrop,
+        net::TcpStream,
+        os::fd::{AsRawFd, FromRawFd},
+    };
+
+    // SAFETY: `source` keeps the descriptor open for at least as long as this call, which the
+    // stream does not outlive, and the stream is never dropped, so it never closes a descriptor
+    // that it does not own.
+    let stream = ManuallyDrop::new(unsafe { TcpStream::from_raw_fd(source.as_raw_fd()) });
+
+    stream.shutdown(Shutdown::Both)
+}
+
 /// Receives bytes from a socket that carries no ancillary data of its own.
 fn recv(source: &IoSource, buffer: &mut [u8]) -> RecvmsgResult {
     #[cfg(unix)]
@@ -363,6 +395,11 @@ fn recv(source: &IoSource, buffer: &mut [u8]) -> RecvmsgResult {
 
         std::io::Read::read(&mut &*socket, buffer)
     }
+    // rustix has no sockets on WASI, but a socket reads as any other descriptor does there.
+    #[cfg(target_os = "wasi")]
+    {
+        Ok(rustix::io::read(source, buffer)?)
+    }
 }
 
 /// Sends bytes over a socket that carries no ancillary data of its own.
@@ -376,6 +413,12 @@ fn send(source: &IoSource, buffer: &[u8]) -> io::Result<usize> {
         let socket = SockRef::from(source);
 
         std::io::Write::write(&mut &*socket, buffer)
+    }
+    // As for `recv`. WASI has no signals, so a write to a peer that has gone away is an error
+    // there whatever the flags.
+    #[cfg(target_os = "wasi")]
+    {
+        Ok(rustix::io::write(source, buffer)?)
     }
 }
 

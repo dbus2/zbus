@@ -45,6 +45,18 @@ cargo clippy -- -D warnings
 cargo check --target x86_64-pc-windows-gnu
 cargo check --target x86_64-apple-darwin
 cargo check --target x86_64-unknown-freebsd
+
+# Check WASI, as CI does: the default build, and Tokio, whose sockets need `tokio_unstable` there
+cargo clippy -p zbus --target wasm32-wasip1 -- -D warnings
+cargo clippy -p zbus --target wasm32-wasip2 -- -D warnings
+RUSTFLAGS="--cfg tokio_unstable" cargo clippy -p zbus --no-default-features \
+    --features tokio,proxy,service,p2p --target wasm32-wasip2 -- -D warnings
+
+# Run a peer-to-peer connection over TCP on WASI under wasmtime, as CI does: the fixture is a
+# workspace of its own, so that the `p2p` feature it needs stays out of the workspace's builds
+cd test_fixtures/wasi_p2p
+cargo build --target wasm32-wasip2
+wasmtime run -S inherit-network target/wasm32-wasip2/debug/wasi_p2p_fixture.wasm
 ```
 
 ### Documentation
@@ -140,7 +152,9 @@ Everything below `error.rs` in that list is behind the `comms` feature.
   keep it out of the user-facing changelog (use for AI-workflow artifacts such as design docs
   and implementation plans).
 - **Testing**: Integration tests require D-Bus session bus
-- **Cross-platform**: Validate changes work on Linux, Windows, macOS
+- **Cross-platform**: Validate changes work on Linux, Windows, macOS, and build for WASI: it has
+  no Unix domain sockets, no threads (`std::thread::spawn` fails and `park` returns at once) and
+  no processes (`std::process::id` panics)
 - **Dependencies**: Check compatibility with async runtimes and optional features
 
 [release-plz]: https://release-plz.ieni.dev/

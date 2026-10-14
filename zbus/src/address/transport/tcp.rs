@@ -216,7 +216,9 @@ fn nonce_path(path: &[u8]) -> Result<PathBuf> {
 
         Ok(PathBuf::from(std::ffi::OsStr::from_bytes(path)))
     }
-    #[cfg(windows)]
+    // Windows names a file in UTF-16, and preview 2 of WASI in a string, of which std has no
+    // stable way to make a path from bytes: so the bytes have to be UTF-8 off unix.
+    #[cfg(not(unix))]
     {
         std::str::from_utf8(path)
             .map(PathBuf::from)

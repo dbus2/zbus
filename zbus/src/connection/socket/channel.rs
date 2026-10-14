@@ -124,21 +124,25 @@ impl super::WriteHalf for Writer {
 
 /// The credentials of the current process.
 async fn self_credentials() -> io::Result<ConnectionCredentials> {
-    let mut creds = ConnectionCredentials::default().set_process_id(std::process::id());
+    let creds = ConnectionCredentials::default();
+    // WASI has no process IDs, and std panics where asked for one there.
+    #[cfg(not(target_os = "wasi"))]
+    let creds = creds.set_process_id(std::process::id());
 
     #[cfg(unix)]
-    {
+    let creds = {
         use rustix::process::{getegid, geteuid};
 
-        creds = creds
+        creds
             .set_unix_user_id(geteuid().as_raw())
-            .add_unix_group_id(getegid().as_raw());
-    }
+            .add_unix_group_id(getegid().as_raw())
+    };
     #[cfg(windows)]
-    {
+    let creds = {
         let sid = crate::win32::ProcessToken::open(None)?.sid()?;
-        creds = creds.set_windows_sid(sid);
-    }
+
+        creds.set_windows_sid(sid)
+    };
 
     Ok(creds)
 }

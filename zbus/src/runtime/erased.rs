@@ -24,6 +24,8 @@
 //!
 //! [`Builder::runtime`]: crate::connection::Builder::runtime
 
+#[cfg(any(unix, windows))]
+use std::path::Path;
 #[cfg(unix)]
 use std::process::{Command, ExitStatus, Stdio};
 use std::{
@@ -33,7 +35,6 @@ use std::{
     io,
     marker::PhantomData,
     net::SocketAddr,
-    path::Path,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -53,6 +54,7 @@ pub(crate) trait ErasedRuntime: Send + Sync {
         future: BoxFuture<'static, Box<dyn Any + Send>>,
     ) -> Box<dyn ErasedTask>;
     fn connect_tcp(&self, address: SocketAddr) -> BoxFuture<'_, io::Result<IoSource>>;
+    #[cfg(any(unix, windows))]
     fn connect_unix<'a>(&'a self, path: &'a Path) -> BoxFuture<'a, io::Result<IoSource>>;
     #[cfg(unix)]
     fn spawn_process(
@@ -99,6 +101,7 @@ where
         Box::pin(traits::Runtime::connect_tcp(self, address))
     }
 
+    #[cfg(any(unix, windows))]
     fn connect_unix<'a>(&'a self, path: &'a Path) -> BoxFuture<'a, io::Result<IoSource>> {
         Box::pin(traits::Runtime::connect_unix(self, path))
     }
@@ -161,6 +164,7 @@ impl traits::Runtime for Arc<dyn ErasedRuntime> {
     // An `async fn` rather than the mirror's boxed future returned as it is: the mirror ties both
     // of its borrows to one lifetime, which a returned future that names two lifetimes of its own
     // cannot be, but a future that holds both can.
+    #[cfg(any(unix, windows))]
     async fn connect_unix(&self, path: &Path) -> io::Result<IoSource> {
         ErasedRuntime::connect_unix(&**self, path).await
     }

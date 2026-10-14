@@ -278,7 +278,10 @@ impl<'a> Builder<'a> {
     /// This can be useful when using [`AuthMechanism::External`] with `socat`
     /// to avoid the host decide what uid to use and instead provide one
     /// known to have access rights.
-    #[cfg(unix)]
+    ///
+    /// On WASI, which has no user ID of its own, [`AuthMechanism::External`] needs this: the ID is
+    /// that of the user the other end of the socket sees the host as.
+    #[cfg(any(unix, target_os = "wasi"))]
     pub fn user_id(mut self, id: u32) -> Self {
         self.user_id = Some(id);
 
@@ -732,7 +735,7 @@ impl<'a> Builder<'a> {
                     }
 
                     let creds = stream.read_mut().peer_credentials().await?;
-                    #[cfg(unix)]
+                    #[cfg(any(unix, target_os = "wasi"))]
                     let client_uid = self.user_id.or_else(|| creds.unix_user_id());
                     #[cfg(windows)]
                     let client_sid = creds.into_windows_sid();
@@ -740,7 +743,7 @@ impl<'a> Builder<'a> {
                     Authenticated::server(
                         stream,
                         guid.to_owned().into(),
-                        #[cfg(unix)]
+                        #[cfg(any(unix, target_os = "wasi"))]
                         client_uid,
                         #[cfg(windows)]
                         client_sid,

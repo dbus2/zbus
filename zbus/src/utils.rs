@@ -96,6 +96,10 @@ pub fn block_on<F: std::future::Future>(future: F) -> F::Output {
 /// Do not call this from another runtime's task. It blocks that task's thread until the future
 /// completes, which deadlocks the program if the future needs that thread to make progress.
 ///
+/// On WASI, a thread cannot park, so the call spins until the future is woken rather than sleep.
+/// A WASI program has only the one thread, which is better spent running its runtime: drive a
+/// connection there with that runtime's own `block_on` instead.
+///
 /// [`Builder::runtime`]: crate::connection::Builder::runtime
 #[cfg(not(any(feature = "default-rt", feature = "tokio")))]
 pub fn block_on<F: std::future::Future>(future: F) -> F::Output {

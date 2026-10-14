@@ -176,6 +176,24 @@ whose worker threads keep the connection going in between calls.
 **Note**: On Windows, a connection that ends up on Tokio cannot use a Unix domain socket, even when
 the `default-rt` feature is also on; see [the corresponding tokio issue on GitHub][tctiog].
 
+## WASI
+
+zbus builds for WASI, `wasm32-wasip1` and `wasm32-wasip2`, on the default `zruntime` backend, on
+Tokio (whose sockets need `RUSTFLAGS="--cfg tokio_unstable"` there) and on a runtime of your own.
+WASI has no Unix domain sockets, no threads and no processes, so there:
+
+* A connection goes over a TCP socket: to a `tcp:` address, which needs `wasm32-wasip2` and a host
+  that grants the network, or over a socket the host hands the program, as a
+  `std::net::TcpStream` made from its descriptor and given to `connection::Builder::tcp_stream`.
+  That socket may well be a Unix domain one on the host's side, connected to the bus: then
+  authenticate with `AuthMechanism::External`, and give `connection::Builder::user_id` the ID of
+  the user the bus knows the host as, as WASI has no user ID of its own.
+* `Address::session` and `Address::system` have no default to fall back to, so they need
+  `DBUS_SESSION_BUS_ADDRESS` and `DBUS_SYSTEM_BUS_ADDRESS` to be set.
+* No helper thread runs a connection while no thread is inside `zbus::block_on`, or inside the
+  `block_on` of the Tokio runtime it is on: its work, the delivery of signals included, waits for
+  the next call. Blocking work, such as resolving a host name, blocks the program's one thread.
+
 [zbus]: https://github.com/z-galaxy/zbus\#readme
 [bw]: https://z-galaxy.github.io/zbus/faq.html#how-do-i-use-zbus-from-synchronous-code
 [tctiog]: https://github.com/tokio-rs/tokio/issues/2201

@@ -26,7 +26,7 @@ pub struct Server {
     common: Common,
     step: ServerHandshakeStep,
     guid: OwnedGuid,
-    #[cfg(unix)]
+    #[cfg(any(unix, target_os = "wasi"))]
     client_uid: Option<u32>,
     #[cfg(windows)]
     client_sid: Option<String>,
@@ -37,7 +37,7 @@ impl Server {
     pub fn new(
         socket: BoxedSplit,
         guid: OwnedGuid,
-        #[cfg(unix)] client_uid: Option<u32>,
+        #[cfg(any(unix, target_os = "wasi"))] client_uid: Option<u32>,
         #[cfg(windows)] client_sid: Option<String>,
         mechanism: Option<AuthMechanism>,
         unique_name: Option<OwnedUniqueName>,
@@ -47,7 +47,7 @@ impl Server {
         Ok(Server {
             common: Common::new(socket, mechanism),
             step: ServerHandshakeStep::WaitingForAuth,
-            #[cfg(unix)]
+            #[cfg(any(unix, target_os = "wasi"))]
             client_uid,
             #[cfg(windows)]
             client_sid,
@@ -71,7 +71,7 @@ impl Server {
         let auth_ok = {
             let id = std::str::from_utf8(sasl_id)
                 .map_err(|e| Error::Handshake(format!("Invalid ID: {e}")))?;
-            #[cfg(unix)]
+            #[cfg(any(unix, target_os = "wasi"))]
             {
                 let uid = id
                     .parse::<u32>()

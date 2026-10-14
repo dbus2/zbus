@@ -61,6 +61,9 @@ impl Address {
     /// Get the address for the session socket respecting the `DBUS_SESSION_BUS_ADDRESS` environment
     /// variable. If we don't recognize the value (or it's not set) we fall back to
     /// `$XDG_RUNTIME_DIR/bus`.
+    ///
+    /// WASI has no unix-domain sockets, so there is nothing to fall back to there, and an unset
+    /// variable is an error.
     pub fn session() -> Result<Self> {
         match env::var("DBUS_SESSION_BUS_ADDRESS") {
             Ok(val) => Self::from_str(&val),
@@ -83,6 +86,11 @@ impl Address {
                 {
                     Self::from_str("launchd:env=DBUS_LAUNCHD_SESSION_BUS_SOCKET")
                 }
+
+                #[cfg(target_os = "wasi")]
+                {
+                    Err(no_default_address("DBUS_SESSION_BUS_ADDRESS"))
+                }
             }
         }
     }
@@ -90,6 +98,9 @@ impl Address {
     /// Get the address for the system bus respecting the `DBUS_SYSTEM_BUS_ADDRESS` environment
     /// variable. If we don't recognize the value (or it's not set) we fall back to
     /// `/var/run/dbus/system_bus_socket`.
+    ///
+    /// WASI has no unix-domain sockets, so there is nothing to fall back to there, and an unset
+    /// variable is an error.
     pub fn system() -> Result<Self> {
         match env::var("DBUS_SYSTEM_BUS_ADDRESS") {
             Ok(val) => Self::from_str(&val),
@@ -102,6 +113,9 @@ impl Address {
 
                 #[cfg(target_os = "macos")]
                 return Self::from_str("launchd:env=DBUS_LAUNCHD_SESSION_BUS_SOCKET");
+
+                #[cfg(target_os = "wasi")]
+                return Err(no_default_address("DBUS_SYSTEM_BUS_ADDRESS"));
             }
         }
     }
@@ -110,6 +124,16 @@ impl Address {
     pub fn guid(&self) -> Option<&Guid<'_>> {
         self.guid.as_ref().map(|guid| guid.inner())
     }
+}
+
+/// The error of a bus address looked up through the unset environment variable `variable` on WASI,
+/// which has no default to fall back to.
+#[cfg(target_os = "wasi")]
+fn no_default_address(variable: &str) -> Error {
+    Error::Address(format!(
+        "`{variable}` is not set, and WASI has no default bus address: it has no unix-domain \
+         sockets"
+    ))
 }
 
 impl Display for Address {

@@ -63,6 +63,7 @@ jobs:
       - name: Check formatting
         run: |
           cargo --locked fmt -- --check
+          cargo --locked fmt --manifest-path test_fixtures/wasi_p2p/Cargo.toml -- --check
           cargo --locked check --target x86_64-apple-darwin
           cargo --locked check --target x86_64-unknown-freebsd
           cargo --locked check --target x86_64-unknown-netbsd
@@ -336,6 +337,52 @@ jobs:
           cargo --locked test -p zbus --no-default-features `
             --features arrayvec,camino,chrono,heapless `
             --features option-as-array,serde_bytes,time,url,uuid
+
+  # WASI has no Unix domain sockets, no threads and no processes, and its preview 1 cannot create a
+  # socket. This lints the builds of zbus there, the wire-format-only one, the default one, the
+  # external-runtime-only one and the Tokio one, whose sockets need `--cfg tokio_unstable` there,
+  # and runs a peer-to-peer connection over TCP on preview 2 under wasmtime, on zruntime and on
+  # Tokio, with the network granted.
+  wasi:
+    runs-on: ubuntu-latest
+    needs: [fmt, clippy]
+    env:
+      RUSTFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: clippy
+          targets: wasm32-wasip1, wasm32-wasip2
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            test_fixtures/wasi_p2p
+      - uses: bytecodealliance/actions/wasmtime/setup@v1
+      - name: Catch common mistakes in the builds for WASI
+        run: |
+          EXT=proxy,service,object-manager,tracing,p2p,bus-impl
+          for target in wasm32-wasip1 wasm32-wasip2; do
+            cargo --locked clippy -p zbus --no-default-features --target $target
+            cargo --locked clippy -p zbus --target $target
+            cargo --locked clippy -p zbus --features p2p,bus-impl --target $target
+            cargo --locked clippy -p zbus --no-default-features --features $EXT --target $target
+            RUSTFLAGS="-D warnings --cfg tokio_unstable" cargo --locked clippy -p zbus \
+              --no-default-features --features tokio,$EXT --target $target
+          done
+      # The fixture is a workspace of its own: see its manifest.
+      - name: Run a peer-to-peer connection on WASI
+        working-directory: test_fixtures/wasi_p2p
+        run: |
+          cargo --locked clippy --target wasm32-wasip2
+          cargo --locked build --target wasm32-wasip2
+          wasmtime run -S inherit-network target/wasm32-wasip2/debug/wasi_p2p_fixture.wasm
+          export RUSTFLAGS="-D warnings --cfg tokio_unstable"
+          cargo --locked clippy --no-default-features --features tokio --target wasm32-wasip2
+          cargo --locked build --no-default-features --features tokio --target wasm32-wasip2
+          wasmtime run -S inherit-network target/wasm32-wasip2/debug/wasi_p2p_fixture.wasm
 
   zbus_fuzz:
     runs-on: ubuntu-latest
