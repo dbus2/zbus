@@ -265,6 +265,12 @@ impl From<zbus::zvariant::Error> for MyError {
 
 the compiler now rejects the duplicate. Delete the `zvariant` one.
 
+One more `From` impl is gone: `zbus::Error` no longer implements `From<hex::FromHexError>`. The
+impl existed for zbus's own handshake parser, and it made the error type of the 0.x `hex` crate
+part of zbus's public API. A function that returns `zbus::Result` and puts a `?` after
+`hex::decode` maps the error itself now; 5.x turned it into an `Error::Handshake` reading
+`Invalid hexcode: <the error>`.
+
 ## What warns, what is silent, what breaks
 
 `zbus::zvariant` is a deprecated module of type aliases, wrapper functions, constants and
@@ -864,6 +870,42 @@ the notifier. Both are zbus types implementing `Future<Output = ()>`; 5.x return
 unchanged. Code that names the type spells out the new one instead, and code that calls an
 `event_listener::Listener` method on it, such as `wait()`, awaits it instead, for example through
 `zbus::block_on`.
+
+### `AsyncDrop` is declared without `async-trait`
+
+`zbus::AsyncDrop`, the async counterpart of `Drop` that `MessageStream`, `SignalStream` and the
+signal streams of `#[proxy]` implement, was declared with `#[async_trait]`, so what an
+implementation had to look like was whatever that crate expanded it to. The method is declared
+natively now, as `fn async_drop(self) -> impl Future<Output = ()> + Send`. Callers are unaffected:
+`stream.async_drop().await` reads the same. An implementation written with `#[async_trait]` no
+longer matches the declaration (`E0195`). It drops the attribute and keeps its `async fn`, whose
+future has to be `Send`, as it always had to be.
+
+Before, this no longer compiles:
+
+```rust,compile_fail,noplayground
+use async_trait::async_trait;
+use zbus::AsyncDrop;
+
+struct Guard;
+
+#[async_trait]
+impl AsyncDrop for Guard {
+    async fn async_drop(self) {}
+}
+```
+
+After:
+
+```rust,noplayground
+use zbus::AsyncDrop;
+
+struct Guard;
+
+impl AsyncDrop for Guard {
+    async fn async_drop(self) {}
+}
+```
 
 ### Queue sizes are `NonZeroUsize`
 
