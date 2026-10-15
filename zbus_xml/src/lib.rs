@@ -502,10 +502,7 @@ impl<'a> Property<'a> {
 pub struct Interface<'a> {
     name: InterfaceName<'a>,
 
-    methods: Vec<Method<'a>>,
-    properties: Vec<Property<'a>>,
-    signals: Vec<Signal<'a>>,
-    annotations: Vec<Annotation<'a>>,
+    children: Vec<Child<'a>>,
     docstring: Option<Str<'a>>,
     telepathy_types: Vec<telepathy::TypeDef<'a>>,
 }
@@ -516,24 +513,54 @@ impl<'a> Interface<'a> {
         self.name.as_ref()
     }
 
+    /// The methods, signals, properties and annotations of the interface, in the order they are
+    /// defined in the document.
+    pub fn children(&self) -> impl Iterator<Item = &Child<'a>> {
+        self.children.iter()
+    }
+
     /// Returns the interface methods.
-    pub fn methods(&self) -> &[Method<'a>] {
-        &self.methods
+    pub fn methods(&self) -> impl Iterator<Item = &Method<'a>> {
+        self.children.iter().filter_map(|child| {
+            if let Child::Method(m) = child {
+                Some(m)
+            } else {
+                None
+            }
+        })
     }
 
     /// Returns the interface signals.
-    pub fn signals(&self) -> &[Signal<'a>] {
-        &self.signals
+    pub fn signals(&self) -> impl Iterator<Item = &Signal<'a>> {
+        self.children.iter().filter_map(|child| {
+            if let Child::Signal(s) = child {
+                Some(s)
+            } else {
+                None
+            }
+        })
     }
 
     /// Returns the interface properties.
-    pub fn properties(&self) -> &[Property<'a>] {
-        &self.properties
+    pub fn properties(&self) -> impl Iterator<Item = &Property<'a>> {
+        self.children.iter().filter_map(|child| {
+            if let Child::Property(p) = child {
+                Some(p)
+            } else {
+                None
+            }
+        })
     }
 
     /// Return the associated annotations.
-    pub fn annotations(&self) -> &[Annotation<'a>] {
-        &self.annotations
+    pub fn annotations(&self) -> impl Iterator<Item = &Annotation<'a>> {
+        self.children.iter().filter_map(|child| {
+            if let Child::Annotation(a) = child {
+                Some(a)
+            } else {
+                None
+            }
+        })
     }
 
     /// Return the content of the Telepathy `tp:docstring` extension element, if any.
@@ -546,8 +573,8 @@ impl<'a> Interface<'a> {
     }
 
     /// Return the Telepathy type definitions on this interface.
-    pub fn telepathy_types(&self) -> &[telepathy::TypeDef<'a>] {
-        &self.telepathy_types
+    pub fn telepathy_types(&self) -> impl Iterator<Item = &telepathy::TypeDef<'a>> {
+        self.telepathy_types.iter()
     }
 
     /// Creates an owned clone of `self`.
@@ -559,18 +586,7 @@ impl<'a> Interface<'a> {
     pub fn into_owned(self) -> Interface<'static> {
         Interface {
             name: self.name.into_owned(),
-            methods: self.methods.into_iter().map(Method::into_owned).collect(),
-            properties: self
-                .properties
-                .into_iter()
-                .map(Property::into_owned)
-                .collect(),
-            signals: self.signals.into_iter().map(Signal::into_owned).collect(),
-            annotations: self
-                .annotations
-                .into_iter()
-                .map(Annotation::into_owned)
-                .collect(),
+            children: self.children.into_iter().map(Child::into_owned).collect(),
             docstring: self.docstring.map(Str::into_owned),
             telepathy_types: self
                 .telepathy_types
@@ -582,27 +598,66 @@ impl<'a> Interface<'a> {
 
     fn write_xml<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
         write!(w, "<interface name=\"{}\"", escape(self.name.as_str()))?;
-        if self.methods.is_empty()
-            && self.properties.is_empty()
-            && self.signals.is_empty()
-            && self.annotations.is_empty()
-        {
+        if self.children.is_empty() {
             return write!(w, "/>");
         }
         write!(w, ">")?;
-        for method in &self.methods {
-            method.write_xml(w)?;
-        }
-        for property in &self.properties {
-            property.write_xml(w)?;
-        }
-        for signal in &self.signals {
-            signal.write_xml(w)?;
-        }
-        for annotation in &self.annotations {
-            annotation.write_xml(w)?;
+        for child in &self.children {
+            child.write_xml(w)?;
         }
         write!(w, "</interface>")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Child<'a> {
+    Method(Method<'a>),
+    Property(Property<'a>),
+    Signal(Signal<'a>),
+    Annotation(Annotation<'a>),
+}
+
+impl<'a> From<Method<'a>> for Child<'a> {
+    fn from(method: Method<'a>) -> Self {
+        Self::Method(method)
+    }
+}
+
+impl<'a> From<Property<'a>> for Child<'a> {
+    fn from(property: Property<'a>) -> Self {
+        Self::Property(property)
+    }
+}
+
+impl<'a> From<Signal<'a>> for Child<'a> {
+    fn from(signal: Signal<'a>) -> Self {
+        Self::Signal(signal)
+    }
+}
+
+impl<'a> From<Annotation<'a>> for Child<'a> {
+    fn from(annotation: Annotation<'a>) -> Self {
+        Self::Annotation(annotation)
+    }
+}
+
+impl<'a> Child<'a> {
+    fn into_owned(self) -> Child<'static> {
+        match self {
+            Self::Method(m) => Child::Method(m.into_owned()),
+            Self::Property(p) => Child::Property(p.into_owned()),
+            Self::Signal(s) => Child::Signal(s.into_owned()),
+            Self::Annotation(a) => Child::Annotation(a.into_owned()),
+        }
+    }
+
+    fn write_xml<W: Write>(&'a self, w: &mut W) -> std::io::Result<()> {
+        match self {
+            Self::Method(m) => m.write_xml(w),
+            Self::Property(p) => p.write_xml(w),
+            Self::Signal(s) => s.write_xml(w),
+            Self::Annotation(a) => a.write_xml(w),
+        }
     }
 }
 

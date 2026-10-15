@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use zbus::Signature;
-use zbus_xml::{Arg, ArgDirection, Interface, Node, PropertyAccess};
+use zbus_xml::{Arg, ArgDirection, Child, Interface, Node, PropertyAccess};
 
 #[test]
 fn sample_object() -> Result<(), Box<dyn Error>> {
@@ -10,13 +10,9 @@ fn sample_object() -> Result<(), Box<dyn Error>> {
     let node = Node::try_from(example)?;
     assert_eq!(node, node_r);
     assert_eq!(node.interfaces().len(), 1);
-    assert_eq!(node.interfaces()[0].methods().len(), 3);
-    assert_eq!(
-        node.interfaces()[0].methods()[0].args()[0]
-            .direction()
-            .unwrap(),
-        ArgDirection::In
-    );
+    let methods = node.interfaces()[0].methods().collect::<Vec<_>>();
+    assert_eq!(methods.len(), 3);
+    assert_eq!(methods[0].args()[0].direction().unwrap(), ArgDirection::In);
     assert_eq!(node.nodes().len(), 4);
 
     let node_str: Node<'_> = example.try_into()?;
@@ -58,7 +54,11 @@ fn multi_complete_arg_type() -> Result<(), Box<dyn Error>> {
     "#;
 
     let node = Node::try_from(input)?;
-    let arg = &node.interfaces()[0].methods()[0].args()[0];
+    let arg = &node.interfaces()[0]
+        .methods()
+        .next()
+        .expect("interface method")
+        .args()[0];
     let Signature::Structure(fields) = arg.ty() else {
         panic!("expected `tt` to parse as a structure");
     };
@@ -81,7 +81,10 @@ fn escaped_attributes() -> Result<(), Box<dyn Error>> {
     "#;
 
     let node = Node::try_from(input)?;
-    let annotation = &node.interfaces()[0].annotations()[0];
+    let annotation = &node.interfaces()[0]
+        .annotations()
+        .next()
+        .expect("interface annotation");
     assert_eq!(annotation.value(), r#"<b> & "q" 'a' AB"#);
 
     // Escaping survives a write/parse round-trip.
@@ -103,7 +106,10 @@ fn attribute_whitespace_normalization() -> Result<(), Box<dyn Error>> {
                  </interface>\n</node>";
 
     let node = Node::try_from(input)?;
-    let annotation = &node.interfaces()[0].annotations()[0];
+    let annotation = &node.interfaces()[0]
+        .annotations()
+        .next()
+        .expect("interface annotation");
     assert_eq!(annotation.value(), "a b c \n\t\rd");
 
     // The writer escapes whitespace so it survives normalization by any parser.
@@ -180,7 +186,10 @@ fn ignores_unknown_elements_and_text() -> Result<(), Box<dyn Error>> {
 
     let node = Node::try_from(input)?;
     assert_eq!(node.interfaces().len(), 1);
-    let method = &node.interfaces()[0].methods()[0];
+    let method = &node.interfaces()[0]
+        .methods()
+        .next()
+        .expect("interface method");
     assert_eq!(method.args().len(), 1);
     assert_eq!(method.args()[0].name(), Some("testarg"));
 
@@ -228,7 +237,7 @@ fn assert_args(context: &str, args: &[Arg<'_>], expected: &[ArgSpec]) {
 /// no particular order.
 fn assert_methods(iface: &Interface<'_>, expected: &[(&str, &[ArgSpec])]) {
     assert_eq!(
-        iface.methods().len(),
+        iface.methods().count(),
         expected.len(),
         "{}: method count",
         iface.name(),
@@ -236,7 +245,6 @@ fn assert_methods(iface: &Interface<'_>, expected: &[(&str, &[ArgSpec])]) {
     for (name, args) in expected {
         let method = iface
             .methods()
-            .iter()
             .find(|m| m.name() == *name)
             .unwrap_or_else(|| panic!("method `{}.{name}` not found", iface.name()));
         assert_args(&format!("{}.{name}", iface.name()), method.args(), args);
@@ -246,7 +254,7 @@ fn assert_methods(iface: &Interface<'_>, expected: &[(&str, &[ArgSpec])]) {
 /// Assert that `iface`'s signals are exactly `expected` (name and full argument list each).
 fn assert_signals(iface: &Interface<'_>, expected: &[(&str, &[ArgSpec])]) {
     assert_eq!(
-        iface.signals().len(),
+        iface.signals().count(),
         expected.len(),
         "{}: signal count",
         iface.name(),
@@ -254,7 +262,6 @@ fn assert_signals(iface: &Interface<'_>, expected: &[(&str, &[ArgSpec])]) {
     for (name, args) in expected {
         let signal = iface
             .signals()
-            .iter()
             .find(|s| s.name() == *name)
             .unwrap_or_else(|| panic!("signal `{}.{name}` not found", iface.name()));
         assert_args(&format!("{}.{name}", iface.name()), signal.args(), args);
@@ -264,7 +271,7 @@ fn assert_signals(iface: &Interface<'_>, expected: &[(&str, &[ArgSpec])]) {
 /// Assert that `iface`'s properties are exactly `expected` (name, signature and access each).
 fn assert_properties(iface: &Interface<'_>, expected: &[(&str, &str, PropertyAccess)]) {
     assert_eq!(
-        iface.properties().len(),
+        iface.properties().count(),
         expected.len(),
         "{}: property count",
         iface.name(),
@@ -272,7 +279,6 @@ fn assert_properties(iface: &Interface<'_>, expected: &[(&str, &str, PropertyAcc
     for &(name, ty, access) in expected {
         let property = iface
             .properties()
-            .iter()
             .find(|p| p.name() == name)
             .unwrap_or_else(|| panic!("property `{}.{name}` not found", iface.name()));
         assert!(
@@ -467,7 +473,6 @@ fn real_world_systemd() -> Result<(), Box<dyn Error>> {
             "Manager.GetUnit",
             manager
                 .methods()
-                .iter()
                 .find(|m| m.name() == "GetUnit")
                 .expect("GetUnit method")
                 .args(),
@@ -477,7 +482,6 @@ fn real_world_systemd() -> Result<(), Box<dyn Error>> {
             "Manager.StartUnit",
             manager
                 .methods()
-                .iter()
                 .find(|m| m.name() == "StartUnit")
                 .expect("StartUnit method")
                 .args(),
@@ -491,7 +495,6 @@ fn real_world_systemd() -> Result<(), Box<dyn Error>> {
             "Manager.UnitNew",
             manager
                 .signals()
-                .iter()
                 .find(|s| s.name() == "UnitNew")
                 .expect("UnitNew signal")
                 .args(),
@@ -501,7 +504,6 @@ fn real_world_systemd() -> Result<(), Box<dyn Error>> {
             "Manager.JobNew",
             manager
                 .signals()
-                .iter()
                 .find(|s| s.name() == "JobNew")
                 .expect("JobNew signal")
                 .args(),
@@ -514,7 +516,6 @@ fn real_world_systemd() -> Result<(), Box<dyn Error>> {
 
         let version = manager
             .properties()
-            .iter()
             .find(|p| p.name() == "Version")
             .expect("Version property");
         assert!(version.ty() == "s", "Version type");
@@ -532,7 +533,6 @@ fn real_world_systemd() -> Result<(), Box<dyn Error>> {
         for name in ["LogLevel", "LogTarget"] {
             let property = manager
                 .properties()
-                .iter()
                 .find(|p| p.name() == name)
                 .unwrap_or_else(|| panic!("Manager.{name} property"));
             assert!(property.ty() == "s", "Manager.{name}: type");
@@ -561,14 +561,16 @@ fn real_world_systemd() -> Result<(), Box<dyn Error>> {
         "org.freedesktop.systemd1.Scope",
     ] {
         let iface = interface(&node, name);
-        assert!(!iface.properties().is_empty(), "{name}: has properties");
+        assert!(
+            iface.properties().next().is_some(),
+            "{name}: has properties"
+        );
     }
     // The generic Unit interface exposes the well-known Id/ActiveState string properties.
     let unit = interface(&node, "org.freedesktop.systemd1.Unit");
     for name in ["Id", "ActiveState"] {
         let property = unit
             .properties()
-            .iter()
             .find(|p| p.name() == name)
             .unwrap_or_else(|| panic!("Unit.{name} property"));
         assert!(property.ty() == "s", "Unit.{name}: type");
@@ -741,7 +743,11 @@ fn invalid_enum_attributes() -> Result<(), Box<dyn Error>> {
     let write_only = "<node><interface name=\"org.test.I\">\
                       <property name=\"P\" type=\"s\" access=\"write\"/></interface></node>";
     let node = Node::try_from(write_only)?;
-    let access = node.interfaces()[0].properties()[0].access();
+    let access = node.interfaces()[0]
+        .properties()
+        .next()
+        .expect("interface property")
+        .access();
     assert_eq!(access, PropertyAccess::Write);
     assert!(access.write() && !access.read());
 
@@ -821,24 +827,28 @@ fn docstrings() -> Result<(), Box<dyn Error>> {
     assert!(docstring.contains("<tp:rationale>"));
     assert!(docstring.ends_with("</tp:rationale>"));
 
-    let method = &interface.methods()[0];
+    let method = &interface.methods().next().expect("interface method");
     assert_eq!(method.docstring(), Some("Does the thing."));
     assert_eq!(method.args()[0].docstring(), Some("The thing to do."));
     assert_eq!(method.args()[1].docstring(), None);
 
-    let signal = &interface.signals()[0];
+    let signal = &interface.signals().next().expect("interface signal");
     assert_eq!(signal.docstring(), Some("Emitted when the thing was done."));
     assert_eq!(
         signal.args()[0].docstring(),
         Some("The thing that was done.")
     );
 
+    let mut properties = interface.properties();
     assert_eq!(
-        interface.properties()[0].docstring(),
+        properties.next().expect("interface property").docstring(),
         Some("Whether the thing has been done.")
     );
     // Whitespace-only and self-closing docstrings count as absent.
-    assert_eq!(interface.properties()[1].docstring(), None);
+    assert_eq!(
+        properties.next().expect("interface property").docstring(),
+        None
+    );
 
     Ok(())
 }
@@ -937,7 +947,7 @@ fn telepathy_type_definitions() -> Result<(), Box<dyn Error>> {
         TypeDef::Enum(ordering),
         TypeDef::Struct(playlist),
         TypeDef::Mapping(map),
-    ] = interface.telepathy_types()
+    ] = interface.telepathy_types().collect::<Vec<_>>()[..]
     else {
         panic!("expected enum, struct and mapping on the interface");
     };
@@ -978,14 +988,141 @@ fn telepathy_type_definitions() -> Result<(), Box<dyn Error>> {
     assert_eq!(map.signature().to_string(), "a{sv}");
 
     // `tp:type` references on args and properties.
-    let method = &interface.methods()[0];
+    let method = &interface.methods().next().expect("interface method");
     assert_eq!(method.args()[0].tp_type(), Some("Playlist[]"));
     assert_eq!(
-        interface.properties()[0].tp_type(),
+        interface
+            .properties()
+            .next()
+            .expect("interface property")
+            .tp_type(),
         Some("Playlist_Ordering[]")
     );
 
     Ok(())
+}
+
+#[test]
+fn docstrings_and_type_definitions_are_not_interface_members() -> Result<(), Box<dyn Error>> {
+    // The docstrings and the definitions come between the members, and one interface has nothing
+    // else.
+    let input = r#"
+        <node xmlns:tp="http://telepathy.freedesktop.org/wiki/DbusSpec#extensions-v0">
+            <interface name="org.test.testinterface">
+                <tp:enum name="Playlist_Ordering" type="s">
+                    <tp:enumvalue suffix="Alphabetical" value="Alphabetical"/>
+                </tp:enum>
+                <method name="GetPlaylists"/>
+                <tp:docstring>First.</tp:docstring>
+                <tp:struct name="Playlist" array-name="Playlist_List">
+                    <tp:member type="s" name="Name"/>
+                </tp:struct>
+                <property name="Orderings" type="as" access="read"/>
+                <tp:docstring>Last.</tp:docstring>
+                <tp:mapping name="String_Variant_Map">
+                    <tp:member type="s" name="Key"/>
+                    <tp:member type="v" name="Value"/>
+                </tp:mapping>
+                <tp:docstring>  </tp:docstring>
+            </interface>
+            <interface name="org.test.onlytypes">
+                <tp:docstring>Only docs.</tp:docstring>
+                <tp:mapping name="String_Variant_Map">
+                    <tp:member type="s" name="Key"/>
+                    <tp:member type="v" name="Value"/>
+                </tp:mapping>
+            </interface>
+        </node>
+    "#;
+
+    let node = Node::try_from(input)?;
+    let interface = &node.interfaces()[0];
+    assert_eq!(interface.telepathy_types().count(), 3);
+    // The last docstring that isn't empty is the interface's.
+    assert_eq!(interface.docstring(), Some("Last."));
+    // The docstrings and the type definitions are not among the children, only the members are.
+    let [Child::Method(method), Child::Property(property)] =
+        interface.children().collect::<Vec<_>>()[..]
+    else {
+        panic!("expected the method and the property as the only children");
+    };
+    assert_eq!(method.name(), "GetPlaylists");
+    assert_eq!(property.name(), "Orderings");
+    assert_eq!(node.interfaces()[1].docstring(), Some("Only docs."));
+    assert_eq!(node.interfaces()[1].telepathy_types().count(), 1);
+    assert_eq!(node.interfaces()[1].children().count(), 0);
+
+    // Writing the node leaves the docstrings and the type definitions out and keeps the members.
+    let mut written = Vec::new();
+    node.to_writer(&mut written)?;
+    let reparsed = Node::from_reader(&written[..])?;
+    assert_eq!(reparsed.interfaces().len(), 2);
+    assert_eq!(
+        reparsed.interfaces()[0].children().collect::<Vec<_>>(),
+        interface.children().collect::<Vec<_>>()
+    );
+    for interface in reparsed.interfaces() {
+        assert_eq!(interface.docstring(), None);
+        assert_eq!(interface.telepathy_types().count(), 0);
+    }
+    assert_eq!(reparsed.interfaces()[1].children().count(), 0);
+
+    Ok(())
+}
+
+#[test]
+fn interface_members_keep_document_order() -> Result<(), Box<dyn Error>> {
+    // Members of all four kinds, interleaved.
+    let input = r#"
+        <node>
+            <interface name="org.test.testinterface">
+                <property name="First" type="s" access="read"/>
+                <method name="Second"/>
+                <annotation name="org.test.Third" value="3"/>
+                <signal name="Fourth"/>
+                <method name="Fifth"/>
+                <annotation name="org.test.Sixth" value="6"/>
+                <property name="Seventh" type="u" access="readwrite"/>
+                <signal name="Eighth"/>
+            </interface>
+        </node>
+    "#;
+
+    let node = Node::try_from(input)?;
+    assert_eq!(
+        member_names(&node.interfaces()[0]),
+        [
+            "property First",
+            "method Second",
+            "annotation org.test.Third",
+            "signal Fourth",
+            "method Fifth",
+            "annotation org.test.Sixth",
+            "property Seventh",
+            "signal Eighth",
+        ]
+    );
+
+    // The order survives writing the node and parsing the result.
+    let mut written = Vec::new();
+    node.to_writer(&mut written)?;
+    let reparsed = Node::from_reader(&written[..])?;
+    assert_eq!(reparsed, node);
+
+    Ok(())
+}
+
+/// The kind and name of each child of `iface`, in the order of `Interface::children`.
+fn member_names(iface: &Interface<'_>) -> Vec<String> {
+    iface
+        .children()
+        .map(|child| match child {
+            Child::Method(method) => format!("method {}", method.name()),
+            Child::Signal(signal) => format!("signal {}", signal.name()),
+            Child::Property(property) => format!("property {}", property.name()),
+            Child::Annotation(annotation) => format!("annotation {}", annotation.name()),
+        })
+        .collect()
 }
 
 #[test]
@@ -1087,7 +1224,7 @@ fn unknown_children_of_telepathy_definitions() -> Result<(), Box<dyn Error>> {
     let (node, warnings) = Node::from_reader_with_warnings(input.as_bytes())?;
     // The definitions themselves still parse fine.
     assert_eq!(node.telepathy_types().len(), 1);
-    assert_eq!(node.interfaces()[0].telepathy_types().len(), 2);
+    assert_eq!(node.interfaces()[0].telepathy_types().count(), 2);
 
     let elements: Vec<_> = warnings.iter().map(|w| w.element()).collect();
     assert_eq!(elements, ["tp:added", "tp:changed", "bogus"]);
@@ -1141,7 +1278,11 @@ fn from_reader_is_owned() -> Result<(), Box<dyn Error>> {
     let interface = &node.interfaces()[0];
     // Docstrings are captured verbatim (not unescaped).
     assert_eq!(interface.docstring(), Some("Some &amp; documentation."));
-    assert_eq!(interface.annotations()[0].value(), "<b>old</b>");
+    let annotation = interface
+        .annotations()
+        .next()
+        .expect("interface annotation");
+    assert_eq!(annotation.value(), "<b>old</b>");
 
     Ok(())
 }
