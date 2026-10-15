@@ -28,7 +28,7 @@ That build compiles `zbus::wire` and `zbus::names` and nothing else — no conne
 object server. The optional wire-format features keep zvariant's names (`arrayvec`, `camino`,
 `chrono`, `heapless`, `option-as-array`, `serde_bytes`, `time`, `url`, `uuid`), and enabling any
 D-Bus feature (`comms`, `default-rt`, `tokio`, `tokio-multithread`, `p2p`, `bus-impl`, `proxy`,
-`service`, `unixexec`, `ibus`) brings the D-Bus API back.
+`service`, `object-manager`, `unixexec`, `ibus`) brings the D-Bus API back.
 
 zbus logs through [`tracing`], behind the default `tracing` feature; a `default-features =
 false` build that wants zbus's logs must re-enable it explicitly.
@@ -127,6 +127,10 @@ Since zbus 6.0, the client-side proxy API and the service-side object server API
 writing a pure service or a pure client, you can disable the API you don't need to reduce the
 size of your binary.
 
+The service side of the standard `org.freedesktop.DBus.ObjectManager` interface,
+[`fdo::ObjectManager`], is behind the `object-manager` feature, which builds on `service` and is
+also enabled by default.
+
 ## Compatibility with async runtimes
 
 zbus is runtime-agnostic. A program with no async runtime of its own drives it with
@@ -198,6 +202,7 @@ WASI has no Unix domain sockets, no threads and no processes, so there:
 [bw]: https://z-galaxy.github.io/zbus/faq.html#how-do-i-use-zbus-from-synchronous-code
 [tctiog]: https://github.com/tokio-rs/tokio/issues/2201
 [`connection::Builder::runtime`]: https://docs.rs/zbus/latest/zbus/connection/struct.Builder.html#method.runtime
+[`fdo::ObjectManager`]: https://docs.rs/zbus/latest/zbus/fdo/struct.ObjectManager.html
 [`runtime::traits::Runtime`]: https://docs.rs/zbus/latest/zbus/runtime/traits/trait.Runtime.html
 [`tokio`]: https://crates.io/crates/tokio
 [serde]: https://crates.io/crates/serde
