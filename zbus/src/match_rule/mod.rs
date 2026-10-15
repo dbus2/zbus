@@ -87,7 +87,7 @@ pub use builder::Builder;
 ///
 /// [mrs]: https://dbus.freedesktop.org/doc/dbus-specification.html#message-bus-routing-match-rules
 #[derive(Clone, Debug, PartialEq, Eq, Hash, VariantType)]
-#[zvariant(signature = "s")]
+#[zbus(signature = "s")]
 pub struct MatchRule<'m> {
     pub(crate) msg_type: Option<Type>,
     pub(crate) sender: Option<BusName<'m>>,

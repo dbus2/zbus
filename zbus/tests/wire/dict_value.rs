@@ -121,7 +121,7 @@ fn dict_value() {
     }
 
     #[derive(DeserializeDict, SerializeDict, Type, PartialEq, Debug, Default)]
-    #[zvariant(signature = "a{sv}")]
+    #[zbus(signature = "a{sv}")]
     struct Test {
         process_id: Option<u32>,
         group_id: Option<u32>,
@@ -146,7 +146,7 @@ fn dict_value() {
     assert_eq!(decoded, test);
 
     #[derive(DeserializeDict, SerializeDict, Type, PartialEq, Debug)]
-    #[zvariant(signature = "a{sv}")]
+    #[zbus(signature = "a{sv}")]
     struct TestMissing {
         process_id: Option<u32>,
         group_id: Option<u32>,
@@ -157,7 +157,7 @@ fn dict_value() {
     assert!(decoded.is_err());
 
     #[derive(DeserializeDict, SerializeDict, Type, PartialEq, Debug, Default)]
-    #[zvariant(signature = "a{sv}")]
+    #[zbus(signature = "a{sv}")]
     struct TestSkipUnknown {
         process_id: Option<u32>,
         group_id: Option<u32>,
@@ -165,7 +165,7 @@ fn dict_value() {
     let _: TestSkipUnknown = encoded.deserialize().unwrap().0;
 
     #[derive(DeserializeDict, SerializeDict, Type, PartialEq, Debug, Default)]
-    #[zvariant(signature = "a{sv}", deny_unknown_fields)]
+    #[zbus(signature = "a{sv}", deny_unknown_fields)]
     struct TestDenyUnknown {
         process_id: Option<u32>,
         group_id: Option<u32>,
@@ -175,7 +175,7 @@ fn dict_value() {
 
     #[derive(serde::Serialize, serde::Deserialize, Type, PartialEq, Debug, Default)]
     #[serde(default)]
-    #[zvariant(signature = "a{sv}")]
+    #[zbus(signature = "a{sv}")]
     struct TestParseUnknown<'s> {
         #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
         process_id: Option<u32>,
@@ -189,7 +189,7 @@ fn dict_value() {
     assert_eq!(decoded.rest["user"], Variant::new("me"));
 
     #[derive(Default, Debug, SerializeDict, DeserializeDict, Type)]
-    #[zvariant(signature = "dict")]
+    #[zbus(signature = "dict")]
     struct TestEmpty {}
 
     // Empty dict should be serialized to contain 4 bytes for the ARRAY length and 4 bytes for the
@@ -204,7 +204,7 @@ fn struct_with_object_path_keys() {
     let ctxt = Context::new(NATIVE_ENDIAN, 0);
 
     #[derive(serde::Deserialize, Type, PartialEq, Debug, Default)]
-    #[zvariant(signature = "a{ou}")]
+    #[zbus(signature = "a{ou}")]
     #[serde(default)]
     struct Mapped {
         #[serde(rename = "/foo")]
@@ -227,7 +227,7 @@ fn nested_dict_value() {
     let ctxt = Context::new(NATIVE_ENDIAN, 0);
 
     #[derive(DeserializeDict, SerializeDict, Type, PartialEq, Debug, Default, Clone)]
-    #[zvariant(signature = "a{sv}", rename_all = "PascalCase")]
+    #[zbus(signature = "a{sv}", rename_all = "PascalCase")]
     struct Adapter {
         address: Option<String>,
         name: Option<String>,
@@ -235,19 +235,19 @@ fn nested_dict_value() {
     }
 
     #[derive(DeserializeDict, SerializeDict, Type, PartialEq, Debug, Default, Clone)]
-    #[zvariant(signature = "a{sv}", rename_all = "PascalCase")]
+    #[zbus(signature = "a{sv}", rename_all = "PascalCase")]
     struct Media {
         supported_features: Vec<String>,
-        #[zvariant(rename = "SupportedUUIDs")]
+        #[zbus(rename = "SupportedUUIDs")]
         supported_uuids: Vec<String>,
     }
 
     #[derive(DeserializeDict, SerializeDict, Type, PartialEq, Debug, Default)]
-    #[zvariant(signature = "a{sa{sv}}")]
+    #[zbus(signature = "a{sa{sv}}")]
     struct Interfaces {
-        #[zvariant(rename = "org.bluez.Adapter1")]
+        #[zbus(rename = "org.bluez.Adapter1")]
         adapter: Option<Adapter>,
-        #[zvariant(rename = "org.bluez.Media1")]
+        #[zbus(rename = "org.bluez.Media1")]
         media: Media,
     }
 
@@ -305,7 +305,7 @@ fn nested_dict_value() {
     use zbus::OwnedVariant;
 
     #[derive(DeserializeDict, SerializeDict, Type, PartialEq, Debug, Default)]
-    #[zvariant(signature = "a{sv}", rename_all = "kebab-case")]
+    #[zbus(signature = "a{sv}", rename_all = "kebab-case")]
     struct InspectBundleUpdateInfo {
         compatible: Option<bool>,
         version: Option<String>,
@@ -313,7 +313,7 @@ fn nested_dict_value() {
 
     // The reporter's case: the nested `a{sv}` is modelled as a typed `*Dict` struct field.
     #[derive(DeserializeDict, SerializeDict, Type, PartialEq, Debug, Default)]
-    #[zvariant(signature = "a{sv}", rename_all = "kebab-case")]
+    #[zbus(signature = "a{sv}", rename_all = "kebab-case")]
     struct InspectBundleInfo {
         manifest_hash: Option<String>,
         update: Option<InspectBundleUpdateInfo>,
@@ -321,7 +321,7 @@ fn nested_dict_value() {
 
     // The same, but capturing the nested variant verbatim as an `OwnedVariant` field.
     #[derive(DeserializeDict, SerializeDict, Type, PartialEq, Debug, Default)]
-    #[zvariant(signature = "a{sv}", rename_all = "kebab-case")]
+    #[zbus(signature = "a{sv}", rename_all = "kebab-case")]
     struct InspectBundleInfoRaw {
         manifest_hash: Option<String>,
         update: Option<OwnedVariant>,
@@ -380,17 +380,17 @@ fn nested_dict_object_path_keys() {
     let ctxt = Context::new(NATIVE_ENDIAN, 0);
 
     #[derive(DeserializeDict, SerializeDict, Type, PartialEq, Debug, Default)]
-    #[zvariant(signature = "a{sv}", rename_all = "PascalCase")]
+    #[zbus(signature = "a{sv}", rename_all = "PascalCase")]
     struct Props {
         value: Option<u32>,
     }
 
     #[derive(DeserializeDict, SerializeDict, Type, PartialEq, Debug, Default)]
-    #[zvariant(signature = "a{oa{sv}}")]
+    #[zbus(signature = "a{oa{sv}}")]
     struct ByPath {
-        #[zvariant(rename = "/org/example/A")]
+        #[zbus(rename = "/org/example/A")]
         a: Option<Props>,
-        #[zvariant(rename = "/org/example/B")]
+        #[zbus(rename = "/org/example/B")]
         b: Option<Props>,
     }
 

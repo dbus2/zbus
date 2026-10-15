@@ -229,25 +229,25 @@ impl TryFrom<u32> for StartServiceReply {
 /// **Note**: unknown keys, in particular those with "." that are not from the specification, will
 /// be ignored. Use your own implementation or contribute your keys here, or in the specification.
 #[derive(Debug, Default, DeserializeDict, PartialEq, Eq, SerializeDict, Type)]
-#[zvariant(signature = "a{sv}")]
+#[zbus(signature = "a{sv}")]
 pub struct ConnectionCredentials {
-    #[zvariant(rename = "UnixUserID")]
+    #[zbus(rename = "UnixUserID")]
     pub(crate) unix_user_id: Option<u32>,
 
-    #[zvariant(rename = "UnixGroupIDs")]
+    #[zbus(rename = "UnixGroupIDs")]
     pub(crate) unix_group_ids: Option<Vec<u32>>,
 
     #[cfg(unix)]
-    #[zvariant(rename = "ProcessFD")]
+    #[zbus(rename = "ProcessFD")]
     pub(crate) process_fd: Option<OwnedFd>,
 
-    #[zvariant(rename = "ProcessID")]
+    #[zbus(rename = "ProcessID")]
     pub(crate) process_id: Option<u32>,
 
-    #[zvariant(rename = "WindowsSID")]
+    #[zbus(rename = "WindowsSID")]
     pub(crate) windows_sid: Option<String>,
 
-    #[zvariant(rename = "LinuxSecurityLabel")]
+    #[zbus(rename = "LinuxSecurityLabel")]
     pub(crate) linux_security_label: Option<Vec<u8>>,
 }
 

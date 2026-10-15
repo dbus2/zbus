@@ -45,7 +45,7 @@ use crate::{Error, Result, Type};
 /// assert_eq!(p2, p3);
 /// ```
 #[derive(Type, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Clone, Ord, PartialOrd)]
-#[zvariant(signature = "ay")]
+#[zbus(signature = "ay")]
 pub struct FilePath<'f>(Cow<'f, CStr>);
 
 impl<'f> FilePath<'f> {

@@ -10,13 +10,13 @@ fn issue_1819() {
     // A peer that wraps a dict value in a variant twice (`v` -> `v` -> `a{sv}`) doesn't match a
     // typed field, and the error must name the signature we did expect.
     #[derive(DeserializeDict, SerializeDict, Type, PartialEq, Debug, Default)]
-    #[zvariant(signature = "a{sv}", rename_all = "kebab-case")]
+    #[zbus(signature = "a{sv}", rename_all = "kebab-case")]
     struct UpdateInfo {
         version: Option<String>,
     }
 
     #[derive(DeserializeDict, SerializeDict, Type, PartialEq, Debug, Default)]
-    #[zvariant(signature = "a{sv}", rename_all = "kebab-case")]
+    #[zbus(signature = "a{sv}", rename_all = "kebab-case")]
     struct BundleInfo {
         update: Option<UpdateInfo>,
     }

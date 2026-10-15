@@ -1041,7 +1041,7 @@ mod tests {
         );
 
         #[derive(Debug, PartialEq, crate::Type, serde::Deserialize)]
-        #[zvariant(signature = "s")]
+        #[zbus(signature = "s")]
         #[serde(rename_all = "snake_case")]
         enum StringUnit {
             First,
@@ -1095,7 +1095,7 @@ mod tests {
     #[test]
     fn deserializes_value_containers_and_dict_structs() {
         #[derive(Debug, PartialEq, crate::DeserializeDict, crate::Type)]
-        #[zvariant(signature = "dict")]
+        #[zbus(signature = "dict")]
         struct DictStruct {
             count: u32,
             name: String,

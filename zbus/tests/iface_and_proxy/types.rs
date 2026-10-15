@@ -3,7 +3,7 @@ use zbus::{DBusError, DeserializeDict, SerializeDict, Str, Type};
 
 // Tests the `crate` attribute with a path to the wire module.
 #[derive(Debug, Deserialize, Serialize, Type)]
-#[zvariant(crate = "zbus::wire")]
+#[zbus(crate = "zbus::wire")]
 pub struct ArgStructTest {
     pub foo: i32,
     pub bar: String,
@@ -13,7 +13,7 @@ pub struct ArgStructTest {
 // dict type using the `Type` And `*Dict` macros (issue #241).
 // Also tests the `crate` attribute with a path to the wire module.
 #[derive(DeserializeDict, SerializeDict, Type, Debug, PartialEq, Eq)]
-#[zvariant(signature = "dict", crate = "zbus::wire")]
+#[zbus(signature = "dict", crate = "zbus::wire")]
 pub struct IP4Adress {
     pub prefix: u32,
     pub address: String,
@@ -22,7 +22,7 @@ pub struct IP4Adress {
 // To test property setter for types with lifetimes.
 // Also tests the `crate` attribute with a path to the wire module.
 #[derive(Serialize, Deserialize, Type, Debug, PartialEq, Eq)]
-#[zvariant(crate = "zbus::wire")]
+#[zbus(crate = "zbus::wire")]
 pub struct RefType<'a> {
     #[serde(borrow)]
     pub field1: Str<'a>,

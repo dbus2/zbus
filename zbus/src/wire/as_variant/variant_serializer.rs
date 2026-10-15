@@ -717,7 +717,7 @@ mod tests {
     struct Empty {}
 
     #[derive(crate::SerializeDict, crate::Type)]
-    #[zvariant(signature = "dict")]
+    #[zbus(signature = "dict")]
     struct DictStruct {
         count: u32,
         name: String,
@@ -736,7 +736,7 @@ mod tests {
     }
 
     #[derive(serde::Serialize, crate::Type)]
-    #[zvariant(signature = "s")]
+    #[zbus(signature = "s")]
     #[serde(rename_all = "snake_case")]
     enum StringEnum {
         FirstValue,
