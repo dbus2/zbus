@@ -184,10 +184,6 @@ impl std::fmt::Display for ReleaseNameReply {
     not(feature = "proxy"),
     doc = "The return code of `DBusProxy::start_service_by_name` (requires the `proxy` feature)."
 )]
-///
-/// In zbus 6.0, this will become the return type of `start_service_by_name`.
-/// For now, it's provided separately with a `TryFrom<u32>` implementation
-/// to avoid breaking changes in the API.
 #[repr(u32)]
 #[derive(Deserialize_repr, Serialize_repr, Type, Debug, PartialEq, Eq)]
 pub enum StartServiceReply {
@@ -206,7 +202,6 @@ impl std::fmt::Display for StartServiceReply {
     }
 }
 
-// FIXME: When releasing 6.0, use StartServiceReply directly in start_service_by_name instead
 impl TryFrom<u32> for StartServiceReply {
     type Error = super::Error;
 
@@ -457,7 +452,11 @@ pub trait DBus {
 
     /// Tries to launch the executable associated with a name (service
     /// activation), as an explicit request.
-    fn start_service_by_name(&self, name: WellKnownName<'_>, flags: u32) -> Result<u32>;
+    fn start_service_by_name(
+        &self,
+        name: WellKnownName<'_>,
+        flags: u32,
+    ) -> Result<StartServiceReply>;
 
     /// This method adds to or modifies that environment when activating services.
     fn update_activation_environment(&self, environment: HashMap<&str, &str>) -> Result<()>;
