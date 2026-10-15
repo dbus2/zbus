@@ -3,8 +3,9 @@
 //! By default, a connection runs on [zruntime] (the `default-rt` feature, on by default):
 //! one runtime per thread that runs [`block_on`](crate::block_on), driven by that thread, and by
 //! a helper thread only for work left with no thread inside `block_on`. A connection built
-//! inside a Tokio runtime runs on it instead (the `tokio` feature). Any other runtime reaches a
-//! connection through an implementation of [`traits::Runtime`], handed to [`Builder::runtime`].
+//! inside a Tokio runtime runs on it instead (the `tokio` feature, with which `block_on` runs a
+//! Tokio runtime itself). Any other runtime reaches a connection through an implementation of
+//! [`traits::Runtime`], handed to [`Builder::runtime`].
 //! The async locks a connection holds are not part of that trait: they come from zruntime, except
 //! on a Tokio build, which uses Tokio's locks instead.
 //! [`AsyncDrop`] is the async counterpart of [`Drop`] that zbus's own types implement.

@@ -3,8 +3,9 @@
 //! By default, a connection runs on [zruntime] (the `default-rt` feature, on by default):
 //! one runtime per thread that runs [`block_on`](crate::block_on), driven by that thread, and by
 //! a helper thread only for work left with no thread inside `block_on`. A connection built inside
-//! a Tokio runtime runs on it instead (the `tokio` feature), and any other runtime reaches a
-//! connection through whatever implements [`Runtime`] and is handed to [`Builder::runtime`].
+//! a Tokio runtime runs on it instead (the `tokio` feature, with which `block_on` runs a Tokio
+//! runtime itself), and any other runtime reaches a connection through whatever implements
+//! [`Runtime`] and is handed to [`Builder::runtime`].
 //! Implementing the trait takes a readiness registration, a timer and a task handle, all of which
 //! every async runtime already has, and the connects of TCP and unix-domain sockets and, on unix,
 //! the spawn of a child process, which a runtime makes with what it has: a non-blocking connect
