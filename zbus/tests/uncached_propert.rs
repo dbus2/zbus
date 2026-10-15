@@ -102,7 +102,7 @@ async fn test_serde_property() -> Result<()> {
     use zbus::{Optional, OwnedVariant, Str, Type, names::OwnedUniqueName};
 
     #[derive(Debug, Deserialize, Serialize, Type, PartialEq)]
-    #[zvariant(signature = "s")]
+    #[zbus(signature = "s")]
     struct CustomString(String);
 
     struct Service(String);

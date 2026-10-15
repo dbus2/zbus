@@ -26,7 +26,7 @@ enum RequestNameFlags {
 }
 
 #[derive(Serialize, Deserialize, Type)]
-#[zvariant(signature = "a{sv}")]
+#[zbus(signature = "a{sv}")]
 #[serde(deny_unknown_fields)]
 struct Test {
     #[serde(

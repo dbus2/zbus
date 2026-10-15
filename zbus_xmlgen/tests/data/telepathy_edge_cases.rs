@@ -8,7 +8,7 @@
     zbus::Variant,
     zbus::OwnedVariant,
 )]
-#[zvariant(crate = "zbus::wire")]
+#[zbus(crate = "zbus::wire")]
 pub struct PlayList {
     pub name: String,
 }
@@ -25,7 +25,7 @@ pub struct PlayList {
     zbus::Variant,
     zbus::OwnedVariant,
 )]
-#[zvariant(crate = "zbus::wire")]
+#[zbus(crate = "zbus::wire")]
 #[repr(i32)]
 pub enum OddValues {
     Plus = 7,
@@ -44,7 +44,7 @@ pub enum OddValues {
     zbus::Variant,
     zbus::OwnedVariant,
 )]
-#[zvariant(signature = "s", crate = "zbus::wire")]
+#[zbus(signature = "s", crate = "zbus::wire")]
 pub enum Status {
     Ok,
 }

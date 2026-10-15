@@ -533,9 +533,10 @@ pub fn derive_dbus_error(input: TokenStream) -> TokenStream {
 /// # Custom signatures
 ///
 /// There are times when you'd find yourself wanting to specify a hardcoded signature yourself for
-/// the type. The `signature` attribute exists for this purpose. A typical use case is when you'd
-/// need to encode your type as a dictionary (signature `a{sv}`) type. For convenience, `dict` is
-/// an alias for `a{sv}`. Here is an example:
+/// the type. The `#[zbus(signature = "...")]` attribute exists for this purpose. The attribute can
+/// also be spelled `#[zvariant(...)]`. A typical use case is when you'd need to encode your type as
+/// a dictionary (signature `a{sv}`) type. For convenience, `dict` is an alias for `a{sv}`. Here is
+/// an example:
 ///
 /// ```
 /// use zbus::{
@@ -544,8 +545,8 @@ pub fn derive_dbus_error(input: TokenStream) -> TokenStream {
 /// use serde::{Deserialize, Serialize};
 ///
 /// #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
-/// // `#[zvariant(signature = "a{sv}")]` would be the same.
-/// #[zvariant(signature = "dict")]
+/// // `#[zbus(signature = "a{sv}")]` would be the same.
+/// #[zbus(signature = "dict")]
 /// struct Struct {
 ///     #[serde(with = "as_variant")]
 ///     field1: u16,
@@ -574,7 +575,7 @@ pub fn derive_dbus_error(input: TokenStream) -> TokenStream {
 /// use serde::{Deserialize, Serialize};
 ///
 /// #[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
-/// #[zvariant(signature = "s")]
+/// #[zbus(signature = "s")]
 /// enum StrEnum {
 ///     Variant1,
 ///     Variant2,
@@ -618,10 +619,11 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
 
 /// Adds [`Serialize`] implementation to structs to be serialized as a D-Bus dictionary type.
 ///
-/// The dictionary type is determined by the `signature` attribute. The default is `a{sv}`
-/// (string keys, variant values), but nested forms like `a{sa{sv}}` and `a{oa{sv}}` are also
-/// supported — fields whose value type is itself a dict (or any non-`Variant` type) are
-/// serialized directly through their own `Serialize` impl rather than wrapped as a variant.
+/// The dictionary type is determined by the `#[zbus(signature = "...")]` attribute. The attribute
+/// can also be spelled `#[zvariant(...)]`. The default is `a{sv}` (string keys, variant values),
+/// but nested forms like `a{sa{sv}}` and `a{oa{sv}}` are also supported — fields whose value type
+/// is itself a dict (or any non-`Variant` type) are serialized directly through their own
+/// `Serialize` impl rather than wrapped as a variant.
 ///
 /// Such dictionary types are very commonly used with
 /// [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-properties)
@@ -645,7 +647,7 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
 /// use zbus::{SerializeDict, Type};
 ///
 /// #[derive(Debug, Default, SerializeDict, Type)]
-/// #[zvariant(signature = "a{sv}", rename_all = "PascalCase")]
+/// #[zbus(signature = "a{sv}", rename_all = "PascalCase")]
 /// pub struct MyStruct {
 ///     field1: Option<u32>,
 ///     field2: String,
@@ -659,7 +661,7 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
 /// use zbus::{Type, as_variant};
 ///
 /// #[derive(Debug, Default, Serialize, Type)]
-/// #[zvariant(signature = "a{sv}")]
+/// #[zbus(signature = "a{sv}")]
 /// #[serde(default, rename_all = "PascalCase")]
 /// pub struct MyStruct {
 ///     #[serde(with = "as_variant::optional", skip_serializing_if = "Option::is_none")]
@@ -679,16 +681,16 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
 /// use zbus::{DeserializeDict, SerializeDict, Type};
 ///
 /// #[derive(SerializeDict, DeserializeDict, Type, Default)]
-/// #[zvariant(signature = "a{sv}", rename_all = "PascalCase")]
+/// #[zbus(signature = "a{sv}", rename_all = "PascalCase")]
 /// pub struct AdapterProperties {
 ///     address: Option<String>,
 ///     name: Option<String>,
 /// }
 ///
 /// #[derive(SerializeDict, DeserializeDict, Type, Default)]
-/// #[zvariant(signature = "a{sa{sv}}")]
+/// #[zbus(signature = "a{sa{sv}}")]
 /// pub struct InterfaceProperties {
-///     #[zvariant(rename = "org.bluez.Adapter1")]
+///     #[zbus(rename = "org.bluez.Adapter1")]
 ///     adapter: Option<AdapterProperties>,
 /// }
 /// ```
@@ -720,11 +722,12 @@ pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 
 /// Adds [`Deserialize`] implementation to structs to be deserialized from a D-Bus dictionary type.
 ///
-/// The dictionary type is determined by the `signature` attribute. The default is `a{sv}`
-/// (string keys, variant values), but nested forms like `a{sa{sv}}` and `a{oa{sv}}` are also
-/// supported — fields whose value type is itself a dict (or any non-`Variant` type) are
-/// deserialized directly through their own `Deserialize` impl rather than unwrapped from a
-/// variant. See [`SerializeDict`] for a nested example.
+/// The dictionary type is determined by the `#[zbus(signature = "...")]` attribute. The attribute
+/// can also be spelled `#[zvariant(...)]`. The default is `a{sv}` (string keys, variant values),
+/// but nested forms like `a{sa{sv}}` and `a{oa{sv}}` are also supported — fields whose value type
+/// is itself a dict (or any non-`Variant` type) are deserialized directly through their own
+/// `Deserialize` impl rather than unwrapped from a variant. See [`SerializeDict`] for a nested
+/// example.
 ///
 /// Such dictionary types are very commonly used with
 /// [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-properties)
@@ -748,7 +751,7 @@ pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// use zbus::{DeserializeDict, Type};
 ///
 /// #[derive(Debug, Default, DeserializeDict, Type)]
-/// #[zvariant(signature = "a{sv}", rename_all = "PascalCase")]
+/// #[zbus(signature = "a{sv}", rename_all = "PascalCase")]
 /// pub struct MyStruct {
 ///     field1: Option<u32>,
 ///     field2: String,
@@ -762,7 +765,7 @@ pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// use zbus::{Type, as_variant};
 ///
 /// #[derive(Debug, Default, Deserialize, Type)]
-/// #[zvariant(signature = "a{sv}")]
+/// #[zbus(signature = "a{sv}")]
 /// #[serde(default, rename_all = "PascalCase")]
 /// pub struct MyStruct {
 ///     #[serde(with = "as_variant::optional")]
@@ -800,6 +803,9 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// Implements conversions for your type to/from [`Variant`].
 ///
 /// Implements `TryFrom<Variant>` and `Into<Variant>` for your type.
+///
+/// The conversions can be adjusted with the `#[zbus(...)]` attribute, as described in the sections
+/// below. The attribute can also be spelled `#[zvariant(...)]`.
 ///
 /// # Examples
 ///
@@ -903,7 +909,7 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// # use zbus::{OwnedVariant, Variant};
 /// #
 /// #[derive(Debug, PartialEq, Variant, OwnedVariant)]
-/// #[zvariant(signature = "s")]
+/// #[zbus(signature = "s")]
 /// enum StrEnum {
 ///     Variant1,
 ///     Variant2,
@@ -921,7 +927,7 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 ///
 /// ## Auto Renaming
 ///
-/// The macro supports specifying a Serde-like `#[zvariant(rename_all = "case")]` attribute on
+/// The macro supports specifying a Serde-like `#[zbus(rename_all = "case")]` attribute on
 /// structures. The attribute allows to rename all the fields from snake case to another case
 /// automatically.
 ///
@@ -937,7 +943,7 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// ## Individual Fields
 ///
 /// It's still possible to specify custom names for individual fields using the
-/// `#[zvariant(rename = "another-name")]` attribute even when the `rename_all` attribute is
+/// `#[zbus(rename = "another-name")]` attribute even when the `rename_all` attribute is
 /// present.
 ///
 /// Here is an example using both `rename` and `rename_all`:
@@ -947,9 +953,9 @@ pub fn deserialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// # use std::collections::HashMap;
 /// #
 /// #[derive(Clone, Variant, OwnedVariant)]
-/// #[zvariant(signature = "dict", rename_all = "PascalCase")]
+/// #[zbus(signature = "dict", rename_all = "PascalCase")]
 /// struct RenamedStruct {
-///     #[zvariant(rename = "MyValue")]
+///     #[zbus(rename = "MyValue")]
 ///     field1: String,
 ///     field2: String,
 /// }
@@ -1004,7 +1010,8 @@ pub fn variant_macro_derive(input: TokenStream) -> TokenStream {
 ///
 /// Implements `TryFrom<OwnedVariant>` and `TryInto<OwnedVariant>` for your type.
 ///
-/// See [`Variant`] documentation for examples.
+/// See [`Variant`] documentation for examples. The `#[zbus(...)]` attribute described there is
+/// accepted here too, and can also be spelled `#[zvariant(...)]`.
 ///
 /// [`OwnedVariant`]: https://docs.rs/zbus/latest/zbus/struct.OwnedVariant.html
 #[proc_macro_derive(OwnedVariant, attributes(zbus, zvariant))]

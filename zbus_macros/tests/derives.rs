@@ -44,7 +44,7 @@ fn derive_enum() {
 #[test]
 fn derive_dict() {
     #[derive(Serialize, Deserialize, Type, Default)]
-    #[zvariant(signature = "a{sv}")]
+    #[zbus(signature = "a{sv}")]
     #[serde(deny_unknown_fields, rename_all = "camelCase", default)]
     struct Test {
         #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
@@ -116,7 +116,7 @@ fn issues_1252() {
     // Issue 1252: Naming a field `key` in a dict struct causes a conflict with variables created by
     // `DeserializeDict` macro, ending up with a strange error.
     #[derive(Type, Deserialize)]
-    #[zvariant(signature = "a{sv}")]
+    #[zbus(signature = "a{sv}")]
     pub struct OwnedProperties {
         #[serde(with = "as_variant")]
         key: String,
@@ -130,7 +130,7 @@ fn derive_with_crate_attr() {
     // Test that the `crate` attribute works for custom crate paths.
     // This is useful when the wire module is re-exported or renamed in Cargo.toml.
     #[derive(Type)]
-    #[zvariant(crate = "zbus::wire")]
+    #[zbus(crate = "zbus::wire")]
     struct TestCrateAttr {
         name: String,
         value: u32,
@@ -141,7 +141,7 @@ fn derive_with_crate_attr() {
     // Also test on enums
     #[repr(u8)]
     #[derive(Type)]
-    #[zvariant(crate = "zbus::wire")]
+    #[zbus(crate = "zbus::wire")]
     enum TestCrateAttrEnum {
         A = 1,
         B = 2,

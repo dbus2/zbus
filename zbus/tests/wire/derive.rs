@@ -88,7 +88,7 @@ fn derive() {
     assert_eq!(decoded, NoReprEnum::Variant2);
 
     #[derive(Deserialize, Serialize, Type, Variant, OwnedVariant, Debug, PartialEq)]
-    #[zvariant(signature = "s", rename_all = "snake_case")]
+    #[zbus(signature = "s", rename_all = "snake_case")]
     enum StrEnum {
         VariantOne,
         Variant2,

@@ -1352,7 +1352,7 @@ fn introspect_add_output_args(
             }
         } else {
             // Note: The type might still serialize as a DBus struct/tuple if it has a custom
-            // signature (e.g., `#[zvariant(signature = "(...)")]`), but we can't detect this
+            // signature (e.g., `#[zbus(signature = "(...)")]`), but we can't detect this
             // from the Rust type structure alone.
             //
             // If out_args has exactly one name, apply it to this output.

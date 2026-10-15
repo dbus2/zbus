@@ -15,7 +15,7 @@ use crate::{
 ///
 /// [`Field`]: enum.Field.html
 #[derive(Debug, Default, Clone, Type)]
-#[zvariant(signature = "a(yv)")]
+#[zbus(signature = "a(yv)")]
 pub(crate) struct Fields<'f> {
     pub path: Option<ObjectPath<'f>>,
     pub interface: Option<InterfaceName<'f>>,
@@ -78,7 +78,7 @@ impl Serialize for Fields<'_> {
 /// for strucutures but for body signature, that's what what the D-Bus expects so we do the same as
 /// `Variant` here, except we serialize signature value as string w/o the `()`.
 #[derive(Debug, Type)]
-#[zvariant(signature = "v")]
+#[zbus(signature = "v")]
 struct SignatureSerializer<'a>(&'a Signature);
 
 impl Serialize for SignatureSerializer<'_> {

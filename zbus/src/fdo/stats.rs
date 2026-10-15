@@ -40,7 +40,7 @@ pub trait Stats {
 
 /// The stats returned by the [`StatsProxy::get_stats`] method.
 #[derive(Debug, Default, Deserialize, PartialEq, Serialize, Type)]
-#[zvariant(signature = "a{sv}", rename_all = "PascalCase")]
+#[zbus(signature = "a{sv}", rename_all = "PascalCase")]
 #[serde(default, rename_all = "PascalCase")]
 pub struct Stats {
     #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
@@ -127,7 +127,7 @@ impl Stats {
 
 /// The stats returned by the [`StatsProxy::get_connection_stats`] method.
 #[derive(Debug, Default, Deserialize, PartialEq, Serialize, Type)]
-#[zvariant(signature = "a{sv}")]
+#[zbus(signature = "a{sv}")]
 #[serde(default, rename_all = "PascalCase")]
 pub struct ConnectionStats {
     #[serde(with = "optional", skip_serializing_if = "Option::is_none")]
