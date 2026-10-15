@@ -501,6 +501,31 @@ Two signatures lose the argument with it. `Signature::alignment(format)` is
 `Basic::alignment()`; its default body covers every type zbus can encode, so that one reaches you
 only through a direct `T::alignment(..)` call or an `impl Basic` that overrode it.
 
+### `StructureSeed` has no lifetime
+
+`zbus::wire::StructureSeed`, the seed that deserializes a `Structure`, carried a lifetime parameter
+that nothing used: every constructor made a `StructureSeed<'static>`, and the parameter was there
+only to be spelled out. It is gone, so `StructureSeed<'static>` and `StructureSeed<'_>` are `E0107`
+now, wherever the type is named: a field, a signature, or the `Deserializer` of a
+`DynamicDeserialize` implementation of yours. The deprecated `zbus::zvariant::StructureSeed<'a>`
+keeps the parameter and ignores it, so code written against zvariant 5 still compiles through that
+path, with the usual deprecation warning:
+
+```rust,noplayground
+# #![allow(deprecated)]
+use zbus::{Signature, wire::StructureSeed};
+
+// Was: `-> zbus::Result<StructureSeed<'static>>`.
+fn seed(signature: Signature) -> zbus::Result<StructureSeed> {
+    StructureSeed::try_from(signature)
+}
+
+// Through the deprecated module, the lifetime is still accepted.
+fn seed_old_path(signature: Signature) -> zbus::Result<zbus::zvariant::StructureSeed<'static>> {
+    seed(signature)
+}
+```
+
 ### `PropertiesProxy::set` takes a `&Variant`
 
 The `org.freedesktop.DBus.Properties` proxy — `zbus::fdo::PropertiesProxy` — takes the new value
