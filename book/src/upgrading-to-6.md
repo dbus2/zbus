@@ -591,6 +591,56 @@ existed to be deserialized from an owned string — is replaced by `zbus::Signat
 `Arg::ty`, `Property::ty` and the Telepathy `ty()` accessors return `&zbus::Signature`, so
 drop any `.inner()` or `.into_inner()` call on their result.
 
+### `zbus_xml` interface members are iterators, in document order
+
+`Interface::methods()`, `signals()`, `properties()`, `annotations()` and `telepathy_types()` return
+an `impl Iterator<Item = &T>` where 5.x returned a `&[T]`. What needed a slice no longer compiles:
+
+| Before | After |
+| --- | --- |
+| `interface.methods().iter()` | `interface.methods()` |
+| `interface.methods().len()` | `interface.methods().count()` |
+| `interface.methods()[0]`, `interface.methods().first()` | `interface.methods().next()` |
+| `interface.methods().is_empty()` | `interface.methods().next().is_none()` |
+| `interface.methods().to_vec()` | `interface.methods().cloned().collect::<Vec<_>>()` |
+
+A `for` loop over the result reads the same. `Node::interfaces()`, `nodes()` and
+`telepathy_types()`, and the `args()` and `annotations()` of the other types, are still slices.
+
+The new `Interface::children()` yields the methods, signals, properties and annotations together,
+as `zbus_xml::Child` values, in the order the document defines them. The Telepathy docstring and
+type definitions are not among them; `docstring()` and `telepathy_types()` still return those.
+
+```rust,noplayground
+use zbus_xml::{Child, Interface};
+
+fn summarize(interface: &Interface<'_>) {
+    // Was: `interface.methods().len()` and `interface.methods()[0]`.
+    println!("{} methods", interface.methods().count());
+    if let Some(first) = interface.methods().next() {
+        println!("the first is {}", first.name());
+    }
+
+    // Every member, in document order.
+    for child in interface.children() {
+        match child {
+            Child::Method(method) => println!("method {}", method.name()),
+            Child::Signal(signal) => println!("signal {}", signal.name()),
+            Child::Property(property) => println!("property {}", property.name()),
+            Child::Annotation(annotation) => println!("annotation {}", annotation.name()),
+        }
+    }
+}
+```
+
+The order shows in three more places. `Node::to_writer` writes the members of an interface in
+document order, where it wrote the methods, then the properties, the signals and the annotations.
+Two interfaces with the same members listed in a different order are no longer equal, even when
+the members of each kind are in the same order. And `zbus_xmlgen` emits the members of a generated
+trait in document order, where it sorted the methods, the signals and the properties by name, in
+that order. Regenerating a checked-in trait reorders its members, and that is all this change does
+to it.
+
 ### `Optional<T>` compares the sentinel before converting
 
 `TryFrom<Variant>` and `TryFrom<OwnedVariant>` for `Optional<T>` check the incoming value against
