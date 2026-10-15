@@ -55,7 +55,7 @@ body = """
 {% if group is ending_with("Other") %}\
 {% set title = subject | upper_first %}\
 {% else %}\
-{% set title = subject | replace_regex(from="^\\s*(?:✨|🎉|🚸|🐛|🚑|🩹|🥅|⚡|📝|💡|♻|🎨|🚚|🔧|🏗|💄|💥|🔥|🗑|⬆|⬇|📌|➕|➖|🔒|✅|🧪|👷|💚)\\u{FE0F}?\\s+", to="") %}\
+{% set title = subject | replace_regex(from="^\\s*(?:✨|🎉|🚸|🐛|🚑|🩹|🥅|⚡|📝|💡|♻|🎨|🚚|🔧|🏗|💄|💥|🔥|🗑|⬆|⬇|📌|➕|➖|🔒|✅|🧪|👷|💚|🚩)\\u{FE0F}?\\s+", to="") %}\
 {% if title == subject %}{% set title = title | upper_first %}{% endif %}\
 {% endif %}\
 - {{ title | trim | trim_end_matches(pat=".") }}\
@@ -119,6 +119,7 @@ commit_parsers = [
     { message = "^🔧", group = "<!-- 03 -->♻️ Changed" },
     { message = "^🏗️", group = "<!-- 03 -->♻️ Changed" },
     { message = "^💄", group = "<!-- 03 -->♻️ Changed" },
+    { message = "^🚩", group = "<!-- 03 -->♻️ Changed" },
 
     # Breaking changes/removals.
     { message = "^💥", group = "<!-- 01 -->💥 Breaking" },
