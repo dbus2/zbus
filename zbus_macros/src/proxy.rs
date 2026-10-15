@@ -883,6 +883,10 @@ fn gen_proxy_signal(
             [`Stream`]: {stream_link}",
     );
     let signal_args_gen_doc = format!("`{signal_name}` signal arguments.");
+    let arg_gen_docs: Vec<_> = args
+        .iter()
+        .map(|arg| format!("The `{arg}` argument of the `{signal_name}` signal."))
+        .collect();
     let args_struct_gen_doc = format!("A `{signal_name}` signal.");
     let args_struct_decl = quote! {
         #[doc = #args_struct_gen_doc]
@@ -948,6 +952,7 @@ fn gen_proxy_signal(
             #visibility struct #signal_args #ty_generics {
                 phantom: std::marker::PhantomData<&'s ()>,
                 #(
+                    #[doc = #arg_gen_docs]
                     pub #args: #input_types_s
                  ),*
             }
@@ -956,6 +961,7 @@ fn gen_proxy_signal(
                 #where_clause
             {
                 #(
+                    #[doc = #arg_gen_docs]
                     pub fn #args(&self) -> &#input_types_s {
                         &self.#args
                     }
