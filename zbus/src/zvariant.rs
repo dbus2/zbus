@@ -125,7 +125,7 @@ pub type StructureBuilder<'a> = wire::StructureBuilder<'a>;
 
 /// Deprecated alias of [`crate::wire::StructureSeed`].
 #[deprecated(since = "6.0.0", note = "use `zbus::wire::StructureSeed` instead")]
-pub type StructureSeed<'a> = wire::StructureSeed<'a>;
+pub type StructureSeed<'a> = wire::StructureSeed;
 
 /// Deprecated alias of [`crate::OwnedStructure`].
 #[deprecated(since = "6.0.0", note = "use `zbus::OwnedStructure` instead")]

@@ -97,16 +97,12 @@ impl<'a> StructureBuilder<'a> {
 }
 
 /// Use this to deserialize a [`Structure`].
-///
-/// The lifetime `'a` is now redundant and kept only for backward compatibility. All instances now
-/// has a `'static` lifetime. This will be removed in the next major release.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StructureSeed<'a> {
+pub struct StructureSeed {
     signature: Signature,
-    phantom: std::marker::PhantomData<&'a ()>,
 }
 
-impl StructureSeed<'static> {
+impl StructureSeed {
     /// Create a new `StructureSeed`
     ///
     /// The given signature must be a valid structure signature.
@@ -114,12 +110,11 @@ impl StructureSeed<'static> {
     pub fn new_unchecked(signature: &Signature) -> Self {
         StructureSeed {
             signature: signature.clone(),
-            phantom: std::marker::PhantomData,
         }
     }
 }
 
-impl TryFrom<Signature> for StructureSeed<'static> {
+impl TryFrom<Signature> for StructureSeed {
     type Error = crate::Error;
 
     fn try_from(signature: Signature) -> Result<Self, crate::Error> {
@@ -127,14 +122,11 @@ impl TryFrom<Signature> for StructureSeed<'static> {
             return Err(crate::Error::IncorrectType);
         }
 
-        Ok(StructureSeed {
-            signature,
-            phantom: std::marker::PhantomData,
-        })
+        Ok(StructureSeed { signature })
     }
 }
 
-impl<'de> DeserializeSeed<'de> for StructureSeed<'_> {
+impl<'de> DeserializeSeed<'de> for StructureSeed {
     type Value = Structure<'de>;
     fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
     where
@@ -292,14 +284,14 @@ impl DynamicType for Structure<'_> {
     }
 }
 
-impl DynamicType for StructureSeed<'_> {
+impl DynamicType for StructureSeed {
     fn signature(&self) -> Signature {
         self.signature.clone()
     }
 }
 
 impl<'a> DynamicDeserialize<'a> for Structure<'a> {
-    type Deserializer = StructureSeed<'static>;
+    type Deserializer = StructureSeed;
 
     fn deserializer_for_signature(signature: &Signature) -> crate::Result<Self::Deserializer> {
         let signature = match signature {
@@ -307,10 +299,7 @@ impl<'a> DynamicDeserialize<'a> for Structure<'a> {
             s => Signature::structure([s.clone()]),
         };
 
-        Ok(StructureSeed {
-            signature,
-            phantom: std::marker::PhantomData,
-        })
+        Ok(StructureSeed { signature })
     }
 }
 
