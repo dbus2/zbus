@@ -1,3 +1,18 @@
+//! The standard D-Bus interfaces.
+//!
+//! The D-Bus specification defines the interface of the message bus, `org.freedesktop.DBus`, and
+//! some [standard interfaces][si] that are useful across D-Bus applications: `Peer`,
+//! `Introspectable`, `Properties` and `ObjectManager`. This module provides the types that go
+//! with them: their proxies, with the `proxy` feature; `Properties` and `ObjectManager`, the
+//! service side of those two interfaces, with the `service` and `object-manager` features
+//! respectively; and the types that their methods and signals use, such as
+//! [`ConnectionCredentials`].
+//!
+//! [`Error`] is the type of the errors that are named under `org.freedesktop.DBus.Error`, and
+//! [`Result`] is the alias of `Result` that has it as its error type.
+//!
+//! [si]: https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces
+
 mod error;
 pub use error::{Error, Result};
 

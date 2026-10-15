@@ -84,6 +84,7 @@ where
         }
     }
 
+    /// The [`SignalEmitter`] for the object path that the interface is registered at.
     pub fn signal_emitter(&self) -> &SignalEmitter<'static> {
         &self.emitter
     }

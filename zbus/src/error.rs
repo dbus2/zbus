@@ -46,7 +46,9 @@ pub enum Error {
     InvalidName(&'static str),
     /// Invalid conversion from name type `from` to name type `to`.
     InvalidNameConversion {
+        /// The name of the name type that was converted from, such as `UniqueName`.
         from: &'static str,
+        /// The name of the name type that was converted to, such as `WellKnownName`.
         to: &'static str,
     },
     /// Interface not found.
