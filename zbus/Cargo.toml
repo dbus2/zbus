@@ -5,11 +5,11 @@ authors = ["Zeeshan Ali Khan <zeeshanak@gnome.org>"]
 edition = { workspace = true }
 rust-version = { workspace = true }
 
-description = "API for D-Bus communication"
+description = "API for D-Bus communication and its wire format"
 repository = { workspace = true }
-keywords = ["D-Bus", "DBus", "IPC"]
+keywords = ["D-Bus", "DBus", "IPC", "serde"]
 license = { workspace = true }
-categories = ["os::unix-apis"]
+categories = ["os::unix-apis", "data-structures", "encoding", "parsing"]
 readme = "README.md"
 
 [features]
