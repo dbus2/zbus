@@ -1,3 +1,10 @@
+//! A [`Socket`] that connects two peers within the same process.
+//!
+//! [`Channel::pair`] creates the two ends, each of which splits into a [`Reader`] and a
+//! [`Writer`].
+//!
+//! [`Socket`]: super::Socket
+
 use std::io;
 
 use std::num::NonZeroUsize;
