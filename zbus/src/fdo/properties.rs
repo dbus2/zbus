@@ -83,13 +83,13 @@ impl Properties {
             Some(&header),
             &emitter,
         ) {
-            zbus::object_server::DispatchResult2::RequiresMut => {}
-            zbus::object_server::DispatchResult2::NotFound => {
+            zbus::object_server::DispatchResult::RequiresMut => {}
+            zbus::object_server::DispatchResult::NotFound => {
                 return Err(
                     Error::UnknownProperty(format!("Unknown property '{property_name}'")).into(),
                 );
             }
-            zbus::object_server::DispatchResult2::Async(f) => {
+            zbus::object_server::DispatchResult::Async(f) => {
                 return f.await;
             }
         }

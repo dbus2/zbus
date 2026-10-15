@@ -1119,6 +1119,49 @@ old `true`. A call that never looked at the result, such as `server.at(path, ifa
 compiles unchanged and still does not notice a taken path; the `Some` it drops is the interface
 that was never registered.
 
+### `DispatchResult2` is `DispatchResult` again
+
+This one concerns only a hand-written implementation of the `Interface` trait, which is documented
+as unstable; `#[interface]` implements it for you. zbus 5.15 introduced `DispatchResult2` as the
+type that the `call`, `call_mut` and `set` methods of the trait return, and deprecated the
+`DispatchResult` they returned until then. 6.0 drops the old type, [as the list
+below][removed-deprecated] says, and the replacement takes the plain name back:
+`object_server::DispatchResult` is what 5.x called `DispatchResult2`. `DispatchResult2` remains as
+a deprecated alias of it until 7.0.
+
+The `Async` variant's future is where the types differ. Property handlers can fail with any D-Bus
+error in 6.0, and the future carries it as a `zbus::BoxDBusError`, an alias of
+`Box<dyn DBusError + Send + Sync>`:
+
+| Type | Output of its `Async` future |
+| --- | --- |
+| 5.x `DispatchResult` | `zbus::Result<()>` |
+| 5.x `DispatchResult2` | `fdo::Result<()>` |
+| 6.0 `DispatchResult`, and the `DispatchResult2` alias | `Result<(), BoxDBusError>` |
+
+Code that spelled `DispatchResult2` renames it, at its own pace since the alias only warns, and
+changes the output type of the future too if it spelled that out. Code that still used the old
+`DispatchResult` finds the same name on a different type, and has to switch to the new shape.
+`DispatchResult::new_async`, which builds the `Async` variant from a future that returns a
+`Result<T, E>` with a `DBusError` for `E` and sends the reply, is unchanged. `fdo::Error` and
+`zbus::Error` convert into a `BoxDBusError`, with `?` or `.into()`:
+
+```rust,noplayground
+use zbus::{BoxDBusError, fdo, object_server::DispatchResult};
+
+// Was: `-> DispatchResult2<'call>`, and the future returned an `fdo::Result<()>`.
+fn refuse<'call>() -> DispatchResult<'call> {
+    DispatchResult::Async(Box::pin(async {
+        let error: BoxDBusError = fdo::Error::AccessDenied("not today".to_string()).into();
+
+        Err(error)
+    }))
+}
+```
+
+The property side of the trait changed the same way: `Interface::get` and `Interface::set_mut` fail
+with a `BoxDBusError` where they had an `fdo::Error`.
+
 ### `Body::deserialize_unchecked` is `Body::deserialize_ignore_signature`
 
 `message::Body::deserialize_unchecked` was renamed and no alias was kept. The old name suggested
@@ -1206,6 +1249,9 @@ build there that is free of warnings has little left to do:
 * `DeserializeValue` and `SerializeValue` are `zbus::as_variant::Deserialize` and
   `zbus::as_variant::Serialize`. The old names are neither at the root nor in `zbus::wire`; only
   the deprecated `zbus::zvariant` module still has them, silently, until 7.0 removes it.
+* The old `object_server::DispatchResult`, which `DispatchResult2` replaced. The name now belongs
+  to what 5.x called `DispatchResult2`, so code that still used the old enum has to switch to the
+  shape of the new one: see [`DispatchResult2` is `DispatchResult` again][dispatch-result].
 * `zbus_xmlgen::write_interfaces` is `CodeGenerator::file_code`, and `GenTrait` is
   `CodeGenerator::interface_code`. `with_service`, `with_path` and `with_format` configure the
   generator in place of the `service` and `path` parameters of the function and the fields of the
@@ -1453,6 +1499,8 @@ build; move a signature across that boundary through its string form.
 [builder-runtime]: #builderruntime-replaces-internal_executor
 [blocking-gone]: #the-blocking-api-is-gone
 [tracing-feature]: #logging-through-tracing-is-a-feature
+[dispatch-result]: #dispatchresult2-is-dispatchresult-again
+[removed-deprecated]: #the-apis-deprecated-in-5x-are-removed
 [`Socket`]: https://docs.rs/zbus/latest/zbus/connection/socket/trait.Socket.html
 [`runtime::traits`]: https://docs.rs/zbus/latest/zbus/runtime/traits/index.html
 [bit-flags]: faq.md#how-do-i-use-bit-flags
