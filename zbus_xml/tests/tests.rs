@@ -1071,6 +1071,61 @@ fn docstrings_and_type_definitions_are_not_interface_members() -> Result<(), Box
 }
 
 #[test]
+fn interface_members_keep_document_order() -> Result<(), Box<dyn Error>> {
+    // Members of all four kinds, interleaved.
+    let input = r#"
+        <node>
+            <interface name="org.test.testinterface">
+                <property name="First" type="s" access="read"/>
+                <method name="Second"/>
+                <annotation name="org.test.Third" value="3"/>
+                <signal name="Fourth"/>
+                <method name="Fifth"/>
+                <annotation name="org.test.Sixth" value="6"/>
+                <property name="Seventh" type="u" access="readwrite"/>
+                <signal name="Eighth"/>
+            </interface>
+        </node>
+    "#;
+
+    let node = Node::try_from(input)?;
+    assert_eq!(
+        member_names(&node.interfaces()[0]),
+        [
+            "property First",
+            "method Second",
+            "annotation org.test.Third",
+            "signal Fourth",
+            "method Fifth",
+            "annotation org.test.Sixth",
+            "property Seventh",
+            "signal Eighth",
+        ]
+    );
+
+    // The order survives writing the node and parsing the result.
+    let mut written = Vec::new();
+    node.to_writer(&mut written)?;
+    let reparsed = Node::from_reader(&written[..])?;
+    assert_eq!(reparsed, node);
+
+    Ok(())
+}
+
+/// The kind and name of each child of `iface`, in the order of `Interface::children`.
+fn member_names(iface: &Interface<'_>) -> Vec<String> {
+    iface
+        .children()
+        .map(|child| match child {
+            Child::Method(method) => format!("method {}", method.name()),
+            Child::Signal(signal) => format!("signal {}", signal.name()),
+            Child::Property(property) => format!("property {}", property.name()),
+            Child::Annotation(annotation) => format!("annotation {}", annotation.name()),
+        })
+        .collect()
+}
+
+#[test]
 fn malformed_telepathy_type_definitions() -> Result<(), Box<dyn Error>> {
     // A type definition that cannot be parsed doesn't fail the document; it is skipped with a
     // warning.
