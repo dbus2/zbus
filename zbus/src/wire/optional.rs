@@ -22,6 +22,7 @@ use crate::wire::{Basic, Type};
 /// this case. This is why you'll get a panic on trying to serialize or deserialize an
 /// `Optionanl<bool>`.
 pub trait NoneValue {
+    /// The type of the none-equivalent value that [`NoneValue::null_value`] produces.
     type NoneType;
 
     /// The none-equivalent value.

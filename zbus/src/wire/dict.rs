@@ -158,10 +158,13 @@ impl<'k, 'v> Dict<'k, 'v> {
         }
     }
 
+    /// An iterator over the entries, as pairs of a key and its value, in the order of the keys.
     pub fn iter(&self) -> impl Iterator<Item = (&Variant<'k>, &Variant<'v>)> {
         self.map.iter()
     }
 
+    /// An iterator over the entries, as pairs of a key and a mutable reference to its value, in the
+    /// order of the keys.
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (&Variant<'k>, &mut Variant<'v>)> {
         self.map.iter_mut()
     }

@@ -89,6 +89,7 @@ impl<'a> Array<'a> {
         self.elements.len()
     }
 
+    /// Whether the `Array` has no elements.
     pub fn is_empty(&self) -> bool {
         self.elements.len() == 0
     }

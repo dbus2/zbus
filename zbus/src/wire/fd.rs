@@ -25,7 +25,9 @@ use crate::wire::{Basic, Type};
 /// [`Deserialize`]: https://docs.serde.rs/serde/de/trait.Deserialize.html
 #[derive(Debug)]
 pub enum Fd<'f> {
+    /// A file descriptor that is borrowed from its owner.
     Borrowed(BorrowedFd<'f>),
+    /// A file descriptor that this value owns and closes when it is dropped.
     Owned(fd::OwnedFd),
 }
 

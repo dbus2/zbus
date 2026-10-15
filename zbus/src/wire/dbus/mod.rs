@@ -1,3 +1,10 @@
+//! The D-Bus encoding.
+//!
+//! This module holds the serde serializer and deserializer that implement the D-Bus wire format.
+//! They are used through the functions of the [`wire`](crate::wire) module, such as
+//! [`to_bytes`](crate::wire::to_bytes), and through
+//! [`Data::deserialize`](crate::wire::serialized::Data::deserialize).
+
 mod de;
 pub(crate) use de::*;
 mod ser;

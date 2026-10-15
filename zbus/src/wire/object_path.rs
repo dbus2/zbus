@@ -258,6 +258,7 @@ fn validate(path: &[u8]) -> Result<()> {
 pub struct OwnedObjectPath(ObjectPath<'static>);
 
 impl OwnedObjectPath {
+    /// Convert into the [`ObjectPath`] that this wraps.
     pub fn into_inner(self) -> ObjectPath<'static> {
         self.0
     }
