@@ -623,9 +623,9 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
 /// supported — fields whose value type is itself a dict (or any non-`Variant` type) are
 /// serialized directly through their own `Serialize` impl rather than wrapped as a variant.
 ///
-/// Such dictionary types are very commonly used with
+/// Such dictionary types are very commonly used in
 /// [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-properties)
-/// and GVariant.
+/// interfaces.
 ///
 /// # Alternative Approaches
 ///
@@ -726,9 +726,9 @@ pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// deserialized directly through their own `Deserialize` impl rather than unwrapped from a
 /// variant. See [`SerializeDict`] for a nested example.
 ///
-/// Such dictionary types are very commonly used with
+/// Such dictionary types are very commonly used in
 /// [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-properties)
-/// and GVariant.
+/// interfaces.
 ///
 /// # Alternative Approaches
 ///
