@@ -241,7 +241,7 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// * `introspection_docs` - whether to include the documentation in the introspection data
 ///   (Default: `true`). If your interface is well-known or well-documented, you may want to set
-///   this to `false` to reduce the the size of your binary and D-Bus traffic.
+///   this to `false` to reduce the size of your binary and D-Bus traffic.
 ///
 /// * `crate` - specify the path to the `zbus` crate if it's renamed or re-exported.
 ///
@@ -279,14 +279,14 @@ pub fn proxy(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[cfg_attr(
     feature = "proxy",
     doc = "* `proxy` - Use this to specify the [`macro@proxy`]-specific method sub-attributes (e.g",
-    doc = "  `object`). The common sub-attributes (e.g `name`) are automatically forworded to the",
+    doc = "  `object`). The common sub-attributes (e.g `name`) are automatically forwarded to the",
     doc = "  [`macro@proxy`] macro. Moreover, you can use `visibility` sub-attribute to specify the",
     doc = "  visibility of the generated proxy type(s)."
 )]
 #[cfg_attr(
     not(feature = "proxy"),
     doc = "* `proxy` - Use this to specify the `proxy` macro-specific method sub-attributes (e.g",
-    doc = "  `object`). The common sub-attributes (e.g `name`) are automatically forworded to the",
+    doc = "  `object`). The common sub-attributes (e.g `name`) are automatically forwarded to the",
     doc = "  `proxy` macro. Moreover, you can use `visibility` sub-attribute to specify the",
     doc = "  visibility of the generated proxy type(s)."
 )]
@@ -625,9 +625,9 @@ pub fn type_macro_derive(input: TokenStream) -> TokenStream {
 /// is itself a dict (or any non-`Variant` type) are serialized directly through their own
 /// `Serialize` impl rather than wrapped as a variant.
 ///
-/// Such dictionary types are very commonly used with
+/// Such dictionary types are very commonly used in
 /// [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-properties)
-/// and GVariant.
+/// interfaces.
 ///
 /// # Alternative Approaches
 ///
@@ -729,9 +729,9 @@ pub fn serialize_dict_macro_derive(input: TokenStream) -> TokenStream {
 /// `Deserialize` impl rather than unwrapped from a variant. See [`SerializeDict`] for a nested
 /// example.
 ///
-/// Such dictionary types are very commonly used with
+/// Such dictionary types are very commonly used in
 /// [D-Bus](https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-properties)
-/// and GVariant.
+/// interfaces.
 ///
 /// # Alternative Approaches
 ///

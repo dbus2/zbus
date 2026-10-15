@@ -130,7 +130,7 @@ zbus/src/
 ├── message/            # D-Bus message serialization/parsing
 ├── address/            # Transport layer abstraction
 ├── fdo/                # Standard D-Bus interfaces (Peer, Properties, etc.)
-└── blocking/           # Sync wrappers around async API
+└── runtime/            # Async runtime integration: zruntime, Tokio and `traits::Runtime`
 ```
 
 Everything below `error.rs` in that list is behind the `comms` feature.
