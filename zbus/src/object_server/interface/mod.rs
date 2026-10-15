@@ -92,9 +92,9 @@ pub trait Interface: Any + Send + Sync {
 
     /// Set a property value.
     ///
-    /// Return [`DispatchResult2::NotFound`] if the property doesn't exist, or
-    /// [`DispatchResult2::RequiresMut`] if `set_mut` should be used instead. The default
-    /// implementation just returns `RequiresMut`. The [`DispatchResult2::Async`] future fails
+    /// Return [`DispatchResult::NotFound`] if the property doesn't exist, or
+    /// [`DispatchResult::RequiresMut`] if `set_mut` should be used instead. The default
+    /// implementation just returns `RequiresMut`. The [`DispatchResult::Async`] future fails
     /// with whatever D-Bus error the setter fails with.
     fn set<'call>(
         &'call self,
@@ -104,7 +104,7 @@ pub trait Interface: Any + Send + Sync {
         connection: &'call Connection,
         header: Option<&'call message::Header<'_>>,
         emitter: &'call SignalEmitter<'_>,
-    ) -> DispatchResult2<'call> {
+    ) -> DispatchResult<'call> {
         let _ = (
             property_name,
             value,
@@ -113,7 +113,7 @@ pub trait Interface: Any + Send + Sync {
             header,
             emitter,
         );
-        DispatchResult2::RequiresMut
+        DispatchResult::RequiresMut
     }
 
     /// Set a property value.
@@ -134,8 +134,8 @@ pub trait Interface: Any + Send + Sync {
 
     /// Call a method.
     ///
-    /// Return [`DispatchResult2::NotFound`] if the method doesn't exist, or
-    /// [`DispatchResult2::RequiresMut`] if `call_mut` should be used instead.
+    /// Return [`DispatchResult::NotFound`] if the method doesn't exist, or
+    /// [`DispatchResult::RequiresMut`] if `call_mut` should be used instead.
     ///
     /// It is valid, though inefficient, for this to always return `RequiresMut`.
     fn call<'call>(
@@ -144,7 +144,7 @@ pub trait Interface: Any + Send + Sync {
         connection: &'call Connection,
         msg: &'call Message,
         name: MemberName<'call>,
-    ) -> DispatchResult2<'call>;
+    ) -> DispatchResult<'call>;
 
     /// Call a `&mut self` method.
     ///
@@ -155,7 +155,7 @@ pub trait Interface: Any + Send + Sync {
         connection: &'call Connection,
         msg: &'call Message,
         name: MemberName<'call>,
-    ) -> DispatchResult2<'call>;
+    ) -> DispatchResult<'call>;
 
     /// Write introspection XML to the writer, with the given indentation level.
     fn introspect_to_writer(&self, writer: &mut dyn Write, level: usize);

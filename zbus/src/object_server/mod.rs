@@ -21,8 +21,12 @@ pub(crate) use interface::ArcInterface;
 #[doc(hidden)]
 pub use interface::introspect_doc_comment;
 pub use interface::{
-    DispatchResult2, Interface, InterfaceDeref, InterfaceDerefMut, InterfaceRef, IntoDBusError,
+    DispatchResult, Interface, InterfaceDeref, InterfaceDerefMut, InterfaceRef, IntoDBusError,
 };
+
+/// Deprecated alias of [`DispatchResult`].
+#[deprecated(since = "6.0.0", note = "renamed to `DispatchResult`")]
+pub type DispatchResult2<'a> = DispatchResult<'a>;
 
 mod signal_emitter;
 pub use signal_emitter::SignalEmitter;
@@ -420,22 +424,22 @@ impl ObjectServer {
         let read_lock = iface.read().await;
         trace!("acquired read lock on interface `{}`", iface_name);
         match read_lock.call(self, connection, msg, member.as_ref()) {
-            DispatchResult2::NotFound => {
+            DispatchResult::NotFound => {
                 return Err(fdo::Error::UnknownMethod(format!("Unknown method '{member}'")).into());
             }
-            DispatchResult2::Async(f) => {
+            DispatchResult::Async(f) => {
                 return f.await;
             }
-            DispatchResult2::RequiresMut => {}
+            DispatchResult::RequiresMut => {}
         }
         drop(read_lock);
         trace!("acquiring write lock on interface `{}`", iface_name);
         let mut write_lock = iface.write().await;
         trace!("acquired write lock on interface `{}`", iface_name);
         match write_lock.call_mut(self, connection, msg, member.as_ref()) {
-            DispatchResult2::NotFound => {}
-            DispatchResult2::RequiresMut => {}
-            DispatchResult2::Async(f) => {
+            DispatchResult::NotFound => {}
+            DispatchResult::RequiresMut => {}
+            DispatchResult::Async(f) => {
                 return f.await;
             }
         }

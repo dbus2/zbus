@@ -556,7 +556,7 @@ impl MyIface {
     }
 
     /// A property with a fallible `&self` setter that fails with a custom `DBusError`, to
-    /// exercise the `Interface::set` (`DispatchResult2::Async`) path.
+    /// exercise the `Interface::set` (`DispatchResult::Async`) path.
     #[instrument]
     #[zbus(property)]
     fn custom_error_prop(&self) -> u32 {

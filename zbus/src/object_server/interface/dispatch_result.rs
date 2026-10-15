@@ -6,11 +6,11 @@ use crate::{BoxDBusError, Connection, DynamicType, Error, fdo, log::trace, messa
 
 /// A helper type returned by [`Interface`](`crate::object_server::Interface`) callbacks.
 ///
-/// The [`Async`](DispatchResult2::Async) variant carries a boxed [`DBusError`](crate::DBusError)
+/// The [`Async`](DispatchResult::Async) variant carries a boxed [`DBusError`](crate::DBusError)
 /// so that any D-Bus error name can be reported, not just the fixed set in [`fdo::Error`].
 ///
 /// This is an unstable type — compatibility may break in minor version bumps.
-pub enum DispatchResult2<'a> {
+pub enum DispatchResult<'a> {
     /// This interface does not support the given method.
     NotFound,
 
@@ -23,7 +23,7 @@ pub enum DispatchResult2<'a> {
     Async(Pin<Box<dyn Future<Output = Result<(), BoxDBusError>> + Send + 'a>>),
 }
 
-impl<'a> DispatchResult2<'a> {
+impl<'a> DispatchResult<'a> {
     /// Helper for creating the Async variant.
     pub fn new_async<F, T, E>(conn: &'a Connection, msg: &'a Message, f: F) -> Self
     where
@@ -31,7 +31,7 @@ impl<'a> DispatchResult2<'a> {
         T: serde::Serialize + DynamicType + Send + Sync,
         E: zbus::DBusError + Send,
     {
-        DispatchResult2::Async(Box::pin(async move {
+        DispatchResult::Async(Box::pin(async move {
             let hdr = msg.header();
             let ret = f.await;
             if !hdr.primary().flags().contains(Flags::NO_REPLY_EXPECTED) {
@@ -57,7 +57,7 @@ impl<'a> DispatchResult2<'a> {
     where
         F: Future<Output = crate::Result<()>> + Send + 'a,
     {
-        DispatchResult2::Async(Box::pin(async move { f.await.map_err(handler_error) }))
+        DispatchResult::Async(Box::pin(async move { f.await.map_err(handler_error) }))
     }
 }
 

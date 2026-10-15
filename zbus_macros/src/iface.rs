@@ -622,14 +622,14 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
 
                         let q = quote!(
                             #(#cfg_attrs)*
-                            #member_name => #zbus::object_server::DispatchResult2::RequiresMut,
+                            #member_name => #zbus::object_server::DispatchResult::RequiresMut,
                         );
                         set_dispatch.extend(q);
                     } else {
                         let q = quote!(
                             #(#cfg_attrs)*
                             #member_name => {
-                                #zbus::object_server::DispatchResult2::Async(::std::boxed::Box::pin(async move {
+                                #zbus::object_server::DispatchResult::Async(::std::boxed::Box::pin(async move {
                                     #do_set
                                 }))
                             }
@@ -800,14 +800,14 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                                 #reply
                             }
                         };
-                        #zbus::object_server::DispatchResult2::from_handler(future)
+                        #zbus::object_server::DispatchResult::from_handler(future)
                     },
                 };
 
                 if is_mut {
                     call_dispatch.extend(quote! {
                         #(#cfg_attrs)*
-                        #member_name => #zbus::object_server::DispatchResult2::RequiresMut,
+                        #member_name => #zbus::object_server::DispatchResult::RequiresMut,
                     });
                     call_mut_dispatch.extend(m);
                 } else {
@@ -934,10 +934,10 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                 __zbus__connection: &'call #zbus::Connection,
                 __zbus__header: Option<&'call #zbus::message::Header<'_>>,
                 __zbus__signal_emitter: &'call #zbus::object_server::SignalEmitter<'_>,
-            ) -> #zbus::object_server::DispatchResult2<'call> {
+            ) -> #zbus::object_server::DispatchResult<'call> {
                 match __zbus__property_name {
                     #set_dispatch
-                    _ => #zbus::object_server::DispatchResult2::NotFound,
+                    _ => #zbus::object_server::DispatchResult::NotFound,
                 }
             }
 
@@ -964,10 +964,10 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                 __zbus__connection: &'call #zbus::Connection,
                 __zbus__message: &'call #zbus::message::Message,
                 name: #zbus::names::MemberName<'call>,
-            ) -> #zbus::object_server::DispatchResult2<'call> {
+            ) -> #zbus::object_server::DispatchResult<'call> {
                 match name.as_str() {
                     #call_dispatch
-                    _ => #zbus::object_server::DispatchResult2::NotFound,
+                    _ => #zbus::object_server::DispatchResult::NotFound,
                 }
             }
 
@@ -978,10 +978,10 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                 __zbus__connection: &'call #zbus::Connection,
                 __zbus__message: &'call #zbus::message::Message,
                 name: #zbus::names::MemberName<'call>,
-            ) -> #zbus::object_server::DispatchResult2<'call> {
+            ) -> #zbus::object_server::DispatchResult<'call> {
                 match name.as_str() {
                     #call_mut_dispatch
-                    _ => #zbus::object_server::DispatchResult2::NotFound,
+                    _ => #zbus::object_server::DispatchResult::NotFound,
                 }
             }
 
