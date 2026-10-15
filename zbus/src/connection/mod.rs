@@ -918,6 +918,18 @@ impl Connection {
     }
 
     /// Set the capacity of the main (unfiltered) queue.
+    ///
+    /// The queue is shared by all the clones of this connection and by every [`MessageStream`]
+    /// created from it without a match rule, so the new capacity applies to all of them.
+    ///
+    /// Unlike [`MessageStream::set_max_queued`], this can lower the capacity. A message stays in
+    /// the queue until every stream that was there when it arrived has received it, so if `max` is
+    /// below the number of messages that are queued, the oldest ones are dropped, leaving the
+    /// newest `max`. A stream that had not received a dropped message skips it without any
+    /// indication, and carries on with the first message that is left.
+    ///
+    /// [`MessageStream`]: crate::MessageStream
+    /// [`MessageStream::set_max_queued`]: crate::MessageStream::set_max_queued
     pub fn set_max_queued(&mut self, max: NonZeroUsize) {
         self.inner.msg_receiver.clone().set_capacity(max);
     }
