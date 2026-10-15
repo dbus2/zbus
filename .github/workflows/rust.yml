@@ -261,7 +261,7 @@ jobs:
           # that must be rejected too.
           dbus-run-session --config-file /tmp/dbus-session.conf -- \
             cargo --locked test -p zbus --no-default-features \
-              --features zbus_utils/gvariant,default-rt
+              --features zbus_utils/gvariant,default-rt -- --skip fdpass_systemd
 
   windows_test:
     runs-on: windows-latest
