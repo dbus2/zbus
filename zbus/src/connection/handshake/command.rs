@@ -62,7 +62,7 @@ impl FromStr for Command {
                     None
                 };
                 let resp = match words.next() {
-                    Some(resp) => Some(hex::decode(resp)?),
+                    Some(resp) => Some(decode_hex(resp)?),
                     None => None,
                 };
                 Command::Auth(mech, resp)
@@ -71,7 +71,7 @@ impl FromStr for Command {
             Some("BEGIN") => Command::Begin,
             Some("DATA") => {
                 let data = match words.next() {
-                    Some(data) => Some(hex::decode(data)?),
+                    Some(data) => Some(decode_hex(data)?),
                     None => None,
                 };
 
@@ -96,8 +96,6 @@ impl FromStr for Command {
     }
 }
 
-impl From<hex::FromHexError> for Error {
-    fn from(e: hex::FromHexError) -> Self {
-        Error::Handshake(format!("Invalid hexcode: {e}"))
-    }
+fn decode_hex(s: &str) -> Result<Vec<u8>> {
+    hex::decode(s).map_err(|e| Error::Handshake(format!("Invalid hexcode: {e}")))
 }
