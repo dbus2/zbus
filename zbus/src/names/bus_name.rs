@@ -50,8 +50,10 @@ use zbus_utils::names::BusNameKind;
 #[derive(Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(untagged)]
 pub enum BusName<'name> {
+    /// A [`UniqueName`], which the bus assigns to a connection.
     #[serde(borrow)]
     Unique(UniqueName<'name>),
+    /// A [`WellKnownName`], which a connection can request for the service it provides.
     #[serde(borrow)]
     WellKnown(WellKnownName<'name>),
 }

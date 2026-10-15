@@ -169,6 +169,10 @@ impl Message {
         })
     }
 
+    /// The primary header of the message.
+    ///
+    /// This is the part of the message header that every message has, whatever its type.
+    /// [`Message::header`] returns the message header as a whole.
     pub fn primary_header(&self) -> &PrimaryHeader {
         &self.inner.primary_header
     }
