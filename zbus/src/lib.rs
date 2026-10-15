@@ -1,4 +1,5 @@
 #![deny(rust_2018_idioms)]
+#![warn(missing_docs)]
 #![cfg_attr(test, recursion_limit = "256")]
 #![doc(
     html_logo_url = "https://raw.githubusercontent.com/z-galaxy/zbus/9f7a90d2b594ddc48b7a5f39fda5e00cd56a7dfb/logo.png"
