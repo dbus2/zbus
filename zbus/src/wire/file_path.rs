@@ -49,6 +49,7 @@ use crate::{Error, Result, Type};
 pub struct FilePath<'f>(Cow<'f, CStr>);
 
 impl<'f> FilePath<'f> {
+    /// Create a new `FilePath` from a nul-terminated byte string, either borrowed or owned.
     pub fn new(cow: Cow<'f, CStr>) -> Self {
         Self(cow)
     }

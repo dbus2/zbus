@@ -76,25 +76,42 @@ use crate::Fd;
 #[derive(Debug, PartialEq, PartialOrd)]
 pub enum Variant<'a> {
     // Simple types
+    /// A `BYTE` (`y`).
     U8(u8),
+    /// A `BOOLEAN` (`b`).
     Bool(bool),
+    /// An `INT16` (`n`).
     I16(i16),
+    /// A `UINT16` (`q`).
     U16(u16),
+    /// An `INT32` (`i`).
     I32(i32),
+    /// A `UINT32` (`u`).
     U32(u32),
+    /// An `INT64` (`x`).
     I64(i64),
+    /// A `UINT64` (`t`).
     U64(u64),
+    /// A `DOUBLE` (`d`).
     F64(f64),
+    /// A `STRING` (`s`).
     Str(Str<'a>),
+    /// A `SIGNATURE` (`g`).
     Signature(Signature),
+    /// An `OBJECT_PATH` (`o`).
     ObjectPath(ObjectPath<'a>),
+    /// A `VARIANT` (`v`), holding another variant.
     Variant(Box<Variant<'a>>),
 
     // Container types
+    /// An `ARRAY` (`a`) of values of one type.
     Array(Array<'a>),
+    /// An `ARRAY` of `DICT_ENTRY` (`a{..}`), that is, a dictionary.
     Dict(Dict<'a, 'a>),
+    /// A `STRUCT` (`(..)`).
     Structure(Structure<'a>),
 
+    /// A `UNIX_FD` (`h`).
     #[cfg(unix)]
     Fd(Fd<'a>),
 }

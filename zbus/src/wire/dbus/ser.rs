@@ -605,6 +605,9 @@ serialize_struct_anon_fields!(SerializeTuple serialize_element);
 serialize_struct_anon_fields!(SerializeTupleStruct serialize_field);
 serialize_struct_anon_fields!(SerializeTupleVariant serialize_field);
 
+/// Serializes a map as an `ARRAY` of `DICT_ENTRY`.
+///
+/// This is the [`SerializeMap`] of the D-Bus serializer.
 pub struct MapSerializer<'ser, 'b, W> {
     seq: SeqSerializer<'ser, 'b, W>,
     key_signature: &'ser Signature,

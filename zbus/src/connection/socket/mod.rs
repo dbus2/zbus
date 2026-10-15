@@ -1,3 +1,8 @@
+//! The transport layer of a connection.
+//!
+//! Implement [`Socket`], and the [`ReadHalf`] and [`WriteHalf`] that it splits into, to run a
+//! connection over a transport of your own.
+
 #[cfg(feature = "p2p")]
 pub mod channel;
 #[cfg(feature = "p2p")]
@@ -166,7 +171,9 @@ pub(crate) type RecvmsgResult = io::Result<usize>;
 /// [`Builder::authenticated_socket`]: crate::connection::Builder::authenticated_socket
 /// [tokio-vsock]: https://docs.rs/tokio-vsock
 pub trait Socket {
+    /// The type of the read half that [`Socket::split`] returns.
     type ReadHalf: ReadHalf;
+    /// The type of the write half that [`Socket::split`] returns.
     type WriteHalf: WriteHalf;
 
     /// Split the socket into a read half and a write half.

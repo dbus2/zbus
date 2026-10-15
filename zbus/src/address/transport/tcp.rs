@@ -276,7 +276,9 @@ impl Display for Tcp {
 /// A `tcp:` address family.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TcpTransportFamily {
+    /// IPv4, the `ipv4` value of the `family` key of a `tcp:` address.
     Ipv4,
+    /// IPv6, the `ipv6` value of the `family` key of a `tcp:` address.
     Ipv6,
 }
 

@@ -490,7 +490,10 @@ impl Serialize for MatchRule<'_> {
 /// The path or path namespace.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum PathSpec<'m> {
+    /// Match messages sent from or to exactly this object path, the `path` key of a match rule.
     Path(ObjectPath<'m>),
+    /// Match messages sent from or to this object path or any object path below it, the
+    /// `path_namespace` key of a match rule.
     PathNamespace(ObjectPath<'m>),
 }
 

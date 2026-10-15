@@ -8,8 +8,11 @@ use crate::{
 /// The trait is automatically implemented by the [`macro@crate::proxy`] macro on your behalf, and
 /// may be later used to retrieve the associated constants.
 pub trait Defaults {
+    /// The default interface of the proxy, if any.
     const INTERFACE: &'static Option<InterfaceName<'static>>;
+    /// The default destination of the proxy, if any.
     const DESTINATION: &'static Option<BusName<'static>>;
+    /// The default object path of the proxy, if any.
     const PATH: &'static Option<ObjectPath<'static>>;
     /// Whether the interface has any properties.
     ///

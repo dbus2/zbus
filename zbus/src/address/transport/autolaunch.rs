@@ -61,6 +61,7 @@ impl Autolaunch {
     }
 }
 
+/// The `scope` of an [`Autolaunch`] address, which limits the session bus that it refers to.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum AutolaunchScope {

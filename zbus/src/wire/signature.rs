@@ -1,3 +1,9 @@
+//! D-Bus type signatures.
+//!
+//! A [`Signature`] is the parsed form of a signature string, such as `a{sv}`. Its container types
+//! are made up of [`Child`] and [`Fields`], [`Error`] is what parsing a signature can fail with
+//! and [`validate`] checks a signature string.
+
 use crate::wire::{Basic, Type};
 
 pub use zbus_utils::signature::*;

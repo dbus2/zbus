@@ -185,7 +185,16 @@ impl MessageStream {
 
     /// Set the maximum number of messages to queue for this stream.
     ///
-    /// After this call, the capacity is guaranteed to be at least `max_queued`.
+    /// After this call, the capacity is guaranteed to be at least `max_queued`: if it is lower, it
+    /// is raised to `max_queued`, and if it is already `max_queued` or more, it is left as it is.
+    /// Unlike [`Connection::set_max_queued`], this never lowers the capacity and so never causes
+    /// queued messages to be dropped.
+    ///
+    /// The queue is shared with the other streams that receive the same messages, so the capacity
+    /// changes for all of them. For a stream created from a [`Connection`] without a match rule,
+    /// that is the main queue of the connection, which [`Connection::max_queued`] reports. For a
+    /// stream created by [`MessageStream::for_match_rule`], it is the queue of its match rule,
+    /// which the streams created for an equal match rule on the same connection share.
     pub fn set_max_queued(&mut self, max_queued: NonZeroUsize) {
         if max_queued <= self.max_queued() {
             return;

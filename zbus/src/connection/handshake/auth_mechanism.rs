@@ -27,6 +27,7 @@ pub enum AuthMechanism {
 }
 
 impl AuthMechanism {
+    /// The name of the mechanism, as the D-Bus specification spells it: `EXTERNAL` or `ANONYMOUS`.
     pub fn as_str(&self) -> &'static str {
         match self {
             AuthMechanism::External => "EXTERNAL",
