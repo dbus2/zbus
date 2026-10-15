@@ -892,7 +892,7 @@ fn write_enum<W: Write>(w: &mut W, e: &telepathy::Enum<'_>) -> std::fmt::Result 
                  serde_repr::Deserialize_repr, serde_repr::Serialize_repr, \
                  zbus::Type, zbus::Variant, zbus::OwnedVariant)]"
             )?;
-            writeln!(w, "#[zvariant(crate = \"zbus::wire\")]")?;
+            writeln!(w, "#[zbus(crate = \"zbus::wire\")]")?;
             writeln!(w, "#[repr({int})]")?;
             writeln!(w, "pub enum {} {{", type_name(e.name()))?;
             for value in e.values() {
@@ -913,7 +913,7 @@ fn write_enum<W: Write>(w: &mut W, e: &telepathy::Enum<'_>) -> std::fmt::Result 
                  serde::Serialize, serde::Deserialize, \
                  zbus::Type, zbus::Variant, zbus::OwnedVariant)]"
             )?;
-            writeln!(w, "#[zvariant(signature = \"s\", crate = \"zbus::wire\")]")?;
+            writeln!(w, "#[zbus(signature = \"s\", crate = \"zbus::wire\")]")?;
             writeln!(w, "pub enum {} {{", type_name(e.name()))?;
             for value in e.values() {
                 if let Some(docstring) = value.docstring() {
@@ -922,7 +922,7 @@ fn write_enum<W: Write>(w: &mut W, e: &telepathy::Enum<'_>) -> std::fmt::Result 
                 let variant = variant_name(value);
                 if variant != value.value() {
                     writeln!(w, "    #[serde(rename = {0:?})]", value.value())?;
-                    writeln!(w, "    #[zvariant(rename = {0:?})]", value.value())?;
+                    writeln!(w, "    #[zbus(rename = {0:?})]", value.value())?;
                 }
                 writeln!(w, "    {variant},")?;
             }
@@ -944,7 +944,7 @@ fn write_struct<W: Write>(
         "#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, \
          zbus::Type, zbus::Variant, zbus::OwnedVariant)]"
     )?;
-    writeln!(w, "#[zvariant(crate = \"zbus::wire\")]")?;
+    writeln!(w, "#[zbus(crate = \"zbus::wire\")]")?;
     writeln!(w, "pub struct {} {{", type_name(s.name()))?;
     for member in s.members() {
         if let Some(docstring) = member.docstring() {

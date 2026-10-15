@@ -10,13 +10,13 @@
     zbus::Variant,
     zbus::OwnedVariant,
 )]
-#[zvariant(signature = "s", crate = "zbus::wire")]
+#[zbus(signature = "s", crate = "zbus::wire")]
 pub enum PlaylistOrdering {
     /// Alphabetical ordering by name, ascending.
     Alphabetical,
     /// A user-defined ordering.
     #[serde(rename = "User")]
-    #[zvariant(rename = "User")]
+    #[zbus(rename = "User")]
     UserDefined,
 }
 
@@ -33,7 +33,7 @@ pub enum PlaylistOrdering {
     zbus::Variant,
     zbus::OwnedVariant,
 )]
-#[zvariant(crate = "zbus::wire")]
+#[zbus(crate = "zbus::wire")]
 #[repr(u32)]
 pub enum LoopStatus {
     /// The playback will stop when there are no more tracks to play.
@@ -55,7 +55,7 @@ pub enum LoopStatus {
     zbus::Variant,
     zbus::OwnedVariant,
 )]
-#[zvariant(crate = "zbus::wire")]
+#[zbus(crate = "zbus::wire")]
 pub struct Playlist {
     /// A unique identifier for the playlist.
     pub id: PlaylistId,
@@ -76,7 +76,7 @@ pub struct Playlist {
     zbus::Variant,
     zbus::OwnedVariant,
 )]
-#[zvariant(crate = "zbus::wire")]
+#[zbus(crate = "zbus::wire")]
 pub struct MaybePlaylist {
     /// Whether this structure refers to a valid playlist.
     pub valid: bool,
