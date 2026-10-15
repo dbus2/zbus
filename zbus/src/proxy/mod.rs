@@ -1364,7 +1364,6 @@ impl stream::FusedStream for SignalStream<'_> {
     }
 }
 
-#[async_trait::async_trait]
 impl AsyncDrop for SignalStream<'_> {
     async fn async_drop(self) {
         let (signals, names, _buffered) = self.stream.into_inner();

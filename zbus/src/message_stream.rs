@@ -362,7 +362,6 @@ impl Drop for Inner {
     }
 }
 
-#[async_trait::async_trait]
 impl AsyncDrop for MessageStream {
     async fn async_drop(mut self) {
         let conn = Connection {

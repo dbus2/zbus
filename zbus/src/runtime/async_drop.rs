@@ -10,8 +10,7 @@
 /// Hopefully this will be unnecessary [in the future][itf] when Rust gain an `AsyncDrop` itself.
 ///
 /// [itf]: https://rust-lang.github.io/async-fundamentals-initiative/roadmap/async_drop.html
-#[async_trait::async_trait]
 pub trait AsyncDrop {
     /// Perform the async cleanup.
-    async fn async_drop(self);
+    fn async_drop(self) -> impl Future<Output = ()> + Send;
 }

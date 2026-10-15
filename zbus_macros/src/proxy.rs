@@ -1032,7 +1032,6 @@ fn gen_proxy_signal(
             }
         }
 
-        #[#zbus::export::async_trait::async_trait]
         impl #zbus::AsyncDrop for #stream_name {
             async fn async_drop(self) {
                 self.0.async_drop().await
