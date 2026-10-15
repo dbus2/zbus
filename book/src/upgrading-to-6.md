@@ -526,6 +526,30 @@ deserialize as a borrowed slice and now asks for an unsized `[u8]`; take `Vec<u8
 to keep the reference. Property setters are unaffected: their value already arrived as a
 `Variant` to convert.
 
+### `DBusProxy::start_service_by_name` returns a `StartServiceReply`
+
+`fdo::DBusProxy::start_service_by_name` returns an `fdo::StartServiceReply`, which is `Success` or
+`AlreadyRunning`, where zbus 5 returned the raw reply code as a `u32`: 1 or 2. Its `flags`
+argument is still a `u32`. The `TryFrom<u32>` implementation of `StartServiceReply`, which 5.x
+callers used to convert the code, stays for code that holds a raw code. A caller that bound the
+result to a `u32` or compared it with a number fails to compile; one that ignored the result is
+unaffected:
+
+```rust,noplayground
+use zbus::{
+    fdo::{DBusProxy, StartServiceReply},
+    names::WellKnownName,
+};
+
+async fn start(proxy: &DBusProxy<'_>) -> zbus::fdo::Result<bool> {
+    let name = WellKnownName::try_from("org.zbus.Test")?;
+    // Was: `proxy.start_service_by_name(name, 0).await? == 1`
+    let reply = proxy.start_service_by_name(name, 0).await?;
+
+    Ok(reply == StartServiceReply::Success)
+}
+```
+
 ### Name types validate when converted from a `Variant`
 
 `TryFrom<Variant>` and `TryFrom<OwnedVariant>` for `ErrorName`, `InterfaceName`, `MemberName`,
