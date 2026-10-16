@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 6.0.0 - 2026-10-16
+
+### ♻️ Changed
+- Rename Value to Variant. #1947
+- Convert property values in memory.
+
+### 📝 Documentation
+- Point signature documentation at the root re-export.
+
+### ⚙️ Other
+- 📄 Link the license file like the other crates.
+- 🧑‍💻 Convert lifetime-free newtypes from Values of any lifetime.
+
+### ⚡️ Performance
+- Deserialize Signature without an intermediate String.
+
 ## 4.2.0 - 2026-08-18
 
 ### Deprecated
