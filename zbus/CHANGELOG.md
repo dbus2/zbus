@@ -7,15 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## 6.0.0 - 2026-10-16
 
+The book's [Upgrading to zbus 6.0](https://z-galaxy.github.io/zbus/upgrading-to-6.html) chapter
+is the complete list of this release's breaking changes; the Breaking group below holds only some
+of them.
+
 ### ✨ Added
 - Run connections on Tokio on WASI.
 - Add spawn_process to traits::Runtime.
 - Add connect_tcp and connect_unix to traits::Runtime.
 - Add a flush hook to WriteHalf.
-- Run the built-in runtime on the thread inside block_on.
-- Add a reactor over poll(2) and select with its own timers.
-- Add a task scheduler with no thread of its own.
-- Give the connection locks of zbus's own.
 - Make block_on part of the public API.
 - Do every socket's I/O through the connection's runtime.
 - Make a build with neither backend valid.
@@ -32,17 +32,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Expose common wire types at the crate root.
 - Use Serde and Type for interface properties.
 - Use Serde and Type for proxy properties.
-- Add the explicit Tokio VSOCK builder.
-- Add the explicit async-io VSOCK builder.
-- Add the Tokio TCP stream builder.
-- Add the Tokio Unix stream builder.
 - Gate the D-Bus API behind the comms feature.
-- add ConnectionCredentials::into_process_fd.
+- Add ConnectionCredentials::into_process_fd.
+- Support conversion from/to BTreeMap for Variant and OwnedVariant.
 
 ### 💥 Breaking
-- Return Iterators to access Interface elements.
 - Declare AsyncDrop without async-trait.
 - Drop the From<hex::FromHexError> impl of Error.
+- Take std socket types in Builder::unix_stream and tcp_stream, and drop
+  Builder::async_io_unix_stream and async_io_tcp_stream.
 - Drop the unused lifetime of StructureSeed.
 - Return StartServiceReply from start_service_by_name.
 - Drop the VSOCK transport.
@@ -52,7 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Make RequestNameFlags a bitflags type.
 - Take and give queue sizes as NonZeroUsize.
 - Hand out listeners of zbus's own types.
-- Replace the async-io feature and crates with builtin-runtime.
+- Replace the `async-io` feature and crates with `default-rt`: zruntime's runtime, one per
+  thread that calls block_on and driven by that thread.
 - Remove the blocking API.
 - Stop generating blocking proxies.
 - Drop the properties cache from proxies without properties.
@@ -76,20 +75,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Remove redundant downcast checks.
 - Take the blocking-work thread from zruntime.
 - Take the async locks from zruntime.
-- Rename the zruntime feature to default-rt.
-- Hand blocking work's outcome over on its own lock.
-- Rename the builtin-runtime feature to zruntime.
-- Move the runtime benchmarks to zruntime.
-- Build the built-in runtime on the zruntime crate.
-- Give each thread that calls block_on a runtime of its own.
-- Run the default connection on zbus's own runtime.
-- Stop using the blocking API.
 - Run transport helper processes on the connection's runtime.
 - Hand blocking work to the runtime when it is asked for.
 - Connect every transport on the connection's runtime.
 - Dispatch every runtime arm through the trait.
 - Take a connection's tasks and timers from one runtime.
-- Rename runtime/async_lock.rs to locks.rs.
 - Rename the `abstractions` module to `runtime`.
 - Rename Body::deserialize_unchecked.
 - Make `tracing` an optional feature. #331
@@ -110,9 +100,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Convert property values in memory.
 - Remove no-op `async-fs` cargo feature. #1287
 - Gate integration tests in modules.
-- Migrate VSOCK stream callers.
-- Migrate TCP stream callers.
-- Migrate Unix stream callers.
 - Rename zvariant_utils to zbus_utils.
 - Tidy the imports the crate merge left behind.
 - Move the zvariant derives into zbus_macros.
@@ -123,16 +110,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Deduplicate the default-interface name checks.
 
 ### 📦 Dependencies
+- Bump the MSRV to 1.89.
 - Update tokio to v1.53.3 (#2028).
 - Drop futures-lite from the library's dependencies.
 - Drop the Tokio features nothing uses.
 - Drop the async-recursion dependency.
 - Move to zruntime's broadcast channel.
 - Build on zruntime's Event instead of event-listener.
-- Move to zruntime's shared runtime API.
 - Drop the async-lock feature and crate.
 - Drop proc-macro-crate (#1365).
-- Bump zvariant to 5.15.
 
 ### 🗑️ Deprecated
 - Add deprecated zvariant aliases for the wire module.
@@ -153,12 +139,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Document the built-in runtime.
 - Point synchronous programs at zbus::block_on.
 - Document the runtime and socket changes of 6.0.
-- Correct the wire module feature overview.
 - Document the `proxy` and `service` features.
 - Add usage example to ObjectManager docs.
-- Document async-io TCP stream stability.
-- Document async-io Unix stream stability.
-- Correct the coexistence story for the renamed crate.
 - Update the book for zbus 6.0.
 - Document the wire and names modules.
 - Make two intra-doc links feature-independent.
@@ -172,13 +154,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Carry any D-Bus error in `zbus::Error`.
 - Let property handlers fail with any `DBusError`. #313
 - Make `ObjectServer::at` hand back the interface on conflict. #235
-- Decide blocking proxy generation on the zbus side.
 - Fix a small build issue for unix targets.
 - Reject non-basic dictionary keys. #1637
-- Keep the async executor on async-io.
 - Don't leak auto-created nodes when interface addition fails.
 - Don't destroy objects still in use on interface removal.
 - Prune empty ancestor nodes on interface removal. #1916
+- Validate names in Variant and OwnedVariant conversions.
+- Check the Optional null sentinel before converting.
 
 ### ⚙️ Other
 - 🚨 Warn about undocumented public items.
@@ -201,19 +183,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🚨 Fix clippy warnings in tests.
 - 🏷️ Use String as owned name NoneType.
 - 🏷️ Implement Basic for scalar representations.
-- 🏷️ Use BitFlags' numeric wire type.
 - 🚨 Fix clippy drain_collect lints.
 
 ### ⚡️ Performance
 - Pipeline the whole client-side handshake.
 - Collect an exited helper process without a blocking worker.
-- Hand a task's name over instead of copying it.
-- Queue a spawned task under the lock that registers it.
-- Keep a task's output in its own cell.
-- Give a block_on the seat while the helper thread waits.
-- Look the runtime up once per block_on waker, not per wake.
-- Hash task ids as themselves in the live map.
-- Drop a finished task's handle without a cancellation error.
 - Serialize the message header in one pass.
 - Serialize message bodies in one pass.
 - Box the address in Error::Connection.
@@ -223,9 +197,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🔥 Removed
 - Drop the xdg-dbus-proxy workarounds. #781
 - Drop pre-6.0 deprecated APIs. #1915
-- Remove the feature-dependent VSOCK builder.
-- Remove the feature-dependent TCP builder.
-- Remove the feature-dependent Unix builder.
+- Remove GVariant support, which lives on in the zgvariant crate.
 
 ### 🔒️ Security
 - Make FilePath to std conversions sound & lossless. #1906
@@ -243,7 +215,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Test that a message rejects a maybe body signature.
 - Cover Serde property conversion.
 - Test message streams with each runtime.
-- Test additive VSOCK builder signatures.
 - Test additive TCP builder signatures.
 - Test additive Unix builder signatures.
 

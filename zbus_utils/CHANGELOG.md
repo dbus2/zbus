@@ -7,9 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## 6.0.0 - 2026-10-16
 
+zvariant_utils is renamed to zbus_utils. The changes below are relative to 4.2.0, its last release
+under the old name, and so include those in the zbus_utils 1.0.0 crates.io release.
+
+### ✨ Added
+- Add shared name and object-path validators.
+
+### 💥 Breaking
+- Rename the crate from zvariant_utils to zbus_utils.
+- Drop the `serialized` module and its `Format` enum.
+- Drop the Format dispatch from Signature.
+
 ### ♻️ Changed
 - Rename Value to Variant. #1947
 - Convert property values in memory.
+
+### 📦 Dependencies
+- Bump the MSRV to 1.89.
 
 ### 📝 Documentation
 - Point signature documentation at the root re-export.

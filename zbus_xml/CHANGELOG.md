@@ -7,17 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## 6.0.0 - 2026-10-16
 
+The book's [Upgrading to zbus 6.0](https://z-galaxy.github.io/zbus/upgrading-to-6.html) chapter
+is the complete list of this release's breaking changes; the Breaking group below holds only some
+of them.
+
 ### ✨ Added
 - Add accessor for all children.
-- Gate the D-Bus API behind the comms feature.
 
 ### 💥 Breaking
 - Return Iterators to access Interface elements.
 - Borrow strings from the introspection document. #9
 - Unify the error types.
-
-### 👷 CI
-- Measure the single-thread benchmarks by CPU simulation.
 
 ### ♻️ Changed
 - Change Interface to store a single list of child elements.
@@ -27,8 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Move zbus_names into zbus as the names module.
 
 ### 📦 Dependencies
+- Bump the MSRV to 1.89.
 - Drop the serde dependency.
-- Bump zvariant to 5.15.
 
 ### 📝 Documentation
 - Document the wire and names modules.

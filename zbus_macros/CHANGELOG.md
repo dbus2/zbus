@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## 6.0.0 - 2026-10-16
 
+The book's [Upgrading to zbus 6.0](https://z-galaxy.github.io/zbus/upgrading-to-6.html) chapter
+is the complete list of this release's breaking changes; the Breaking group below holds only some
+of them.
+
 ### ✨ Added
-- Defer connection builder errors to build().
 - Defer message builder errors to build().
 - Defer proxy builder errors to build().
 - Use Serde and Type for interface properties.
@@ -30,7 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rename Value to Variant. #1947
 - Generate a proxy method's flags as a list of constants.
 - Name the proxy type override proxy_type_name.
-- Stop using the blocking API.
 - Write introspection doc comments through a helper.
 - Create the reply builder once in the derived create_reply.
 - Match the error name once in the derived From<zbus::Error>.
@@ -43,12 +45,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Move the zvariant derives into zbus_macros.
 - Port the in-tree callers to zbus::wire.
 - Move zvariant into zbus as the wire module.
-- Validate names and paths via zvariant_utils.
 
 ### 📦 Dependencies
+- Bump the MSRV to 1.89.
 - Drop the async-io dev-dependency.
 - Drop proc-macro-crate (#1365).
-- Bump zvariant to 5.15.
 
 ### 📝 Documentation
 - Document the fields and getters of signal args structs.
@@ -62,7 +63,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🐛 Fixed
 - Carry any D-Bus error in `zbus::Error`.
 - Let property handlers fail with any `DBusError`. #313
-- Decide blocking proxy generation on the zbus side.
 - Honour the crate attribute in the remaining codegen.
 - Honour the crate attribute in property setter codegen.
 - Resolve the crate path in signature!.
