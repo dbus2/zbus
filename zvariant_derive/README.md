@@ -2,10 +2,16 @@
 
 [![](https://docs.rs/zvariant_derive/badge.svg)](https://docs.rs/zvariant_derive/) [![](https://img.shields.io/crates/v/zvariant_derive)](https://crates.io/crates/zvariant_derive)
 
+> **Deprecated:** zvariant and its derives are merged into [zbus] as of zbus 6.0, and
+> zvariant_derive receives no further releases. Depend on
+> `zbus = { version = "6", default-features = false }` instead, and take the derives from the
+> `zbus` root or from `zbus::wire`, where `Value` and `OwnedValue` are named `Variant` and
+> `OwnedVariant`. The [upgrade guide] covers the move.
+
 This crate provides derive macros helpers for [`zvariant`]. The `zvariant` crate re-exports these
 macros for your convenience so you do not need to use this crate directly.
 
-**Status:** Stable.
+**Status:** Deprecated.
 
 ## Example code
 
@@ -33,3 +39,5 @@ assert_eq!(decoded, s);
 ```
 
 [`zvariant`]: https://crates.io/crates/zvariant
+[zbus]: https://crates.io/crates/zbus
+[upgrade guide]: https://z-galaxy.github.io/zbus/upgrading-to-6.html

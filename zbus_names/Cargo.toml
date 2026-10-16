@@ -1,16 +1,19 @@
 [package]
 name = "zbus_names"
-version = "4.3.4"
+version = "4.3.5"
 authors = ["Zeeshan Ali Khan <zeeshanak@gnome.org>"]
 edition = { workspace = true }
 rust-version = { workspace = true }
 
-description = "A collection of D-Bus bus names types"
+description = "A collection of D-Bus bus names types (deprecated: merged into zbus)"
 repository = { workspace = true }
-keywords = ["D-Bus", "DBus", "IPC"]
+keywords = ["D-Bus", "DBus", "IPC", "deprecated"]
 license = { workspace = true }
 categories = ["os::unix-apis"]
 readme = "README.md"
+
+[badges]
+maintenance = { status = "deprecated" }
 
 [dependencies]
 zvariant = { path = "../zvariant", features = [
