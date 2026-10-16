@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "rust";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-f65ac939.js";
+            window.path_to_searchindex_js = "searchindex-112591ad.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-a3902f6a.js"></script>
+        <script src="toc-0eac0ed4.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -185,6 +185,13 @@
 <li><a href="#connection-to-the-bus">Connection to the bus</a></li>
 <li><a href="#using-a-custom-bus-address">Using a custom bus address</a></li>
 <li><a href="#peer-to-peer-connection">Peer to peer connection</a></li>
+<li><a href="#runtimes">Runtimes</a>
+<ul>
+<li><a href="#built-in-backends">Built-in backends</a></li>
+<li><a href="#supplying-your-own-runtime">Supplying your own runtime</a></li>
+<li><a href="#bringing-your-own-socket">Bringing your own socket</a></li>
+</ul>
+</li>
 </ul>
 <p>The first thing you will have to do is to connect to a D-Bus bus or to a D-Bus peer. This is the
 entry point of the zbus API.</p>
@@ -193,7 +200,7 @@ entry point of the zbus API.</p>
 returns an instance of the connection (if all went well). Similarly, to connect to the system bus
 (to communicate with services such as <a href="https://developer.gnome.org/NetworkManager/stable/spec.html">NetworkManager</a>, <a href="https://git.kernel.org/pub/scm/bluetooth/bluez.git/tree/doc">BlueZ</a> or <a href="https://www.freedesktop.org/software/systemd/man/latest/org.freedesktop.systemd1.html">PID1</a>), use
 <code>Connection::system()</code>.</p>
-<p>Moreover, it can be converted to a <a href="https://docs.rs/zbus/5/zbus/struct.MessageStream.html"><code>MessageStream</code></a> that implements <a href="https://docs.rs/futures/4/futures/stream/trait.Stream.html"><code>futures::stream::Stream</code></a>,
+<p>Moreover, it can be converted to a <a href="https://docs.rs/zbus/latest/zbus/struct.MessageStream.html"><code>MessageStream</code></a> that implements <a href="https://docs.rs/futures/4/futures/stream/trait.Stream.html"><code>futures::stream::Stream</code></a>,
 which can be used to conveniently receive messages, for the times when low-level API is
 more appropriate for your use case.</p>
 <p><strong>Note:</strong> it is common for a D-Bus library to provide a “shared” connection to a bus for a process:
@@ -205,8 +212,10 @@ The official dbus installation method via <code>Homebrew</code> provides a sessi
 utilizing macOS <code>LaunchAgents</code> feature. By default, zbus consumes an address for a bus connection that
 is provided via <code>launchctl getenv DBUS_LAUNCHD_SESSION_BUS_SOCKET</code> command output.</p>
 <h2 id="using-a-custom-bus-address"><a class="header" href="#using-a-custom-bus-address">Using a custom bus address</a></h2>
-<p>You may also specify a custom bus with <a href="https://docs.rs/zbus/5/zbus/connection/struct.Builder.html#method.address"><code>connection::Builder::address</code></a> which takes a D-Bus address
+<p>You may also specify a custom bus with <a href="https://docs.rs/zbus/latest/zbus/connection/struct.Builder.html#method.address"><code>connection::Builder::address</code></a> which takes a D-Bus address
 <a href="https://dbus.freedesktop.org/doc/dbus-specification.html#addresses">as specified in the specification</a>.</p>
+<p><strong>Note:</strong> the <code>unixexec:</code> and <code>ibus:</code> transports are only available when the <code>unixexec</code> and <code>ibus</code>
+cargo features of <code>zbus</code>, respectively, are enabled.</p>
 <h2 id="peer-to-peer-connection"><a class="header" href="#peer-to-peer-connection">Peer to peer connection</a></h2>
 <p>Peer-to-peer connections are bus-less<sup class="footnote-reference" id="fr-bus-less-1"><a href="#footnote-bus-less">1</a></sup>, and the initial handshake protocol is a bit
 different. There is the notion of client &amp; server endpoints, but that distinction doesn’t matter
@@ -214,7 +223,7 @@ once the connection is established (both ends are equal, and can send any messag
 <p>For example to create a bus-less peer-to-peer connection on Unix, you can do:</p>
 <pre><code class="language-rust noplayground"><span class="boring">#[tokio::main]
 </span><span class="boring">async fn main() -&gt; zbus::Result&lt;()&gt; {
-</span><span class="boring">#[cfg(all(unix, feature = "async-io"))]
+</span><span class="boring">#[cfg(unix)]
 </span><span class="boring">{
 </span>use std::os::unix::net::UnixStream;
 use zbus::{connection::Builder, Guid};
@@ -224,18 +233,73 @@ let (p0, p1) = UnixStream::pair().unwrap();
 <span class="boring">#[allow(unused)]
 </span>let (client_conn, server_conn) = futures_util::try_join!(
     // Client
-    Builder::async_io_unix_stream(p0).p2p().build(),
+    Builder::unix_stream(p0).p2p().build(),
     // Server
-    Builder::async_io_unix_stream(p1).server(guid)?.p2p().build(),
+    Builder::unix_stream(p1).server(guid).p2p().build(),
 )?;
 <span class="boring">}
 </span><span class="boring">
 </span><span class="boring">Ok(())
 </span><span class="boring">}</span></code></pre>
-<p><code>async_io_unix_stream</code> (and <code>async_io_tcp_stream</code>) take a <a href="https://doc.rust-lang.org/std/os/unix/net/struct.UnixStream.html"><code>std::os::unix::net::UnixStream</code></a>. With <code>tokio</code>
-enabled you can instead pass a <a href="https://docs.rs/tokio/latest/tokio/net/struct.UnixStream.html"><code>tokio::net::UnixStream</code></a> to <code>unix_stream</code>.</p>
+<p><code>unix_stream</code> takes a <a href="https://doc.rust-lang.org/std/os/unix/net/struct.UnixStream.html"><code>std::os::unix::net::UnixStream</code></a>, whichever runtime the connection ends
+up on. A stream of another kind is handed over as the socket it wraps: <code>into_std()</code> for a
+<a href="https://docs.rs/tokio/latest/tokio/net/struct.UnixStream.html"><code>tokio::net::UnixStream</code></a>.</p>
 <p><strong>Note:</strong> the <code>p2p</code> and <code>server</code> methods of <code>connection::Builder</code> are only available when <code>p2p</code>
 cargo feature of <code>zbus</code> is enabled.</p>
+<h2 id="runtimes"><a class="header" href="#runtimes">Runtimes</a></h2>
+<p>A connection takes its readiness notifications, timers, spawned tasks and blocking work from one
+runtime, chosen once when it is built. A program with no async runtime of its own drives it with
+<code>zbus::block_on</code>; see <a href="faq.html#how-do-i-use-zbus-from-synchronous-code">the FAQ</a>. A program built on Tokio turns on the <code>tokio</code> feature, and a
+connection built while a Tokio runtime is current runs on it. Any other executor can use the
+zruntime backend below as it is, with no integration needed: a connection built outside a
+<code>zbus::block_on</code> call is run by that backend’s own helper thread. <a href="https://docs.rs/zbus/latest/zbus/connection/struct.Builder.html#method.runtime"><code>Builder::runtime</code></a> is there for
+an application that wants to hand a connection a runtime of its own instead, not something every
+other executor needs. A connection’s async locks come from zruntime whichever runtime it runs on,
+except on a Tokio build, which uses Tokio’s locks instead.</p>
+<h3 id="built-in-backends"><a class="header" href="#built-in-backends">Built-in backends</a></h3>
+<p>With the <code>default-rt</code> cargo feature (a default feature), a connection runs on <a href="https://docs.rs/zruntime">zruntime</a>, one
+per thread that runs <code>zbus::block_on</code>, depending on no general-purpose async executor crate. The
+thread that drives it is the one inside <code>zbus::block_on</code>: between two polls of the future handed to
+it, that thread runs the tasks, sockets and timers of every zruntime connection built in it — apart
+from a handful of blocking system calls (a DNS lookup, a nonce-file read, a peer-credential lookup)
+that use a short-lived worker thread of their own instead. Two threads that each call
+<code>zbus::block_on</code> drive their own connections, in parallel. A thread’s runtime serves every
+connection built inside its <code>zbus::block_on</code> calls, so a task of one connection that runs long
+delays the others’ I/O until it yields, and a connection used from another thread is still driven by
+the thread that built it. A connection built on a thread that is in no <code>zbus::block_on</code> at the time
+— one that some other executor polls — has no thread of its own to look to, and goes instead on a
+single runtime the whole process shares with every other such connection. Only where a connection
+has work and no thread is inside <code>zbus::block_on</code> — it is polled from some other executor, or a call
+returned with the connection alive — does zbus start a helper thread, which leaves once nothing is
+left to run. If the <code>tokio</code> feature is also enabled and a Tokio runtime is current on the thread
+that builds the connection, it runs on Tokio instead. With only <code>tokio</code> enabled, a connection always
+runs on the Tokio runtime that is current when it is built; building one from a thread with no such
+runtime fails with <code>Error::Unsupported</code>.</p>
+<p>A build with neither feature depends on no <code>tokio</code> crate. It still depends on the <code>zruntime</code>
+crate, whose <code>Event</code>, async locks, broadcast channels and <code>unblock</code> (the thread that blocking work
+runs on by default) zbus uses, but not with its <code>runtime</code> feature, so none of zruntime’s runtime is
+built. Every connection in the build needs an explicit runtime, given through
+<a href="https://docs.rs/zbus/latest/zbus/connection/struct.Builder.html#method.runtime"><code>Builder::runtime</code></a>.</p>
+<h3 id="supplying-your-own-runtime"><a class="header" href="#supplying-your-own-runtime">Supplying your own runtime</a></h3>
+<p><a href="https://docs.rs/zbus/latest/zbus/connection/struct.Builder.html#method.runtime"><code>Builder::runtime</code></a> takes any implementation of <a href="https://docs.rs/zbus/latest/zbus/runtime/traits/trait.Runtime.html"><code>traits::Runtime</code></a>, for an application whose
+event loop is neither backend above:</p>
+<pre class="playground"><code class="language-rust no_run edition2024"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use zbus::{Connection, Result, connection::Builder, runtime::traits::Runtime};
+
+async fn connect(runtime: impl Runtime) -&gt; Result&lt;Connection&gt; {
+    Builder::session().runtime(runtime).build().await
+}
+<span class="boring">}</span></code></pre>
+<p>The <a href="https://docs.rs/zbus/latest/zbus/runtime/traits/index.html"><code>runtime::traits</code></a> module documents what an implementation supplies.</p>
+<h3 id="bringing-your-own-socket"><a class="header" href="#bringing-your-own-socket">Bringing your own socket</a></h3>
+<p>Besides an address, a connection can be built directly over a socket you already have.
+<a href="https://docs.rs/zbus/latest/zbus/connection/struct.Builder.html#method.unix_stream"><code>Builder::unix_stream</code></a> and <a href="https://docs.rs/zbus/latest/zbus/connection/struct.Builder.html#method.tcp_stream"><code>Builder::tcp_stream</code></a> each take an owned, platform-native stream and
+register it on the connection’s runtime; a stream of another kind is handed over as the socket it
+wraps, such as <code>into_std()</code> for a Tokio stream. <a href="https://docs.rs/zbus/latest/zbus/connection/struct.Builder.html#method.socket"><code>Builder::socket</code></a> and
+<a href="https://docs.rs/zbus/latest/zbus/connection/struct.Builder.html#method.authenticated_socket"><code>Builder::authenticated_socket</code></a> take any implementation of <a href="https://docs.rs/zbus/latest/zbus/connection/socket/trait.Socket.html"><code>Socket</code></a>, for any other transport,
+such as a VSOCK stream, an in-process channel or a tunnel of your own. The <code>Socket</code> documentation
+has how to write one.</p>
 <hr>
 <ol class="footnote-definition">
 <li id="footnote-bus-less">

@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "rust";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-f65ac939.js";
+            window.path_to_searchindex_js = "searchindex-112591ad.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-a3902f6a.js"></script>
+        <script src="toc-0eac0ed4.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -193,7 +193,6 @@
 <li><a href="#mygreeter-simple-example"><code>MyGreeter</code> simple example</a></li>
 <li><a href="#-service-activation-pitfalls">⚠ Service activation pitfalls</a></li>
 <li><a href="#a-more-complete-example">A more complete example</a></li>
-<li><a href="#trait-bounds-for-property-values">Trait-bounds for property values</a></li>
 <li><a href="#method-errors">Method errors</a></li>
 <li><a href="#sending-signals">Sending signals</a></li>
 <li><a href="#notifying-property-changes">Notifying property changes</a></li>
@@ -336,9 +335,9 @@ setting up your interfaces and requesting names, and not have to care about this
 </span><span class="boring">
 </span><span class="boring">#[tokio::main]
 </span><span class="boring">async fn main() -&gt; Result&lt;()&gt; {
-</span>    let _connection = connection::Builder::session()?
-        .name("org.zbus.MyGreeter")?
-        .serve_at("/org/zbus/MyGreeter", Greeter)?
+</span>    let _connection = connection::Builder::session()
+        .name("org.zbus.MyGreeter")
+        .serve_at("/org/zbus/MyGreeter", Greeter)
         .build()
         .await?;
 <span class="boring">    loop {
@@ -366,11 +365,12 @@ org.zbus.MyGreeter1                 interface -         -             -
 </code></pre>
 <h3 id="a-more-complete-example"><a class="header" href="#a-more-complete-example">A more complete example</a></h3>
 <p><code>ObjectServer</code> supports various method attributes to declare properties or signals.</p>
-<p>This is a more complete example, demonstrating some of its usages. It also shows a way to
-synchronize with the interface handlers from outside, thanks to the <code>event_listener</code> crate
-(this is just one of the many ways).</p>
+<p>This is a more complete example, demonstrating some of its usages. It also shows one of the many
+ways to synchronize with the interface handlers from outside: an <code>Event</code> from the <code>zruntime</code>
+crate, where zbus’s default runtime comes from. An <code>Event</code> needs no runtime of its own, so it
+works under Tokio as it does here; add <code>zruntime</code> to your own <code>Cargo.toml</code> to use it.</p>
 <pre class="playground"><code class="language-rust no_run edition2024">use zbus::{object_server::SignalEmitter, connection::Builder, interface, fdo, Result};
-use event_listener::{Event, Listener};
+use zruntime::Event;
 
 struct Greeter {
     name: String,
@@ -421,16 +421,16 @@ impl Greeter {
 async fn main() -&gt; Result&lt;()&gt; {
     let greeter = Greeter {
         name: "GreeterName".to_string(),
-        done: event_listener::Event::new(),
+        done: Event::new(),
     };
     let done_listener = greeter.done.listen();
-    let connection = Builder::session()?
-        .name("org.zbus.MyGreeter")?
-        .serve_at("/org/zbus/MyGreeter", greeter)?
+    let connection = Builder::session()
+        .name("org.zbus.MyGreeter")
+        .serve_at("/org/zbus/MyGreeter", greeter)
         .build()
         .await?;
 
-    done_listener.wait();
+    done_listener.await;
 
     // Let's emit the signal again, just for the fun of it.
     connection
@@ -452,24 +452,19 @@ org.zbus.MyGreeter1                 interface -         -             -
 .GreeterName                        property  s         "GreeterName" emits-change writable
 .GreetedEveryone                    signal    -         -             -
 </code></pre>
-<h3 id="trait-bounds-for-property-values"><a class="header" href="#trait-bounds-for-property-values">Trait-bounds for property values</a></h3>
-<p>If you use custom types for property values, you might get a compile error for missing
-<code>TryFrom&lt;zvariant::Value&lt;'_&gt;&gt;</code> and/or <code>TryFrom&lt;OwnedValue&gt;</code> implementations. This is because
-properties are always sent as Variants on the bus, so you need to implement these conversions for
-your custom types.</p>
-<p>Not to worry though, the <code>zvariant</code> crate provides a <a href="https://docs.rs/zvariant/5/zvariant/derive.Value.html"><code>Value</code></a> and <a href="https://docs.rs/zvariant/5/zvariant/derive.OwnedValue.html"><code>OwnedValue</code></a> derive macro to
-implement these conversions for you.</p>
 <h3 id="method-errors"><a class="header" href="#method-errors">Method errors</a></h3>
 <p>There are two possibilities for the return value of interface methods. The first is for infallible
 method calls, where the return type is a directly serializable value, like the <code>String</code> in
 <code>say_hello()</code> above.</p>
 <p>The second is a result return value, where the <code>Ok</code> variant is the serializable value, and the
-error is any type that implements <a href="https://docs.rs/zbus/5/zbus/trait.DBusError.html"><code>zbus::DBusError</code></a>. The <a href="https://docs.rs/zbus/5/zbus/fdo/enum.Error.html"><code>zbus::fdo::Error</code></a> type implements this
+error is any type that implements <a href="https://docs.rs/zbus/latest/zbus/trait.DBusError.html"><code>zbus::DBusError</code></a>. The <a href="https://docs.rs/zbus/latest/zbus/fdo/enum.Error.html"><code>zbus::fdo::Error</code></a> type implements this
 trait, and should cover most common use cases. However, when a custom error type needs to be emitted
 from the method as an error reply, it can be created using <code>derive(zbus::DBusError)</code>, and used in
 the returned <code>Result&lt;T, E&gt;</code>.</p>
-<p>Property methods may also return errors, but they must be <a href="https://docs.rs/zbus/5/zbus/fdo/enum.Error.html"><code>zbus::fdo::Error</code></a>. Most often you’ll
-want to use <a href="https://docs.rs/zbus/5/zbus/fdo/enum.Error.html#variant.UnknownProperty"><code>zbus::fdo::Error::UnknownProperty</code></a> variant.</p>
+<p>Property getters and setters follow the same rule as methods: the error is any type that
+implements <a href="https://docs.rs/zbus/latest/zbus/trait.DBusError.html"><code>zbus::DBusError</code></a>, so a custom <code>derive(zbus::DBusError)</code> type works there too.
+<a href="https://docs.rs/zbus/latest/zbus/fdo/enum.Error.html"><code>zbus::fdo::Error</code></a> covers the common cases; <a href="https://docs.rs/zbus/latest/zbus/fdo/enum.Error.html#variant.UnknownProperty"><code>zbus::fdo::Error::UnknownProperty</code></a> is the one
+you’ll reach for most often.</p>
 <h3 id="sending-signals"><a class="header" href="#sending-signals">Sending signals</a></h3>
 <p>As you might have noticed in the previous example, the signal methods don’t take a <code>&amp;self</code> argument
 but a <code>SignalEmitter</code> reference. While this allows to emit signals whether from inside or outside of
@@ -484,7 +479,7 @@ without the <code>SignalEmitter</code> argument. The macro provides two implemen
 latter is useful for emitting signals from inside of it. To make it possible to emit signals from
 inside of an <code>interface</code> method, methods can ask to receive a <code>SignalEmitter</code> passed to them using
 the special <code>zbus(signal_emitter)</code> attribute.</p>
-<p>Please refer to <a href="https://docs.rs/zbus/5/zbus/attr.interface.html"><code>interface</code> documentation</a> for more examples and list of other special
+<p>Please refer to <a href="https://docs.rs/zbus/latest/zbus/attr.interface.html"><code>interface</code> documentation</a> for more examples and list of other special
 attributes you can make use of.</p>
 <p>We saw examples of signal emission in action, from both inside and outside an <code>interface</code> method, in
 the previous example.</p>
@@ -523,7 +518,7 @@ iface.greeter_name_changed(iface_ref.signal_emitter()).await?;
 <span class="boring">Ok(())
 </span><span class="boring">}</span></code></pre>
 <h2 id="proxy-generation"><a class="header" href="#proxy-generation">Proxy generation</a></h2>
-<p><code>interface</code> macro can also generate the client-side proxy code for you. It utilizes the <a href="https://docs.rs/zbus/5/zbus/attr.proxy.html"><code>proxy</code></a>
+<p><code>interface</code> macro can also generate the client-side proxy code for you. It utilizes the <a href="https://docs.rs/zbus/latest/zbus/attr.proxy.html"><code>proxy</code></a>
 macro behind the scenes to achieve this. Here is how to use it:</p>
 <pre class="playground"><code class="language-rust edition2024">use zbus::interface;
 
@@ -535,11 +530,10 @@ struct Greeter {
     name = "org.zbus.MyGreeter.WithProxy",
     // Specifying the `proxy` attribute instructs `interface` to generate the
     // client-side proxy. You can specify proxy-specific attributes
-    // (e.g `gen_blocking) here. All the attributes that are common between
+    // (e.g `async_name`) here. All the attributes that are common between
     // `proxy` and `interface` macros (e.g `name`) are automtically forwarded to
     // the `proxy` macro.
     proxy(
-        gen_blocking = false,
         default_path = "/org/zbus/MyGreeter/WithProxy",
         default_service = "org.zbus.MyGreeter.WithProxy",
     ),
@@ -560,9 +554,9 @@ impl Greeter {
 </span><span class="boring">async fn main() -&gt; zbus::Result&lt;()&gt; {
 </span>
 let greeter = Greeter { name: "GreeterName".to_string() };
-let connection = zbus::connection::Builder::session()?
-        .name("org.zbus.MyGreeter.WithProxy")?
-        .serve_at("/org/zbus/MyGreeter/WithProxy", greeter)?
+let connection = zbus::connection::Builder::session()
+        .name("org.zbus.MyGreeter.WithProxy")
+        .serve_at("/org/zbus/MyGreeter/WithProxy", greeter)
         .build()
         .await?;
 let proxy = GreeterProxy::new(&amp;connection).await?;
@@ -575,14 +569,12 @@ proxy.whatever().await?;
 <p>While it’s extremely useful to be able to generate the client-side proxy code directly from
 <code>interface</code> as it allows you to avoid duplicating code, there are some limitations to be aware of:</p>
 <ul>
-<li>The trait bounds of the <code>proxy</code> macro methods’ arguments and return value, now also apply to the
-<code>interface</code> methods. For example, when only generating the service-side code, the method return
-values need to implement <code>serde::Serialize</code> but when generating the client-side proxy code, the
-method return values need to implement <code>serde::DeserializeOwned</code> as well.</li>
-<li>Reference types in return values of <code>interface</code> methods won’t work. As you may have noticed,
-unlike the previous examples the <code>greeter_name</code> method in the example above returns a <code>String</code>
-instead of a <code>&amp;str</code>. This is because the methods in the <code>proxy</code> macro do not support reference
-type to be returned from its methods.</li>
+<li>The <code>proxy</code> macro’s trait bounds also apply to ordinary <code>interface</code> methods. A service-only
+method result needs <code>Serialize + Type</code>, while the corresponding generated proxy method also
+needs <code>DeserializeOwned</code>.</li>
+<li>Ordinary method return values cannot borrow. A borrowing property getter is supported: its
+generated proxy getter is generic over an owned <code>DeserializeOwned + Type</code> result selected by the
+caller.</li>
 <li>Methods returning [<code>object_server::ResponseDispatchNotifier</code>] wrapper type will do the same for
 proxy as well.</li>
 </ul>
@@ -595,7 +587,7 @@ proxy as well.</li>
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="blocking.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="upgrading-to-6.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -609,7 +601,7 @@ proxy as well.</li>
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="blocking.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="upgrading-to-6.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "rust";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-f65ac939.js";
+            window.path_to_searchindex_js = "searchindex-112591ad.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-a3902f6a.js"></script>
+        <script src="toc-0eac0ed4.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -193,16 +193,24 @@ from different languages and environments.</p>
 and receive messages over a connection, as well as API to interact with peers through high-level
 concepts like method calls, signals and properties<sup class="footnote-reference" id="fr-high-level-api-1"><a href="#footnote-high-level-api">2</a></sup>. Thanks to the power of Rust
 macros, zbus is able to make interacting with D-Bus very easy.</p>
-<p>zbus project provides two crates:</p>
-<h2 id="zvariant"><a class="header" href="#zvariant">zvariant</a></h2>
-<p>D-Bus defines a marshalling format for its messages. The <a href="https://crates.io/crates/zvariant">zvariant</a> crate provides a <a href="https://serde.rs/">serde</a>-based
-<a href="https://docs.rs/zvariant/">API</a> to serialize/deserialize Rust data types to/from this format. Outside of D-Bus context, a
-modified form of this format, <a href="https://developer.gnome.org/documentation/specifications/gvariant-specification-1.0.html">GVariant</a>
-is very commonly used for efficient storage of arbitrary data and is also supported by this crate.</p>
-<h2 id="zbus"><a class="header" href="#zbus">zbus</a></h2>
-<p>The <a href="https://crates.io/crates/zbus">zbus crate</a> provides the main API you will use to interact with D-Bus from Rust. It takes care
-of the establishment of a connection, the creation, sending and receiving of different kind of D-Bus
-messages (method calls, signals etc) for you.</p>
+<p>The crate has two halves.</p>
+<h2 id="the-wire-format"><a class="header" href="#the-wire-format">The wire format</a></h2>
+<p>D-Bus defines a marshalling format for its messages. The <code>zbus::wire</code> module provides a
+<a href="https://serde.rs/">serde</a>-based <a href="https://docs.rs/zbus/latest/zbus/wire/index.html">API</a> to serialize and deserialize Rust data types to and from that format. It does
+not need the rest of zbus, so if the format is all you are after — no connection, no proxies —
+depend on zbus with its default features disabled:</p>
+<pre><code class="language-toml">[dependencies]
+zbus = { version = "6", default-features = false }
+</code></pre>
+<p>Outside of a D-Bus context, a modified form of this format, <a href="https://developer.gnome.org/documentation/specifications/gvariant-specification-1.0.html">GVariant</a>, is commonly used for
+efficient storage of arbitrary data; the separate <a href="https://crates.io/crates/zgvariant">zgvariant</a> crate implements it.</p>
+<h2 id="the-d-bus-api"><a class="header" href="#the-d-bus-api">The D-Bus API</a></h2>
+<p>Everything else — connections, messages, proxies, the object server — is the API you will use to
+interact with D-Bus from Rust. It takes care of the establishment of a connection, the creation,
+sending and receiving of different kind of D-Bus messages (method calls, signals etc) for you.</p>
+<p>The API is async. A program with no async runtime of its own drives it with <a href="https://docs.rs/zbus/latest/zbus/fn.block_on.html"><code>zbus::block_on</code></a>,
+which runs a future to completion on the calling thread; the
+<a href="faq.html#how-do-i-use-zbus-from-synchronous-code">FAQ</a> shows how.</p>
 <p align="center">
   <img src="https://www.freedesktop.org/png/freedesktop-logo.png" height="32" />
 </p>

@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "rust";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-f65ac939.js";
+            window.path_to_searchindex_js = "searchindex-112591ad.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-a3902f6a.js"></script>
+        <script src="toc-0eac0ed4.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -192,7 +192,6 @@
 </li>
 <li><a href="#properties">Properties</a>
 <ul>
-<li><a href="#trait-bounds-for-property-values">Trait-bounds for property values</a></li>
 <li><a href="#watching-for-changes">Watching for changes</a></li>
 </ul>
 </li>
@@ -256,7 +255,7 @@ example, is for a string. ‘as’ is for array of strings.</p>
 <pre class="playground"><code class="language-rust no_run edition2024">use std::collections::HashMap;
 use std::error::Error;
 
-use zbus::{zvariant::Value, Connection};
+use zbus::{Variant, Connection};
 
 // Although we use `tokio` here, you can use any async runtime of choice.
 #[tokio::main]
@@ -269,7 +268,7 @@ async fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
         Some("org.freedesktop.Notifications"),
         "Notify",
         &amp;("my-app", 0u32, "dialog-information", "A summary", "Some body",
-          vec![""; 0], HashMap::&lt;&amp;str, &amp;Value&gt;::new(), 5000),
+          vec![""; 0], HashMap::&lt;&amp;str, &amp;Variant&gt;::new(), 5000),
     ).await?;
     let reply: u32 = m.body().deserialize().unwrap();
     dbg!(reply);
@@ -281,14 +280,12 @@ arguments with the wrong type or other kind of errors (what would happen if you 
 of <code>0u32</code>?).</p>
 <p>Instead, we want to wrap this <code>Notify</code> D-Bus method in a Rust function. Let’s see how next.</p>
 <h2 id="trait-derived-proxy-call"><a class="header" href="#trait-derived-proxy-call">Trait-derived proxy call</a></h2>
-<p>A trait declaration <code>T</code> with a <code>proxy</code> attribute will have a derived <code>TProxy</code> and
-<code>TProxyBlocking</code> (see <a href="blocking.html">chapter on “blocking”</a> for more information on that) implemented thanks
-to procedural macros. The trait methods will have respective <code>impl</code> methods wrapping the D-Bus
-calls:</p>
+<p>A trait declaration <code>T</code> with a <code>proxy</code> attribute will have a derived <code>TProxy</code> implemented thanks to
+procedural macros. The trait methods will have respective <code>impl</code> methods wrapping the D-Bus calls:</p>
 <pre class="playground"><code class="language-rust no_run edition2024">use std::collections::HashMap;
 use std::error::Error;
 
-use zbus::{zvariant::Value, proxy, Connection};
+use zbus::{Variant, proxy, Connection};
 
 #[proxy(
     default_service = "org.freedesktop.Notifications",
@@ -303,7 +300,7 @@ trait Notifications {
               summary: &amp;str,
               body: &amp;str,
               actions: &amp;[&amp;str],
-              hints: HashMap&lt;&amp;str, &amp;Value&lt;'_&gt;&gt;,
+              hints: HashMap&lt;&amp;str, &amp;Variant&lt;'_&gt;&gt;,
               expire_timeout: i32) -&gt; zbus::Result&lt;u32&gt;;
 }
 
@@ -326,17 +323,16 @@ async fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
 
     Ok(())
 }</code></pre>
-<p>A <code>TProxy</code> and <code>TProxyBlocking</code> has a few associated methods, such as <code>new(connection)</code>, using the
-default associated service name and object path, and an associated builder if you need to specify
-something different.</p>
+<p>A <code>TProxy</code> has a few associated methods, such as <code>new(connection)</code>, using the default associated
+service name and object path, and an associated builder if you need to specify something
+different.</p>
 <p>This should help to avoid the kind of mistakes we saw earlier. It’s also a bit easier to use, thanks
 to Rust type inference. This makes it also possible to have higher-level types, they fit more
 naturally with the rest of the code. You can further document the D-Bus API or provide additional
 helpers.</p>
 <blockquote>
 <p><strong>Note</strong></p>
-<p>For simple transient cases like the one above, you may find the <a href="blocking.html">blocking API</a> very
-convenient to use.</p>
+<p>For a program without an async runtime of its own, see <a href="faq.html#how-do-i-use-zbus-from-synchronous-code">the FAQ</a>.</p>
 </blockquote>
 <h3 id="signals"><a class="header" href="#signals">Signals</a></h3>
 <p>Signals are like methods, except they don’t expect a reply. They are typically emitted by services
@@ -345,10 +341,10 @@ to notify interested peers of any changes to the state of the service. zbus prov
 <p>Let’s look at this API in action, with an example where we monitor started systemd units.</p>
 <pre class="playground"><code class="language-rust no_run edition2024"><span class="boring">// NOTE: When changing this, please also keep `zbus/examples/watch-systemd-jobs.rs` in sync.
 </span>use futures_util::stream::StreamExt;
-use zbus::{zvariant::OwnedObjectPath, proxy, Connection};
+use zbus::{OwnedObjectPath, proxy, Connection};
 
 <span class="boring">fn main() {
-</span><span class="boring">    async_io::block_on(watch_systemd_jobs()).expect("Error listening to signal");
+</span><span class="boring">    zbus::block_on(watch_systemd_jobs()).expect("Error listening to signal");
 </span><span class="boring">}
 </span>
 #[proxy(
@@ -384,7 +380,7 @@ async fn watch_systemd_jobs() -&gt; zbus::Result&lt;()&gt; {
 <h4 id="more-advanced-example"><a class="header" href="#more-advanced-example">More advanced example</a></h4>
 <p>Here is a more elaborate example, where we get our location from
 <a href="https://gitlab.freedesktop.org/geoclue/geoclue/-/blob/master/README.md">Geoclue</a>:</p>
-<pre class="playground"><code class="language-rust no_run edition2024">use zbus::{zvariant::ObjectPath, proxy, Connection, Result};
+<pre class="playground"><code class="language-rust no_run edition2024">use zbus::{ObjectPath, proxy, Connection, Result};
 use futures_util::stream::StreamExt;
 
 #[proxy(
@@ -433,8 +429,8 @@ async fn main() -&gt; Result&lt;()&gt; {
     client.set_desktop_id("org.freedesktop.zbus").await?;
 
     let props = zbus::fdo::PropertiesProxy::builder(&amp;conn)
-        .destination("org.freedesktop.GeoClue2")?
-        .path(client.inner().path())?
+        .destination("org.freedesktop.GeoClue2")
+        .path(client.inner().path())
         .build()
         .await?;
     let mut props_changed = props.receive_properties_changed().await?;
@@ -459,7 +455,7 @@ async fn main() -&gt; Result&lt;()&gt; {
                 let args = signal.args()?;
 
                 let location = LocationProxy::builder(&amp;conn)
-                    .path(args.new())?
+                    .path(args.new())
                     .build()
                     .await?;
                 println!(
@@ -535,13 +531,6 @@ Environment variables:
   LC_TIME=de_DE.UTF-8
   ...
 </code></pre>
-<h4 id="trait-bounds-for-property-values"><a class="header" href="#trait-bounds-for-property-values">Trait-bounds for property values</a></h4>
-<p>If you use custom types for property values, you might get a compile error for missing
-<code>TryFrom&lt;zvariant::Value&lt;'_&gt;&gt;</code> and/or <code>TryFrom&lt;OwnedValue&gt;</code> implementations. This is because
-properties are always sent as Variants on the bus, so you need to implement these conversions for
-your custom types.</p>
-<p>Not to worry though, the <code>zvariant</code> crate provides a <a href="https://docs.rs/zvariant/5/zvariant/derive.Value.html"><code>Value</code></a> and <a href="https://docs.rs/zvariant/5/zvariant/derive.OwnedValue.html"><code>OwnedValue</code></a> derive macro to
-implement these conversions for you.</p>
 <h4 id="watching-for-changes"><a class="header" href="#watching-for-changes">Watching for changes</a></h4>
 <p>By default, the proxy will cache the properties and watch for changes.</p>
 <p>To be notified of a property change, you use a stream API, just like for receiving signals. The
@@ -683,7 +672,7 @@ trait Notifications {
         arg_3: &amp;str,
         arg_4: &amp;str,
         arg_5: &amp;[&amp;str],
-        arg_6: std::collections::HashMap&lt;&amp;str, zvariant::Value&lt;'_&gt;&gt;,
+        arg_6: std::collections::HashMap&lt;&amp;str, zbus::Variant&lt;'_&gt;&gt;,
         arg_7: i32,
     ) -&gt; zbus::Result&lt;u32&gt;;
 
@@ -696,11 +685,11 @@ trait Notifications {
     fn notification_closed(&amp;self, arg_0: u32, arg_1: u32) -&gt; zbus::Result&lt;()&gt;;
 }</code></pre>
 <p>It should be usable as such. But you may as well improve a bit the naming of the arguments, use
-better types (using <code>BitFlags</code>, structs or other custom types), add extra documentation, and other
+better types (<a href="faq.html#how-do-i-use-bit-flags">bit flags</a>, structs or other custom types), add extra documentation, and other
 functions to make the binding more pleasing to use from Rust.</p>
 <p>For example, the generated <code>GetServerInformation</code> method can be improved to a nicer version:</p>
 <pre><code class="language-rust noplayground">use serde::{Serialize, Deserialize};
-use zbus::{zvariant::Type, proxy};
+use zbus::{Type, proxy};
 
 #[derive(Debug, Type, Serialize, Deserialize)]
 pub struct ServerInformation {
