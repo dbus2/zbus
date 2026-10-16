@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 6.0.0 - 2026-10-16
+
+The book's [Upgrading to zbus 6.0](https://z-galaxy.github.io/zbus/upgrading-to-6.html) chapter
+is the complete list of this release's breaking changes; the Breaking group below holds only some
+of them.
+
+### ✨ Added
+- Maintain definition order.
+- Pass '-' to 'file' to read from stdin.
+- Defer proxy builder errors to build().
+- Use Serde and Type for proxy properties.
+
+### 💥 Breaking
+- Return Iterators to access Interface elements.
+- Stop generating blocking proxies.
+- Borrow strings from the introspection document. #9
+
+### ♻️ Changed
+- Emit the zbus attribute spelling in generated code.
+- Rename Value to Variant. #1947
+- Enable zbus's unixexec and ibus features for the CLI.
+- Generate bindings with root wire types.
+- Port the in-tree callers to zbus::wire.
+- Move zvariant into zbus as the wire module.
+
+### 📦 Dependencies
+- Bump the MSRV to 1.89.
+
+### 🐛 Fixed
+- Avoid generating duplicate `receive_*_changed` methods. #231
+
+### 🔥 Removed
+- Drop the serde leftovers of the quick-xml parser.
+- Drop pre-6.0 deprecated APIs. #1915
+
 ## 5.4.1 - 2026-07-17
 
 ### Other
