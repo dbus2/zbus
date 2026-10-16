@@ -2211,7 +2211,7 @@ dependencies = [
 
 [[package]]
 name = "zbus_names"
-version = "4.3.4"
+version = "4.3.5"
 dependencies = [
  "codspeed-criterion-compat",
  "serde",
@@ -2335,7 +2335,7 @@ checksum = "e6d6085d62852e35540689d1f97ad663e3971fc19cf5eceab364d62c646ea167"
 
 [[package]]
 name = "zvariant"
-version = "5.15.0"
+version = "5.15.1"
 dependencies = [
  "arrayvec",
  "camino",
@@ -2360,7 +2360,7 @@ dependencies = [
 
 [[package]]
 name = "zvariant_derive"
-version = "5.15.0"
+version = "5.15.1"
 dependencies = [
  "enumflags2",
  "proc-macro-crate",
