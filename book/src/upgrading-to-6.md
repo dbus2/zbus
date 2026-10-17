@@ -1529,7 +1529,7 @@ code, and its test suite, live in the [zgvariant] crate now:
 
 ```toml
 [dependencies]
-zgvariant = "1"
+zgvariant = "2"
 ```
 
 zgvariant only speaks GVariant, so, like zbus, it has no format to choose: what was
