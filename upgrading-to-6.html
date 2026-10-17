@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "rust";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-112591ad.js";
+            window.path_to_searchindex_js = "searchindex-94c411a4.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-0eac0ed4.js"></script>
@@ -183,47 +183,24 @@
                         <h1 id="upgrading-to-zbus-60"><a class="header" href="#upgrading-to-zbus-60">Upgrading to zbus 6.0</a></h1>
 <ul>
 <li><a href="#which-part-applies-to-you">Which part applies to you</a></li>
-<li><a href="#cargotoml">Cargo.toml</a></li>
+<li><a href="#cargo-features">Cargo features</a></li>
 <li><a href="#paths">Paths</a></li>
 <li><a href="#errors">Errors</a></li>
-<li><a href="#what-warns-what-is-silent-what-breaks">What warns, what is silent, what breaks</a></li>
+<li><a href="#what-the-compatibility-module-covers">What the compatibility module covers</a></li>
 <li><a href="#other-changes-in-60">Other changes in 6.0</a>
 <ul>
 <li><a href="#value-is-now-variant"><code>Value</code> is now <code>Variant</code></a></li>
 <li><a href="#builder-setters-defer-their-errors-to-build">Builder setters defer their errors to <code>build()</code></a></li>
 <li><a href="#property-methods-use-serde-traits">Property methods use Serde traits</a></li>
-<li><a href="#stream-constructors-take-an-owned-socket">Stream constructors take an owned socket</a></li>
-<li><a href="#vsock-is-not-a-transport-of-zbus-anymore">VSOCK is not a transport of zbus anymore</a></li>
-<li><a href="#the-encoding-context-has-no-format">The encoding context has no format</a></li>
-<li><a href="#structureseed-has-no-lifetime"><code>StructureSeed</code> has no lifetime</a></li>
-<li><a href="#propertiesproxyset-takes-a-variant"><code>PropertiesProxy::set</code> takes a <code>&amp;Variant</code></a></li>
-<li><a href="#dbusproxystart_service_by_name-returns-a-startservicereply"><code>DBusProxy::start_service_by_name</code> returns a <code>StartServiceReply</code></a></li>
-<li><a href="#name-types-validate-when-converted-from-a-variant">Name types validate when converted from a <code>Variant</code></a></li>
-<li><a href="#dictionary-keys-have-to-be-basic-types">Dictionary keys have to be basic types</a></li>
-<li><a href="#zbus_xml-borrows-from-the-document-it-parses"><code>zbus_xml</code> borrows from the document it parses</a></li>
-<li><a href="#zbus_xml-interface-members-are-iterators-in-document-order"><code>zbus_xml</code> interface members are iterators, in document order</a></li>
-<li><a href="#optionalt-compares-the-sentinel-before-converting"><code>Optional&lt;T&gt;</code> compares the sentinel before converting</a></li>
-<li><a href="#filepath-converts-back-to-std-types-with-tryfrom"><code>FilePath</code> converts back to std types with <code>TryFrom</code></a></li>
-<li><a href="#proxy-and-service-api-are-separate-features">Proxy and service API are separate features</a></li>
-<li><a href="#the-unixexec-and-ibus-transports-are-features">The <code>unixexec</code> and <code>ibus</code> transports are features</a></li>
-<li><a href="#the-service-side-objectmanager-is-a-feature">The service-side <code>ObjectManager</code> is a feature</a></li>
 <li><a href="#builderruntime-replaces-internal_executor"><code>Builder::runtime</code> replaces <code>internal_executor</code></a></li>
 <li><a href="#the-blocking-api-is-gone">The blocking API is gone</a></li>
-<li><a href="#logging-through-tracing-is-a-feature">Logging through <code>tracing</code> is a feature</a></li>
-<li><a href="#a-proxy-without-properties-has-no-properties-cache">A proxy without properties has no properties cache</a></li>
-<li><a href="#the-xdg-dbus-proxy-workarounds-are-gone">The xdg-dbus-proxy workarounds are gone</a></li>
-<li><a href="#listeners-are-zbus-types">Listeners are zbus types</a></li>
-<li><a href="#asyncdrop-is-declared-without-async-trait"><code>AsyncDrop</code> is declared without <code>async-trait</code></a></li>
-<li><a href="#queue-sizes-are-nonzerousize">Queue sizes are <code>NonZeroUsize</code></a></li>
-<li><a href="#objectserverat-hands-the-interface-back"><code>ObjectServer::at</code> hands the interface back</a></li>
-<li><a href="#dispatchresult2-is-dispatchresult-again"><code>DispatchResult2</code> is <code>DispatchResult</code> again</a></li>
-<li><a href="#bodydeserialize_unchecked-is-bodydeserialize_ignore_signature"><code>Body::deserialize_unchecked</code> is <code>Body::deserialize_ignore_signature</code></a></li>
-<li><a href="#some-error-replies-are-errorfdo">Some error replies are <code>Error::FDO</code></a></li>
-<li><a href="#errordbus-carries-any-d-bus-error"><code>Error::DBus</code> carries any D-Bus error</a></li>
-<li><a href="#the-apis-deprecated-in-5x-are-removed">The APIs deprecated in 5.x are removed</a></li>
-<li><a href="#a-renamed-zbus-dependency-needs-the-crate-attribute">A renamed <code>zbus</code> dependency needs the <code>crate</code> attribute</a></li>
 <li><a href="#the-flag-types-are-bitflags-types">The flag types are <code>bitflags</code> types</a></li>
 <li><a href="#the-enumflags2-feature-is-gone">The <code>enumflags2</code> feature is gone</a></li>
+<li><a href="#dictionary-keys-have-to-be-basic-types">Dictionary keys have to be basic types</a></li>
+<li><a href="#zbus_xml-borrows-from-the-document-and-keeps-its-order"><code>zbus_xml</code> borrows from the document and keeps its order</a></li>
+<li><a href="#a-renamed-zbus-dependency-needs-the-crate-attribute">A renamed <code>zbus</code> dependency needs the <code>crate</code> attribute</a></li>
+<li><a href="#the-apis-deprecated-in-5x-are-removed">The APIs deprecated in 5.x are removed</a></li>
+<li><a href="#smaller-changes">Smaller changes</a></li>
 </ul>
 </li>
 <li><a href="#a-stale-zvariant-in-the-dependency-graph">A stale zvariant in the dependency graph</a></li>
@@ -243,111 +220,55 @@
 </tbody>
 </table>
 </div>
-<p>The D-Bus API — connections, messages, proxies, the object server, <code>fdo</code> — now sits behind a
-<code>comms</code> Cargo feature that every runtime feature turns on, so <code>zbus</code> with its default features
-disabled is what <code>zvariant</code> and <code>zbus_names</code> used to be: the wire format and the name types, no
-connection code.</p>
 <p>GVariant support, deprecated in zvariant 5.15, is gone; it lives on in the <a href="https://crates.io/crates/zgvariant">zgvariant</a> crate.</p>
 <h2 id="which-part-applies-to-you"><a class="header" href="#which-part-applies-to-you">Which part applies to you</a></h2>
 <ul>
-<li><strong>You depend on <code>zbus</code>.</strong> Bump the version. <code>zbus::zvariant</code> is still there as a deprecated
-alias module, so almost everything keeps compiling with a warning; the handful of things that
-do break are listed <a href="#what-warns-what-is-silent-what-breaks">further down</a>. Move common types and derives to the <code>zbus</code> root and
-direct encoding and decoding calls to <code>zbus::wire</code> at your own pace. The compatibility module
-goes away in 7.0.</li>
-<li><strong>You depend on <code>zvariant</code> and not on <code>zbus</code>.</strong> Replace the dependency (below) and rename
-common types and derives from <code>zvariant::</code> to <code>zbus::</code>, minding that <a href="#value-is-now-variant"><code>Value</code> is now
-<code>Variant</code></a>; use <code>zbus::wire::</code> for direct encoding and decoding APIs.</li>
-<li><strong>You depend on <code>zbus_names</code>.</strong> Replace the dependency and rename <code>zbus_names::</code> to
-<code>zbus::names::</code>.</li>
+<li><strong>You depend on <code>zbus</code>.</strong> Bump the version and, if you disable the default features, see
+<a href="#cargo-features">Cargo features</a>. <code>zbus::zvariant</code> remains as a deprecated alias module until
+7.0, so most code keeps compiling with a warning; <a href="#what-the-compatibility-module-covers">what it does not cover</a> is listed
+below. Move common types and derives to the <code>zbus</code> root and encoding and decoding calls to
+<code>zbus::wire</code> at your own pace.</li>
+<li><strong>You depend on <code>zvariant</code> and not on <code>zbus</code>.</strong> Depend on <code>zbus</code> with <code>default-features = false</code>
+instead, with the same features: they kept their names, except for the removed <code>gvariant</code>,
+<code>ostree-tests</code> and <code>enumflags2</code>. Rename <code>zvariant::</code> to <code>zbus::</code> for common types and derives,
+minding that <a href="#value-is-now-variant"><code>Value</code> is now <code>Variant</code></a>, and to <code>zbus::wire::</code> for encoding and
+decoding APIs.</li>
+<li><strong>You depend on <code>zbus_names</code>.</strong> Depend on <code>zbus</code> with <code>default-features = false</code> instead and
+rename <code>zbus_names::</code> to <code>zbus::names::</code>.</li>
 <li><strong>You use the <code>gvariant</code> feature.</strong> Move to <a href="https://crates.io/crates/zgvariant">zgvariant</a>.</li>
 </ul>
-<h2 id="cargotoml"><a class="header" href="#cargotoml">Cargo.toml</a></h2>
-<p>zbus users change the version and nothing else:</p>
-<pre><code class="language-toml">[dependencies]
-zbus = "6"
-</code></pre>
-<p>The <code>default-features = false, features = ["tokio"]</code> idiom needs one more feature or two:
-<code>tokio</code> enables <code>comms</code>, the D-Bus connection layer, but the client-side proxy API and the
-service-side object server API are now behind the <code>proxy</code> and <code>service</code> features (see
-<a href="#proxy-and-service-api-are-separate-features">below</a>):</p>
-<pre><code class="language-toml"># Before
-[dependencies]
-zbus = { version = "5", default-features = false, features = ["tokio"] }
-
-# After
-[dependencies]
-zbus = { version = "6", default-features = false, features = ["tokio", "proxy", "service"] }
-</code></pre>
-<p>Wire-format-only users replace the crate. Every <code>zvariant</code> feature kept its name, except
-<code>gvariant</code>, <code>ostree-tests</code> and <code>enumflags2</code>, which are gone:</p>
-<pre><code class="language-toml"># Before
-[dependencies]
-zvariant = { version = "5", default-features = false, features = ["serde_bytes"] }
-
-# After
-[dependencies]
-zbus = { version = "6", default-features = false, features = ["serde_bytes"] }
-</code></pre>
-<p>and <code>zbus_names</code> users likewise:</p>
-<pre><code class="language-toml"># Before
-[dependencies]
-zbus_names = "4"
-
-# After
-[dependencies]
-zbus = { version = "6", default-features = false }
-</code></pre>
-<p>Four things to know about the features:</p>
+<h2 id="cargo-features"><a class="header" href="#cargo-features">Cargo features</a></h2>
+<p>A lot of the API is now behind new Cargo features. Those marked as default are on with a plain
+<code>zbus = "6"</code>; the others have to be enabled explicitly:</p>
 <ul>
-<li><code>enumflags2</code> is gone. zbus and zbus_names both asked <code>zvariant</code> for it, so anything with
-either in its graph got <code>BitFlags&lt;F&gt;: Type</code> without asking. zbus’s own flag types are no longer
-<code>enumflags2</code> types (see <a href="#the-flag-types-are-bitflags-types">below</a>), and a flags type of yours needs no feature to go
-over the bus: <a href="#the-enumflags2-feature-is-gone">The <code>enumflags2</code> feature is gone</a> says how to move it off <code>BitFlags</code>.</li>
-<li><code>arrayvec</code> was a zvariant-only feature and is available in zbus now.</li>
-<li><code>comms</code> pulls in the <code>uuid</code> crate — it parses D-Bus GUIDs — without turning on zbus’s own
-<code>uuid</code> feature, so the <code>Uuid</code> wire impls stay opt-in, as they were.</li>
-<li>Any D-Bus feature (<code>default-rt</code>, <code>tokio</code>, <code>tokio-multithread</code>, <code>p2p</code>, <code>bus-impl</code>) enables
-<code>comms</code>. In a workspace where one crate asks for the wire-only build
-and another for the full one, Cargo’s feature unification gives everybody the full build.
-That is a build-size question only; nothing behaves differently.</li>
+<li><code>comms</code>: the D-Bus API, i.e. connections, messages and <code>fdo</code>. Every other D-Bus feature, such as
+<code>tokio</code>, <code>proxy</code> or <code>p2p</code>, enables it. Without it, zbus is the wire format and the name types.</li>
+<li><code>proxy</code> (default): the client-side API, i.e. <code>Proxy</code>, <code>#[proxy]</code> and the <code>fdo::*Proxy</code> types.</li>
+<li><code>service</code> (default): the service-side API, i.e. <code>ObjectServer</code> and <code>#[interface]</code>.</li>
+<li><code>object-manager</code> (default): the service-side <code>fdo::ObjectManager</code>.</li>
+<li><code>tracing</code> (default): log events and spans through <a href="https://docs.rs/tracing"><code>tracing</code></a>.</li>
+<li><code>default-rt</code> (default): zbus’s own runtime, <a href="https://docs.rs/zruntime">zruntime</a>; replaces 5.x’s <code>async-io</code>.</li>
+<li><code>tokio-multithread</code>: runs <code>zbus::block_on</code> on a multi-threaded Tokio runtime.</li>
+<li><code>unixexec</code> and <code>ibus</code>: the <code>unixexec:</code> and <code>ibus:</code> transports. Without them, an address of that
+transport is rejected, including in <code>DBUS_SESSION_BUS_ADDRESS</code>.</li>
 </ul>
-<p>A crate that depends on <code>zbus_macros</code> directly keeps <code>proxy</code>, <code>interface</code> and <code>DBusError</code>
-without doing anything: <code>comms</code>, <code>proxy</code> and <code>service</code> are default features there. Only a
-direct dependency that had turned the (previously empty) defaults off <em>and</em> uses those macros
-needs <code>features = ["proxy"]</code> and/or <code>features = ["service"]</code> now (<code>DBusError</code> alone needs
-<code>comms</code>), or drops the <code>default-features = false</code>; the wire-format derives and <code>signature!</code> never
-needed it. zbus’s own dependency on the macro crate is such a defaults-off one, and its <code>comms</code>,
-<code>proxy</code> and <code>service</code> features switch the macro crate’s back on.</p>
-<p>Cargo rejects a dependency entry that names a feature the crate does not have, so a feature that is
-gone has to come off the entry. <code>async-io</code> (<a href="#builderruntime-replaces-internal_executor"><code>default-rt</code></a> replaces it),
-<code>blocking-api</code> (<a href="#the-blocking-api-is-gone">the blocking API is gone</a>), <code>vsock</code> and <code>tokio-vsock</code> (<a href="#vsock-is-not-a-transport-of-zbus-anymore">VSOCK is not
-a transport of zbus anymore</a>) are covered below. Six more are gone, and dropping them is all
-it takes:</p>
+<p>These features are gone and have to be removed from your dependency entry:</p>
 <ul>
-<li><code>async-fs</code>, a dummy that 5.x kept for <code>cargo semver</code> and that turned nothing on.</li>
-<li><code>async-executor</code>, <code>async-task</code>, <code>async-lock</code>, <code>async-process</code> and <code>blocking</code>. zbus never meant
-these as features: Cargo makes a feature of the same name out of every optional dependency that no
-<code>dep:</code> entry refers to, and only 5.x’s <code>async-io</code> feature turned these five on, to bring in
-crates that 6.0 does not depend on at all. If your own code uses one of those crates, depend on it
-directly.</li>
+<li><code>async-io</code>: use <code>default-rt</code>.</li>
+<li><code>blocking-api</code>: <a href="#the-blocking-api-is-gone">the blocking API is gone</a>.</li>
+<li><code>vsock</code> and <code>tokio-vsock</code>: VSOCK is no longer a transport. To use a VSOCK stream you open
+yourself, see <a href="faq.html#how-do-i-connect-over-vsock">the FAQ</a>.</li>
+<li><code>enumflags2</code>: see <a href="#the-enumflags2-feature-is-gone">The <code>enumflags2</code> feature is gone</a>.</li>
+<li><code>gvariant</code> and <code>ostree-tests</code>: see <a href="#gvariant">GVariant</a>.</li>
+<li><code>async-fs</code>, <code>async-executor</code>, <code>async-task</code>, <code>async-lock</code>, <code>async-process</code> and <code>blocking</code>: these
+were never meant to be features. If you use these crates, depend on them directly.</li>
 </ul>
-<p>The <code>tokio</code> feature turns on fewer of Tokio’s own features, too. zbus 5 enabled <code>rt</code>,
-<code>rt-multi-thread</code>, <code>net</code>, <code>time</code>, <code>fs</code>, <code>io-util</code>, <code>process</code>, <code>sync</code> and <code>tracing</code>; zbus 6 enables
-<code>rt</code>, <code>net</code>, <code>time</code> and <code>sync</code>. Nothing in zbus uses <code>tokio::fs</code> or the extension traits of
-<code>io-util</code>, so those two are off for good. The rest come back with the zbus feature that needs
-them: <code>rt-multi-thread</code> with <code>tokio-multithread</code>, <code>process</code> with <code>unixexec</code> and <code>ibus</code> (and on
-macOS, for <code>launchd:</code>), and <code>tracing</code> with <a href="#logging-through-tracing-is-a-feature">zbus’s own <code>tracing</code> feature</a>. A
-crate that used <code>tokio::fs</code>, <code>AsyncReadExt</code>, <code>AsyncWriteExt</code>, <code>tokio::process</code> or the multi-threaded
-runtime only because zbus switched the feature on for it fails to build now. Enable the Tokio
-features you use in your own dependency entry:</p>
-<pre><code class="language-toml">[dependencies]
-zbus = { version = "6", default-features = false, features = ["tokio", "proxy"] }
-# Enabled by zbus's `tokio` feature in 5.x, and not any more.
-tokio = { version = "1", features = ["fs", "io-util"] }
-</code></pre>
-<p>zbus 6 needs Rust 1.89 or newer, where zbus 5 needed 1.87. Every crate of the workspace declares it
-as its <code>rust-version</code>.</p>
+<p>zbus’s <code>tokio</code> feature no longer enables Tokio’s <code>fs</code>, <code>io-util</code>, <code>process</code>, <code>rt-multi-thread</code> and
+<code>tracing</code> features (the last three come back with zbus’s <code>unixexec</code>/<code>ibus</code>, <code>tokio-multithread</code>
+and <code>tracing</code> features). Enable the ones your code uses in your own <code>tokio</code> dependency.</p>
+<p>A direct <code>zbus_macros</code> dependency with <code>default-features = false</code> needs its new <code>proxy</code> and
+<code>service</code> features for <code>#[proxy]</code> and <code>#[interface]</code>, and <code>comms</code> for <code>DBusError</code>.</p>
+<p>zbus 6 needs Rust 1.89 or newer.</p>
 <h2 id="paths"><a class="header" href="#paths">Paths</a></h2>
 <div class="table-wrapper">
 <table>
@@ -370,193 +291,55 @@ as its <code>rust-version</code>.</p>
 </table>
 </div>
 <p>Encoding and decoding functions, <code>serialized</code>, <code>Endian</code> and its constants, <code>DynamicDeserialize</code>,
-<code>StructureBuilder</code>, the <code>*Seed</code> types, and <code>signature::{Child, Fields}</code> remain under <code>zbus::wire</code>.
-Use <code>zbus::Structure::builder()</code> to construct structures without importing <code>StructureBuilder</code>.</p>
-<p>On these derives the <code>crate</code> attribute names the module that holds the wire types, so
-point it at <code>zbus::wire</code>.
-Pointing it at <code>zbus::zvariant</code> works but routes the generated code through the deprecated
-module.</p>
-<p>After the rename the wire API reads like this:</p>
-<pre><code class="language-rust noplayground">use serde::{Deserialize, Serialize};
-use zbus::{Type, wire::{serialized::Context, to_bytes, LE}};
-
-#[derive(Deserialize, Serialize, Type, PartialEq, Debug)]
-struct Struct&lt;'s&gt; {
-    field1: u16,
-    field2: i64,
-    field3: &amp;'s str,
-}
-
-assert_eq!(Struct::SIGNATURE, "(qxs)");
-
-let ctxt = Context::new(LE, 0);
-let s = Struct { field1: 42, field2: i64::MAX, field3: "hello" };
-let encoded = to_bytes(ctxt, &amp;s).unwrap();
-let decoded: Struct&lt;'_&gt; = encoded.deserialize().unwrap().0;
-assert_eq!(decoded, s);</code></pre>
-<p>and the name types like this:</p>
-<pre><code class="language-rust noplayground">use zbus::names::{InterfaceName, UniqueName};
-
-let interface = InterfaceName::try_from("org.freedesktop.DBus").unwrap();
-assert_eq!(interface, "org.freedesktop.DBus");
-
-// A unique name has to start with a colon.
-UniqueName::try_from("not.unique").unwrap_err();</code></pre>
+<code>StructureBuilder</code>, the <code>*Seed</code> types, and <code>signature::{Child, Fields}</code> are in <code>zbus::wire</code>.</p>
 <h2 id="errors"><a class="header" href="#errors">Errors</a></h2>
-<p>There is one error type now. <code>zvariant::Error</code> and <code>zbus_names::Error</code> are gone, and so are the
-two <code>zbus::Error</code> variants that used to wrap them:</p>
-<pre><code class="language-rust compile_fail noplayground">use zbus::Error;
-
-fn describe(error: &amp;Error) -&gt; String {
-    match error {
-        // Neither variant exists in zbus 6.
-        Error::Variant(e) =&gt; e.to_string(),
-        Error::Names(e) =&gt; e.to_string(),
-        _ =&gt; error.to_string(),
-    }
-}</code></pre>
-<p>Their contents are variants of <code>zbus::Error</code> itself:</p>
-<pre><code class="language-rust noplayground">use zbus::Error;
-
-fn describe(error: &amp;Error) -&gt; String {
-    match error {
-        Error::IncorrectType =&gt; "a value had the wrong type".to_string(),
-        Error::SignatureMismatch(signature, expected) =&gt; {
-            format!("got {signature}, expected {expected}")
-        }
-        Error::InvalidObjectPath =&gt; "not a valid object path".to_string(),
-        Error::InvalidName(reason) =&gt; (*reason).to_string(),
-        Error::InvalidNameConversion { from, to } =&gt; format!("cannot convert {from} to {to}"),
-        _ =&gt; error.to_string(),
-    }
-}</code></pre>
-<p><code>?</code> keeps working everywhere: a function that returned <code>zvariant::Result&lt;T&gt;</code> now returns
-<code>zbus::Result&lt;T&gt;</code>, and the conversion that used to happen has become an identity.</p>
-<p>Five details that a <code>match</code> or a log line can notice:</p>
+<p>There is one error type now. <code>zvariant::Error</code>, <code>zbus_names::Error</code> and the <code>zbus::Error::Variant</code>
+and <code>zbus::Error::Names</code> variants that wrapped them are gone: their variants, such as
+<code>IncorrectType</code>, <code>SignatureMismatch</code> and <code>InvalidName</code>, are variants of <code>zbus::Error</code> itself. <code>?</code>
+keeps working. Besides that:</p>
 <ul>
-<li><code>zvariant::Error::Message(s)</code> — what serde’s <code>Error::custom</code> produced — is now
-<code>zbus::Error::Failure(s)</code>, which is where zbus already collected such errors.</li>
-<li><code>Error::InputOutput</code> prints as <code>I/O error: &lt;the io::Error&gt;</code>, where <code>zvariant::Error</code> printed
-the inner error on its own. zbus has always prefixed it and its rendering is the one that
-survived, so a log line or a string comparison that saw the bare message now sees the prefix.</li>
-<li><code>Error::MissingFramingOffset</code> is gone with the rest of GVariant, and so is
-<code>Error::IncompatibleFormat</code>: with a single wire format left, nothing can be incompatible with
-it.</li>
-<li><code>Error::Connection</code> carries a <code>Box&lt;Address&gt;</code> where zbus 5 inlined the <code>Address</code>, so
-<code>Error::Connection(_, addr)</code> now binds a box; dereference it where you need the <code>Address</code>
-itself. Its <code>Display</code> changed as well:
-<code>Failed to connect to address `&lt;address&gt;`: &lt;io::Error&gt;</code> is now
-<code>failed to connect to `&lt;address&gt;`: &lt;io::Error&gt;</code>.</li>
-<li><code>Error::MethodError</code>, <code>Error::FDO</code> and <code>Error::Connection</code> only exist with <code>comms</code> enabled.
-A <code>match</code> in a wire-only crate cannot name them. <code>Error</code> is <code>#[non_exhaustive]</code>, so the
-wildcard arm you already need covers them.</li>
+<li><code>zvariant::Error::Message(s)</code>, what serde’s <code>Error::custom</code> produced, is <code>Error::Failure(s)</code>.</li>
+<li><code>Error::InputOutput</code> displays as <code>I/O error: &lt;the io::Error&gt;</code>, with a prefix zvariant’s lacked.</li>
+<li><code>Error::MissingFramingOffset</code> and <code>Error::IncompatibleFormat</code> are gone with GVariant.</li>
+<li><code>Error::Connection</code> holds a <code>Box&lt;Address&gt;</code>.</li>
+<li><code>Error::MethodError</code>, <code>Error::FDO</code>, <code>Error::Connection</code> and the new <code>Error::DBus</code> only exist
+with <code>comms</code>.</li>
+<li>The <code>Invalid*Name</code> variants that <code>zbus_names</code> 4.1 deprecated are gone; <code>Error::InvalidName</code> is
+what you get.</li>
+<li><code>zbus::Error</code> no longer implements <code>From&lt;hex::FromHexError&gt;</code>.</li>
+<li><code>zbus_xml::Error</code>’s <code>Variant</code> and <code>Name</code> variants are now a single <code>Zbus(zbus::Error)</code> variant.</li>
+<li>An error type of yours that implements <code>From</code> for both <code>zbus::Error</code> and <code>zvariant::Error</code> now
+has the same impl twice (<code>E0119</code>). Delete the second one.</li>
 </ul>
-<p>Flattening also shows in two places no <code>match</code> arm mentions. <code>Error::Failure("x")</code> and what
-used to be <code>Error::Variant(zvariant::Error::Message("x"))</code> are one and the same value now, so
-code that relied on those two comparing unequal finds them equal. And <code>Error::source()</code> is one
-link shorter: the <code>Variant</code> and <code>Names</code> wrappers used to report their inner error as the source,
-where each flattened variant reports what that inner error reported — the <code>io::Error</code> behind
-<code>InputOutput</code>, nothing at all behind <code>Failure</code>.</p>
-<p>On the names side, the seven <code>Invalid*Name</code> variants that <code>zbus_names</code> 4.1 deprecated
-(<code>InvalidBusName</code>, <code>InvalidWellKnownName</code>, <code>InvalidUniqueName</code>, <code>InvalidInterfaceName</code>,
-<code>InvalidMemberName</code>, <code>InvalidPropertyName</code> and <code>InvalidErrorName</code>) were dropped rather than
-carried over. Nothing had returned them since 4.1; <code>Error::InvalidName</code> is what you get.
-Code that still spells <code>zbus::names::Error</code> or <code>zbus::names::Result</code> keeps working: both are
-aliases of the root types now. Being aliases, they collide the way <code>zvariant::Error</code> does: a
-crate that implements <code>From&lt;zbus::Error&gt;</code> and <code>From&lt;zbus::names::Error&gt;</code> for its own error type
-is writing the same impl twice, which the compiler rejects with E0119 — the duplicate-<code>From</code>
-breakage shown just below.</p>
-<p><code>zbus_xml</code> collapsed its error type the same way. Its 5.x <code>Error</code> had a <code>Variant(zvariant::Error)</code>
-variant and a <code>Name(zbus_names::Error)</code> variant; 6.0 has a single <code>Zbus(zbus::Error)</code> variant
-instead. Code matching on either of the old arms changes to match <code>Zbus(_)</code>, and <code>?</code> conversions
-into <code>zbus_xml</code>’s <code>Error</code> keep working unchanged.</p>
-<p>One thing to watch for. If your own error type implemented <code>From</code> for both of them:</p>
-<pre><code class="language-rust compile_fail noplayground"><span class="boring">#![allow(deprecated)]
-</span>struct MyError;
-
-impl From&lt;zbus::Error&gt; for MyError {
-    fn from(_: zbus::Error) -&gt; Self {
-        MyError
-    }
-}
-
-// This is what `impl From&lt;zvariant::Error&gt; for MyError` became: the same impl, twice.
-impl From&lt;zbus::zvariant::Error&gt; for MyError {
-    fn from(_: zbus::zvariant::Error) -&gt; Self {
-        MyError
-    }
-}</code></pre>
-<p>the compiler now rejects the duplicate. Delete the <code>zvariant</code> one.</p>
-<p>One more <code>From</code> impl is gone: <code>zbus::Error</code> no longer implements <code>From&lt;hex::FromHexError&gt;</code>. The
-impl existed for zbus’s own handshake parser, and it made the error type of the 0.x <code>hex</code> crate
-part of zbus’s public API. A function that returns <code>zbus::Result</code> and puts a <code>?</code> after
-<code>hex::decode</code> maps the error itself now; 5.x turned it into an <code>Error::Handshake</code> reading
-<code>Invalid hexcode: &lt;the error&gt;</code>.</p>
-<h2 id="what-warns-what-is-silent-what-breaks"><a class="header" href="#what-warns-what-is-silent-what-breaks">What warns, what is silent, what breaks</a></h2>
-<p><code>zbus::zvariant</code> is a deprecated module of type aliases, wrapper functions, constants and
-re-exports. It warns on:</p>
+<p>D-Bus error replies changed too:</p>
 <ul>
-<li><code>use zbus::zvariant;</code> and <code>use zbus::{zvariant, Connection};</code> — the idiom most zbus code uses.</li>
-<li>Every type alias, function and constant reached through it: <code>zbus::zvariant::Value</code>,
-<code>zbus::zvariant::to_bytes</code>, <code>zbus::zvariant::LE</code> and friends, and the <code>serialized</code> and
-<code>signature</code> submodules of aliases.</li>
+<li>A reply whose name is one that <code>fdo::Error</code> defines is now an <code>Error::FDO</code> rather than an
+<code>Error::MethodError</code>, so match on <code>fdo::Error::ServiceUnknown</code> and the like instead of comparing
+names.</li>
+<li>The new <code>Error::DBus</code> holds a D-Bus error of any type. It is how the <code>&lt;property&gt;_changed</code> method
+that <code>#[interface]</code> generates reports a failing getter’s error, an <code>fdo::Error</code> included, which
+5.x reported as <code>Error::FDO</code>. <code>fdo::Error::from(error)</code>, or <code>MyError::from(error)</code> for a
+<code>#[derive(DBusError)]</code> type with a <code>#[zbus(error)]</code> variant, gets the typed error back.</li>
 </ul>
-<p>Separately, <code>zbus::names::Error</code> and <code>zbus::names::Result</code> are deprecated aliases of the root
-types, also removed in 7.0.</p>
-<p>It stays silent on — Rust cannot attach a deprecation to a <code>pub use</code>:</p>
+<h2 id="what-the-compatibility-module-covers"><a class="header" href="#what-the-compatibility-module-covers">What the compatibility module covers</a></h2>
+<p><code>zbus::zvariant</code> warns on <code>use zbus::zvariant;</code> and on every type alias, function and constant it
+contains, such as <code>zbus::zvariant::Value</code>. It can’t warn on what it re-exports, such as the
+traits, the derives and the macros. Those keep resolving silently until 7.0, so search for
+<code>zvariant</code> rather than relying on the warnings. <code>zbus::names::Error</code> and <code>zbus::names::Result</code> are
+deprecated aliases too.</p>
+<p>It does not cover:</p>
 <ul>
-<li>The traits <code>Type</code>, <code>Basic</code>, <code>DynamicType</code>, <code>DynamicDeserialize</code>, <code>NoneValue</code>, <code>ReadBytes</code> and
-<code>WriteBytes</code>.</li>
-<li>The derives <code>Type</code>, <code>Value</code>, <code>OwnedValue</code>, <code>SerializeDict</code> and <code>DeserializeDict</code>, and the
-<code>signature!</code>, <code>impl_type_with_repr</code> and <code>static_str_type</code> macros.</li>
-<li>The <code>as_value</code>, <code>dbus</code> and <code>export</code> submodules, <code>DeserializeValue</code>, <code>SerializeValue</code>,
-<code>to_writer</code> and <code>to_writer_for_signature</code>.</li>
-<li><code>Variant</code>, <code>OwnedVariant</code> (the types and the derives) and <code>as_variant</code>, the 6.0 names that the
-code generated by a derive pointed at the module (<code>#[zbus(crate = "zbus::zvariant")]</code>) uses.</li>
+<li>Matching the removed <code>Error::Variant</code> and <code>Error::Names</code> variants.</li>
+<li>Implementing a trait for both <code>zbus::Error</code> and <code>zbus::zvariant::Error</code>, now the same type.</li>
+<li>Constructing <code>DynamicTuple</code> and <code>OwnedStructure</code> through the module, since a type alias is not a
+constructor (<code>E0423</code>). Use <code>zbus::DynamicTuple(..)</code> and <code>zbus::OwnedStructure(..)</code>.</li>
+<li>Matching on <code>Value::Value</code>, which is now <code>Variant::Variant</code>.</li>
+<li>Naming the old crates, as in <code>extern crate zvariant;</code> or <code>#[zbus(crate = "zvariant")]</code>.</li>
 </ul>
-<p>A single <code>use</code> line can straddle both lists: <code>use zbus::zvariant::{OwnedValue, Type, Value};</code>
-warns for the deprecated <code>OwnedValue</code> and <code>Value</code> aliases and stays silent for the <code>Type</code>
-derive.</p>
-<p>Silent is not the same as unchanged: those paths keep resolving until 7.0 removes the module, so
-grep for <code>zvariant</code> rather than trusting the warnings to find every site.</p>
-<p>And the module does not cover:</p>
-<ul>
-<li>
-<p>Matching the removed <code>zbus::Error::Variant(_)</code> and <code>zbus::Error::Names(_)</code> variants.</p>
-</li>
-<li>
-<p>Implementing a trait for <code>zbus::Error</code> and for <code>zbus::zvariant::Error</code>: they are one type
-now, so the second impl is a duplicate (the <code>From</code> example above).</p>
-</li>
-<li>
-<p>Calling a tuple-struct constructor through an alias. A type alias names a type, not its
-constructor function, so this is <code>E0423</code>:</p>
-<pre><code class="language-rust compile_fail noplayground"><span class="boring">#![allow(deprecated)]
-</span>let _ = zbus::zvariant::DynamicTuple((1u32, "a"));</code></pre>
-<p>Spell it <code>zbus::DynamicTuple((1u32, "a"))</code>. <code>DynamicTuple</code> and <code>OwnedStructure</code> are the
-two aliased types this bites; <code>zbus::as_variant::Serialize</code> also has a public tuple field
-but is re-exported rather than aliased, so it constructs fine either way.</p>
-</li>
-<li>
-<p>Matching on the <code>Value::Value</code> variant. <code>zbus::zvariant::Value</code> is an alias of the renamed
-enum, whose variants carry their new names, so a pattern on a variant nested in a variant is
-<code>zbus::Variant::Variant(..)</code> now (<a href="#value-is-now-variant">see below</a>). Constructing one as
-<code>Value::Value(..)</code> still compiles, with a warning.</p>
-</li>
-<li>
-<p>Anything that named the crates themselves: <code>extern crate zvariant;</code>, a <code>zvariant = "5"</code>
-dependency, <code>#[zbus(crate = "zvariant")]</code>.</p>
-</li>
-</ul>
-<p>The compatibility module is removed in zbus 7.0.</p>
 <h2 id="other-changes-in-60"><a class="header" href="#other-changes-in-60">Other changes in 6.0</a></h2>
-<p>More things break in 6.0 without being a consequence of the crate merge. They reach code
-that never mentioned <code>zvariant</code> or <code>zbus_names</code>.</p>
 <h3 id="value-is-now-variant"><a class="header" href="#value-is-now-variant"><code>Value</code> is now <code>Variant</code></a></h3>
-<p>The type that holds a value of any D-Bus type is named after the D-Bus <code>VARIANT</code> type now, which
-is what it encodes as: the signature of the value it holds, followed by that value. <code>Value</code> told
-a different story, since in other Serde-based APIs, such as <code>serde_json</code>, a <code>Value</code> encodes as the
-value it holds. Everything named after the type follows it:</p>
+<p>The type that holds a value of any D-Bus type is now named after the D-Bus <code>VARIANT</code> type, which is
+what it encodes as. The encoding does not change:</p>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -571,476 +354,38 @@ value it holds. Everything named after the type follows it:</p>
 </tbody>
 </table>
 </div>
-<p><code>Variant::Value</code> remains as a deprecated function that makes a <code>Variant::Variant</code>, so expressions
-like <code>Value::Value(inner)</code> keep compiling with a warning until 7.0. A pattern can not name a
-function, so a <code>match</code> on the variant has to use its new name.</p>
-<pre><code class="language-rust noplayground">use zbus::{OwnedVariant, Variant};
-
-// Was: `Value::new(Value::U32(42))`.
-let nested = Variant::new(Variant::U32(42));
-// Was: `Value::Value(inner)`.
-let Variant::Variant(inner) = nested else {
-    panic!("not a nested variant");
-};
-assert_eq!(*inner, Variant::U32(42));
-
-// Was: `OwnedValue::try_from(..)`.
-let owned = OwnedVariant::try_from(Variant::from("hello")).unwrap();
-assert_eq!(&lt;&amp;str&gt;::try_from(&amp;owned).unwrap(), "hello");</code></pre>
-<p>The encoding does not change. Code that reaches the type through the deprecated <code>zbus::zvariant</code>
-module keeps the old names, patterns on <code>Value::Value</code> aside, until 7.0 removes the module.</p>
+<p><code>Variant::Value</code> remains as a deprecated function until 7.0, so <code>Value::Value(inner)</code> keeps
+compiling as an expression, but a pattern has to use <code>Variant::Variant</code>.</p>
 <h3 id="builder-setters-defer-their-errors-to-build"><a class="header" href="#builder-setters-defer-their-errors-to-build">Builder setters defer their errors to <code>build()</code></a></h3>
-<p>Every builder setter generic over <code>TryInto</code> (a D-Bus name, an object path, a GUID, an address)
-used to convert its argument on the spot and return <code>Result&lt;Self&gt;</code>, forcing a <code>?</code> after every
-call in the chain even when the argument was an already-typed value that could not fail to
-convert. Setters now return <code>Self</code> and the builder records the first error one of them hits;
-<code>build()</code> returns that error, so a whole chain built from string arguments needs exactly one
-<code>?</code>, at the end. Nothing clears a recorded error, so calling a setter again with a valid value
-does not rescue a chain that has already passed an invalid one.</p>
-<p>Before, this no longer compiles:</p>
-<pre><code class="language-rust compile_fail noplayground">use zbus::Message;
-
-fn make_message() -&gt; zbus::Result&lt;Message&gt; {
-    Message::method_call("/org/zbus/Test", "Test")?
-        .destination("org.zbus.Test")?
-        .build(&amp;())
-}</code></pre>
-<p>After:</p>
-<pre><code class="language-rust noplayground">use zbus::Message;
-
-fn make_message() -&gt; zbus::Result&lt;Message&gt; {
-    Message::method_call("/org/zbus/Test", "Test")
-        .destination("org.zbus.Test")
-        .build(&amp;())
-}</code></pre>
-<p>This covers <code>message::Builder</code> and the <code>Message::method_call</code>, <code>Message::signal</code>,
-<code>Message::error</code> and <code>Message::method_return</code> constructors that create it; <code>proxy::Builder</code>; and
-<code>connection::Builder</code> and its <code>session</code>, <code>system</code>, <code>ibus</code>, <code>address</code> and <code>authenticated_socket</code>
-constructors. <code>match_rule::Builder::build()</code> moves the other way: it used to be infallible and
-now returns <code>Result&lt;MatchRule&lt;'_&gt;&gt;</code>, since it is the one builder whose fields were already fully
-validated by the time <code>build()</code> ran.</p>
-<p>To migrate:</p>
+<p>Builder setters and constructors that convert a <code>TryInto</code> argument (a name, a path, a GUID, an
+address) return <code>Self</code> instead of <code>Result&lt;Self&gt;</code>, and <code>build()</code> returns the first error any of them
+hit. Remove the <code>?</code> after:</p>
 <ul>
-<li>Remove the <code>?</code> (or <code>.unwrap()</code>/<code>.expect(...)</code>) after every builder setter call.</li>
-<li>Remove the <code>?</code> after <code>Message::method_call</code>, <code>Message::signal</code>, <code>Message::error</code> and
-<code>Message::method_return</code>.</li>
-<li>Remove the <code>?</code> after the <code>connection::Builder</code> constructors (<code>session</code>, <code>system</code>, <code>ibus</code>,
-<code>address</code>, <code>authenticated_socket</code>) and after <code>server</code>, <code>serve_at</code>, <code>name</code> and <code>unique_name</code>.</li>
-<li>Add a <code>?</code> after <code>MatchRule::builder()...build()</code>, which is now fallible.</li>
+<li>the setters of <code>message::Builder</code>, <code>proxy::Builder</code>, <code>connection::Builder</code> and
+<code>match_rule::Builder</code>;</li>
+<li><code>Message::method_call</code>, <code>Message::signal</code>, <code>Message::error</code> and <code>Message::method_return</code>;</li>
+<li><code>connection::Builder::session</code>, <code>system</code>, <code>ibus</code>, <code>address</code> and <code>authenticated_socket</code>.</li>
 </ul>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Before</th><th>After</th></tr>
-</thead>
-<tbody>
-<tr><td><code>.path("/org/zbus/Foo")?</code></td><td><code>.path("/org/zbus/Foo")</code></td></tr>
-<tr><td><code>Message::method_call("/", "Ping")?</code></td><td><code>Message::method_call("/", "Ping")</code></td></tr>
-<tr><td><code>MatchRule::builder().build()</code></td><td><code>MatchRule::builder().build()?</code></td></tr>
-</tbody>
-</table>
-</div>
-<p>A stale <code>?</code> left after a setter fails to compile with “the <code>?</code> operator can only be applied to
-values that implement <code>Try</code>”, pointing straight at the call site to clean up. A missing <code>?</code>
-after <code>MatchRule::builder()...build()</code> fails the opposite way, with a type mismatch between
-<code>MatchRule</code> and whatever type the rest of the function expected. Both are one-line fixes.</p>
+<p><code>match_rule::Builder::build()</code>, on the other hand, used to be infallible and needs a <code>?</code> now.</p>
 <h3 id="property-methods-use-serde-traits"><a class="header" href="#property-methods-use-serde-traits">Property methods use Serde traits</a></h3>
-<p>Property APIs now use the same Serde traits and <code>Type</code> bounds as regular methods. Client-side
-getters require <code>DeserializeOwned + Type</code> and setters require <code>Serialize + Type</code>; service-side
-getters require <code>Serialize + Type</code> and setters require <code>Deserialize + Type</code>. Replace custom
-<code>Value</code> and <code>OwnedValue</code> conversions (<code>Variant</code> and <code>OwnedVariant</code> now) with the appropriate Serde
-traits and <code>Type</code>.</p>
-<p>Property getters declared with <code>#[proxy]</code> must use owned result types. A proxy generated from an
-interface getter with a borrowing result is generic over its owned result type; select a
-<code>DeserializeOwned + Type</code> representation at the call site.</p>
-<p>Serde now also determines the property’s wire representation. Audit <code>#[serde(...)]</code> attributes
-before upgrading because they were not used by the old <code>Value</code> conversions. In particular, an
-ordinary Serde derive serializes a unit enum as its variant index, not an explicit Rust
-discriminant. Use <code>serde_repr</code> for an integer enum whose discriminants are its D-Bus values.</p>
-<p>A property type mismatch now returns <code>Error::SignatureMismatch</code> rather than
-<code>Error::IncorrectType</code>. The new error includes both the actual and expected signatures.</p>
-<h3 id="stream-constructors-take-an-owned-socket"><a class="header" href="#stream-constructors-take-an-owned-socket">Stream constructors take an owned socket</a></h3>
-<p>The stream constructors on <code>connection::Builder</code> no longer change their parameter type when Cargo
-features are unified: each one takes the socket the platform owns, and the connection drives it on
-whichever runtime it was built with. Hand a stream of another kind over as the socket it wraps.</p>
-<ul>
-<li><code>Builder::unix_stream</code> takes a <code>std::os::unix::net::UnixStream</code> (<code>uds_windows::UnixStream</code> on
-Windows). A <code>tokio::net::UnixStream</code> becomes one with <code>into_std()</code>; an <code>async_io::Async&lt;T&gt;</code>
-becomes one with <code>into_inner()</code>. Tokio cannot watch a unix socket on Windows, so a Tokio
-connection there can no longer use one — through this constructor or through a <code>unix:</code> address
-— even where the <code>default-rt</code> feature is also on. Give such a connection a TCP or
-<code>autolaunch:</code> address instead.</li>
-<li><code>Builder::tcp_stream</code> takes a <code>std::net::TcpStream</code>. A <code>tokio::net::TcpStream</code> becomes one with
-<code>into_std()</code>; an <code>async_io::Async&lt;T&gt;</code> becomes one with <code>into_inner()</code>.</li>
-</ul>
-<p><code>Builder::socket</code> is likewise no longer a way to bring a runtime’s own socket type along: the
-<code>Socket</code>, <code>ReadHalf</code> and <code>WriteHalf</code> implementations for <code>async_io::Async&lt;T&gt;</code> and for Tokio’s
-stream types are gone. Implement <code>Socket</code> for a transport that is neither of the two above, such
-as a VSOCK stream (<a href="#vsock-is-not-a-transport-of-zbus-anymore">see below</a>), an in-process channel or a tunnel of your own.</p>
-<h3 id="vsock-is-not-a-transport-of-zbus-anymore"><a class="header" href="#vsock-is-not-a-transport-of-zbus-anymore">VSOCK is not a transport of zbus anymore</a></h3>
-<p>The <code>vsock</code> and <code>tokio-vsock</code> features are gone, and with them <code>Builder::vsock_stream</code> and the
-<code>vsock:</code> address transport, <code>Transport::Vsock</code> and <code>address::transport::Vsock</code>: <code>Address::from_str</code>
-rejects a <code>vsock:</code> address now. D-Bus never took VSOCK up, neither in its specification nor in
-its reference implementation, so zbus no longer carries a transport of its own for it.</p>
-<p>A connection still runs over a VSOCK stream that you open yourself, such as a
-<code>tokio_vsock::VsockStream</code>: implement <a href="https://docs.rs/zbus/latest/zbus/connection/socket/trait.Socket.html"><code>Socket</code></a> for it and hand it to <code>Builder::socket</code>. The
-<code>Socket</code> documentation has such an implementation, for any stream of Tokio’s. A VSOCK peer has no
-credentials to check, so that implementation authenticates with <code>AuthMechanism::Anonymous</code>, the
-mechanism zbus’s own VSOCK transport used.</p>
-<h3 id="the-encoding-context-has-no-format"><a class="header" href="#the-encoding-context-has-no-format">The encoding context has no format</a></h3>
-<p><code>zbus::wire</code> speaks one format, so <code>serialized::Context</code> no longer says which:</p>
-<pre><code class="language-rust noplayground">use zbus::wire::{serialized::Context, to_bytes, LE};
-
-// Was `Context::new(Format::DBus, LE, 0)`.
-let ctxt = Context::new(LE, 0);
-let encoded = to_bytes(ctxt, &amp;"hello").unwrap();
-assert_eq!(encoded.len(), 10);</code></pre>
-<p><code>Context::new_dbus</code> is a deprecated alias of <code>Context::new</code>, removed in 7.0. <code>Context::format()</code>
-is gone, and so is the enum it returned: <code>zbus::wire::serialized::Format</code>, along with its
-<code>zbus::zvariant::serialized::Format</code> alias.</p>
-<p>Two signatures lose the argument with it. <code>Signature::alignment(format)</code> is
-<code>Signature::alignment_dbus()</code> — plus <code>Signature::alignment_gvariant()</code>, behind <code>zbus_utils</code>’s
-<code>gvariant</code> feature, for whoever needs the other rules. And <code>Basic::alignment(format)</code> is
-<code>Basic::alignment()</code>; its default body covers every type zbus can encode, so that one reaches you
-only through a direct <code>T::alignment(..)</code> call or an <code>impl Basic</code> that overrode it.</p>
-<h3 id="structureseed-has-no-lifetime"><a class="header" href="#structureseed-has-no-lifetime"><code>StructureSeed</code> has no lifetime</a></h3>
-<p><code>zbus::wire::StructureSeed</code>, the seed that deserializes a <code>Structure</code>, carried a lifetime parameter
-that nothing used: every constructor made a <code>StructureSeed&lt;'static&gt;</code>, and the parameter was there
-only to be spelled out. It is gone, so <code>StructureSeed&lt;'static&gt;</code> and <code>StructureSeed&lt;'_&gt;</code> are <code>E0107</code>
-now, wherever the type is named: a field, a signature, or the <code>Deserializer</code> of a
-<code>DynamicDeserialize</code> implementation of yours. The deprecated <code>zbus::zvariant::StructureSeed&lt;'a&gt;</code>
-keeps the parameter and ignores it, so code written against zvariant 5 still compiles through that
-path, with the usual deprecation warning:</p>
-<pre><code class="language-rust noplayground"><span class="boring">#![allow(deprecated)]
-</span>use zbus::{Signature, wire::StructureSeed};
-
-// Was: `-&gt; zbus::Result&lt;StructureSeed&lt;'static&gt;&gt;`.
-fn seed(signature: Signature) -&gt; zbus::Result&lt;StructureSeed&gt; {
-    StructureSeed::try_from(signature)
-}
-
-// Through the deprecated module, the lifetime is still accepted.
-fn seed_old_path(signature: Signature) -&gt; zbus::Result&lt;zbus::zvariant::StructureSeed&lt;'static&gt;&gt; {
-    seed(signature)
-}</code></pre>
-<h3 id="propertiesproxyset-takes-a-variant"><a class="header" href="#propertiesproxyset-takes-a-variant"><code>PropertiesProxy::set</code> takes a <code>&amp;Variant</code></a></h3>
-<p>The <code>org.freedesktop.DBus.Properties</code> proxy — <code>zbus::fdo::PropertiesProxy</code> — takes the new value
-by reference:</p>
-<pre><code class="language-rust noplayground">use zbus::{fdo::PropertiesProxy, names::InterfaceName, Variant};
-
-async fn mute(proxy: &amp;PropertiesProxy&lt;'_&gt;, iface: InterfaceName&lt;'_&gt;) -&gt; zbus::fdo::Result&lt;()&gt; {
-    // Was: proxy.set(iface, "Muted", Variant::from(true)).await
-    proxy.set(iface, "Muted", &amp;Variant::from(true)).await
-}</code></pre>
-<p><code>Proxy::set_property</code> and the setters that <code>#[proxy]</code> generates still take the value by value, so
-only code that drives the <code>Properties</code> interface by hand needs the <code>&amp;</code>.</p>
-<p>The macro change behind it widens what an <code>#[interface]</code> method may take: an argument that is a
-reference to anything other than <code>str</code> is deserialized as the owned type and then handed to the
-method by reference, so <code>&amp;Variant&lt;'_&gt;</code>, <code>&amp;Str&lt;'_&gt;</code> and the other borrowed wire types work as
-arguments now. What stops compiling is <code>&amp;[u8]</code> (or any other unsized <code>&amp;[T]</code>), which used to
-deserialize as a borrowed slice and now asks for an unsized <code>[u8]</code>; take <code>Vec&lt;u8&gt;</code>, or <code>&amp;Vec&lt;u8&gt;</code>
-to keep the reference. Property setters are unaffected: their value already arrived as a
-<code>Variant</code> to convert.</p>
-<h3 id="dbusproxystart_service_by_name-returns-a-startservicereply"><a class="header" href="#dbusproxystart_service_by_name-returns-a-startservicereply"><code>DBusProxy::start_service_by_name</code> returns a <code>StartServiceReply</code></a></h3>
-<p><code>fdo::DBusProxy::start_service_by_name</code> returns an <code>fdo::StartServiceReply</code>, which is <code>Success</code> or
-<code>AlreadyRunning</code>, where zbus 5 returned the raw reply code as a <code>u32</code>: 1 or 2. Its <code>flags</code>
-argument is still a <code>u32</code>. The <code>TryFrom&lt;u32&gt;</code> implementation of <code>StartServiceReply</code>, which 5.x
-callers used to convert the code, stays for code that holds a raw code. A caller that bound the
-result to a <code>u32</code> or compared it with a number fails to compile; one that ignored the result is
-unaffected:</p>
-<pre><code class="language-rust noplayground">use zbus::{
-    fdo::{DBusProxy, StartServiceReply},
-    names::WellKnownName,
-};
-
-async fn start(proxy: &amp;DBusProxy&lt;'_&gt;) -&gt; zbus::fdo::Result&lt;bool&gt; {
-    let name = WellKnownName::try_from("org.zbus.Test")?;
-    // Was: `proxy.start_service_by_name(name, 0).await? == 1`
-    let reply = proxy.start_service_by_name(name, 0).await?;
-
-    Ok(reply == StartServiceReply::Success)
-}</code></pre>
-<h3 id="name-types-validate-when-converted-from-a-variant"><a class="header" href="#name-types-validate-when-converted-from-a-variant">Name types validate when converted from a <code>Variant</code></a></h3>
-<p><code>TryFrom&lt;Variant&gt;</code> and <code>TryFrom&lt;OwnedVariant&gt;</code> for <code>ErrorName</code>, <code>InterfaceName</code>, <code>MemberName</code>,
-<code>PropertyName</code>, <code>UniqueName</code>, <code>WellKnownName</code> and their <code>Owned*</code> siblings run the validator that
-<code>TryFrom&lt;&amp;str&gt;</code> has always run, and return <code>Error::InvalidName</code> when it fails. In 5.x they wrapped
-the string as it came, so a malformed name off the wire became a typed name and surfaced later —
-as a method call with an empty destination, say. <code>BusName</code> and <code>OwnedBusName</code> already validated.</p>
-<pre><code class="language-rust noplayground">use zbus::{names::UniqueName, Optional, Variant};
-
-// Accepted in 5.x, an `Error::InvalidName` now.
-UniqueName::try_from(Variant::from("not.unique")).unwrap_err();
-
-// The empty string is D-Bus's "no name" sentinel, so it still reads back as `None`.
-let name = Optional::&lt;UniqueName&lt;'_&gt;&gt;::try_from(Variant::from("")).unwrap();
-assert!(Option::&lt;UniqueName&lt;'_&gt;&gt;::from(name).is_none());</code></pre>
-<p>A property getter typed as a name can therefore fail where it used to hand back a bogus name.</p>
-<h3 id="dictionary-keys-have-to-be-basic-types"><a class="header" href="#dictionary-keys-have-to-be-basic-types">Dictionary keys have to be basic types</a></h3>
-<p>D-Bus allows only basic types as dictionary keys: the numbers, <code>bool</code>, strings, object paths,
-signatures and file descriptors. zbus 5 did not hold you to it, so a <code>HashMap&lt;Vec&lt;u8&gt;, u8&gt;</code> had the
-signature <code>a{ayy}</code>, which is not a valid one, and a message that carried it made the bus
-disconnect its sender without a useful error. In 6.0 the key of a map has to implement <code>Basic</code>,
-where <code>Type</code> used to be enough, for:</p>
-<ul>
-<li><code>Type</code> for <code>HashMap&lt;K, V, H&gt;</code> and <code>BTreeMap&lt;K, V&gt;</code>;</li>
-<li>the conversions of both into <code>Variant</code>, <code>OwnedVariant</code> and <code>Dict</code>.</li>
-</ul>
-<p>The conversions from a <code>Variant</code> back into a map already asked for it. A map with another kind of
-key no longer compiles, with an unsatisfied <code>Basic</code> bound on the key type, wherever it is a method
-argument or result, a property, or a field of a type that derives <code>Type</code>. Two kinds of keys hit
-this.</p>
-<p>A key that is not a basic type on the wire, such as a <code>Vec&lt;u8&gt;</code> or a struct, made the map invalid,
-so such a map could not have worked on the bus in 5.x either. Use a basic type for the key or, when
-the key is a container, send an array of <code>(K, V)</code> pairs, a <code>Vec&lt;(K, V)&gt;</code>.</p>
-<p>A newtype around a basic type, such as <code>struct Key(u32)</code>, is a basic type on the wire too: deriving
-<code>Type</code> gives it the signature of the type it wraps, so a <code>HashMap&lt;Key, u8&gt;</code> had the valid signature
-<code>a{uy}</code> in 5.x and worked. The derive does not implement <code>Basic</code>, though. Implement it by hand,
-forwarding its two constants to the wrapped type, and the map keeps its signature and its encoding:</p>
-<pre><code class="language-rust noplayground">use std::collections::HashMap;
-
-use serde::{Deserialize, Serialize};
-use zbus::{
-    Basic, Type,
-    wire::{serialized::Context, to_bytes, LE},
-};
-
-#[derive(Deserialize, Serialize, Type, PartialEq, Eq, Hash, Debug)]
-struct Key(u32);
-
-impl Basic for Key {
-    const SIGNATURE_CHAR: char = u32::SIGNATURE_CHAR;
-    const SIGNATURE_STR: &amp;'static str = u32::SIGNATURE_STR;
-}
-
-assert_eq!(HashMap::&lt;Key, u8&gt;::SIGNATURE, "a{uy}");
-
-let map = HashMap::from([(Key(7), 1u8)]);
-let encoded = to_bytes(Context::new(LE, 0), &amp;map).unwrap();
-let decoded: HashMap&lt;Key, u8&gt; = encoded.deserialize().unwrap().0;
-assert_eq!(decoded, map);</code></pre>
-<h3 id="zbus_xml-borrows-from-the-document-it-parses"><a class="header" href="#zbus_xml-borrows-from-the-document-it-parses"><code>zbus_xml</code> borrows from the document it parses</a></h3>
-<p><code>zbus_xml</code> no longer copies every string out of the introspection document.
-<code>Node::try_from(&amp;str)</code> now borrows names, annotation values, argument names and Telepathy
-docstrings from the input where it can; the lifetime that <code>Node&lt;'a&gt;</code>, <code>Interface&lt;'a&gt;</code> and
-friends always carried is now meaningful.</p>
-<p>Consequently <code>Annotation</code>, <code>Arg</code> and the <code>telepathy</code> type-definition types (<code>TypeDef</code>,
-<code>SimpleType</code>, <code>Enum</code>, <code>EnumValue</code>, <code>Struct</code>, <code>Member</code>, <code>Mapping</code>) gained a lifetime parameter.
-Code that names them in a type position needs <code>&lt;'_&gt;</code> (or a named lifetime); code that only
-calls accessors keeps working, since they still return <code>&amp;str</code>. A function that hands out a
-borrow from one of them now has two lifetimes to choose from, so it has to name the one it
-borrows from:</p>
-<pre><code class="language-rust noplayground">use zbus_xml::{Arg, Node};
-
-// Was: fn describe(arg: &amp;Arg) -&gt; Option&lt;&amp;str&gt;
-fn describe&lt;'a&gt;(arg: &amp;'a Arg&lt;'_&gt;) -&gt; Option&lt;&amp;'a str&gt; {
-    arg.name()
-}
-
-// Keep the tree past the document it was parsed from.
-fn parse(xml: &amp;str) -&gt; zbus_xml::Result&lt;Node&lt;'static&gt;&gt; {
-    Ok(Node::try_from(xml)?.into_owned())
-}</code></pre>
-<p><code>Node::from_reader</code> and <code>Node::from_reader_with_warnings</code> return <code>Node&lt;'static&gt;</code>: they read the
-whole input into memory, so the tree owns its strings. Callers that bound the result to
-<code>Node&lt;'a&gt;</code> keep compiling.</p>
-<p>To keep a borrowed tree (or part of it) past the document, use the new
-<code>into_owned()</code>/<code>to_owned()</code> methods on every tree type, mirroring <code>zbus::names</code> types. Strings
-in the tree are <code>zbus::Str</code>, the same type the name types wrap, so cloning an owned tree is
-cheap.</p>
-<p>Two leftovers of the quick-xml parser that 5.2 replaced are gone too. The tree types no longer
-implement <code>Serialize</code> and <code>Deserialize</code> (the derives described quick-xml’s <code>@name</code> attribute
-convention, not a format anyone writes), and <code>zbus_xml::Signature</code> — a newtype that only
-existed to be deserialized from an owned string — is replaced by <code>zbus::Signature</code> itself.
-<code>Arg::ty</code>, <code>Property::ty</code> and the Telepathy <code>ty()</code> accessors return <code>&amp;zbus::Signature</code>, so
-drop any <code>.inner()</code> or <code>.into_inner()</code> call on their result.</p>
-<h3 id="zbus_xml-interface-members-are-iterators-in-document-order"><a class="header" href="#zbus_xml-interface-members-are-iterators-in-document-order"><code>zbus_xml</code> interface members are iterators, in document order</a></h3>
-<p><code>Interface::methods()</code>, <code>signals()</code>, <code>properties()</code>, <code>annotations()</code> and <code>telepathy_types()</code> return
-an <code>impl Iterator&lt;Item = &amp;T&gt;</code> where 5.x returned a <code>&amp;[T]</code>. What needed a slice no longer compiles:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Before</th><th>After</th></tr>
-</thead>
-<tbody>
-<tr><td><code>interface.methods().iter()</code></td><td><code>interface.methods()</code></td></tr>
-<tr><td><code>interface.methods().len()</code></td><td><code>interface.methods().count()</code></td></tr>
-<tr><td><code>interface.methods()[0]</code>, <code>interface.methods().first()</code></td><td><code>interface.methods().next()</code></td></tr>
-<tr><td><code>interface.methods().is_empty()</code></td><td><code>interface.methods().next().is_none()</code></td></tr>
-<tr><td><code>interface.methods().to_vec()</code></td><td><code>interface.methods().cloned().collect::&lt;Vec&lt;_&gt;&gt;()</code></td></tr>
-</tbody>
-</table>
-</div>
-<p>A <code>for</code> loop over the result reads the same. <code>Node::interfaces()</code>, <code>nodes()</code> and
-<code>telepathy_types()</code>, and the <code>args()</code> and <code>annotations()</code> of the other types, are still slices.</p>
-<p>The new <code>Interface::children()</code> yields the methods, signals, properties and annotations together,
-as <code>zbus_xml::Child</code> values, in the order the document defines them. The Telepathy docstring and
-type definitions are not among them; <code>docstring()</code> and <code>telepathy_types()</code> still return those.</p>
-<pre><code class="language-rust noplayground">use zbus_xml::{Child, Interface};
-
-fn summarize(interface: &amp;Interface&lt;'_&gt;) {
-    // Was: `interface.methods().len()` and `interface.methods()[0]`.
-    println!("{} methods", interface.methods().count());
-    if let Some(first) = interface.methods().next() {
-        println!("the first is {}", first.name());
-    }
-
-    // Every member, in document order.
-    for child in interface.children() {
-        match child {
-            Child::Method(method) =&gt; println!("method {}", method.name()),
-            Child::Signal(signal) =&gt; println!("signal {}", signal.name()),
-            Child::Property(property) =&gt; println!("property {}", property.name()),
-            Child::Annotation(annotation) =&gt; println!("annotation {}", annotation.name()),
-        }
-    }
-}</code></pre>
-<p>The order shows in three more places. <code>Node::to_writer</code> writes the members of an interface in
-document order, where it wrote the methods, then the properties, the signals and the annotations.
-Two interfaces with the same members listed in a different order are no longer equal, even when
-the members of each kind are in the same order. And <code>zbus_xmlgen</code> emits the members of a generated
-trait in document order, where it sorted the methods, the signals and the properties by name, in
-that order. Regenerating a checked-in trait reorders its members, and that is all this change does
-to it.</p>
-<h3 id="optionalt-compares-the-sentinel-before-converting"><a class="header" href="#optionalt-compares-the-sentinel-before-converting"><code>Optional&lt;T&gt;</code> compares the sentinel before converting</a></h3>
-<p><code>TryFrom&lt;Variant&gt;</code> and <code>TryFrom&lt;OwnedVariant&gt;</code> for <code>Optional&lt;T&gt;</code> check the incoming value against
-<code>T::null_value()</code> first and convert only when it does not match. Their bound moved from
-<code>T: PartialEq&lt;&lt;T as NoneValue&gt;::NoneType&gt;</code> to <code>&lt;T as NoneValue&gt;::NoneType: Into&lt;Variant&lt;'_&gt;&gt;</code>.
-The types you would normally put in an <code>Optional</code> — strings, numbers, flags, the name types —
-satisfy it; a <code>NoneValue</code> implementation of your own does not automatically, and loses these two
-conversions if its <code>NoneType</code> has no <code>Into&lt;Variant&gt;</code>.</p>
-<p>The order matters for any <code>T</code> whose conversion validates its input. The name types above reject
-the empty string, and the sentinel now maps to <code>None</code> without being converted at all.</p>
-<p>The public <code>NoneValue::NoneType</code> associated type for each owned name type is now <code>String</code> rather
-than <code>&amp;'static str</code>. This allows <code>Optional&lt;Owned*Name&gt;</code> to implement <code>DeserializeOwned</code> without
-changing its wire encoding.</p>
-<h3 id="filepath-converts-back-to-std-types-with-tryfrom"><a class="header" href="#filepath-converts-back-to-std-types-with-tryfrom"><code>FilePath</code> converts back to std types with <code>TryFrom</code></a></h3>
-<p><code>zbus::FilePath</code> wraps a nul-terminated byte array (D-Bus signature <code>ay</code>), because a file path
-need not be valid UTF-8. Its conversions back to the std path types used to assume otherwise:
-<code>From&lt;FilePath&gt; for OsString</code> built the <code>OsString</code> with <code>OsString::from_encoded_bytes_unchecked</code>,
-undefined behaviour on Windows for bytes that are not valid WTF-8; <code>From&lt;&amp;FilePath&gt; for &amp;Path</code>
-panicked on a non-UTF-8 path, the case the type exists for; and <code>From&lt;FilePath&gt; for PathBuf</code> went
-through <code>to_string_lossy()</code>, silently replacing invalid bytes with <code>U+FFFD</code>.</p>
-<p>The four conversions — to <code>OsString</code>, <code>PathBuf</code>, <code>&amp;Path</code> and, new, <code>&amp;OsStr</code> — are <code>TryFrom</code>
-impls now, with <code>type Error = zbus::Error</code> on every platform. On unix, where <code>OsStr</code> is a byte
-string like <code>FilePath</code> itself, they hand back the original bytes and never fail. Elsewhere no
-lossless mapping to <code>OsStr</code> exists, so they succeed only when the bytes are valid UTF-8 and return
-<code>Error::Utf8</code> otherwise.</p>
-<p>Before, this no longer compiles:</p>
-<pre><code class="language-rust compile_fail noplayground">use std::path::PathBuf;
-use zbus::FilePath;
-
-fn path_buf(file_path: FilePath&lt;'_&gt;) -&gt; PathBuf {
-    PathBuf::from(file_path)
-}</code></pre>
-<p>After:</p>
-<pre><code class="language-rust noplayground">use std::path::PathBuf;
-use zbus::FilePath;
-
-fn path_buf(file_path: FilePath&lt;'_&gt;) -&gt; zbus::Result&lt;PathBuf&gt; {
-    PathBuf::try_from(file_path)
-}</code></pre>
-<p>The same applies to <code>OsString::from(file_path)</code>, <code>&lt;&amp;Path&gt;::from(&amp;file_path)</code> and the matching
-<code>.into()</code> calls: spell them <code>try_from</code> or <code>try_into</code> and handle the <code>Result</code>. On unix the error
-arm is unreachable in practice, but the signature is the same everywhere so that portable code
-has one form to write.</p>
-<p>Code that needs the raw path off unix has <code>FilePath::as_c_str()</code>, which is new: it returns the
-nul-terminated bytes as they are on every platform, and <code>FilePath</code> implements <code>AsRef&lt;CStr&gt;</code> to
-match.</p>
-<p>Conversions into <code>FilePath</code> — <code>From&lt;&amp;Path&gt;</code>, <code>From&lt;PathBuf&gt;</code>, <code>From&lt;&amp;OsStr&gt;</code>, <code>From&lt;OsString&gt;</code>,
-<code>From&lt;&amp;CStr&gt;</code>, <code>From&lt;CString&gt;</code>, <code>From&lt;&amp;str&gt;</code> and so on — are unchanged, and
-<code>FilePath::to_string_lossy()</code> remains the explicit lossy option.</p>
-<h3 id="proxy-and-service-api-are-separate-features"><a class="header" href="#proxy-and-service-api-are-separate-features">Proxy and service API are separate features</a></h3>
-<p>The client-side proxy API (<code>zbus::proxy</code>, <code>zbus::Proxy</code>, <code>#[proxy]</code>, the <code>fdo::*Proxy</code> types)
-and the service-side object server API (<code>zbus::object_server</code>, <code>zbus::ObjectServer</code>,
-<code>#[interface]</code>, <code>Connection::object_server</code>, <code>Builder::serve_at</code>) are behind the <code>proxy</code> and
-<code>service</code> features respectively. Both are default features, so a plain <code>zbus = "6"</code> dependency
-is unaffected. A <code>default-features = false</code> build has to ask for the half it uses:</p>
-<pre><code class="language-toml">[dependencies]
-# A pure client.
-zbus = { version = "6", default-features = false, features = ["tokio", "proxy"] }
-# A pure service.
-zbus = { version = "6", default-features = false, features = ["tokio", "service"] }
-</code></pre>
-<p>Leaving out the half you don’t use keeps its code out of your binary, which even fat LTO could
-not do before. Everything else in the D-Bus API (<code>Connection</code>, <code>Message</code>, <code>MessageStream</code>,
-<code>MatchRule</code>, the plain <code>fdo</code> types and errors, <code>Connection::request_name</code>) needs neither.</p>
-<h3 id="the-unixexec-and-ibus-transports-are-features"><a class="header" href="#the-unixexec-and-ibus-transports-are-features">The <code>unixexec</code> and <code>ibus</code> transports are features</a></h3>
-<p>The <code>unixexec:</code> and <code>ibus:</code> address transports run a program to reach the bus, which links the
-code that spawns and waits on that program into every binary. They are behind the <code>unixexec</code> and
-<code>ibus</code> features now, neither of which is a default feature, so a build that connects through
-either has to name it:</p>
-<pre><code class="language-toml">[dependencies]
-zbus = { version = "6", features = ["unixexec"] }
-</code></pre>
-<p><code>Transport::Unixexec</code>, <code>Transport::Ibus</code>, <code>transport::Unixexec</code>, <code>transport::Ibus</code> and
-<code>connection::Builder::ibus</code> exist only with their feature, and <code>Address::from_str</code> rejects the
-address of a transport that was left out. That goes for an address in <code>DBUS_SESSION_BUS_ADDRESS</code>
-or <code>DBUS_SYSTEM_BUS_ADDRESS</code> too.</p>
-<h3 id="the-service-side-objectmanager-is-a-feature"><a class="header" href="#the-service-side-objectmanager-is-a-feature">The service-side <code>ObjectManager</code> is a feature</a></h3>
-<p>The object server emits <code>InterfacesAdded</code> and <code>InterfacesRemoved</code> on behalf of any
-<a href="https://docs.rs/zbus/6/zbus/fdo/struct.ObjectManager.html"><code>fdo::ObjectManager</code></a> registered above an object, which links that interface, its signal
-emission and the property gathering behind it into every service. That is behind the new
-<code>object-manager</code> feature, a default feature which implies <code>service</code>, so a plain <code>zbus = "6"</code>
-dependency keeps it. A <code>default-features = false</code> build that registers an <code>ObjectManager</code> has to
-name it:</p>
-<pre><code class="language-toml">[dependencies]
-zbus = { version = "6", default-features = false, features = ["tokio", "object-manager"] }
-</code></pre>
-<p><code>fdo::ObjectManager</code> exists only with the feature. The <code>ObjectManagerProxy</code> and its signal
-streams only need <code>proxy</code>, as before.</p>
+<p>Properties are converted through Serde and <code>Type</code>, like method arguments, rather than through
+<code>Variant</code> conversions. Client-side getters need <code>DeserializeOwned + Type</code> and setters
+<code>Serialize + Type</code>; service-side getters need <code>Serialize + Type</code> and setters
+<code>Deserialize + Type</code>. A <code>#[proxy]</code> property getter has to return an owned type.</p>
+<p>Check the <code>#[serde(...)]</code> attributes of your property types, since they now decide the wire format.
+In particular, a derived <code>Serialize</code> encodes a unit enum as its variant index, not its
+discriminant; use <code>serde_repr</code> where the discriminants are the D-Bus values. A property of the
+wrong type fails with <code>Error::SignatureMismatch</code> rather than <code>Error::IncorrectType</code>.</p>
 <h3 id="builderruntime-replaces-internal_executor"><a class="header" href="#builderruntime-replaces-internal_executor"><code>Builder::runtime</code> replaces <code>internal_executor</code></a></h3>
-<p>A connection used to pick its executor by cargo feature, with
-<code>Builder::internal_executor(false)</code> and <code>Connection::executor().tick()</code> as the way to drive
-zbus’s tasks from another runtime. That pair is gone, together with the <code>Executor</code> and <code>Task</code>
-types. A connection takes its readiness, its timers, its internal tasks and its blocking work
-from one runtime: Tokio when the <code>tokio</code> feature is on and a runtime is current, otherwise
-<a href="https://docs.rs/zruntime">zruntime</a> (the <code>default-rt</code> feature, on by default), or whatever you pass to
-<code>Builder::runtime</code>:</p>
-<pre class="playground"><code class="language-rust no_run edition2024"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>use zbus::{Connection, Result, connection::Builder, runtime::traits::Runtime};
-
-async fn connect(runtime: impl Runtime) -&gt; Result&lt;Connection&gt; {
-    Builder::session().runtime(runtime).build().await
-}
-<span class="boring">}</span></code></pre>
-<p>5.x’s <code>async-io</code> feature has no 6.0 equivalent by that name — it’s gone outright, with no
-compatibility alias. <code>default-rt</code> is the default, so a plain <code>zbus = "6"</code> dependency carries it
-without asking by name; a <code>default-features = false</code> build that named <code>async-io</code> explicitly replaces
-that name with <code>default-rt</code>. The feature names zbus’s default runtime, which is <a href="https://docs.rs/zruntime">zruntime</a>, rather
-than the crate that provides it. Dropping the name outright instead of renaming it only keeps a
-connection working when the build also enables the <code>tokio</code> feature or hands a runtime to
-<code>Builder::runtime</code> — otherwise nothing supplies a backend and building a connection returns
-<code>Error::Unsupported</code>. The backend behind it changed too: 5.x’s feature pulled in the <code>async-io</code>,
-<code>async-executor</code>, <code>async-task</code> and <code>blocking</code> crates, whereas 6.0’s <code>default-rt</code> feature builds on
-<a href="https://docs.rs/zruntime">zruntime</a> — a reactor and task scheduler of its own, one runtime per thread that runs
-<code>zbus::block_on</code>, driven by that thread — and depends on none of the four crates above.</p>
-<p>The <a href="https://docs.rs/zbus/latest/zbus/runtime/traits/index.html"><code>runtime::traits</code></a> module documents what an implementation of
-<code>zbus::runtime::traits::Runtime</code> supplies. A connection’s runtime also spawns the helper process
-behind a <code>unixexec:</code>, <code>ibus:</code> or <code>launchd:</code> address and watches the pipes to it, as it watches
-every socket the connection owns, so <code>async-process</code> is no longer a dependency. The two built-in
-backends are implementations of the same trait, picked by cargo feature, so this method is for the
-runtime your application already has. Nothing changes for connections built without <code>runtime</code>.</p>
-<p>zbus’s async locks are not part of the trait: 5.x takes them from the <code>async-lock</code> crate; 6.0 has
-no dependency on it at all and takes them from zruntime, which it depends on anyway, or from Tokio
-when the <code>tokio</code> feature is enabled. Neither choice needs a cargo feature of its own, so a build
-with <code>comms</code> but neither <code>default-rt</code> nor <code>tokio</code> pulls in no lock crate for them.</p>
-<p>A runtime may also abort or drop a task it was given, so the connection no longer relies on its
-socket-reader task running to its end: however that task stops, <code>Connection::closed()</code> resolves,
-pending method calls fail and every <code>MessageStream</code> on the connection ends. A stream therefore
-also ends once <code>Connection::close()</code> has been called, after yielding whatever it already held.</p>
-<p>A build with <code>comms</code> but neither <code>default-rt</code> nor <code>tokio</code> is valid, something 5.x has no
-equivalent of, and needs no lock feature for zbus’s locks; every connection in it needs a
-<code>runtime</code>, over an address or over a socket you supply.</p>
-<p>The examples rendered throughout this book and zbus’s API documentation connect to a bus without
-naming a runtime, so they need one of the built-in backends and report <code>Error::Unsupported</code> in a
-build that has neither.</p>
+<p><code>Builder::internal_executor</code>, <code>Connection::executor()</code> and the <code>Executor</code> and <code>Task</code> types are
+gone. A connection runs on Tokio when the <code>tokio</code> feature is on and a Tokio runtime is current,
+otherwise on <a href="https://docs.rs/zruntime">zruntime</a> (the <code>default-rt</code> feature), unless you pass an implementation of
+<a href="https://docs.rs/zbus/latest/zbus/runtime/traits/index.html"><code>runtime::traits::Runtime</code></a> to <code>Builder::runtime</code>. A build with neither
+<code>default-rt</code> nor <code>tokio</code> has to pass one, or building a connection returns <code>Error::Unsupported</code>.</p>
+<p>A connection’s <code>MessageStream</code>s now end once it is closed.</p>
 <h3 id="the-blocking-api-is-gone"><a class="header" href="#the-blocking-api-is-gone">The blocking API is gone</a></h3>
-<p>5.x’s <code>zbus::blocking</code> module — <code>blocking::Connection</code>, <code>blocking::Proxy</code>, the
-<code>*ProxyBlocking</code> types <code>#[proxy]</code> generated, <code>blocking::ObjectServer</code> and the signal, property
-and message iterators — and its <code>blocking-api</code> cargo feature have no 6.0 equivalent. A program
-without an async runtime of its own drives the async API with <code>zbus::block_on</code>, which with the
-<code>default-rt</code> feature, on by default, also runs the connection’s work on the calling thread:</p>
+<p><code>zbus::blocking</code>, the <code>*ProxyBlocking</code> types and the <code>blocking-api</code> feature have no equivalent in
+6.0. Drive the async API with <code>zbus::block_on</code> instead, ideally once around the whole program:</p>
 <pre><code class="language-rust compile_fail noplayground">// 5.x
 let connection = zbus::blocking::Connection::session()?;
 let proxy = FooProxyBlocking::new(&amp;connection)?;
@@ -1052,399 +397,26 @@ let answer = zbus::block_on(async {
     let proxy = FooProxy::new(&amp;connection).await?;
     proxy.bar().await
 })?;</code></pre>
-<p>One <code>zbus::block_on</code> around the whole program is the shape to prefer, because a call returning
-with the connection alive leaves its work to a helper thread until the next call. A blocking
-iterator becomes the stream it wrapped, driven with <code>StreamExt::next</code> inside the future.</p>
-<p>5.x’s <code>blocking::MessageIterator</code> and <code>blocking::SignalIterator</code> removed their match rule from
-the bus before <code>Drop</code> returned. Dropping a <code>MessageStream</code> or <code>SignalStream</code> only queues that
-removal, which is harmless: until the rule is gone, the connection merely receives messages
-nobody reads. A program that wants the rule gone before continuing can import <code>zbus::AsyncDrop</code>
-and call <code>stream.async_drop().await</code> inside the <code>block_on</code> future instead of letting the stream
-drop.</p>
-<p>Two rules come with <code>zbus::block_on</code>: the future must not block the thread waiting for work the
-connection has to do, and the function must not be called from inside a task zbus is running,
-where it panics.</p>
-<p>With the <code>tokio</code> feature, 5.x’s blocking API ran on a multi-threaded Tokio runtime of zbus’s own,
-whose worker threads kept every connection on it going. <code>zbus::block_on</code> runs on a
-single-threaded one instead, so a connection’s work only runs while a thread is inside that call.
-Enable the <code>tokio-multithread</code> feature (which enables <code>tokio</code>) to keep the multi-threaded runtime.</p>
-<p>The <code>#[proxy]</code> attributes <code>gen_blocking</code>, <code>blocking_name</code> and <code>blocking_object</code> are gone
-with the proxies they configured, and so is <code>gen_async</code>, since the async proxy is the only one;
-<code>async_name</code> stays; <code>async_object</code> is <code>proxy_type_name</code> (the old name is still accepted,
-undocumented). See <a href="faq.html#how-do-i-use-zbus-from-synchronous-code">the FAQ</a>.</p>
-<h3 id="logging-through-tracing-is-a-feature"><a class="header" href="#logging-through-tracing-is-a-feature">Logging through <code>tracing</code> is a feature</a></h3>
-<p>zbus’s log events and spans go through <a href="https://docs.rs/tracing"><code>tracing</code></a>, which is now behind the <code>tracing</code>
-feature. It is a default feature, so a plain <code>zbus = "6"</code> dependency is unaffected. A
-<code>default-features = false</code> build that wants zbus’s logs has to name it:</p>
-<pre><code class="language-toml">[dependencies]
-zbus = { version = "6", default-features = false, features = ["tokio", "proxy", "tracing"] }
-</code></pre>
-<p>With the feature off, zbus emits no log events or spans at all, and it no longer enables
-<code>tokio</code>’s own <code>tracing</code> feature either.</p>
-<h3 id="a-proxy-without-properties-has-no-properties-cache"><a class="header" href="#a-proxy-without-properties-has-no-properties-cache">A proxy without properties has no properties cache</a></h3>
-<p><code>proxy::Defaults</code> has a new constant, <code>HAS_PROPERTIES</code>, which <code>#[proxy]</code> sets from the trait,
-and <code>proxy::Builder::build</code> requires the trait. A proxy whose interface has no properties never
-sets up the properties cache, whatever the <code>CacheProperties</code> setting, so a program whose proxies
-have none carries no cache code at all. A hand-written <code>Defaults</code> implementation can leave the
-constant at its default of <code>true</code>.</p>
-<h3 id="the-xdg-dbus-proxy-workarounds-are-gone"><a class="header" href="#the-xdg-dbus-proxy-workarounds-are-gone">The xdg-dbus-proxy workarounds are gone</a></h3>
-<p>zbus 5 checked the <code>FLATPAK_ID</code> environment variable and, when it was set, worked around two bugs in
-xdg-dbus-proxy, the proxy Flatpak puts between a sandboxed app and the bus: it did not pipeline the
-Unix FD negotiation during the handshake (<a href="https://github.com/flatpak/xdg-dbus-proxy/issues/21">xdg-dbus-proxy#21</a>) and it serialized message creation
-and sending behind a global lock (<a href="https://github.com/flatpak/xdg-dbus-proxy/issues/46">xdg-dbus-proxy#46</a>). Both were fixed in xdg-dbus-proxy 0.1.6,
-released in 2024. zbus 6 drops the workarounds and stops special-casing Flatpak altogether, so a
-sandboxed app gets the same pipelined handshake and lock-free sending as everything else.</p>
-<p>If your app runs in a Flatpak whose runtime still ships an older xdg-dbus-proxy, connections can
-fail or messages can come out mis-serialized. Update the runtime, get the fix backported, or stay on
-zbus 5 until you can.</p>
-<h3 id="listeners-are-zbus-types"><a class="header" href="#listeners-are-zbus-types">Listeners are zbus types</a></h3>
-<p><code>Connection::monitor_activity</code> returns a <code>connection::ActivityListener</code>, and
-<code>ResponseDispatchNotifier::new</code> returns an <code>object_server::ResponseDispatchListener</code> along with
-the notifier. Both are zbus types implementing <code>Future&lt;Output = ()&gt;</code>; 5.x returned
-<code>event_listener::EventListener</code> in both places. Code that awaits the listener keeps working
-unchanged. Code that names the type spells out the new one instead, and code that calls an
-<code>event_listener::Listener</code> method on it, such as <code>wait()</code>, awaits it instead, for example through
-<code>zbus::block_on</code>.</p>
-<h3 id="asyncdrop-is-declared-without-async-trait"><a class="header" href="#asyncdrop-is-declared-without-async-trait"><code>AsyncDrop</code> is declared without <code>async-trait</code></a></h3>
-<p><code>zbus::AsyncDrop</code>, the async counterpart of <code>Drop</code> that <code>MessageStream</code>, <code>SignalStream</code> and the
-signal streams of <code>#[proxy]</code> implement, was declared with <code>#[async_trait]</code>, so what an
-implementation had to look like was whatever that crate expanded it to. The method is declared
-natively now, as <code>fn async_drop(self) -&gt; impl Future&lt;Output = ()&gt; + Send</code>. Callers are unaffected:
-<code>stream.async_drop().await</code> reads the same. An implementation written with <code>#[async_trait]</code> no
-longer matches the declaration (<code>E0195</code>). It drops the attribute and keeps its <code>async fn</code>, whose
-future has to be <code>Send</code>, as it always had to be.</p>
-<p>Before, this no longer compiles:</p>
-<pre><code class="language-rust compile_fail noplayground">use async_trait::async_trait;
-use zbus::AsyncDrop;
-
-struct Guard;
-
-#[async_trait]
-impl AsyncDrop for Guard {
-    async fn async_drop(self) {}
-}</code></pre>
-<p>After:</p>
-<pre><code class="language-rust noplayground">use zbus::AsyncDrop;
-
-struct Guard;
-
-impl AsyncDrop for Guard {
-    async fn async_drop(self) {}
-}</code></pre>
-<h3 id="queue-sizes-are-nonzerousize"><a class="header" href="#queue-sizes-are-nonzerousize">Queue sizes are <code>NonZeroUsize</code></a></h3>
-<p>A queue’s capacity is a <code>std::num::NonZeroUsize</code> where 5.x had a <code>usize</code>.
-<code>connection::Builder::max_queued</code>, <code>Connection::set_max_queued</code> and <code>MessageStream::set_max_queued</code>
-take one, <code>MessageStream::for_match_rule</code> takes an <code>Option&lt;NonZeroUsize&gt;</code> as its last argument, and
-<code>Connection::max_queued</code> and <code>MessageStream::max_queued</code> return one.</p>
-<p>A queue that holds no messages is no queue, and 5.x treated a zero capacity differently from one
-method to the next: <code>for_match_rule</code> panicked when it made the channel of a match rule nobody had
-subscribed to yet, <code>Builder::max_queued</code> and <code>Connection::set_max_queued</code> left the main queue with
-no room, and <code>MessageStream::set_max_queued</code> — like <code>for_match_rule</code> for a rule that was already
-subscribed to — ignored it without a word. Zero is a type error now, on all of those paths.</p>
-<p>Build the value where you used to write the number. <code>NonZeroUsize::new(64).unwrap()</code> does for a
-literal, and works in a <code>const</code> too, where a zero is a build error rather than a run-time panic. For
-a size that comes from the user, <code>NonZeroUsize::new(n)</code> returns an <code>Option</code>: handle the <code>None</code>, by
-rejecting the input or by falling back to a size of your own. <code>for_match_rule</code> still takes an
-<code>Option</code>, so the size goes in as <code>Some(size)</code>, and <code>None</code> still asks for the default. Where a
-getter’s result has to be a <code>usize</code>, in arithmetic or in a comparison with a plain number, call
-<code>.get()</code> on it:</p>
-<pre><code class="language-rust noplayground">use std::num::NonZeroUsize;
-use zbus::{Connection, MatchRule, MessageStream};
-
-// Was: const DEFAULT_QUEUED: usize = 128;
-const DEFAULT_QUEUED: NonZeroUsize = NonZeroUsize::new(128).unwrap();
-
-async fn watch(conn: &amp;Connection, rule: MatchRule&lt;'_&gt;, wanted: usize) -&gt; zbus::Result&lt;usize&gt; {
-    // `wanted` comes from the user, so it can be zero, which `new` reports as `None`: fall back.
-    let size = NonZeroUsize::new(wanted).unwrap_or(DEFAULT_QUEUED);
-
-    // Was: MessageStream::for_match_rule(rule, conn, Some(wanted))
-    let stream = MessageStream::for_match_rule(rule, conn, Some(size)).await?;
-
-    // Was: Ok(stream.max_queued())
-    Ok(stream.max_queued().get())
-}</code></pre>
-<h3 id="objectserverat-hands-the-interface-back"><a class="header" href="#objectserverat-hands-the-interface-back"><code>ObjectServer::at</code> hands the interface back</a></h3>
-<p><code>ObjectServer::at</code> returns <code>Result&lt;Option&lt;I&gt;&gt;</code> where zbus 5 returned <code>Result&lt;bool&gt;</code>. In 5.x, <code>true</code>
-meant that the interface was registered and <code>false</code> that the path already had an interface of the
-same name: the object server was left as it was and the interface you passed was dropped, so a
-caller that wanted to try another path had to build it again. In 6.0, <code>None</code> means that it was
-registered, and <code>Some(iface)</code> that the path already had an interface of that name. The object
-server is still left as it was, and the interface you passed comes back in the <code>Some</code>:</p>
-<pre><code class="language-rust noplayground">use zbus::{ObjectServer, interface};
-
-struct Counter(u32);
-
-#[interface(name = "org.zbus.Counter")]
-impl Counter {
-    fn value(&amp;self) -&gt; u32 {
-        self.0
-    }
-}
-
-async fn register(server: &amp;ObjectServer) -&gt; zbus::Result&lt;()&gt; {
-    // Was: `if server.at("/org/zbus/Counter1", Counter(0)).await? {`
-    match server.at("/org/zbus/Counter1", Counter(0)).await? {
-        None =&gt; println!("registered"),
-        // The path is taken: the counter is handed back, to register at the next one.
-        Some(counter) =&gt; {
-            server.at("/org/zbus/Counter2", counter).await?;
-        }
-    }
-
-    Ok(())
-}</code></pre>
-<p>A check on the <code>bool</code> fails to compile; <code>.is_none()</code> on the result is the direct translation of the
-old <code>true</code>. A call that never looked at the result, such as <code>server.at(path, iface).await?;</code>,
-compiles unchanged and still does not notice a taken path; the <code>Some</code> it drops is the interface
-that was never registered.</p>
-<h3 id="dispatchresult2-is-dispatchresult-again"><a class="header" href="#dispatchresult2-is-dispatchresult-again"><code>DispatchResult2</code> is <code>DispatchResult</code> again</a></h3>
-<p>This one concerns only a hand-written implementation of the <code>Interface</code> trait, which is documented
-as unstable; <code>#[interface]</code> implements it for you. zbus 5.15 introduced <code>DispatchResult2</code> as the
-type that the <code>call</code>, <code>call_mut</code> and <code>set</code> methods of the trait return, and deprecated the
-<code>DispatchResult</code> they returned until then. 6.0 drops the old type, <a href="#the-apis-deprecated-in-5x-are-removed">as the list
-below</a> says, and the replacement takes the plain name back:
-<code>object_server::DispatchResult</code> is what 5.x called <code>DispatchResult2</code>. <code>DispatchResult2</code> remains as
-a deprecated alias of it until 7.0.</p>
-<p>The <code>Async</code> variant’s future is where the types differ. Property handlers can fail with any D-Bus
-error in 6.0, and the future carries it as a <code>zbus::BoxDBusError</code>, an alias of
-<code>Box&lt;dyn DBusError + Send + Sync&gt;</code>:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Type</th><th>Output of its <code>Async</code> future</th></tr>
-</thead>
-<tbody>
-<tr><td>5.x <code>DispatchResult</code></td><td><code>zbus::Result&lt;()&gt;</code></td></tr>
-<tr><td>5.x <code>DispatchResult2</code></td><td><code>fdo::Result&lt;()&gt;</code></td></tr>
-<tr><td>6.0 <code>DispatchResult</code>, and the <code>DispatchResult2</code> alias</td><td><code>Result&lt;(), BoxDBusError&gt;</code></td></tr>
-</tbody>
-</table>
-</div>
-<p>Code that spelled <code>DispatchResult2</code> renames it, at its own pace since the alias only warns, and
-changes the output type of the future too if it spelled that out. Code that still used the old
-<code>DispatchResult</code> finds the same name on a different type, and has to switch to the new shape.
-<code>DispatchResult::new_async</code>, which builds the <code>Async</code> variant from a future that returns a
-<code>Result&lt;T, E&gt;</code> with a <code>DBusError</code> for <code>E</code> and sends the reply, is unchanged. <code>fdo::Error</code> and
-<code>zbus::Error</code> convert into a <code>BoxDBusError</code>, with <code>?</code> or <code>.into()</code>:</p>
-<pre><code class="language-rust noplayground">use zbus::{BoxDBusError, fdo, object_server::DispatchResult};
-
-// Was: `-&gt; DispatchResult2&lt;'call&gt;`, and the future returned an `fdo::Result&lt;()&gt;`.
-fn refuse&lt;'call&gt;() -&gt; DispatchResult&lt;'call&gt; {
-    DispatchResult::Async(Box::pin(async {
-        let error: BoxDBusError = fdo::Error::AccessDenied("not today".to_string()).into();
-
-        Err(error)
-    }))
-}</code></pre>
-<p>The property side of the trait changed the same way: <code>Interface::get</code> and <code>Interface::set_mut</code> fail
-with a <code>BoxDBusError</code> where they had an <code>fdo::Error</code>.</p>
-<h3 id="bodydeserialize_unchecked-is-bodydeserialize_ignore_signature"><a class="header" href="#bodydeserialize_unchecked-is-bodydeserialize_ignore_signature"><code>Body::deserialize_unchecked</code> is <code>Body::deserialize_ignore_signature</code></a></h3>
-<p><code>message::Body::deserialize_unchecked</code> was renamed and no alias was kept. The old name suggested
-that the caller had to uphold something, as <code>_unchecked</code> does elsewhere in Rust, but nothing about
-it was unsafe. Unlike <code>Body::deserialize</code>, which reads the body as its signature says, the method
-skips the signature and assumes the one of the requested type instead, and it still returns an error
-when the bytes do not fit that type:</p>
-<pre><code class="language-rust noplayground">use zbus::Message;
-
-fn first_argument(msg: &amp;Message) -&gt; zbus::Result&lt;String&gt; {
-    // Was: msg.body().deserialize_unchecked::&lt;String&gt;()
-    msg.body().deserialize_ignore_signature::&lt;String&gt;()
-}</code></pre>
-<h3 id="some-error-replies-are-errorfdo"><a class="header" href="#some-error-replies-are-errorfdo">Some error replies are <code>Error::FDO</code></a></h3>
-<p>zbus 5 reported every D-Bus error reply as <code>Error::MethodError</code>. In 6.0 an error reply whose name
-is one of those defined by <code>fdo::Error</code> is an <code>Error::FDO</code> holding the matching <code>fdo::Error</code>
-variant instead, so a caller can match on <code>fdo::Error::ServiceUnknown</code> rather than compare a name.
-A reply with any other name is still an <code>Error::MethodError</code>. The reply message that <code>MethodError</code>
-carries is not kept in the <code>FDO</code> case.</p>
-<p>A <code>match</code> arm that looks for one of those names in an <code>Error::MethodError</code> stops matching:</p>
-<pre><code class="language-rust noplayground">use zbus::{Error, fdo};
-
-fn is_service_unknown(error: &amp;Error) -&gt; bool {
-    // Was: matches!(error, Error::MethodError(name, ..)
-    //          if name.as_str() == "org.freedesktop.DBus.Error.ServiceUnknown")
-    let Error::FDO(e) = error else {
-        return false;
-    };
-
-    matches!(**e, fdo::Error::ServiceUnknown(_))
-}</code></pre>
-<h3 id="errordbus-carries-any-d-bus-error"><a class="header" href="#errordbus-carries-any-d-bus-error"><code>Error::DBus</code> carries any D-Bus error</a></h3>
-<p><code>zbus::Error</code> has a new variant, <code>Error::DBus(Arc&lt;dyn DBusError + Send + Sync&gt;)</code>, for a D-Bus error
-of any type: an <code>fdo::Error</code> or a <code>#[derive(DBusError)]</code> type of your own. Like <code>Error::FDO</code>, it
-exists only with <code>comms</code>; it displays as the error it holds does, and it has no <code>source()</code>. <code>Error</code>
-is <code>#[non_exhaustive]</code>, so the wildcard arm that a <code>match</code> on it needs anyway covers the new
-variant.</p>
-<p>It turns up in one place. Property getters and setters of an <code>#[interface]</code> can fail with any
-<code>DBusError</code> in 6.0, where 5.x allowed only <code>fdo::Error</code>, and the <code>&lt;property&gt;_changed</code> method that
-<code>#[interface]</code> generates to emit <code>PropertiesChanged</code> (see <a href="service.html">the service chapter</a>) has to
-return a <code>zbus::Result</code>. When the getter fails, the method reports its error as <code>Error::DBus</code>, with
-the name and description intact. That goes for an <code>fdo::Error</code> too, which 5.x reported as
-<code>Error::FDO</code>, so an arm that expects <code>Error::FDO</code> from that method no longer matches. Convert the
-<code>Error</code> to get the typed error back: <code>fdo::Error::from(error)</code> does it for the standard ones, and so
-does <code>MyError::from(error)</code> for a <code>#[derive(DBusError)]</code> type that has a <code>#[zbus(error)]</code> variant.
-Both go by the name of the D-Bus error, as they already did for <code>Error::FDO</code> and
-<code>Error::MethodError</code>:</p>
-<pre><code class="language-rust noplayground">use zbus::{Error, fdo};
-
-fn is_access_denied(error: Error) -&gt; bool {
-    // Was: matches!(error, Error::FDO(e) if matches!(*e, fdo::Error::AccessDenied(_)))
-    matches!(fdo::Error::from(error), fdo::Error::AccessDenied(_))
-}</code></pre>
-<h3 id="the-apis-deprecated-in-5x-are-removed"><a class="header" href="#the-apis-deprecated-in-5x-are-removed">The APIs deprecated in 5.x are removed</a></h3>
-<p>The APIs below were deprecated in 5.x, and 6.0 drops them instead of carrying them over: the
-deprecation was the notice. All of them but the attribute in the second item warned in 5.19, so a
-build there that is free of warnings has little left to do:</p>
-<ul>
-<li><code>object_server::SignalContext</code> is <code>SignalEmitter</code>, and <code>InterfaceRef::signal_context()</code> is
-<code>signal_emitter()</code>.</li>
-<li>The <code>#[zbus(signal_context)]</code> argument attribute of <code>#[interface]</code> methods, which 5.x accepted
-without a warning as the old spelling of <code>#[zbus(signal_emitter)]</code>, is rejected as an unknown
-attribute.</li>
-<li><code>Connection::peer_credentials()</code> is <code>peer_creds()</code>. It caches the credentials and returns them
-behind a reference to an <code>Arc</code>, where the old method returned an owned <code>ConnectionCredentials</code>.</li>
-<li><code>zbus::AuthMechanism</code>, the re-export at the root, is <code>zbus::connection::AuthMechanism</code>, which
-is also spelled <code>zbus::conn::AuthMechanism</code>.</li>
-<li><code>DeserializeValue</code> and <code>SerializeValue</code> are <code>zbus::as_variant::Deserialize</code> and
-<code>zbus::as_variant::Serialize</code>. The old names are neither at the root nor in <code>zbus::wire</code>; only
-the deprecated <code>zbus::zvariant</code> module still has them, silently, until 7.0 removes it.</li>
-<li>The old <code>object_server::DispatchResult</code>, which <code>DispatchResult2</code> replaced. The name now belongs
-to what 5.x called <code>DispatchResult2</code>, so code that still used the old enum has to switch to the
-shape of the new one: see <a href="#dispatchresult2-is-dispatchresult-again"><code>DispatchResult2</code> is <code>DispatchResult</code> again</a>.</li>
-<li><code>zbus_xmlgen::write_interfaces</code> is <code>CodeGenerator::file_code</code>, and <code>GenTrait</code> is
-<code>CodeGenerator::interface_code</code>. <code>with_service</code>, <code>with_path</code> and <code>with_format</code> configure the
-generator in place of the <code>service</code> and <code>path</code> parameters of the function and the fields of the
-struct. <code>write_interfaces</code> always formatted the code, and the generator does so only after
-<code>with_format(true)</code>.</li>
-<li><code>zbus_xml::Error::QuickXml</code> and <code>Error::QuickXmlSer</code>, with the <code>DeError</code> and <code>SeError</code> types they
-held. Nothing has returned them since 5.2; match on <code>Error::Xml</code> or <code>Error::Io</code> instead.</li>
-</ul>
-<h3 id="a-renamed-zbus-dependency-needs-the-crate-attribute"><a class="header" href="#a-renamed-zbus-dependency-needs-the-crate-attribute">A renamed <code>zbus</code> dependency needs the <code>crate</code> attribute</a></h3>
-<p>zbus 5’s macros read the Cargo.toml of the crate they were expanded in to find out what its <code>zbus</code>
-dependency is called, so a renamed one worked without any help. The macro crate no longer does that
-(<code>proc-macro-crate</code> is not a dependency of it anymore): the macros name <code>::zbus</code>, and the wire
-derives <code>::zbus::wire</code>, whatever the dependency is called. A renamed one, like this, is out of
-their sight, and so is zbus when it reaches your code through a re-export of another crate:</p>
-<pre><code class="language-toml">[dependencies]
-my_zbus = { package = "zbus", version = "6" }
-</code></pre>
-<p>Point the macros at it with the <code>crate</code> attribute. Its value is a path that starts with the name of
-a crate, and the macros put the leading <code>::</code> in front of it. On <code>#[proxy]</code>, <code>#[interface]</code> and
-<code>#[derive(DBusError)]</code> the attribute names the zbus crate. On the wire derives — <code>Type</code>, <code>Variant</code>,
-<code>OwnedVariant</code>, <code>SerializeDict</code> and <code>DeserializeDict</code> — it names the <code>wire</code> module, as
-<a href="#paths">above</a>:</p>
-<pre><code class="language-rust noplayground"><span class="boring">extern crate zbus as my_zbus;
-</span>use my_zbus::{DBusError, Type, interface, proxy};
-
-#[proxy(
-    interface = "org.zbus.Test",
-    default_service = "org.zbus.Test",
-    default_path = "/org/zbus/Test",
-    crate = "my_zbus"
-)]
-trait Test {
-    fn ping(&amp;self) -&gt; my_zbus::Result&lt;()&gt;;
-}
-
-struct Service;
-
-#[interface(name = "org.zbus.Test", crate = "my_zbus")]
-impl Service {
-    fn ping(&amp;self) {}
-}
-
-#[derive(Debug, DBusError)]
-#[zbus(prefix = "org.zbus.Test", crate = "my_zbus")]
-enum Error {
-    Failed,
-}
-
-#[derive(Type)]
-#[zbus(crate = "my_zbus::wire")]
-struct Data {
-    field: u32,
-}</code></pre>
-<p>Without the attribute the macros fail with <code>could not find `zbus` in the list of imported crates</code>.
-<code>signature!</code> takes no attribute at all, so it cannot find a renamed zbus that way. Put
-<code>extern crate my_zbus as zbus;</code> in the crate root to make <code>::zbus</code> resolve for every macro at once,
-<code>signature!</code> included, and none of them needs the attribute any more. Or parse the signature at run
-time, with <code>"a{sv}".parse::&lt;Signature&gt;()</code>.</p>
+<p>A blocking iterator becomes the stream it wrapped, driven with <code>StreamExt::next</code>. With the <code>tokio</code>
+feature, <code>zbus::block_on</code> uses a single-threaded runtime, so a connection’s work only runs inside
+it; the <code>tokio-multithread</code> feature gives you the multi-threaded runtime 5.x used. See
+<a href="faq.html#how-do-i-use-zbus-from-synchronous-code">the FAQ</a> for more.</p>
+<p>The <code>gen_blocking</code>, <code>blocking_name</code>, <code>blocking_object</code> and <code>gen_async</code> attributes of <code>#[proxy]</code> are
+gone, and <code>async_object</code> is now spelled <code>proxy_type_name</code>.</p>
 <h3 id="the-flag-types-are-bitflags-types"><a class="header" href="#the-flag-types-are-bitflags-types">The flag types are <code>bitflags</code> types</a></h3>
-<p><code>message::Flags</code>, <code>proxy::MethodFlags</code> and <code>fdo::RequestNameFlags</code> used to be <code>enumflags2</code>
-enums, one variant per flag, and the API spelt a set of them <code>BitFlags&lt;Flags&gt;</code>,
-<code>BitFlags&lt;MethodFlags&gt;</code> and <code>BitFlags&lt;RequestNameFlags&gt;</code>. Each is now a set of flags itself,
-made with the <a href="https://docs.rs/bitflags"><code>bitflags</code></a> crate, and the API takes or returns it without the <code>BitFlags</code>
-wrapper:</p>
-<ul>
-<li><code>Connection::request_name_with_flags</code> and <code>fdo::DBusProxy::request_name</code> take a
-<code>RequestNameFlags</code>.</li>
-<li><code>Proxy::call_with_flags</code> takes a <code>MethodFlags</code>.</li>
-<li><code>message::PrimaryHeader::flags</code> returns a <code>Flags</code>, and <code>set_flags</code> takes one.</li>
-<li><code>message::Builder::with_flags</code> still takes a <code>Flags</code>, but that is a set now, so one call can
-add several flags.</li>
-</ul>
-<p>The flags themselves are associated constants, named in upper snake case:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Before</th><th>After</th></tr>
-</thead>
-<tbody>
-<tr><td><code>NoReplyExpected</code> (<code>Flags</code> and <code>MethodFlags</code>)</td><td><code>NO_REPLY_EXPECTED</code></td></tr>
-<tr><td><code>NoAutoStart</code> (<code>Flags</code> and <code>MethodFlags</code>)</td><td><code>NO_AUTO_START</code></td></tr>
-<tr><td><code>AllowInteractiveAuth</code> (<code>Flags</code> and <code>MethodFlags</code>)</td><td><code>ALLOW_INTERACTIVE_AUTH</code></td></tr>
-<tr><td><code>RequestNameFlags::AllowReplacement</code></td><td><code>RequestNameFlags::ALLOW_REPLACEMENT</code></td></tr>
-<tr><td><code>RequestNameFlags::ReplaceExisting</code></td><td><code>RequestNameFlags::REPLACE_EXISTING</code></td></tr>
-<tr><td><code>RequestNameFlags::DoNotQueue</code></td><td><code>RequestNameFlags::DO_NOT_QUEUE</code></td></tr>
-</tbody>
-</table>
-</div>
-<p>A single flag is a set already, so drop the <code>.into()</code> that used to turn one into a <code>BitFlags</code>, and
-write <code>BitFlags::empty()</code> and <code>BitFlags::default()</code> as <code>RequestNameFlags::empty()</code> and
-<code>RequestNameFlags::default()</code>:</p>
-<pre><code class="language-rust noplayground">use zbus::{Connection, fdo::RequestNameFlags};
-
-async fn request_names(conn: &amp;Connection) -&gt; zbus::Result&lt;()&gt; {
-    // Was: RequestNameFlags::DoNotQueue.into()
-    conn.request_name_with_flags("org.zbus.First", RequestNameFlags::DO_NOT_QUEUE)
-        .await?;
-    // Was: RequestNameFlags::ReplaceExisting | RequestNameFlags::DoNotQueue
-    conn.request_name_with_flags(
-        "org.zbus.Second",
-        RequestNameFlags::REPLACE_EXISTING | RequestNameFlags::DO_NOT_QUEUE,
-    )
-    .await?;
-
-    Ok(())
-}</code></pre>
-<p>Most of what you did with a <code>BitFlags</code> reads the same: <code>contains</code>, <code>insert</code>, <code>remove</code>, <code>set</code>,
-<code>is_empty</code>, <code>bits</code> and the <code>|</code> and <code>&amp;</code> operators. <code>from_bits</code> returns an <code>Option</code> rather than a
-<code>Result</code>, and a <code>match</code> on a single flag becomes a <code>contains</code> check. The types implement neither
-<code>Display</code> nor <code>TryFrom</code> of their integer, which <code>BitFlags</code> did: format them with <code>{:?}</code>, which
-names the flags, and turn an integer into flags with <code>from_bits</code>, or with <code>from_bits_retain</code> to
-keep the bits that no flag defines. <code>RequestNameFlags::default()</code>
-is still <code>ALLOW_REPLACEMENT | REPLACE_EXISTING | DO_NOT_QUEUE</code>, so an <code>Optional&lt;RequestNameFlags&gt;</code>
-uses the same null value as before.</p>
-<p>Decoding keeps bits that none of the flags define, where <code>enumflags2</code> rejected them with an
-error. In particular, zbus 5 failed to read a message whose header set a flag it did not know,
-although the D-Bus specification asks for unknown flags to be ignored; zbus 6 reads it, and the
-unknown bit stays in <code>PrimaryHeader::flags</code>.</p>
+<p><code>message::Flags</code>, <code>proxy::MethodFlags</code> and <code>fdo::RequestNameFlags</code> were <code>enumflags2</code> enums, used as
+<code>BitFlags&lt;Flags&gt;</code> and so on. They are <a href="https://docs.rs/bitflags"><code>bitflags</code></a> types now, used without the <code>BitFlags</code> wrapper,
+and their flags are associated constants: <code>RequestNameFlags::DoNotQueue</code> is
+<code>RequestNameFlags::DO_NOT_QUEUE</code>, and so on.</p>
+<p>A single flag is a set already, so drop the <code>.into()</code> that turned it into a <code>BitFlags</code>. <code>from_bits</code>
+returns an <code>Option</code>, and the types implement neither <code>Display</code> nor <code>TryFrom</code> of their integer.
+Decoding now keeps unknown bits instead of failing.</p>
 <h3 id="the-enumflags2-feature-is-gone"><a class="header" href="#the-enumflags2-feature-is-gone">The <code>enumflags2</code> feature is gone</a></h3>
-<p>The <code>enumflags2</code> feature implemented <code>Type</code>, <code>Basic</code> and the <code>Variant</code> and <code>OwnedVariant</code>
-conversions for <code>enumflags2::BitFlags&lt;F&gt;</code>. Now that zbus’s own flag types are <code>bitflags</code> types (see
-<a href="#the-flag-types-are-bitflags-types">above</a>), zbus has no use for <code>enumflags2</code>, and the feature is gone with these
-implementations. A <code>BitFlags&lt;F&gt;</code> can no longer be an argument, return value or property of a
-<code>#[proxy]</code> or <code>#[interface]</code>, nor a field of a type that derives <code>Type</code>.</p>
-<p>You cannot add the implementations back in your own crate either. Rust accepts an implementation
-of a trait only in the crate that defines the trait or the one that defines the type, and <code>Type</code>
-and <code>Variant</code> are zbus’s while <code>BitFlags</code> is <code>enumflags2</code>’s. Wrapping your enum does not make
-<code>BitFlags&lt;YourEnum&gt;</code> a type of yours, so <code>impl Type for BitFlags&lt;YourEnum&gt;</code> is rejected (<code>E0117</code>).</p>
-<p>Instead, make the set of flags your own type: a newtype over the integer that derives zbus’s
-traits like any other type of yours, with the flags and the methods and operators to work with
-them generated by the <code>impl</code> form of the <a href="https://docs.rs/bitflags"><code>bitflags</code></a> crate’s <code>bitflags!</code> macro. Add <code>bitflags</code> to
-your dependencies and replace the enum:</p>
+<p>zbus no longer implements its traits for <code>enumflags2::BitFlags&lt;F&gt;</code>, and the orphan rule keeps you
+from doing so yourself. Make your set of flags a newtype over the integer instead, with the flags
+generated by the <a href="https://docs.rs/bitflags"><code>bitflags</code></a> crate:</p>
 <pre><code class="language-rust noplayground">use serde::{Deserialize, Serialize};
-use zbus::{OwnedVariant, Type, Variant, proxy};
+use zbus::{OwnedVariant, Type, Variant};
 
 // Was:
 //
@@ -1466,58 +438,103 @@ bitflags::bitflags! {
         const READ = 0x1;
         const WRITE = 0x2;
     }
+}</code></pre>
+<p>It encodes as the <code>u32</code> it wraps, as <code>BitFlags&lt;Permission&gt;</code> did. If your enum had a
+<code>#[bitflags(default = ...)]</code> attribute, implement <code>Default</code> by hand. To use the type as a
+dictionary key or to have its <code>Debug</code> name the flags, see <a href="faq.html#how-do-i-use-bit-flags">the FAQ</a>.</p>
+<h3 id="dictionary-keys-have-to-be-basic-types"><a class="header" href="#dictionary-keys-have-to-be-basic-types">Dictionary keys have to be basic types</a></h3>
+<p>The key type of a <code>HashMap</code> or <code>BTreeMap</code> has to implement <code>Basic</code> now, as D-Bus only allows basic
+types as keys. A map with any other key, such as a <code>Vec&lt;u8&gt;</code>, had an invalid signature and could not
+have worked; send a <code>Vec&lt;(K, V)&gt;</code> instead. A newtype around a basic type did work, and needs a
+<code>Basic</code> implementation now:</p>
+<pre><code class="language-rust noplayground">use std::collections::HashMap;
+
+use serde::{Deserialize, Serialize};
+use zbus::{Basic, Type};
+
+#[derive(Deserialize, Serialize, Type, PartialEq, Eq, Hash)]
+struct Key(u32);
+
+impl Basic for Key {
+    const SIGNATURE_CHAR: char = u32::SIGNATURE_CHAR;
+    const SIGNATURE_STR: &amp;'static str = u32::SIGNATURE_STR;
 }
 
-#[proxy(
-    interface = "org.zbus.Files",
-    default_path = "/org/zbus/Files",
-    default_service = "org.zbus.Files",
-)]
-trait Files {
-    // Was: `permissions: BitFlags&lt;Permission&gt;`
-    fn open(&amp;self, path: &amp;str, permissions: Permissions) -&gt; zbus::Result&lt;()&gt;;
-}</code></pre>
-<p><code>Permissions</code> encodes as the <code>u32</code> it wraps, as <code>BitFlags&lt;Permission&gt;</code> did, so nothing changes on
-the bus. In your code, <code>Permissions</code> takes the place of <code>BitFlags&lt;Permission&gt;</code> and its constants
-that of the variants: <code>Permission::Read | Permission::Write</code> becomes
-<code>Permissions::READ | Permissions::WRITE</code>. What the <a href="#the-flag-types-are-bitflags-types">previous section</a> says about
-working with the flags applies here too, including that decoding now keeps bits that no flag
-defines instead of failing. Besides:</p>
+assert_eq!(HashMap::&lt;Key, u8&gt;::SIGNATURE, "a{uy}");</code></pre>
+<h3 id="zbus_xml-borrows-from-the-document-and-keeps-its-order"><a class="header" href="#zbus_xml-borrows-from-the-document-and-keeps-its-order"><code>zbus_xml</code> borrows from the document and keeps its order</a></h3>
+<p><code>Node::try_from(&amp;str)</code> borrows strings from the document where it can. <code>Annotation</code>, <code>Arg</code> and the
+Telepathy types (<code>TypeDef</code>, <code>SimpleType</code>, <code>Enum</code>, <code>EnumValue</code>, <code>Struct</code>, <code>Member</code>, <code>Mapping</code>)
+gained a lifetime parameter as a result. Use <code>into_owned()</code> to keep a tree past its document.</p>
+<p><code>Interface::methods()</code>, <code>signals()</code>, <code>properties()</code>, <code>annotations()</code> and <code>telepathy_types()</code> return
+iterators rather than slices: <code>.len()</code> becomes <code>.count()</code>, <code>[0]</code> and <code>.first()</code> become <code>.next()</code>.
+The new <code>Interface::children()</code> yields the methods, signals, properties and annotations together,
+in document order. That is also the order that <code>Node::to_writer</code> writes, <code>PartialEq</code> compares and
+<code>zbus_xmlgen</code> generates code in now.</p>
+<p>The tree types no longer implement <code>Serialize</code> and <code>Deserialize</code>, and <code>zbus_xml::Signature</code> is
+replaced by <code>zbus::Signature</code>: drop the <code>.inner()</code> and <code>.into_inner()</code> calls on what <code>Arg::ty</code> and
+<code>Property::ty</code> return.</p>
+<h3 id="a-renamed-zbus-dependency-needs-the-crate-attribute"><a class="header" href="#a-renamed-zbus-dependency-needs-the-crate-attribute">A renamed <code>zbus</code> dependency needs the <code>crate</code> attribute</a></h3>
+<p>The macros no longer find a renamed <code>zbus</code> dependency, or one reached through a re-export of
+another crate, on their own. Pass its name with the <code>crate</code> attribute: <code>crate = "my_zbus"</code> on
+<code>#[proxy]</code>, <code>#[interface]</code> and <code>#[derive(DBusError)]</code>, and <code>crate = "my_zbus::wire"</code> on the wire
+derives. Alternatively, put <code>extern crate my_zbus as zbus;</code> in your crate root, which also covers
+<code>signature!</code>.</p>
+<h3 id="the-apis-deprecated-in-5x-are-removed"><a class="header" href="#the-apis-deprecated-in-5x-are-removed">The APIs deprecated in 5.x are removed</a></h3>
+<p>All of these but <code>#[zbus(signal_context)]</code> warned in 5.19:</p>
 <ul>
-<li><code>#[derive(Default)]</code> makes the empty set the default, as <code>BitFlags</code> did unless the enum had a
-<code>#[bitflags(default = ...)]</code> attribute. If yours had one, implement <code>Default</code> by hand to keep
-it: the default is also what an <code>Optional&lt;Permissions&gt;</code> uses as its null value.</li>
-<li>A <code>BitFlags&lt;F&gt;</code> could be the key of a dictionary. For the new type to be one, implement <code>Basic</code>
-for it, as <a href="faq.html#how-do-i-use-bit-flags">the FAQ</a> shows.</li>
-<li>The derived <code>Debug</code> prints the integer (<code>Permissions(3)</code>), where that of <code>BitFlags</code> named the
-flags. The FAQ entry says how to name them in yours.</li>
+<li><code>object_server::SignalContext</code> is <code>SignalEmitter</code>, <code>InterfaceRef::signal_context()</code> is
+<code>signal_emitter()</code> and <code>#[zbus(signal_context)]</code> is <code>#[zbus(signal_emitter)]</code>.</li>
+<li><code>Connection::peer_credentials()</code> is <code>peer_creds()</code>, which returns an
+<code>&amp;Arc&lt;ConnectionCredentials&gt;</code> rather than an owned <code>ConnectionCredentials</code>.</li>
+<li><code>zbus::AuthMechanism</code> is <code>zbus::connection::AuthMechanism</code>.</li>
+<li><code>DeserializeValue</code> and <code>SerializeValue</code> are <code>zbus::as_variant::Deserialize</code> and <code>Serialize</code>.</li>
+<li><code>zbus_xmlgen::write_interfaces</code> and <code>GenTrait</code> are <code>CodeGenerator::file_code</code> and
+<code>interface_code</code>. The generator only formats the code after <code>with_format(true)</code>.</li>
+<li><code>zbus_xml::Error::QuickXml</code> and <code>QuickXmlSer</code> are gone; match on <code>Error::Xml</code> or <code>Error::Io</code>.</li>
+<li><code>object_server::DispatchResult</code> is what 5.x called <code>DispatchResult2</code>, which is now a deprecated
+alias. It only matters for a hand-written <code>Interface</code> implementation: the <code>Async</code> future returns
+a <code>Result&lt;(), BoxDBusError&gt;</code>, and <code>Interface::get</code> and <code>set_mut</code> fail with a <code>BoxDBusError</code>.</li>
 </ul>
-<p>If you would rather keep <code>enumflags2</code>, have your <code>#[proxy]</code> or <code>#[interface]</code> methods take and
-return the integer, and convert it with <code>BitFlags::bits</code> and <code>BitFlags::from_bits</code> on your side.</p>
+<h3 id="smaller-changes"><a class="header" href="#smaller-changes">Smaller changes</a></h3>
+<ul>
+<li><strong>Stream constructors take an owned socket.</strong> <code>Builder::unix_stream</code> takes a
+<code>std::os::unix::net::UnixStream</code> (<code>uds_windows::UnixStream</code> on Windows) and
+<code>Builder::tcp_stream</code> a <code>std::net::TcpStream</code>. Convert a Tokio stream with <code>into_std()</code> and an
+<code>async_io::Async&lt;T&gt;</code> with <code>into_inner()</code>; <code>Builder::socket</code> doesn’t accept those types anymore
+either. On Windows, a Tokio connection can’t use unix sockets.</li>
+<li><strong>The encoding context has no format.</strong> <code>Context::new(Format::DBus, LE, 0)</code> is
+<code>Context::new(LE, 0)</code>, <code>Signature::alignment(format)</code> is <code>alignment_dbus()</code> and
+<code>Basic::alignment(format)</code> is <code>alignment()</code>.</li>
+<li><strong><code>StructureSeed</code> has no lifetime parameter.</strong></li>
+<li><strong><code>PropertiesProxy::set</code> takes a <code>&amp;Variant</code>.</strong> <code>#[interface]</code> methods accept references to any
+sized type as arguments now, but a slice such as <code>&amp;[u8]</code> no longer compiles; take a <code>Vec&lt;u8&gt;</code>.</li>
+<li><strong><code>DBusProxy::start_service_by_name</code> returns a <code>StartServiceReply</code></strong> instead of a <code>u32</code>.</li>
+<li><strong>Name types validate when converted from a <code>Variant</code></strong>, failing with <code>Error::InvalidName</code>.</li>
+<li><strong><code>Optional&lt;T&gt;</code> compares with the null value before converting</strong>, so the empty string reads back
+as <code>None</code> for the name types. These conversions now need <code>T::NoneType: Into&lt;Variant&gt;</code>.</li>
+<li><strong><code>FilePath</code> converts to std types with <code>TryFrom</code></strong>, which fails off unix for paths that are not
+valid UTF-8. <code>FilePath::as_c_str()</code> returns the raw bytes.</li>
+<li><strong>Queue sizes are <code>NonZeroUsize</code></strong> in <code>max_queued</code>, <code>set_max_queued</code> and <code>for_match_rule</code>.</li>
+<li><strong><code>ObjectServer::at</code> returns <code>Result&lt;Option&lt;I&gt;&gt;</code></strong>: <code>Some</code> hands the interface back if the path
+already had one of that name.</li>
+<li><strong><code>Body::deserialize_unchecked</code> is <code>Body::deserialize_ignore_signature</code>.</strong></li>
+<li><strong><code>proxy::Builder::build</code> requires <code>proxy::Defaults</code>.</strong></li>
+<li><strong><code>AsyncDrop</code> is declared without <code>async-trait</code></strong>, so drop <code>#[async_trait]</code> from your
+implementations.</li>
+<li><strong><code>Connection::monitor_activity</code> and <code>ResponseDispatchNotifier::new</code> return zbus types</strong> rather
+than <code>event_listener::EventListener</code>. Await them.</li>
+<li><strong>The xdg-dbus-proxy workarounds are gone.</strong> Flatpak apps need xdg-dbus-proxy 0.1.6 or newer.</li>
+</ul>
 <h2 id="a-stale-zvariant-in-the-dependency-graph"><a class="header" href="#a-stale-zvariant-in-the-dependency-graph">A stale zvariant in the dependency graph</a></h2>
-<p>If another crate in your tree still depends on zvariant 5, your build contains two unrelated
-copies of the wire types — zvariant’s <code>Type</code>, <code>Value</code> and <code>Signature</code> next to zbus’s <code>Type</code>,
-<code>Variant</code> and <code>Signature</code> — and the resulting errors (“expected <code>zbus::Variant</code>, found
-<code>zvariant::Value</code>”) are confusing. <code>Signature</code> is duplicated like the other two: zbus 6
-re-exports it from <code>zbus_utils</code>, which no zvariant 5 release uses. Find the culprit with:</p>
-<pre><code class="language-bash">cargo tree -i zvariant
-</code></pre>
-<p>Nothing breaks — the two coexist — but values cannot cross from one to the other. Upgrade that
-crate, or keep using its <code>zvariant</code> types on its side of the boundary until it migrates.</p>
+<p>If another crate in your tree still depends on zvariant 5, its <code>Type</code>, <code>Value</code> and <code>Signature</code> are
+unrelated to zbus’s, which leads to errors such as “expected <code>zbus::Variant</code>, found
+<code>zvariant::Value</code>”. Find the crate with <code>cargo tree -i zvariant</code>, and upgrade it or keep its types
+on its side.</p>
 <h2 id="gvariant"><a class="header" href="#gvariant">GVariant</a></h2>
-<p>The <code>gvariant</code> and <code>ostree-tests</code> Cargo features and everything behind them — <code>Value::Maybe</code>,
-<code>Context::new_gvariant</code>, the GVariant serializer and deserializer — were removed in 6.0. That
-code, and its test suite, live in the <a href="https://crates.io/crates/zgvariant">zgvariant</a> crate now:</p>
-<pre><code class="language-toml">[dependencies]
-zgvariant = "1"
-</code></pre>
-<p>zgvariant only speaks GVariant, so, like zbus, it has no format to choose: what was
-<code>zvariant::serialized::Context::new_gvariant(LE, 0)</code> is <code>zgvariant::serialized::Context::new(LE, 0)</code>
-there. The rest reads the same.</p>
-<p>zgvariant 2.0 and later share their <code>Signature</code> type with zbus 6 — both re-export it from
-<code>zbus_utils</code> — so a signature parsed by one is the same value in the other. zgvariant 1.x
-re-exports it from <code>zvariant_utils</code> instead, which makes it a second, unrelated type in a zbus 6
-build; move a signature across that boundary through its string form.</p>
+<p>The <code>gvariant</code> and <code>ostree-tests</code> features and everything behind them moved to the <a href="https://crates.io/crates/zgvariant">zgvariant</a>
+crate, where <code>Context::new_gvariant(LE, 0)</code> is <code>zgvariant::serialized::Context::new(LE, 0)</code>.
+zgvariant 2 shares its <code>Signature</code> type with zbus 6; zgvariant 1 does not, so pass a signature
+between the two as a string.</p>
 
                     </main>
 
