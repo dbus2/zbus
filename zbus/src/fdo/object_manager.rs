@@ -5,7 +5,7 @@
 
 #[cfg(any(feature = "proxy", feature = "object-manager"))]
 use std::borrow::Cow;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 #[cfg(feature = "object-manager")]
 use super::Error;
@@ -27,7 +27,7 @@ use crate::{OwnedObjectPath, OwnedVariant, names::OwnedInterfaceName};
     doc = "feature)."
 )]
 pub type ManagedObjects =
-    HashMap<OwnedObjectPath, BTreeMap<OwnedInterfaceName, HashMap<String, OwnedVariant>>>;
+    HashMap<OwnedObjectPath, HashMap<OwnedInterfaceName, HashMap<String, OwnedVariant>>>;
 
 /// Service-side [Object Manager][om] interface implementation.
 ///
