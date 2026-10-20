@@ -422,4 +422,231 @@ mod tests {
         assert_eq!(err, Error::InvalidMatchRule);
         MatchRule::try_from("arg0namespace='org'").unwrap();
     }
+
+    #[test]
+    fn rule_string_follows_the_quoting_of_the_specification() {
+        // The two examples of the specification, which have the same arguments.
+        for rule in [
+            r"arg0=''\''',arg1='\',arg2=',',arg3='\\'",
+            r"arg0=\',arg1=\,arg2=',',arg3=\\",
+        ] {
+            let parsed = MatchRule::try_from(rule).unwrap();
+
+            assert_eq!(
+                args(&parsed),
+                [(0, "'"), (1, "\\"), (2, ","), (3, "\\\\")],
+                "{rule}"
+            );
+        }
+    }
+
+    #[test]
+    fn rule_string_values_need_no_quotes() {
+        assert_eq!(
+            MatchRule::try_from("type=signal").unwrap(),
+            MatchRule::try_from("type='signal'").unwrap(),
+        );
+
+        let unquoted =
+            MatchRule::try_from("type=signal,sender=org.zbus,member=Foo,arg0=bar,arg1=").unwrap();
+        let quoted =
+            MatchRule::try_from("type='signal',sender='org.zbus',member='Foo',arg0='bar',arg1=''")
+                .unwrap();
+
+        assert_eq!(unquoted, quoted);
+        assert_eq!(unquoted.msg_type(), Some(Type::Signal));
+        assert_eq!(args(&unquoted), [(0, "bar"), (1, "")]);
+    }
+
+    #[test]
+    fn rule_string_keeps_a_quoted_comma_in_the_value() {
+        let rule =
+            MatchRule::try_from("type='signal',arg0='a,b',arg1=c,arg2=',',arg3='a=b,c'").unwrap();
+
+        assert_eq!(rule.msg_type(), Some(Type::Signal));
+        assert_eq!(args(&rule), [(0, "a,b"), (1, "c"), (2, ","), (3, "a=b,c")]);
+    }
+
+    #[test]
+    fn rule_string_concatenates_quoted_and_unquoted_text() {
+        // The quotes can start and end anywhere in a value, and a value can have several of them.
+        let rule = MatchRule::try_from("arg0=a'b,c'd,arg1='a'b'c',arg2=''x'',arg3=a''b").unwrap();
+
+        assert_eq!(args(&rule), [(0, "ab,cd"), (1, "abc"), (2, "x"), (3, "ab")]);
+    }
+
+    #[test]
+    fn rule_string_escapes_an_apostrophe_outside_quotes() {
+        let rule = MatchRule::try_from(r"arg0=\',arg1=a\'b,arg2=\'\',arg3='a'\''b'").unwrap();
+
+        assert_eq!(args(&rule), [(0, "'"), (1, "a'b"), (2, "''"), (3, "a'b")]);
+    }
+
+    #[test]
+    fn rule_string_backslash_escapes_only_an_apostrophe_outside_quotes() {
+        // Outside quotes, a backslash stands for itself unless an apostrophe follows it. So it
+        // doesn't escape a comma, nor another backslash, and it can end the string.
+        let rule = MatchRule::try_from(r"arg0=a\b,arg1=\,arg2=\\',arg3=c\").unwrap();
+
+        assert_eq!(
+            args(&rule),
+            [(0, "a\\b"), (1, "\\"), (2, "\\'"), (3, "c\\")]
+        );
+
+        // Within quotes, it always does.
+        let rule = MatchRule::try_from(r"arg0='\',arg1='a\b\\'").unwrap();
+
+        assert_eq!(args(&rule), [(0, "\\"), (1, "a\\b\\\\")]);
+    }
+
+    #[test]
+    fn rule_string_rejects_an_unterminated_quote() {
+        for rule in [
+            "arg0='foo",
+            "arg0='",
+            "arg0='foo,arg1=bar",
+            "arg0=foo'",
+            "arg0='a'b'",
+            r"arg0='\''",
+        ] {
+            assert_invalid(rule);
+        }
+    }
+
+    #[test]
+    fn rule_string_skips_whitespace_around_keys_but_not_in_values() {
+        let rule = MatchRule::try_from(" type =signal,\targ0\n=a b ,  arg1 =' c', ").unwrap();
+
+        assert_eq!(rule.msg_type(), Some(Type::Signal));
+        assert_eq!(args(&rule), [(0, "a b "), (1, " c")]);
+
+        for rule in [
+            "type= signal",
+            "type=signal ",
+            "type='signal' ",
+            "type=signal ,member=Foo",
+        ] {
+            assert_invalid(rule);
+        }
+    }
+
+    #[test]
+    fn rule_string_accepts_an_empty_value() {
+        for rule in ["arg0=''", "arg0=", "arg0=,", "arg0='',", "arg0=''''"] {
+            let rule = MatchRule::try_from(rule).unwrap();
+
+            assert_eq!(args(&rule), [(0, "")]);
+        }
+
+        let rule = MatchRule::try_from("arg0=,arg1=b").unwrap();
+
+        assert_eq!(args(&rule), [(0, ""), (1, "b")]);
+
+        // A name is never empty, though.
+        MatchRule::try_from("member=").unwrap_err();
+        MatchRule::try_from("member=''").unwrap_err();
+    }
+
+    #[test]
+    fn rule_string_accepts_a_trailing_comma_only() {
+        let expected = MatchRule::try_from("type=signal").unwrap();
+
+        assert_eq!(MatchRule::try_from("type=signal,").unwrap(), expected);
+        assert_eq!(MatchRule::try_from("type=signal, ").unwrap(), expected);
+
+        for rule in [
+            ",",
+            ",type=signal",
+            "type=signal,,member=Foo",
+            "type=signal,,",
+        ] {
+            assert_invalid(rule);
+        }
+    }
+
+    #[test]
+    fn rule_string_can_be_empty() {
+        let rule = MatchRule::builder().build().unwrap();
+
+        assert_eq!(rule.to_string(), "");
+        assert_eq!(MatchRule::try_from("").unwrap(), rule);
+        assert_eq!(MatchRule::try_from(" \t\r\n").unwrap(), rule);
+    }
+
+    #[test]
+    fn rule_string_rejects_a_pair_without_a_key_or_a_value() {
+        for rule in [
+            "type",
+            "type,member=Foo",
+            "type=signal,member",
+            "type=signal,member,",
+            "=signal",
+            "='signal'",
+            "unknown=signal",
+            // A comma before the `=` ends a pair without a value, even when the key would take the
+            // next pair in.
+            "arg0path,path='/foo'",
+            "arg0path,,path='/foo'",
+        ] {
+            assert_invalid(rule);
+        }
+    }
+
+    #[test]
+    fn rule_string_reports_the_component_at_fault() {
+        // The error is the same, whether the value is borrowed from the rule string or a copy.
+        let expected = MemberName::try_from("not a member")
+            .unwrap_err()
+            .to_string();
+        for rule in [
+            "member=not a member",
+            "member='not a member'",
+            "member='not'' a member'",
+        ] {
+            let err = MatchRule::try_from(rule).unwrap_err();
+
+            assert_eq!(err.to_string(), expected, "{rule}");
+        }
+
+        assert_invalid("type=bogus");
+    }
+
+    #[test]
+    fn rule_string_values_are_borrowed_unless_they_need_unquoting() {
+        let text = "sender=org.zbus,path='/org/zbus',arg0=foo,arg1='bar',arg2=''baz'',\
+                    arg3=a'b'c,arg4=d\\'e";
+        let in_text = |s: &str| text.as_bytes().as_ptr_range().contains(&s.as_ptr());
+        let rule = MatchRule::try_from(text).unwrap();
+
+        assert!(in_text(rule.sender().unwrap().as_str()));
+        let Some(PathSpec::Path(path)) = rule.path_spec() else {
+            panic!("expected a path, got {:?}", rule.path_spec());
+        };
+        assert!(in_text(path.as_str()));
+        let values = args(&rule);
+        assert_eq!(values.len(), 5);
+        // Neither quotes around the whole value nor empty quoted text next to it need a copy.
+        assert!(in_text(values[0].1) && in_text(values[1].1) && in_text(values[2].1));
+        // Concatenating text, or escaping an apostrophe in it, does.
+        assert_eq!(values[3], (3, "abc"));
+        assert_eq!(values[4], (4, "d'e"));
+        assert!(!in_text(values[3].1) && !in_text(values[4].1));
+    }
+
+    /// Assert that `rule` is not a valid rule string, whatever the reason.
+    fn assert_invalid(rule: &str) {
+        assert_eq!(
+            MatchRule::try_from(rule).unwrap_err(),
+            Error::InvalidMatchRule,
+            "{rule}",
+        );
+    }
+
+    /// The arguments of `rule`, along with their indices.
+    fn args<'a>(rule: &'a MatchRule<'_>) -> Vec<(u8, &'a str)> {
+        rule.args()
+            .iter()
+            .map(|(idx, arg)| (*idx, arg.as_str()))
+            .collect()
+    }
 }
