@@ -780,13 +780,29 @@ impl<'de> Deserialize<'de> for OwnedMatchRule {
     where
         D: de::Deserializer<'de>,
     {
-        String::deserialize(deserializer)
-            .and_then(|r| {
-                MatchRule::try_from(r.as_str())
-                    .map(|r| r.to_owned())
-                    .map_err(|e| de::Error::custom(e.to_string()))
-            })
-            .map(Self)
+        deserializer.deserialize_str(OwnedMatchRuleVisitor)
+    }
+}
+
+/// Parses an [`OwnedMatchRule`] right from the string that the deserializer has, rather than from
+/// a copy of it.
+struct OwnedMatchRuleVisitor;
+
+impl de::Visitor<'_> for OwnedMatchRuleVisitor {
+    type Value = OwnedMatchRule;
+
+    fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("a match rule string")
+    }
+
+    fn visit_str<E>(self, rule: &str) -> std::result::Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        // `to_owned`, unlike `into_owned`, doesn't keep the spare capacity of the parsed rule.
+        MatchRule::try_from(rule)
+            .map(|rule| OwnedMatchRule(rule.to_owned()))
+            .map_err(E::custom)
     }
 }
 

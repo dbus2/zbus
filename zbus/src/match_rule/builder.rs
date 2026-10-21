@@ -809,6 +809,21 @@ mod tests {
         }
     }
 
+    #[test]
+    fn owned_rule_deserializes_from_a_rule_string() {
+        use crate::wire::{LE, serialized::Context, to_bytes};
+
+        let ctxt = Context::new(LE, 0);
+        let rule = r"type='signal',arg0='it'\''s'";
+        let encoded = to_bytes(ctxt, &rule).unwrap();
+        let owned: OwnedMatchRule = encoded.deserialize().unwrap().0;
+
+        assert_eq!(owned, MatchRule::try_from(rule).unwrap());
+
+        let encoded = to_bytes(ctxt, &"type='bogus'").unwrap();
+        encoded.deserialize::<OwnedMatchRule>().unwrap_err();
+    }
+
     /// Assert that `rule` is not a valid rule string, whatever the reason.
     fn assert_invalid(rule: &str) {
         assert_eq!(
