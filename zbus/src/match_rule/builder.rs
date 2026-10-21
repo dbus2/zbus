@@ -633,6 +633,80 @@ mod tests {
         assert!(!in_text(values[3].1) && !in_text(values[4].1));
     }
 
+    #[test]
+    fn display_escapes_apostrophes() {
+        let rule = MatchRule::builder()
+            .add_arg("it's")
+            .add_arg("'")
+            .add_arg("''")
+            .add_arg("no apostrophe")
+            .build()
+            .unwrap();
+
+        assert_eq!(
+            rule.to_string(),
+            r"arg0='it'\''s',arg1=''\''',arg2=''\'''\''',arg3='no apostrophe'",
+        );
+    }
+
+    #[test]
+    fn display_round_trips() {
+        let values = [
+            "",
+            "'",
+            "''",
+            "'a'",
+            "it's",
+            "a,b",
+            ",",
+            "\\",
+            "\\\\",
+            "\\'",
+            "'\\",
+            "a\\'b",
+            "\\,'",
+            " a ",
+            "a=b,c=d",
+            "\"quoted\"",
+            "é'日本",
+            "x'y,z\\w'",
+        ];
+
+        // Each value on its own, next to other components.
+        for value in values {
+            let rule = MatchRule::builder()
+                .msg_type(Type::Signal)
+                .sender("org.zbus.Sender")
+                .add_arg(value)
+                .arg_path(1, "/org/zbus")
+                .build()
+                .unwrap();
+            let text = rule.to_string();
+            let parsed = MatchRule::try_from(text.as_str()).unwrap();
+
+            assert_eq!(parsed, rule, "{value:?}");
+        }
+
+        // All of them in one rule, along with every other kind of component.
+        let mut builder = MatchRule::builder()
+            .msg_type(Type::Signal)
+            .sender("org.freedesktop.DBus")
+            .interface("org.freedesktop.DBus.Properties")
+            .member("PropertiesChanged")
+            .path_namespace("/org/zbus")
+            .destination(":1.11")
+            .arg_path(2, "/org/zbus/Arg")
+            .arg0ns("org.zbus");
+        for value in values {
+            builder = builder.add_arg(value);
+        }
+        let rule = builder.build().unwrap();
+        let text = rule.to_string();
+        let parsed = MatchRule::try_from(text.as_str()).unwrap();
+
+        assert_eq!(parsed, rule);
+    }
+
     /// Assert that `rule` is not a valid rule string, whatever the reason.
     fn assert_invalid(rule: &str) {
         assert_eq!(

@@ -334,6 +334,10 @@ impl<'m> MatchRule<'m> {
     }
 }
 
+/// The match rule string, which [`MatchRule::try_from`] parses back to an equal rule.
+///
+/// Each value is written within single quotes, and an apostrophe in a value is written as `'\''`:
+/// the quotes are closed, the apostrophe is escaped and the quotes are opened again.
 impl Display for MatchRule<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut first_component = true;
@@ -366,16 +370,20 @@ impl Display for MatchRule<'_> {
             write_match_rule_string_component(f, key, value, &mut first_component)?;
         }
         for (i, arg) in self.args() {
-            write_comma(f, &mut first_component)?;
-            write!(f, "arg{i}='{arg}'")?;
+            let key = format_args!("arg{i}");
+            write_match_rule_string_component(f, key, arg, &mut first_component)?;
         }
         for (i, arg_path) in self.arg_paths() {
-            write_comma(f, &mut first_component)?;
-            write!(f, "arg{i}path='{arg_path}'")?;
+            let key = format_args!("arg{i}path");
+            write_match_rule_string_component(f, key, arg_path, &mut first_component)?;
         }
         if let Some(arg0namespace) = self.arg0ns() {
-            write_comma(f, &mut first_component)?;
-            write!(f, "arg0namespace='{arg0namespace}'")?;
+            write_match_rule_string_component(
+                f,
+                "arg0namespace",
+                arg0namespace,
+                &mut first_component,
+            )?;
         }
 
         Ok(())
@@ -384,14 +392,19 @@ impl Display for MatchRule<'_> {
 
 fn write_match_rule_string_component(
     f: &mut std::fmt::Formatter<'_>,
-    key: &str,
+    key: impl Display,
     value: &str,
     first_component: &mut bool,
 ) -> std::fmt::Result {
     write_comma(f, first_component)?;
-    f.write_str(key)?;
-    f.write_str("='")?;
-    f.write_str(value)?;
+    write!(f, "{key}='")?;
+    // Within quotes an apostrophe would end them, so they're closed around the escaped apostrophe.
+    for (i, part) in value.split('\'').enumerate() {
+        if i > 0 {
+            f.write_str("'\\''")?;
+        }
+        f.write_str(part)?;
+    }
     f.write_char('\'')?;
 
     Ok(())
