@@ -98,6 +98,7 @@ pub struct MatchRule<'m> {
     pub(crate) args: Vec<(u8, Str<'m>)>,
     pub(crate) arg_paths: Vec<(u8, ObjectPath<'m>)>,
     pub(crate) arg0ns: Option<Str<'m>>,
+    pub(crate) eavesdrop: bool,
 }
 
 impl<'m> MatchRule<'m> {
@@ -151,6 +152,25 @@ impl<'m> MatchRule<'m> {
         self.arg0ns.as_ref()
     }
 
+    /// Whether the rule has `eavesdrop='true'`.
+    ///
+    /// This is the `eavesdrop` key of the match rules of the D-Bus specification. Since D-Bus
+    /// 1.5.6, a rule only matches the messages that are sent to other connections if it has this.
+    /// A connection gets the messages that are sent to it whatever its rules are, so this makes no
+    /// difference to those.
+    ///
+    /// It is deprecated, in favour of the `BecomeMonitor` method of the bus, which treats every
+    /// rule it is given as if it had this. [`Connection`] has an example of using it. A bus may
+    /// restrict such rules to privileged connections, and dbus-broker refuses them in `AddMatch`.
+    ///
+    /// [`MatchRule::matches`] doesn't look at this, as it is the bus that decides which messages a
+    /// connection gets.
+    ///
+    /// [`Connection`]: crate::Connection#monitoring-all-messages
+    pub fn eavesdrop(&self) -> bool {
+        self.eavesdrop
+    }
+
     /// Create an owned clone of `self`.
     pub fn to_owned(&self) -> MatchRule<'static> {
         MatchRule {
@@ -167,6 +187,7 @@ impl<'m> MatchRule<'m> {
                 .map(|(i, p)| (*i, p.to_owned()))
                 .collect(),
             arg0ns: self.arg0ns.as_ref().map(|a| a.to_owned()),
+            eavesdrop: self.eavesdrop,
         }
     }
 
@@ -190,6 +211,7 @@ impl<'m> MatchRule<'m> {
                 .map(|(i, p)| (i, p.into_owned()))
                 .collect(),
             arg0ns: self.arg0ns.map(|a| a.into_owned()),
+            eavesdrop: self.eavesdrop,
         }
     }
 
@@ -204,6 +226,9 @@ impl<'m> MatchRule<'m> {
     ///   always a unique name.
     /// * `destination` in the rule when `destination` on the `msg` is a well-known name. The
     ///   `destination` on a match rule is always a unique name.
+    ///
+    /// Whether the rule has [`eavesdrop`](MatchRule::eavesdrop) makes no difference, as it is the
+    /// bus that decides which messages a connection gets.
     pub fn matches(&self, msg: &zbus::message::Message) -> Result<bool> {
         let hdr = msg.header();
 
@@ -385,6 +410,9 @@ impl Display for MatchRule<'_> {
                 &mut first_component,
             )?;
         }
+        if self.eavesdrop() {
+            write_match_rule_string_component(f, "eavesdrop", "true", &mut first_component)?;
+        }
 
         Ok(())
     }
@@ -472,6 +500,14 @@ impl<'m> TryFrom<&'m str> for MatchRule<'m> {
                         _ => return Err(Error::InvalidMatchRule),
                     };
                     builder.msg_type(msg_type)
+                }
+                "eavesdrop" => {
+                    let eavesdrop = match value.as_ref() {
+                        "true" => true,
+                        "false" => false,
+                        _ => return Err(Error::InvalidMatchRule),
+                    };
+                    builder.eavesdrop(eavesdrop)
                 }
                 // Each component is converted here, rather than left to the builder, so that an
                 // invalid rule string is reported by the component that's actually at fault.

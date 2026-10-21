@@ -251,6 +251,15 @@ impl<'m> Builder<'m> {
         self
     }
 
+    /// Set whether the rule has `eavesdrop='true'`, which it doesn't by default.
+    ///
+    /// See [`MatchRule::eavesdrop`] for what that means.
+    pub fn eavesdrop(mut self, eavesdrop: bool) -> Self {
+        self.rule.eavesdrop = eavesdrop;
+
+        self
+    }
+
     /// Create a builder for `MatchRule`.
     pub(crate) fn new() -> Self {
         Self {
@@ -264,6 +273,7 @@ impl<'m> Builder<'m> {
                 args: Vec::with_capacity(MAX_ARGS as usize),
                 arg_paths: Vec::with_capacity(MAX_ARGS as usize),
                 arg0ns: None,
+                eavesdrop: false,
             },
             error: None,
         }
@@ -320,7 +330,7 @@ pub(crate) fn validate_arg0ns(namespace: Str<'_>) -> Result<Str<'_>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::names::OwnedBusName;
+    use crate::{Message, OwnedMatchRule, names::OwnedBusName};
     use test_log::test;
 
     #[test]
@@ -705,6 +715,98 @@ mod tests {
         let parsed = MatchRule::try_from(text.as_str()).unwrap();
 
         assert_eq!(parsed, rule);
+    }
+
+    #[test]
+    fn eavesdrop_is_part_of_the_rule() {
+        let without = MatchRule::builder().msg_type(Type::Signal).build().unwrap();
+        let with = MatchRule::builder()
+            .msg_type(Type::Signal)
+            .eavesdrop(true)
+            .build()
+            .unwrap();
+
+        assert!(!without.eavesdrop());
+        assert!(with.eavesdrop());
+        assert_ne!(with, without);
+        assert!(with.to_owned().eavesdrop());
+        assert!(with.clone().into_owned().eavesdrop());
+        assert!(OwnedMatchRule::from(with).eavesdrop());
+    }
+
+    #[test]
+    fn rule_string_parses_eavesdrop() {
+        for (rule, eavesdrop) in [
+            ("eavesdrop=true", true),
+            ("eavesdrop='true'", true),
+            ("eavesdrop=false", false),
+            ("type=signal", false),
+            // A repeated key keeps its last value, so a user can override the one a tool added.
+            ("eavesdrop=true,type=signal,eavesdrop=false", false),
+        ] {
+            let parsed = MatchRule::try_from(rule).unwrap();
+
+            assert_eq!(parsed.eavesdrop(), eavesdrop, "{rule}");
+        }
+
+        for rule in [
+            "eavesdrop=maybe",
+            "eavesdrop=",
+            "eavesdrop=TRUE",
+            "eavesdrop=true ",
+        ] {
+            assert_invalid(rule);
+        }
+    }
+
+    #[test]
+    fn display_writes_eavesdrop_only_if_set() {
+        let rule = |eavesdrop| {
+            MatchRule::builder()
+                .msg_type(Type::Signal)
+                .add_arg("a")
+                .eavesdrop(eavesdrop)
+                .build()
+                .unwrap()
+        };
+
+        assert_eq!(
+            rule(true).to_string(),
+            "type='signal',arg0='a',eavesdrop='true'"
+        );
+        assert_eq!(rule(false).to_string(), "type='signal',arg0='a'");
+        for eavesdrop in [true, false] {
+            let text = rule(eavesdrop).to_string();
+
+            assert_eq!(MatchRule::try_from(text.as_str()).unwrap(), rule(eavesdrop));
+        }
+    }
+
+    #[test]
+    fn matches_ignores_eavesdrop() {
+        let rule = |eavesdrop| {
+            MatchRule::builder()
+                .msg_type(Type::Signal)
+                .member("Event")
+                .eavesdrop(eavesdrop)
+                .build()
+                .unwrap()
+        };
+        let signal = |member| Message::signal("/org/zbus", "org.zbus.Interface", member);
+        let broadcast = signal("Event").sender(":1.42").build(&()).unwrap();
+        // Whether a connection gets a message for another one is for the bus to decide.
+        let unicast = signal("Event")
+            .sender(":1.42")
+            .destination(":1.43")
+            .build(&())
+            .unwrap();
+        let other = signal("Other").sender(":1.42").build(&()).unwrap();
+
+        for (msg, matched) in [(&broadcast, true), (&unicast, true), (&other, false)] {
+            for eavesdrop in [true, false] {
+                assert_eq!(rule(eavesdrop).matches(msg).unwrap(), matched, "{msg}");
+            }
+        }
     }
 
     /// Assert that `rule` is not a valid rule string, whatever the reason.
