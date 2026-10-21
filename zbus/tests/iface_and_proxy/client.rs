@@ -156,6 +156,25 @@ pub async fn my_iface_test(conn: Connection, event: Event) -> zbus::Result<u32> 
         MyIfaceError::SomethingWentWrong("oops".to_string())
     );
 
+    // Arguments that don't deserialize get the error that D-Bus has for them, and so does a
+    // property value that doesn't.
+    let err = proxy
+        .inner()
+        .call_method("CreateObj", &42u32)
+        .await
+        .unwrap_err();
+    let err = zbus::fdo::Error::from(err);
+    assert!(matches!(err, zbus::fdo::Error::InvalidArgs(_)), "{err}");
+    let err = props_proxy
+        .set(
+            "org.freedesktop.MyIface".try_into()?,
+            "Count",
+            &Variant::from("not a number"),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(err, zbus::fdo::Error::InvalidArgs(_)), "{err}");
+
     check_hash_map(proxy.test_hashmap_return().await?);
     check_hash_map(proxy.hash_map().await?);
     proxy
