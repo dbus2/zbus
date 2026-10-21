@@ -603,9 +603,14 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                                     }
                                 }
                             }
+                            // A value that doesn't deserialize is an invalid argument of `Set`.
                             ::std::result::Result::Err(e) => {
                                 ::std::result::Result::Err(
-                                    #zbus::object_server::IntoDBusError::into_dbus_error(e),
+                                    #zbus::object_server::IntoDBusError::into_dbus_error(
+                                        #zbus::fdo::Error::InvalidArgs(
+                                            ::std::string::ToString::to_string(&e),
+                                        ),
+                                    ),
                                 )
                             }
                         }
@@ -1140,8 +1145,12 @@ fn get_args_from_inputs(
                         let (#(#args_names),*): (#(#owned_tys),*) =
                             match msg_body.deserialize() {
                                 ::std::result::Result::Ok(r) => r,
+                                // Arguments that don't deserialize, be it for their signature
+                                // or for their values, are invalid ones.
                                 ::std::result::Result::Err(e) => {
-                                    let err = <#zbus::fdo::Error as ::std::convert::From<_>>::from(e);
+                                    let err = #zbus::fdo::Error::InvalidArgs(
+                                        ::std::string::ToString::to_string(&e),
+                                    );
                                     return __zbus__connection.reply_dbus_error(&hdr, err).await;
                                 }
                             };
