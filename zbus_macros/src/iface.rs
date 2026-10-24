@@ -1,5 +1,5 @@
-use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use proc_macro2::{Span, TokenStream};
+use quote::{format_ident, quote, quote_spanned};
 use std::collections::BTreeMap;
 use syn::{
     AngleBracketedGenericArguments, Attribute, Error, Expr, ExprLit, FnArg, Ident, ImplItem,
@@ -551,15 +551,27 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                     }
 
                     let value_param_name = &value_param.pat;
-                    let value_ty = maybe_unref_ty(&value_param.ty).unwrap_or(&value_param.ty);
-                    let value_arg = if maybe_unref_ty(&value_param.ty).is_some() {
-                        quote! {
-                            let #value_param_name = &__zbus__value;
+                    let value_ty = &value_param.ty;
+                    let storage = format_ident!("__zbus__value");
+                    let (value_ty, value_arg) = match borrow_ref_arg(value_ty, &storage) {
+                        // The compiler infers the type the value is deserialized into.
+                        Some(borrow) => {
+                            let items = ref_arg_items(RefArgsOf::Setter, &zbus);
+
+                            (
+                                quote! { _ },
+                                quote! {
+                                    #items
+                                    let #value_param_name = #borrow;
+                                },
+                            )
                         }
-                    } else {
-                        quote! {
-                            let #value_param_name = __zbus__value;
-                        }
+                        None => (
+                            quote! { #value_ty },
+                            quote! {
+                                let #value_param_name = #storage;
+                            },
+                        ),
                     };
                     // Each arm yields `Result<(), BoxDBusError>`. A getter's failure inside the
                     // `*_changed` helper is carried by `Error::DBus`, which the conversion boxes
@@ -1012,16 +1024,121 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
     })
 }
 
-fn maybe_unref_ty(ty: &Type) -> Option<&Type> {
-    fn should_unref(v: &TypeReference) -> bool {
-        // &str is special and we can deserialize to it, unlike other reference types.
-        !matches!(*v.elem, Type::Path(ref p) if p.path.is_ident("str"))
-    }
+/// The arguments, of a method or of a property setter, that `ref_arg_items` are for.
+#[derive(Clone, Copy)]
+enum RefArgsOf {
+    Method,
+    Setter,
+}
 
-    match *ty {
-        Type::Reference(ref v) if should_unref(v) => Some(&v.elem),
-        _ => None,
+/// The items through which `borrow_ref_arg` picks the type a `&T` argument is deserialized into.
+///
+/// The choice is between `&T` itself, which borrows from the message, `T`, and `Vec<E>` for a
+/// slice `[E]`. Trait implementations for those would overlap, so the items leave it to the method
+/// resolution instead: the `__ZbusRefArg` trait is implemented for `&&&__ZbusRefArgOf<T>`,
+/// `&&__ZbusRefArgOf<T>` and `&__ZbusRefArgOf<[E]>`, each with the bounds of one choice, and
+/// calling its method on a `&&&__ZbusRefArgOf<T>` picks the first implementation that applies,
+/// from the outermost reference inwards. A method argument is first borrowed, as it was in 5.x,
+/// then owned, as in 6.0, and then collected. A property value doesn't keep the bytes of an array
+/// together, so a setter argument is first collected, then owned, and only then borrowed.
+///
+/// The items go in each block that needs them, rather than in `zbus`, so that the code generated
+/// works with the earlier `zbus` 6 releases as well.
+fn ref_arg_items(of: RefArgsOf, zbus: &TokenStream) -> TokenStream {
+    let serde = quote! { #zbus::export::serde };
+    let borrowed = |refs: TokenStream| {
+        quote! {
+            impl<'de, T> __ZbusRefArg<'de> for #refs __ZbusRefArgOf<T>
+            where
+                T: ?::std::marker::Sized + 'de,
+                &'de T: #zbus::Type + #serde::Deserialize<'de>,
+            {
+                type Storage = &'de T;
+                type Target = T;
+
+                fn __zbus_ref_arg<'s>(self, storage: &'s &'de T) -> &'s T {
+                    storage
+                }
+            }
+        }
+    };
+    // `Deserialize` implies `Sized`. Without the relaxed bound, the compiler would suggest relaxing
+    // it when no implementation applies.
+    let owned = |refs: TokenStream| {
+        quote! {
+            impl<'de, T> __ZbusRefArg<'de> for #refs __ZbusRefArgOf<T>
+            where
+                T: ?::std::marker::Sized + #zbus::Type + #serde::Deserialize<'de>,
+            {
+                type Storage = T;
+                type Target = T;
+
+                fn __zbus_ref_arg(self, storage: &T) -> &T {
+                    storage
+                }
+            }
+        }
+    };
+    let collected = |refs: TokenStream| {
+        quote! {
+            impl<'de, E> __ZbusRefArg<'de> for #refs __ZbusRefArgOf<[E]>
+            where
+                E: #zbus::Type + #serde::Deserialize<'de>,
+            {
+                type Storage = ::std::vec::Vec<E>;
+                type Target = [E];
+
+                fn __zbus_ref_arg(self, storage: &::std::vec::Vec<E>) -> &[E] {
+                    storage
+                }
+            }
+        }
+    };
+    let impls = match of {
+        RefArgsOf::Method => [
+            borrowed(quote! { &&& }),
+            owned(quote! { && }),
+            collected(quote! { & }),
+        ],
+        RefArgsOf::Setter => [
+            collected(quote! { &&& }),
+            owned(quote! { && }),
+            borrowed(quote! { & }),
+        ],
+    };
+
+    quote! {
+        trait __ZbusRefArg<'de> {
+            type Storage: #zbus::Type + #serde::Deserialize<'de>;
+            type Target: ?::std::marker::Sized;
+
+            fn __zbus_ref_arg(self, storage: &Self::Storage) -> &Self::Target;
+        }
+
+        struct __ZbusRefArgOf<T: ?::std::marker::Sized>(::std::marker::PhantomData<T>);
+
+        #(#impls)*
     }
+}
+
+/// The expression borrowing an argument of type `&T` from `storage`, the value it's deserialized
+/// into, through the items from `ref_arg_items`. These decide the type of `storage`, so the
+/// compiler infers it from this expression.
+fn borrow_ref_arg(ty: &Type, storage: &Ident) -> Option<TokenStream> {
+    // A type from a `macro_rules!` fragment comes in an invisible group.
+    let mut pointee = ty;
+    while let Type::Group(group) = pointee {
+        pointee = &group.elem;
+    }
+    let Type::Reference(reference) = pointee else {
+        return None;
+    };
+    let pointee = &reference.elem;
+
+    // The span makes the compiler point at the argument if no implementation applies.
+    Some(quote_spanned! {ty.span()=>
+        (&&&__ZbusRefArgOf::<#pointee>(::std::marker::PhantomData)).__zbus_ref_arg(&#storage)
+    })
 }
 
 fn get_args_from_inputs(
@@ -1118,6 +1235,7 @@ fn get_args_from_inputs(
             }
         }
 
+        let mut ref_items = None;
         let (hdr_init, msg_init, args_decl) = match method_type {
             MethodType::Property(PropertyType::Getter) => (quote! {}, quote! {}, quote! {}),
             MethodType::Property(PropertyType::Setter) => (
@@ -1129,20 +1247,31 @@ fn get_args_from_inputs(
                 quote! { let hdr = __zbus__message.header(); },
                 quote! { let msg_body = __zbus__message.body(); },
                 {
-                    let mut unrefed_indices = vec![];
-                    let owned_tys = tys
-                        .iter()
-                        .enumerate()
-                        .map(|(i, ty)| {
-                            let owned = maybe_unref_ty(ty);
-                            if owned.is_some() {
-                                unrefed_indices.push(i);
+                    let mut storages = vec![];
+                    let mut storage_tys = vec![];
+                    let mut borrows = quote! {};
+                    for (i, (ty, arg_name)) in tys.iter().zip(&args_names).enumerate() {
+                        let storage = format_ident!("__zbus__arg_{i}", span = Span::mixed_site());
+                        match borrow_ref_arg(ty, &storage) {
+                            Some(borrow) => {
+                                borrows.extend(quote! {
+                                    let #arg_name = #borrow;
+                                });
+                                storages.push(storage);
+                                // The compiler infers the type the argument is deserialized into.
+                                storage_tys.push(quote! { _ });
                             }
-                            owned.unwrap_or(ty)
-                        })
-                        .collect::<Vec<_>>();
-                    let mut q = quote! {
-                        let (#(#args_names),*): (#(#owned_tys),*) =
+                            None => {
+                                storages.push((*arg_name).clone());
+                                storage_tys.push(quote! { #ty });
+                            }
+                        }
+                    }
+                    if !borrows.is_empty() {
+                        ref_items = Some(ref_arg_items(RefArgsOf::Method, zbus));
+                    }
+                    quote! {
+                        let (#(#storages),*): (#(#storage_tys),*) =
                             match msg_body.deserialize() {
                                 ::std::result::Result::Ok(r) => r,
                                 // Arguments that don't deserialize, be it for their signature
@@ -1154,19 +1283,15 @@ fn get_args_from_inputs(
                                     return __zbus__connection.reply_dbus_error(&hdr, err).await;
                                 }
                             };
-                    };
-                    for index in unrefed_indices {
-                        let arg_name = &args_names[index];
-                        q.extend(quote! {
-                            let #arg_name = &#arg_name;
-                        });
+                        #borrows
                     }
-                    q
                 },
             ),
         };
 
         let args_from_msg = quote! {
+            #ref_items
+
             #hdr_init
 
             #msg_init
