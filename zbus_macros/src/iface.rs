@@ -566,12 +566,16 @@ pub fn expand(args: Punctuated<Meta, Token![,]>, mut input: ItemImpl) -> syn::Re
                                 },
                             )
                         }
-                        None => (
-                            quote! { #value_ty },
-                            quote! {
-                                let #value_param_name = #storage;
-                            },
-                        ),
+                        None => {
+                            let value_ty = elide_lifetimes(value_ty);
+
+                            (
+                                quote! { #value_ty },
+                                quote! {
+                                    let #value_param_name = #storage;
+                                },
+                            )
+                        }
                     };
                     // Each arm yields `Result<(), BoxDBusError>`. A getter's failure inside the
                     // `*_changed` helper is carried by `Error::DBus`, which the conversion boxes
@@ -1133,12 +1137,32 @@ fn borrow_ref_arg(ty: &Type, storage: &Ident) -> Option<TokenStream> {
     let Type::Reference(reference) = pointee else {
         return None;
     };
-    let pointee = &reference.elem;
+    let pointee = elide_lifetimes(&reference.elem);
 
     // The span makes the compiler point at the argument if no implementation applies.
     Some(quote_spanned! {ty.span()=>
         (&&&__ZbusRefArgOf::<#pointee>(::std::marker::PhantomData)).__zbus_ref_arg(&#storage)
     })
+}
+
+/// `ty` with its lifetimes, other than `'static`, elided.
+///
+/// The generated code names the types of the arguments outside of the methods and setters taking
+/// them, where the lifetime parameters of those aren't declared.
+fn elide_lifetimes(ty: &Type) -> Type {
+    struct ElideLifetimes;
+
+    impl Fold for ElideLifetimes {
+        fn fold_lifetime(&mut self, lifetime: syn::Lifetime) -> syn::Lifetime {
+            if lifetime.ident == "static" {
+                return lifetime;
+            }
+
+            syn::Lifetime::new("'_", lifetime.span())
+        }
+    }
+
+    ElideLifetimes.fold_type(ty.clone())
 }
 
 fn get_args_from_inputs(
