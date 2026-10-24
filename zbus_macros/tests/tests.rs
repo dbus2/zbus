@@ -590,3 +590,32 @@ fn interface_property_setter_with_serde() {
 
     assert_eq!(Thermostat::name(), "org.freedesktop.Thermostat");
 }
+
+#[test]
+fn interface_property_setter_with_lifetime_parameter() {
+    use zbus::{ObjectPath, OwnedObjectPath, object_server::Interface};
+
+    struct Lifetimes;
+
+    // The lifetime parameters of a setter aren't in scope where its value is deserialized.
+    #[interface(name = "org.freedesktop.Lifetimes")]
+    impl Lifetimes {
+        #[zbus(property)]
+        fn path(&self) -> OwnedObjectPath {
+            ObjectPath::from_static_str_unchecked("/").into()
+        }
+
+        #[zbus(property)]
+        fn set_path<'a>(&self, _path: ObjectPath<'a>) {}
+
+        #[zbus(property)]
+        fn borrowed_path(&self) -> OwnedObjectPath {
+            ObjectPath::from_static_str_unchecked("/").into()
+        }
+
+        #[zbus(property)]
+        fn set_borrowed_path<'a>(&self, _path: &ObjectPath<'a>) {}
+    }
+
+    assert_eq!(Lifetimes::name(), "org.freedesktop.Lifetimes");
+}
